@@ -1,9 +1,10 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "assets360-angular",
+  // Whole site (shell + remotes under /mf/) built by `npm run build:site`
+  "name": "assets360-frontend-new",
   "compatibility_date": "2026-08-18",
   "assets": {
-    "directory": "dist/frontend/browser",
+    "directory": "dist/site",
     "not_found_handling": "single-page-application"
   }
 }
