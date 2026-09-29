@@ -4,6 +4,7 @@
 //   dist/site/                          <- shell (frontend)
 //   dist/site/mf/<remote>/              <- each remote, served next to the shell
 //   dist/site/federation.manifest.json  <- points the shell at /mf/<remote>/remoteEntry.json
+//   dist/site/version.json              <- commit/branch/time of this build, to check what is live
 //
 // Usage: npm run build:site
 import { spawnSync } from 'node:child_process';
@@ -54,5 +55,19 @@ for (const [name, project] of Object.entries(REMOTES)) {
 }
 writeFileSync(join(site, 'federation.manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 
+// Cloudflare Workers Builds provides WORKERS_CI_* variables; fall back to git for local builds
+function git(args) {
+  const result = spawnSync('git', args, { encoding: 'utf8' });
+  return result.status === 0 ? result.stdout.trim() : null;
+}
+const version = {
+  commit: process.env.WORKERS_CI_COMMIT_SHA || git(['rev-parse', 'HEAD']),
+  branch: process.env.WORKERS_CI_BRANCH || git(['rev-parse', '--abbrev-ref', 'HEAD']),
+  builtAt: new Date().toISOString(),
+  builtBy: process.env.WORKERS_CI ? 'cloudflare' : 'local',
+};
+writeFileSync(join(site, 'version.json'), JSON.stringify(version, null, 2) + '\n');
+
 console.log(`\nSite assembled in ${site}`);
 console.log('Remotes:', manifest);
+console.log('Version:', version);
