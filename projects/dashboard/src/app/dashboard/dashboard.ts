@@ -8,7 +8,8 @@ import { InspectionDashboard } from '../inspection-dashboard/inspection-dashboar
 import { MapComponent, MapPin } from 'shared-ui';
 import { WidgetDragHandle } from '../shared/widget-drag-handle/widget-drag-handle';
 import { loadOrder, saveOrder, reorderByKey, moveWithinVisible } from '../shared/dashboard-widgets/widget-order.util';
-import { WIDGET_CATALOG, WidgetCategory, WidgetCategoryKey, WidgetDef } from '../shared/dashboard-widgets/widget-catalog';
+import { WIDGET_CATALOG, WidgetCategory, WidgetCategoryKey } from '../shared/dashboard-widgets/widget-catalog';
+import { WidgetPicker } from '../shared/widget-picker/widget-picker';
 import { loadSelectedWidgets, saveSelectedWidgets } from '../shared/dashboard-widgets/widget-selection';
 
 interface AssetsStatCard {
@@ -76,7 +77,7 @@ interface AssetsData {
 @Component({
   standalone: true,
   selector: 'app-dashboard',
-  imports: [CommonModule, FormsModule, DragDropModule, MainDashboard, WipDashboard, InspectionDashboard, MapComponent, WidgetDragHandle],
+  imports: [CommonModule, FormsModule, DragDropModule, MainDashboard, WipDashboard, InspectionDashboard, MapComponent, WidgetDragHandle, WidgetPicker],
   templateUrl: './dashboard.html',
   styleUrls: ['./dashboard.css'],
 })
@@ -115,17 +116,13 @@ export class Dashboard implements OnInit {
   // ===== Widget selection (Add Widget popup) =====
   readonly catalog: WidgetCategory[] = WIDGET_CATALOG;
   // Full ids, e.g. 'asset.stat:Total Assets', 'workOrder.timeline'
-  private selectedIds: string[] = [];
+  selectedIds: string[] = [];
   // Local ids per category, passed down to each module's widgets
   selectedByCategory: Record<WidgetCategoryKey, string[]> = { asset: [], workOrder: [], wip: [], inspection: [] };
 
   isWidgetPickerOpen = false;
-  // True while the close animation plays; the popup is removed once it finishes
-  isWidgetPickerClosing = false;
-  private pickerCloseTimer?: ReturnType<typeof setTimeout>;
-  private static readonly PICKER_CLOSE_MS = 180;
-  expandedCategory: WidgetCategoryKey | null = null;
-  private pickerDraft = new Set<string>();
+  // Module group the popup opens expanded on
+  pickerExpand: WidgetCategoryKey | null = null;
 
   get hasWidgets(): boolean {
     return this.selectedIds.length > 0;
@@ -133,74 +130,18 @@ export class Dashboard implements OnInit {
 
   openWidgetPicker(expand: WidgetCategoryKey | null = null): void {
     this.closePicker();
-    clearTimeout(this.pickerCloseTimer);
-    this.isWidgetPickerClosing = false;
-    this.pickerDraft = new Set(this.selectedIds);
-    this.expandedCategory = expand;
+    this.pickerExpand = expand;
     this.isWidgetPickerOpen = true;
   }
 
-  closeWidgetPicker(): void {
-    if (!this.isWidgetPickerOpen || this.isWidgetPickerClosing) return;
-    const reduceMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduceMotion) {
-      this.isWidgetPickerOpen = false;
-      return;
-    }
-    this.isWidgetPickerClosing = true;
-    this.pickerCloseTimer = setTimeout(() => {
-      this.isWidgetPickerOpen = false;
-      this.isWidgetPickerClosing = false;
-    }, Dashboard.PICKER_CLOSE_MS);
-  }
-
-  toggleCategory(key: WidgetCategoryKey): void {
-    this.expandedCategory = this.expandedCategory === key ? null : key;
-  }
-
-  isDraftSelected(category: WidgetCategory, widget: WidgetDef): boolean {
-    return this.pickerDraft.has(`${category.key}.${widget.id}`);
-  }
-
-  toggleDraft(category: WidgetCategory, widget: WidgetDef): void {
-    const id = `${category.key}.${widget.id}`;
-    if (this.pickerDraft.has(id)) this.pickerDraft.delete(id);
-    else this.pickerDraft.add(id);
-  }
-
-  draftCount(category: WidgetCategory): number {
-    return category.widgets.filter((w) => this.isDraftSelected(category, w)).length;
-  }
-
-  isCategoryFullySelected(category: WidgetCategory): boolean {
-    return this.draftCount(category) === category.widgets.length;
-  }
-
-  toggleCategoryAll(category: WidgetCategory): void {
-    const selectAll = !this.isCategoryFullySelected(category);
-    for (const w of category.widgets) {
-      const id = `${category.key}.${w.id}`;
-      if (selectAll) this.pickerDraft.add(id);
-      else this.pickerDraft.delete(id);
-    }
-  }
-
-  get draftTotal(): number {
-    return this.pickerDraft.size;
-  }
-
-  applyWidgetPicker(): void {
-    // Keep catalog order so the saved list is stable
-    const ids = this.catalog.flatMap((c) => c.widgets.map((w) => `${c.key}.${w.id}`)).filter((id) => this.pickerDraft.has(id));
+  onWidgetsApplied(ids: string[]): void {
     const before = new Set(this.visibleModules);
     this.setSelection(ids);
     saveSelectedWidgets(ids);
     // Jump to a module that just got its first widgets, so the user sees what they added
     const added = this.visibleModules.find((key) => !before.has(key));
     if (added) this.activeModule = added;
-    this.closeWidgetPicker();
   }
-
   private setSelection(ids: string[]): void {
     this.selectedIds = ids;
     const byCategory: Record<WidgetCategoryKey, string[]> = { asset: [], workOrder: [], wip: [], inspection: [] };
@@ -565,7 +506,6 @@ export class Dashboard implements OnInit {
   onEscape(): void {
     if (this.isPickerOpen) this.isPickerOpen = false;
     if (this.cardPopup) this.closeCardPopup();
-    if (this.isWidgetPickerOpen) this.closeWidgetPicker();
   }
 
   // ===== Calendar Generation =====

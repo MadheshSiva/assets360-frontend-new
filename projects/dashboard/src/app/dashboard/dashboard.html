@@ -421,59 +421,7 @@
     </section>
   </div>
 
-  <!-- Add Widget popup: one collapsible group per module, a checkbox per widget -->
-  <div class="widget-picker-backdrop" *ngIf="isWidgetPickerOpen" [class.closing]="isWidgetPickerClosing"
-    (click)="closeWidgetPicker()">
-    <section class="widget-picker" role="dialog" aria-modal="true" aria-labelledby="widget-picker-title"
-      (click)="$event.stopPropagation()">
-      <header class="widget-picker-header">
-        <div>
-          <h2 id="widget-picker-title">Add Widgets</h2>
-          <p>Choose the widgets to show on your dashboard</p>
-        </div>
-        <button type="button" class="card-popup-close" (click)="closeWidgetPicker()" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </header>
-
-      <div class="widget-picker-body">
-        <div class="wp-group" *ngFor="let category of catalog" [class.open]="expandedCategory === category.key">
-          <button type="button" class="wp-group-header" (click)="toggleCategory(category.key)"
-            [attr.aria-expanded]="expandedCategory === category.key">
-            <span class="wp-group-label">{{ category.label }}</span>
-            <span class="wp-group-count" *ngIf="draftCount(category)">{{ draftCount(category) }} selected</span>
-            <svg class="wp-group-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              width="16" height="16">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-
-          <!-- Always rendered so opening/closing can animate; inert while collapsed -->
-          <div class="wp-group-collapse" [attr.inert]="expandedCategory === category.key ? null : ''">
-          <div class="wp-group-list">
-            <label class="wp-option wp-option-all">
-              <input type="checkbox" [checked]="isCategoryFullySelected(category)"
-                [indeterminate]="draftCount(category) > 0 && !isCategoryFullySelected(category)"
-                (change)="toggleCategoryAll(category)" />
-              <span>Select all</span>
-            </label>
-            <label class="wp-option" *ngFor="let widget of category.widgets">
-              <input type="checkbox" [checked]="isDraftSelected(category, widget)"
-                (change)="toggleDraft(category, widget)" />
-              <span>{{ widget.label }}</span>
-            </label>
-          </div>
-          </div>
-        </div>
-      </div>
-
-      <footer class="widget-picker-footer">
-        <span class="wp-total">{{ draftTotal }} widget{{ draftTotal === 1 ? '' : 's' }} selected</span>
-        <div class="footer-right">
-          <button type="button" class="btn btn-ghost" (click)="closeWidgetPicker()">Cancel</button>
-          <button type="button" class="btn btn-primary" (click)="applyWidgetPicker()">Apply</button>
-        </div>
-      </footer>
-    </section>
-  </div>
+  <!-- Add Widget popup -->
+  <app-widget-picker *ngIf="isWidgetPickerOpen" [selected]="selectedIds" [expand]="pickerExpand"
+    (applied)="onWidgetsApplied($event)" (closed)="isWidgetPickerOpen = false"></app-widget-picker>
 </section>
