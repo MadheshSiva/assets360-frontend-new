@@ -3,6 +3,11 @@
   // Whole site (shell + remotes under /mf/) built by `npm run build:site`
   "name": "assets360-frontend-new",
   "compatibility_date": "2026-08-18",
+  // Runs before `wrangler deploy`, so a deploy always ships a fresh build
+  // (even when the Cloudflare dashboard's "Build command" is empty)
+  "build": {
+    "command": "npm run build:site"
+  },
   "assets": {
     "directory": "dist/site",
     "not_found_handling": "single-page-application"
