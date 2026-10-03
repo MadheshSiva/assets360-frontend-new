@@ -1,9 +1,84 @@
 <section class="locating-page">
-  <div class="locating-layout">
-    <!-- Left Panel: real Project -> Area -> State -> (Zone/Floor -> Zone) hierarchy, read-only -->
-    <aside class="filter-panel" *ngIf="!isPanelCollapsed">
-      <h2 class="panel-title">Locating</h2>
+  <header class="page-header">
+    <h1 class="page-title">Locating</h1>
 
+    <!-- Floor-plan toolbar: shown in the header once a floor, zone or sub zone is selected -->
+    <div class="header-toolbar" *ngIf="showFloorPlan && floorFilters as filters">
+      <div class="select-pill">
+        <select [(ngModel)]="filters.parameter" (ngModelChange)="onParameterChange(filters)">
+          <option value="" disabled>Select Parameter</option>
+          <option *ngFor="let p of parameters" [value]="p.value">{{ p.label }}</option>
+        </select>
+      </div>
+
+      <div class="filter-dropdown" *ngIf="hasCategoryItems(filters)">
+        <button type="button" class="select-pill filter-dropdown-toggle"
+          (click)="$event.stopPropagation(); isItemDropdownOpen = !isItemDropdownOpen">
+          <span>{{ selectedItemsSummary(filters) }}</span>
+        </button>
+        <div class="filter-dropdown-menu" *ngIf="isItemDropdownOpen" (click)="$event.stopPropagation()">
+          <label class="filter-dropdown-option" *ngFor="let item of itemsForParameter(filters.parameter)">
+            <input type="checkbox" [checked]="isItemSelected(filters, item.id)"
+              (change)="toggleItemSelection(filters, item.id)" />
+            {{ item.name }}
+          </label>
+        </div>
+      </div>
+
+      <div class="select-pill">
+        <select [(ngModel)]="timeRange">
+          <option value="" disabled>Time Range</option>
+          <option *ngFor="let t of timeRangeOptions" [value]="t.value">{{ t.label }}</option>
+        </select>
+      </div>
+
+      <div class="live-group">
+        <button type="button" class="btn-live" [class.is-live]="liveTrackingEnabled" (click)="toggleLiveTracking()">
+          Live
+        </button>
+        <div class="select-pill select-pill--compact">
+          <select [(ngModel)]="duration">
+            <option value="" disabled>Duration</option>
+            <option *ngFor="let d of durationOptions" [value]="d.value">{{ d.label }}</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="track-menu">
+        <button type="button" class="btn-track" (click)="$event.stopPropagation(); isTrackMenuOpen = !isTrackMenuOpen"
+          [attr.aria-expanded]="isTrackMenuOpen">
+          <svg class="btn-track-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+          </svg>
+          Track
+          <svg class="btn-track-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+        <div class="filter-dropdown-menu track-menu-list" *ngIf="isTrackMenuOpen" (click)="$event.stopPropagation()">
+          <button type="button" class="filter-dropdown-option" *ngFor="let c of assetTrackingCategories"
+            [class.is-selected]="filters.category === c.value" (click)="selectTrackCategory(filters, c.value)">
+            {{ c.label }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="locating-layout">
+    <!-- Left-edge toggle: shows/hides the hierarchy tree -->
+    <button type="button" class="edge-toggle edge-toggle--left" [class.is-flipped]="isTreeHidden" (click)="toggleTree()"
+      [attr.aria-label]="isTreeHidden ? 'Show locations' : 'Hide locations'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </button>
+
+    <!-- Left Panel: real Project -> Area -> State -> (Zone/Floor -> Zone) hierarchy, read-only -->
+    <aside class="filter-panel" *ngIf="!isPanelCollapsed && !isTreeHidden">
       <ul class="cascade-list">
         <li
           *ngFor="let row of visibleRows; trackBy: trackByRow"
@@ -12,69 +87,57 @@
           [class.is-active]="isActive(row.node.id)"
           [class.is-clickable]="true"
           [attr.data-depth]="row.depth"
+          [style.--depth]="row.depth"
           (click)="toggle(row.node)"
         >
-          <span class="row-label">{{ row.node.name }}</span>
+          <span class="row-chevron" [class.is-open]="expanded.has(row.node.id)" aria-hidden="true">
+            <svg *ngIf="isExpandable(row.node) || expanded.has(row.node.id)" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </span>
+          <svg class="row-folder" [ngSwitch]="levelIcon(row)" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path *ngSwitchCase="'folder'" d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            <g *ngSwitchCase="'flag'">
+              <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+              <line x1="4" y1="22" x2="4" y2="15"></line>
+            </g>
+            <g *ngSwitchCase="'map'">
+              <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"></path>
+              <line x1="9" y1="3" x2="9" y2="18"></line>
+              <line x1="15" y1="6" x2="15" y2="21"></line>
+            </g>
+            <g *ngSwitchCase="'building'">
+              <rect x="4" y="2" width="16" height="20" rx="2"></rect>
+              <path d="M9 22v-4h6v4"></path>
+              <path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"></path>
+            </g>
+            <path *ngSwitchCase="'floor'" d="M3 20h5v-5h5v-5h5V5h3"></path>
+            <g *ngSwitchCase="'zone'">
+              <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="12" y1="3" x2="12" y2="21"></line>
+            </g>
+            <g *ngSwitchCase="'subzone'">
+              <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 3"></rect>
+              <rect x="8" y="8" width="8" height="8" rx="1"></rect>
+            </g>
+          </svg>
+          <span class="row-label" [title]="row.node.name">{{ row.node.name }}</span>
           <span class="area-type-badge" *ngIf="areaTypeOf(row.node) as areaType" [title]="areaTypeLabels[areaType]">
             {{ areaTypeShortLabels[areaType] }}
           </span>
-          <span class="row-chevron" aria-hidden="true" *ngIf="isExpandable(row.node) || expanded.has(row.node.id)">
-            <ng-container *ngIf="expanded.has(row.node.id); else chevDown">&rsaquo;</ng-container>
-            <ng-template #chevDown>v</ng-template>
-          </span>
+          <span class="row-status" [class.is-inactive]="row.node.status === 'inactive'"
+            [title]="row.node.status === 'inactive' ? 'Inactive' : 'Active'"></span>
         </li>
       </ul>
     </aside>
 
     <!-- Right Panel: Map + Top Filters -->
     <div class="map-panel">
-      <!-- Phase 2 toolbar row 1: role, search, advanced filters, geofencing — sits above the map, not in the sidebar -->
-      
-
-      
-
-
-      
-
-      <!-- Asset Monitoring header: shown above the map once a floor (or a zone on a floor) is
-           selected in the left-side locating card, mirroring a Staff Monitoring floor header
-           but with asset-tracking options/sample data instead of employee/visitor data. -->
-      <div class="asset-monitor-panel" *ngIf="showFloorPlan && floorFilters as filters">
-        
-
-        <div class="asset-monitor-toolbar">
-          <select class="filter-select" [(ngModel)]="filters.parameter" (ngModelChange)="onParameterChange(filters)">
-            <option value="" disabled>Option</option>
-            <option *ngFor="let p of parameters" [value]="p.value">{{ p.label }}</option>
-          </select>
-
-          <div class="filter-dropdown" *ngIf="hasCategoryItems(filters)">
-            <button type="button" class="filter-select filter-dropdown-toggle"
-              (click)="$event.stopPropagation(); isItemDropdownOpen = !isItemDropdownOpen">
-              <span>{{ selectedItemsSummary(filters) }}</span>
-              <span class="filter-dropdown-caret" aria-hidden="true">&#9662;</span>
-            </button>
-            <div class="filter-dropdown-menu" *ngIf="isItemDropdownOpen" (click)="$event.stopPropagation()">
-              <label class="filter-dropdown-option" *ngFor="let item of itemsForParameter(filters.parameter)">
-                <input type="checkbox" [checked]="isItemSelected(filters, item.id)"
-                  (change)="toggleItemSelection(filters, item.id)" />
-                {{ item.name }}
-              </label>
-            </div>
-          </div>
-
-          <select class="filter-select" [(ngModel)]="filters.category">
-            <option *ngFor="let c of assetTrackingCategories" [value]="c.value">{{ c.label }}</option>
-          </select>
-
-          <button type="button" class="btn-live" [class.is-live]="liveTrackingEnabled" (click)="toggleLiveTracking()">
-            Live
-          </button>
-        </div>
-      </div>
-
       <!-- Map + its own FAB, anchored to the map's right edge -->
-      <div class="map-wrapper">
+      <div class="map-wrapper" [class.is-floor-plan]="showFloorPlan">
         <app-map
           *ngIf="!showFloorPlan"
           [pins]="mapPins"
@@ -85,16 +148,18 @@
         <app-floor-plan
           *ngIf="showFloorPlan"
           [floorId]="activeFloor?.id ?? null"
-          [zones]="floorPlanZones"
           [controlsDisabled]="mapControlsDisabled"
           [assetLabel]="zoneAssetLabel"
+          [freePan]="true"
           (assetClick)="onZoneAssetClick($event)"
           (assetsSummaryClick)="onZoneAssetsSummaryClick($event)"
         ></app-floor-plan>
 
         <button type="button" class="panel-fab" [class.is-collapsed]="isPanelCollapsed" (click)="togglePanel()"
           [attr.aria-label]="isPanelCollapsed ? 'Hide statistics' : 'Show statistics'">
-          <span class="fab-chevron">{{ isPanelCollapsed ? '&rsaquo;' : '&lsaquo;' }}</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
         </button>
       </div>
 

@@ -151,6 +151,8 @@ export class MapComponent implements AfterViewInit, OnDestroy, OnChanges {
   private readonly isBrowser: boolean;
   /** Guards against overlapping initializeMap() calls while the async Leaflet load is in flight. */
   private mapInitStarted = false;
+  /** Keeps Leaflet's tiles in sync when the host resizes the container (e.g. side panels toggling). */
+  private resizeObserver?: ResizeObserver;
 
   constructor(@Inject(PLATFORM_ID) platformId: object) {
     this.isBrowser = isPlatformBrowser(platformId);
@@ -158,6 +160,10 @@ export class MapComponent implements AfterViewInit, OnDestroy, OnChanges {
 
   async ngAfterViewInit(): Promise<void> {
     if (!this.isBrowser || !this.mapEl) return;
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => this.map?.invalidateSize());
+      this.resizeObserver.observe(this.mapEl.nativeElement);
+    }
     if (this.locations.length === 0 && this.pins.length === 0) return;
     await this.initializeMap();
   }
@@ -190,6 +196,7 @@ export class MapComponent implements AfterViewInit, OnDestroy, OnChanges {
   }
 
   ngOnDestroy(): void {
+    this.resizeObserver?.disconnect();
     this.map?.off('zoomend', this.onViewChange);
     this.map?.remove();
     this.map = undefined;

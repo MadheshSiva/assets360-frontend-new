@@ -40,8 +40,42 @@
           <span class="nav-label" *ngIf="!collapsed">{{ item.label }}</span>
         </a>
 
+        <!-- Single-level menus (Assets, Tracking & IoT) expand inline under the item -->
+        <ng-container *ngIf="item.children && isInline(item)">
+          <div
+            class="nav-item nav-item-dropdown nav-item-dropdown--inline"
+            (click)="toggleInline(item, $event.currentTarget)"
+            [class.open]="isInlineOpen(item.label) || isDropdownOpen(item.label)"
+            [class.section-active]="isSectionActive(item)"
+            [attr.title]="collapsed ? item.label : null"
+          >
+            <span class="nav-icon">
+              <lucide-icon *ngIf="item.icon" [img]="item.icon" [size]="18" [strokeWidth]="2"></lucide-icon>
+            </span>
+            <span class="nav-label" *ngIf="!collapsed">{{ item.label }}</span>
+            <span class="nav-caret" *ngIf="!collapsed">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </span>
+          </div>
+
+          <div class="nav-dropdown" *ngIf="isInlineOpen(item.label)">
+            <a
+              *ngFor="let child of item.children"
+              [routerLink]="child.path"
+              routerLinkActive="active"
+              [routerLinkActiveOptions]="{ exact: false }"
+              class="nav-dropdown-item"
+            >
+              {{ child.label }}
+            </a>
+          </div>
+        </ng-container>
+
+        <!-- Deeper menus (Administration) open the flyout panel -->
         <div
-          *ngIf="item.children"
+          *ngIf="item.children && !isInline(item)"
           class="nav-item nav-item-dropdown"
           (click)="toggleDropdown(item.label, $event.currentTarget)"
           [class.open]="isDropdownOpen(item.label)"

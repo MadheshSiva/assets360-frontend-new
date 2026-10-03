@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320" role="img" aria-label="Diesel generator">
+  <defs>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cfd4da"/>
+      <stop offset="1" stop-color="#aab1b9"/>
+    </linearGradient>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9aa1a8"/>
+      <stop offset="1" stop-color="#7d848b"/>
+    </linearGradient>
+    <linearGradient id="front" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6c21a"/>
+      <stop offset="1" stop-color="#dba50c"/>
+    </linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#d79f08"/>
+      <stop offset="1" stop-color="#b98606"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Building: wall panels and windows -->
+  <rect width="480" height="210" fill="url(#wall)"/>
+  <g fill="#b9c0c7">
+    <rect x="0" y="0" width="480" height="18"/>
+    <rect x="20" y="40" width="70" height="44" rx="2"/>
+    <rect x="390" y="40" width="70" height="44" rx="2"/>
+  </g>
+  <g stroke="#bfc5cc" stroke-width="2">
+    <line x1="120" y1="18" x2="120" y2="210"/>
+    <line x1="240" y1="18" x2="240" y2="210"/>
+    <line x1="360" y1="18" x2="360" y2="210"/>
+  </g>
+  <rect y="210" width="480" height="110" fill="url(#floor)"/>
+
+  <!-- Concrete pad -->
+  <polygon points="40,270 400,270 450,240 100,240" fill="#c7c9cc"/>
+  <polygon points="40,270 400,270 400,282 40,282" fill="#a9acb0"/>
+  <polygon points="400,270 450,240 450,252 400,282" fill="#93979b"/>
+
+  <!-- Base frame -->
+  <polygon points="60,262 380,262 380,250 60,250" fill="#2b2b2b"/>
+  <polygon points="380,262 425,236 425,224 380,250" fill="#1d1d1d"/>
+
+  <!-- Enclosure: top, side, front -->
+  <polygon points="60,110 380,110 425,84 105,84" fill="#f8cf3a"/>
+  <polygon points="380,110 425,84 425,224 380,250" fill="url(#side)"/>
+  <rect x="60" y="110" width="320" height="140" fill="url(#front)"/>
+
+  <!-- Doors -->
+  <g fill="none" stroke="#b88a07" stroke-width="2">
+    <rect x="72" y="122" width="96" height="116" rx="2"/>
+    <rect x="176" y="122" width="96" height="116" rx="2"/>
+    <rect x="280" y="122" width="88" height="116" rx="2"/>
+  </g>
+  <!-- Louvre vents -->
+  <g stroke="#a67b05" stroke-width="3" stroke-linecap="round">
+    <line x1="186" y1="140" x2="262" y2="140"/>
+    <line x1="186" y1="152" x2="262" y2="152"/>
+    <line x1="186" y1="164" x2="262" y2="164"/>
+    <line x1="186" y1="176" x2="262" y2="176"/>
+    <line x1="186" y1="188" x2="262" y2="188"/>
+    <line x1="290" y1="140" x2="358" y2="140"/>
+    <line x1="290" y1="152" x2="358" y2="152"/>
+    <line x1="290" y1="164" x2="358" y2="164"/>
+    <line x1="392" y1="120" x2="414" y2="108"/>
+    <line x1="392" y1="134" x2="414" y2="122"/>
+    <line x1="392" y1="148" x2="414" y2="136"/>
+    <line x1="392" y1="162" x2="414" y2="150"/>
+  </g>
+  <!-- Handles -->
+  <g fill="#3a3a3a">
+    <rect x="156" y="172" width="5" height="20" rx="2"/>
+    <rect x="260" y="200" width="5" height="20" rx="2"/>
+    <rect x="356" y="172" width="5" height="20" rx="2"/>
+  </g>
+  <!-- Rating plate -->
+  <rect x="84" y="134" width="72" height="30" rx="3" fill="#1f1f1f"/>
+  <text x="120" y="154" fill="#f8cf3a" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">250 kVA</text>
+  <!-- Exhaust stack -->
+  <rect x="330" y="66" width="12" height="32" fill="#4b4b4b"/>
+  <rect x="327" y="62" width="18" height="6" fill="#3a3a3a"/>
+</svg>

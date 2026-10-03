@@ -12,7 +12,6 @@ import {
   DrawnZone,
   Floor,
   FloorPlanComponent,
-  FloorPlanZoneInput,
   GEOFENCE_ACTIONS,
   GEOFENCE_ACTION_LABELS,
   GeofenceAction,
@@ -39,6 +38,8 @@ type PopupKind = 'count' | 'device' | 'camera' | 'asset';
 interface Row {
   node: HierarchyNode;
   depth: number;
+  /** A zone whose parent is another zone is a Sub Zone. */
+  parentKind?: HierarchyNode['kind'];
 }
 
 interface MockItem {
@@ -155,8 +156,15 @@ export class Locating implements AfterViewInit, OnDestroy {
     this.onPinClick(pin);
   }
 
+  /** Left-edge toggle: hides the hierarchy tree so the map can use the full width. */
+  isTreeHidden = false;
+
   togglePanel(): void {
     this.isPanelCollapsed = !this.isPanelCollapsed;
+  }
+
+  toggleTree(): void {
+    this.isTreeHidden = !this.isTreeHidden;
   }
 
   // ===== Read-only cascade (mirrors the Area/State/Zone/Floor hierarchy configured in Projects) =====
@@ -172,10 +180,10 @@ export class Locating implements AfterViewInit, OnDestroy {
 
   get visibleRows(): Row[] {
     const rows: Row[] = [];
-    const walk = (node: HierarchyNode, depth: number) => {
-      rows.push({ node, depth });
+    const walk = (node: HierarchyNode, depth: number, parentKind?: HierarchyNode['kind']) => {
+      rows.push({ node, depth, parentKind });
       if (this.expanded.has(node.id)) {
-        childrenOf(node).forEach((child) => walk(child, depth + 1));
+        this.treeChildren(node).forEach((child) => walk(child, depth + 1, node.kind));
       }
     };
     this.hierarchy.projects().forEach((project) => walk(project, 0));
@@ -188,8 +196,33 @@ export class Locating implements AfterViewInit, OnDestroy {
     return this.activeNodeId === id;
   }
 
+  /**
+   * Children as displayed in this tree: Project -> Country -> Area -> (Outdoor Zone | Building)
+   * -> Floor -> Zone -> Sub Zone. The backend's Outer Zone level is skipped, so its buildings
+   * sit directly under the Area alongside the outdoor zones. The shared data itself is unchanged.
+   */
+  treeChildren(node: HierarchyNode): HierarchyNode[] {
+    if (node.kind === 'state') {
+      return [...node.zones, ...node.outerZones.flatMap((outerZone) => outerZone.buildings)];
+    }
+    return childrenOf(node);
+  }
+
+  /** Icon per tree level: Project folder, Country flag, Area map, Building, Floor stairs, Zone grid, Sub Zone square. */
+  levelIcon(row: Row): 'folder' | 'flag' | 'map' | 'building' | 'floor' | 'zone' | 'subzone' {
+    switch (row.node.kind) {
+      case 'project': return 'folder';
+      case 'area': return 'flag';
+      case 'state': return 'map';
+      case 'outerZone':
+      case 'building': return 'building';
+      case 'floor': return 'floor';
+      case 'zone': return row.parentKind === 'zone' ? 'subzone' : 'zone';
+    }
+  }
+
   isExpandable(node: HierarchyNode): boolean {
-    return childrenOf(node).length > 0 && !this.expanded.has(node.id);
+    return this.treeChildren(node).length > 0 && !this.expanded.has(node.id);
   }
 
   areaTypeOf(node: HierarchyNode) {
@@ -205,7 +238,7 @@ export class Locating implements AfterViewInit, OnDestroy {
       const next = new Set(this.expanded);
       next.delete(node.id);
       const collectDescendants = (n: HierarchyNode) => {
-        childrenOf(n).forEach((child) => {
+        this.treeChildren(n).forEach((child) => {
           next.delete(child.id);
           collectDescendants(child);
         });
@@ -215,7 +248,7 @@ export class Locating implements AfterViewInit, OnDestroy {
       return;
     }
 
-    if (childrenOf(node).length === 0) return;
+    if (this.treeChildren(node).length === 0) return;
     this.expanded = new Set(this.expanded).add(node.id);
   }
 
@@ -243,21 +276,14 @@ export class Locating implements AfterViewInit, OnDestroy {
     return this.activeFloor !== null;
   }
 
-  get floorPlanZones(): FloorPlanZoneInput[] {
-    return (this.activeFloor?.zones ?? []).map((zone) => ({
-      id: zone.id,
-      name: zone.name,
-      color: zone.color,
-      lat: zone.coords.lat,
-      lng: zone.coords.lng,
-    }));
-  }
-
+  /** The floor a zone belongs to, at any depth — so a sub zone shows the same floor plan as its parent zone. */
   private findParentFloor(zoneId: string): Floor | undefined {
     let result: Floor | undefined;
+    const containsZone = (zones: Zone[]): boolean =>
+      zones.some((zone) => zone.id === zoneId || containsZone(zone.zones));
     const walk = (node: HierarchyNode) => {
       if (result) return;
-      if (node.kind === 'floor' && node.zones.some((zone) => zone.id === zoneId)) {
+      if (node.kind === 'floor' && containsZone(node.zones)) {
         result = node;
         return;
       }
@@ -312,10 +338,37 @@ export class Locating implements AfterViewInit, OnDestroy {
 
   /** Header's "Select Item"/"Select Device" checkbox dropdown, open state. */
   isItemDropdownOpen = false;
+  /** Header's "Track" button menu (picks the asset-tracking category), open state. */
+  isTrackMenuOpen = false;
+
+  // Floor-plan header filters — UI selections only; not yet applied to the data.
+  timeRange = '';
+  duration = '';
+
+  readonly timeRangeOptions = [
+    { label: 'Today', value: 'today' },
+    { label: 'Last 24 Hours', value: '24h' },
+    { label: 'Last 7 Days', value: '7d' },
+    { label: 'Last 30 Days', value: '30d' },
+  ];
+
+  readonly durationOptions = [
+    { label: '15 min', value: '15m' },
+    { label: '30 min', value: '30m' },
+    { label: '1 hour', value: '1h' },
+    { label: '4 hours', value: '4h' },
+    { label: '8 hours', value: '8h' },
+  ];
 
   @HostListener('document:click')
   onDocumentClick(): void {
     this.isItemDropdownOpen = false;
+    this.isTrackMenuOpen = false;
+  }
+
+  selectTrackCategory(filters: LevelFilters, value: string): void {
+    filters.category = value;
+    this.isTrackMenuOpen = false;
   }
 
   itemDropdownPlaceholder(filters: LevelFilters): string {

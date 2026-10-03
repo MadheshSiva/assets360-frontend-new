@@ -58,8 +58,29 @@
       </svg>
     </button>
 
-    <button type="button" class="tool-btn" title="Zoom in" [disabled]="zoomLevel >= maxZoom" (click)="zoomIn()">+</button>
-    <button type="button" class="tool-btn" title="Zoom out" [disabled]="zoomLevel <= minZoom" (click)="zoomOut()">&minus;</button>
+    <button type="button" class="tool-btn tool-btn--zoom-in" title="Zoom in" [disabled]="zoomLevel >= maxZoom" (click)="zoomIn()">+</button>
+    <button type="button" class="tool-btn tool-btn--zoom-out" title="Zoom out" [disabled]="zoomLevel <= minZoom" (click)="zoomOut()">&minus;</button>
+    <button
+      type="button"
+      class="tool-btn tool-btn--fullscreen"
+      [title]="isFullscreen ? 'Exit full screen' : 'Full screen'"
+      (click)="toggleFullscreen()"
+    >
+      <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <ng-container *ngIf="!isFullscreen; else exitFullscreenIcon">
+          <path d="M3 8V5a2 2 0 0 1 2-2h3"></path>
+          <path d="M16 3h3a2 2 0 0 1 2 2v3"></path>
+          <path d="M21 16v3a2 2 0 0 1-2 2h-3"></path>
+          <path d="M8 21H5a2 2 0 0 1-2-2v-3"></path>
+        </ng-container>
+        <ng-template #exitFullscreenIcon>
+          <path d="M8 3v3a2 2 0 0 1-2 2H3"></path>
+          <path d="M21 8h-3a2 2 0 0 1-2-2V3"></path>
+          <path d="M3 16h3a2 2 0 0 1 2 2v3"></path>
+          <path d="M16 21v-3a2 2 0 0 1 2-2h3"></path>
+        </ng-template>
+      </svg>
+    </button>
 
     <div class="tool-btn-wrap">
       <button
@@ -90,7 +111,7 @@
     #floorPlanCanvas
     class="floor-plan-canvas"
     [class.is-drawing]="isDrawing"
-    [class.is-pannable]="zoomLevel > minZoom && !isDrawing"
+    [class.is-pannable]="canPan"
     [class.is-panning]="isPanning"
     (mousedown)="startPan($event)"
     (click)="onFloorPlanClick($event)"

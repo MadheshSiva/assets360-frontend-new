@@ -1,7 +1,7 @@
 import { Component, ViewChild, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { forkJoin, of, switchMap } from 'rxjs';
+import { of, switchMap } from 'rxjs';
 import { ProjectService, AppProject, ProjectFormValue } from '../../../../services/project.service';
 import { CountryService, AppCountry, CountryFormValue } from '../../../../services/country.service';
 import { ProjectAreaService, AppProjectArea, ProjectAreaFormValue } from '../../../../services/project-area.service';
@@ -10,6 +10,19 @@ import { BuildingService, AppBuilding, BuildingFormValue } from '../../../../ser
 import { FloorService, AppFloor, FloorFormValue } from '../../../../services/floor.service';
 import { ZoneService, AppZone, ZoneFormValue } from '../../../../services/zone.service';
 import { SubZoneService, AppSubZone, SubZoneFormValue } from '../../../../services/sub-zone.service';
+import {
+  DEFAULT_COORDS,
+  SiteHierarchyLoader,
+  ZONE_COLORS,
+  toTreeArea,
+  toTreeBuilding,
+  toTreeFloor,
+  toTreeOuterZone,
+  toTreeProject,
+  toTreeState,
+  toTreeSubZone,
+  toTreeZone,
+} from '../../../../services/site-hierarchy-loader.service';
 import {
   AREA_TYPE_LABELS,
   AREA_TYPE_SHORT_LABELS,
@@ -71,17 +84,6 @@ interface ToastMessage {
   text: string;
 }
 
-/** Used for backend-sourced projects/countries, which don't carry map coordinates of their own. */
-const DEFAULT_COORDS: Coords = { lat: 25.2048, lng: 55.2708, zoom: 6 };
-
-const ZONE_COLORS = [
-  { label: 'Purple', value: '#5b3df5' },
-  { label: 'Red', value: '#c22a3e' },
-  { label: 'Green', value: '#158b4b' },
-  { label: 'Amber', value: '#a8650a' },
-  { label: 'Blue', value: '#2563eb' },
-];
-
 @Component({
   standalone: true,
   selector: 'app-projects',
@@ -99,6 +101,17 @@ export class Projects {
   private readonly floorService = inject(FloorService);
   private readonly zoneService = inject(ZoneService);
   private readonly subZoneService = inject(SubZoneService);
+  private readonly hierarchyLoader = inject(SiteHierarchyLoader);
+
+  // Backend record -> tree node builders (shared with the loader)
+  private readonly toTreeProject = toTreeProject;
+  private readonly toTreeArea = toTreeArea;
+  private readonly toTreeState = toTreeState;
+  private readonly toTreeOuterZone = toTreeOuterZone;
+  private readonly toTreeBuilding = toTreeBuilding;
+  private readonly toTreeFloor = toTreeFloor;
+  private readonly toTreeZone = toTreeZone;
+  private readonly toTreeSubZone = toTreeSubZone;
 
   readonly projects = this.hierarchy.projects;
   readonly areaTypeLabels = AREA_TYPE_LABELS;
@@ -149,30 +162,8 @@ export class Projects {
   private loadFromBackend(): void {
     this.loading = true;
     this.loadError = null;
-    forkJoin({
-      projects: this.projectService.getAll(),
-      countries: this.countryService.getAll(),
-      areas: this.projectAreaService.getAll(),
-      outerZones: this.outerZoneService.getAll(),
-      buildings: this.buildingService.getAll(),
-      floors: this.floorService.getAll(),
-      zones: this.zoneService.getAll(),
-      subZones: this.subZoneService.getAll(),
-    }).subscribe({
-      next: ({ projects, countries, areas, outerZones, buildings, floors, zones, subZones }) => {
-        const tree = projects.map((project) =>
-          this.toTreeProject(
-            project,
-            countries.filter((c) => c.projectId === project.id),
-            areas,
-            outerZones,
-            buildings,
-            floors,
-            zones,
-            subZones,
-          ),
-        );
-        this.hierarchy.seedProjects(tree);
+    this.hierarchyLoader.load().subscribe({
+      next: () => {
         this.loading = false;
       },
       error: () => {
@@ -180,191 +171,6 @@ export class Projects {
         this.loading = false;
       },
     });
-  }
-
-  private toTreeProject(
-    project: AppProject,
-    countries: AppCountry[],
-    areas: AppProjectArea[],
-    outerZones: AppOuterZone[],
-    buildings: AppBuilding[],
-    floors: AppFloor[],
-    zones: AppZone[],
-    subZones: AppSubZone[],
-  ): Project {
-    return {
-      kind: 'project',
-      id: project.id,
-      name: project.projectName,
-      description: project.description || undefined,
-      weekStart: project.weekStart ? project.weekStart.slice(0, 10) : undefined,
-      weekEnd: project.weekEnd ? project.weekEnd.slice(0, 10) : undefined,
-      status: project.status ? 'active' : 'inactive',
-      coords: DEFAULT_COORDS,
-      areas: countries.map((country) =>
-        this.toTreeArea(
-          country,
-          areas.filter((a) => a.countryId === country.id),
-          outerZones,
-          buildings,
-          floors,
-          zones,
-          subZones,
-        ),
-      ),
-    };
-  }
-
-  private toTreeArea(
-    country: AppCountry,
-    states: AppProjectArea[],
-    outerZones: AppOuterZone[],
-    buildings: AppBuilding[],
-    floors: AppFloor[],
-    zones: AppZone[],
-    subZones: AppSubZone[],
-  ): Area {
-    const lat = parseFloat(country.latitude);
-    const lng = parseFloat(country.longitude);
-    return {
-      kind: 'area',
-      id: country.id,
-      name: country.countryName,
-      coords: !isNaN(lat) && !isNaN(lng) ? { lat, lng, zoom: 11 } : DEFAULT_COORDS,
-      states: states.map((state) =>
-        this.toTreeState(
-          state,
-          outerZones.filter((o) => o.areaId === state.id),
-          buildings,
-          floors,
-          zones,
-          subZones,
-        ),
-      ),
-      description: country.description || undefined,
-      timeZone: country.timeZone || undefined,
-      countryCode: country.countryCode || undefined,
-      status: country.status ? 'active' : 'inactive',
-    };
-  }
-
-  /**
-   * The backend "Area" resource has no indoor/outdoor classification, so a freshly-loaded state
-   * always allows both zones and outer zones (`indoor_outdoor`) — the "Outdoor Map" choice made in
-   * the form only affects the current session's tree behavior, since there's nowhere to persist it.
-   */
-  private toTreeState(
-    area: AppProjectArea,
-    outerZones: AppOuterZone[],
-    buildings: AppBuilding[],
-    floors: AppFloor[],
-    zones: AppZone[],
-    subZones: AppSubZone[],
-  ): State {
-    const lat = parseFloat(area.latitude);
-    const lng = parseFloat(area.longitude);
-    return {
-      kind: 'state',
-      id: area.id,
-      name: area.areaName,
-      type: 'indoor_outdoor',
-      coords: !isNaN(lat) && !isNaN(lng) ? { lat, lng, zoom: 13 } : DEFAULT_COORDS,
-      zones: [],
-      outerZones: outerZones.map((oz) =>
-        this.toTreeOuterZone(oz, buildings.filter((b) => b.outerZoneId === oz.id), floors, zones, subZones),
-      ),
-      description: area.description || undefined,
-      status: area.status ? 'active' : 'inactive',
-    };
-  }
-
-  private toTreeOuterZone(
-    outerZone: AppOuterZone,
-    buildings: AppBuilding[],
-    floors: AppFloor[],
-    zones: AppZone[],
-    subZones: AppSubZone[],
-  ): OuterZone {
-    const lat = parseFloat(outerZone.latitude);
-    const lng = parseFloat(outerZone.longitude);
-    return {
-      kind: 'outerZone',
-      id: outerZone.id,
-      name: outerZone.outerZoneName,
-      coords: !isNaN(lat) && !isNaN(lng) ? { lat, lng, zoom: 14 } : DEFAULT_COORDS,
-      buildings: buildings.map((b) => this.toTreeBuilding(b, floors, zones, subZones)),
-      description: outerZone.description || undefined,
-      status: outerZone.status ? 'active' : 'inactive',
-    };
-  }
-
-  private toTreeBuilding(building: AppBuilding, floors: AppFloor[], zones: AppZone[], subZones: AppSubZone[]): Building {
-    const lat = parseFloat(building.latitude);
-    const lng = parseFloat(building.longitude);
-    const coords = !isNaN(lat) && !isNaN(lng) ? { lat, lng, zoom: 16 } : DEFAULT_COORDS;
-    return {
-      kind: 'building',
-      id: building.id,
-      name: building.buildingName,
-      coords,
-      floors: floors.filter((f) => f.buildingId === building.id).map((f) => this.toTreeFloor(f, coords, zones, subZones)),
-      description: building.description || undefined,
-      status: building.status ? 'active' : 'inactive',
-    };
-  }
-
-  /** The backend "Floor" resource carries no coordinates of its own, so it inherits its building's. */
-  private toTreeFloor(floor: AppFloor, buildingCoords: Coords, zones: AppZone[], subZones: AppSubZone[]): Floor {
-    return {
-      kind: 'floor',
-      id: floor.id,
-      name: floor.floorName,
-      coords: buildingCoords,
-      zones: zones.filter((z) => z.floorId === floor.id).map((z) => this.toTreeZone(z, buildingCoords, subZones)),
-      description: floor.description || undefined,
-      mapImage: floor.mapPath || undefined,
-      status: floor.status ? 'active' : 'inactive',
-    };
-  }
-
-  /** The backend "Zone" resource carries no coordinates of its own, so it inherits its floor's. */
-  private toTreeZone(zone: AppZone, floorCoords: Coords, subZones: AppSubZone[]): Zone {
-    return {
-      kind: 'zone',
-      id: zone.id,
-      name: zone.zoneName,
-      color: ZONE_COLORS[0].value,
-      coords: floorCoords,
-      zones: subZones.filter((s) => s.zoneId === zone.id).map((s) => this.toTreeSubZone(s, floorCoords)),
-      description: zone.description || undefined,
-      mapImage: zone.mapPath || undefined,
-      topZone: zone.topZone || undefined,
-      priority: zone.priority || undefined,
-      exit: zone.exitPoint ? 'active' : 'inactive',
-      assemblyPoint: zone.musterPoint ? 'active' : 'inactive',
-      timeTakenAssemblePoint: zone.timeTakenAssemblePoint,
-      status: zone.status ? 'active' : 'inactive',
-    };
-  }
-
-  /** The backend "Sub-Zone" resource carries no coordinates of its own, so it inherits its zone's. */
-  private toTreeSubZone(subZone: AppSubZone, zoneCoords: Coords): Zone {
-    return {
-      kind: 'zone',
-      id: subZone.id,
-      name: subZone.subZoneName,
-      color: ZONE_COLORS[0].value,
-      coords: zoneCoords,
-      zones: [],
-      description: subZone.description || undefined,
-      mapImage: subZone.mapPath || undefined,
-      isTopZone: subZone.topZone ? 'active' : 'inactive',
-      priority: String(subZone.priority),
-      exit: subZone.exit ? 'active' : 'inactive',
-      assemblyPoint: subZone.assemblyPoint ? 'active' : 'inactive',
-      timeTakenAssemblePoint: subZone.timeTakenAssemblePoint,
-      status: subZone.status ? 'active' : 'inactive',
-    };
   }
 
   private findParentProjectOfArea(areaId: string): Project | undefined {

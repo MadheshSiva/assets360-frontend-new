@@ -295,6 +295,17 @@
   white-space: nowrap;
 }
 
+/* Full screen: fill the screen with a neutral backdrop around the plan */
+:host(:fullscreen) {
+  background: #e4e3e8;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+:host(:fullscreen) .floor-plan {
+  height: 100%;
+}
+
 .zone-asset-label {
   position: absolute;
   transform: translate(-50%, -50%);

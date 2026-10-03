@@ -4,6 +4,7 @@ import { Login } from './components/pages/login/login/login';
 import { Signup } from './components/pages/signup/signup/signup';
 import { SectionUnavailable } from './section-unavailable/section-unavailable';
 import { ModulePlaceholder } from './module-placeholder/module-placeholder';
+import { AssetRegistration } from './components/pages/assets/asset-registration/asset-registration';
 import { Events } from './components/pages/events/events/events';
 import { Reports } from './components/pages/reports/reports/reports';
 import { CreateReport } from './components/pages/reports/create-report/create-report';
@@ -155,7 +156,16 @@ export const routes: Routes = [
       { path: 'dashboard', loadChildren: remoteRoutes('dashboard') },
       // New UI modules: placeholder pages until their screens are built
       { path: 'assets', component: ModulePlaceholder, data: { title: 'Assets' } },
+      { path: 'assets/registration', component: AssetRegistration },
+      { path: 'assets/list', component: ModulePlaceholder, data: { title: 'Asset List' } },
+      { path: 'assets/location-history', component: ModulePlaceholder, data: { title: 'Location History' } },
+      { path: 'assets/assignment', component: ModulePlaceholder, data: { title: 'Assignment' } },
+      { path: 'assets/maintenance', component: ModulePlaceholder, data: { title: 'Maintenance' } },
+      { path: 'assets/service-requests', component: ModulePlaceholder, data: { title: 'Service Requests' } },
+      { path: 'assets/audit', component: ModulePlaceholder, data: { title: 'Asset Audit' } },
+      { path: 'assets/disposal', component: ModulePlaceholder, data: { title: 'Disposal' } },
       { path: 'tracking-iot', component: ModulePlaceholder, data: { title: 'Tracking & IoT' } },
+      { path: 'tracking-iot/real-time-location', loadChildren: remoteRoutes('locating') },
       { path: 'movement-custody', component: ModulePlaceholder, data: { title: 'Movement & Custody' } },
       { path: 'maintenance', component: ModulePlaceholder, data: { title: 'Maintenance' } },
       { path: 'inspection', component: ModulePlaceholder, data: { title: 'Inspection' } },
@@ -165,7 +175,7 @@ export const routes: Routes = [
       { path: 'contracts-warranty', component: ModulePlaceholder, data: { title: 'Contracts & Warranty' } },
       { path: 'financial', component: ModulePlaceholder, data: { title: 'Financial' } },
       { path: 'reports-analytics', component: ModulePlaceholder, data: { title: 'Reports & Analytics' } },
-      { path: 'locating', loadChildren: remoteRoutes('locating') },
+      { path: 'locating', redirectTo: 'tracking-iot/real-time-location', pathMatch: 'full' },
       { path: 'events', component: Events },
       { path: 'report', component: Reports },
       { path: 'report/create', component: CreateReport },

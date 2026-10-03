@@ -1,6 +1,8 @@
 import { Component, ElementRef, HostListener, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router, RouterModule } from '@angular/router';
+import { NavigationEnd, Router, RouterModule } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { filter } from 'rxjs';
 import {
   LucideAngularModule,
   LucideIconData,
@@ -53,8 +55,29 @@ export class Sidebar {
 
   navItems: NavItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { label: 'Assets', path: '/assets', icon: Boxes },
-    { label: 'Tracking & IoT', path: '/tracking-iot', icon: RadioTower },
+    {
+      label: 'Assets',
+      path: '/assets',
+      icon: Boxes,
+      children: [
+        { label: 'Asset Registration', path: '/assets/registration' },
+        { label: 'Asset List', path: '/assets/list' },
+        { label: 'Location History', path: '/assets/location-history' },
+        { label: 'Assignment', path: '/assets/assignment' },
+        { label: 'Maintenance', path: '/assets/maintenance' },
+        { label: 'Service Requests', path: '/assets/service-requests' },
+        { label: 'Asset Audit', path: '/assets/audit' },
+        { label: 'Disposal', path: '/assets/disposal' }
+      ]
+    },
+    {
+      label: 'Tracking & IoT',
+      path: '/tracking-iot',
+      icon: RadioTower,
+      children: [
+        { label: 'Real-time Location', path: '/tracking-iot/real-time-location' }
+      ]
+    },
     { label: 'Movement & Custody', path: '/movement-custody', icon: ArrowLeftRight },
     { label: 'Maintenance', path: '/maintenance', icon: Wrench },
     { label: 'Inspection', path: '/inspection', icon: ClipboardCheck },
@@ -237,7 +260,50 @@ export class Sidebar {
     }
   ];
 
-  constructor(private router: Router, private elementRef: ElementRef) { }
+  // labels of the top-level items whose submenu is expanded inline inside the sidebar (e.g. 'Assets')
+  openInline = new Set<string>();
+
+  constructor(private router: Router, private elementRef: ElementRef) {
+    // Keep the section that contains the current page expanded, including on first load / deep links
+    this.router.events
+      .pipe(
+        filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+        takeUntilDestroyed()
+      )
+      .subscribe(() => {
+        this.navItems
+          .filter((item) => this.isInline(item) && this.isSectionActive(item))
+          .forEach((item) => this.openInline.add(item.label));
+      });
+  }
+
+  // Items with a single level of children expand inline; deeper menus (Administration) keep the flyout
+  isInline(item: NavItem): boolean {
+    return !!item.children?.length && item.children.every((child) => !child.children);
+  }
+
+  // True when the current page is this item's page or one of its sub pages
+  isSectionActive(item: NavItem): boolean {
+    const url = this.router.url.split('?')[0];
+    return url === item.path || url.startsWith(item.path + '/');
+  }
+
+  isInlineOpen(label: string): boolean {
+    return !this.collapsed && this.openInline.has(label);
+  }
+
+  // Inline items expand in place; when the sidebar is collapsed there is no room, so they use the flyout
+  toggleInline(item: NavItem, triggerEl: EventTarget | null): void {
+    if (this.collapsed) {
+      this.toggleDropdown(item.label, triggerEl);
+      return;
+    }
+    if (this.openInline.has(item.label)) {
+      this.openInline.delete(item.label);
+    } else {
+      this.openInline.add(item.label);
+    }
+  }
 
   private assetUrl(fileName: string): string {
     return `/assets/${encodeURIComponent(fileName)}`;

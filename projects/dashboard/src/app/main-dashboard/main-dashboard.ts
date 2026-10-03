@@ -294,6 +294,6 @@ export class MainDashboard implements OnInit {
   }
 
   locate(zoneName: string): void {
-    this.router.navigate(['/locating'], { queryParams: { zone: zoneName } });
+    this.router.navigate(['/tracking-iot/real-time-location'], { queryParams: { zone: zoneName } });
   }
 }

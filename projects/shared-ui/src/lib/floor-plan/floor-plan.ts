@@ -72,6 +72,8 @@ export class FloorPlanComponent implements OnChanges {
   /** Label shown on each drawn zone's asset count (e.g. "Unique Assets", "Movable Assets"),
    *  driven by the host's asset-category filter so it stays in sync with the toolbar. */
   @Input() assetLabel = 'Unique Assets';
+  /** Lets the plan be dragged anywhere at any zoom (Locating), instead of only panning while zoomed in. */
+  @Input() freePan = false;
   /** Fired when a placed asset icon is clicked, so the host can show that asset's details. */
   @Output() assetClick = new EventEmitter<{ zone: DrawnZone; asset: ZoneAsset }>();
   /** Fired when the zone's "<Label>: N" count badge is clicked, so the host can list every
@@ -121,8 +123,19 @@ export class FloorPlanComponent implements OnChanges {
   private panStartX = 0;
   private panStartY = 0;
 
+  get canPan(): boolean {
+    return !this.isDrawing && (this.freePan || this.zoomLevel > this.minZoom);
+  }
+
+  /** How far the zoom layer may move from center. Normally just enough to reach the edges of the
+   *  zoomed image; with freePan, until only ~20% of the plan is left in view. */
+  private maxPan(rect: DOMRect): { x: number; y: number } {
+    const reach = this.freePan ? this.zoomLevel / 2 + 0.3 : (this.zoomLevel - 1) / 2;
+    return { x: reach * rect.width, y: reach * rect.height };
+  }
+
   startPan(event: MouseEvent): void {
-    if (this.isDrawing || this.zoomLevel <= this.minZoom) return;
+    if (!this.canPan) return;
     event.preventDefault();
     this.isPanning = true;
     this.dragMoved = false;
@@ -142,10 +155,9 @@ export class FloorPlanComponent implements OnChanges {
 
     const rect = this.floorPlanCanvasRef?.nativeElement.getBoundingClientRect();
     if (!rect) return;
-    const maxPanX = ((this.zoomLevel - 1) / 2) * rect.width;
-    const maxPanY = ((this.zoomLevel - 1) / 2) * rect.height;
-    this.panX = this.clamp(this.panStartX + dx, -maxPanX, maxPanX);
-    this.panY = this.clamp(this.panStartY + dy, -maxPanY, maxPanY);
+    const max = this.maxPan(rect);
+    this.panX = this.clamp(this.panStartX + dx, -max.x, max.x);
+    this.panY = this.clamp(this.panStartY + dy, -max.y, max.y);
   }
 
   @HostListener('document:mouseup')
@@ -163,13 +175,30 @@ export class FloorPlanComponent implements OnChanges {
     this.clampPanToZoom();
   }
 
+  isFullscreen = false;
+
+  constructor(private readonly hostRef: ElementRef<HTMLElement>) {}
+
+  /** Expands the whole floor plan (tools + canvas) to fill the screen, or exits fullscreen. */
+  toggleFullscreen(): void {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      this.hostRef.nativeElement.requestFullscreen?.();
+    }
+  }
+
+  @HostListener('document:fullscreenchange')
+  onFullscreenChange(): void {
+    this.isFullscreen = document.fullscreenElement === this.hostRef.nativeElement;
+  }
+
   private clampPanToZoom(): void {
     const rect = this.floorPlanCanvasRef?.nativeElement.getBoundingClientRect();
     if (!rect) return;
-    const maxPanX = ((this.zoomLevel - 1) / 2) * rect.width;
-    const maxPanY = ((this.zoomLevel - 1) / 2) * rect.height;
-    this.panX = this.clamp(this.panX, -maxPanX, maxPanX);
-    this.panY = this.clamp(this.panY, -maxPanY, maxPanY);
+    const max = this.maxPan(rect);
+    this.panX = this.clamp(this.panX, -max.x, max.x);
+    this.panY = this.clamp(this.panY, -max.y, max.y);
   }
 
   private clamp(value: number, min: number, max: number): number {
@@ -365,6 +394,11 @@ export class FloorPlanComponent implements OnChanges {
   addAssetAt(zone: DrawnZone, event: MouseEvent): void {
     event.stopPropagation();
     if (this.isDrawing) return;
+    // A drag that ended over a zone is a pan, not a click — don't drop an asset icon.
+    if (this.dragMoved) {
+      this.dragMoved = false;
+      return;
+    }
     const point = this.toImagePoint(event);
     if (!point) return;
     this.selectedZoneId = zone.id;

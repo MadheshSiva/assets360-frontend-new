@@ -1,0 +1,1383 @@
+<section class="reg-page">
+  <!-- Everything above the action bar scrolls; the bar stays pinned to the bottom of the screen -->
+  <div class="reg-scroll">
+  <!-- Breadcrumb + back -->
+  <div class="reg-topbar">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a routerLink="/assets/list">Assets</a>
+      <span class="breadcrumb-sep" aria-hidden="true">&rsaquo;</span>
+      <span class="breadcrumb-current">Asset Registration</span>
+    </nav>
+    <button type="button" class="btn btn-outline btn-sm" (click)="backToList()">
+      <lucide-icon [img]="icons.ChevronLeft" [size]="16"></lucide-icon>
+      Back to List
+    </button>
+  </div>
+
+  <!-- Header + stepper -->
+  <div class="card reg-header">
+    <div class="reg-title-row">
+      <span class="icon-tile icon-tile--lg">
+        <lucide-icon [img]="icons.Box" [size]="24"></lucide-icon>
+      </span>
+      <div>
+        <h1>Register Asset</h1>
+        <p>Add a new asset to your organization with complete details</p>
+      </div>
+    </div>
+
+    <ol class="stepper">
+      <li
+        *ngFor="let step of steps; let i = index"
+        class="step"
+        [class.is-active]="i === currentStep"
+        [class.is-done]="i < currentStep"
+        (click)="goToStep(i)"
+      >
+        <span class="step-number">
+          <lucide-icon *ngIf="i < currentStep; else stepNumber" [img]="icons.Check" [size]="14" [strokeWidth]="3"></lucide-icon>
+          <ng-template #stepNumber>{{ i + 1 }}</ng-template>
+        </span>
+        <span class="step-text">
+          <span class="step-title">{{ step.title }}</span>
+          <span class="step-subtitle">{{ step.subtitle }}</span>
+        </span>
+      </li>
+    </ol>
+  </div>
+
+  <div class="reg-body" [class.reg-body--wide-side]="currentStep >= 2">
+    <!-- ===== Left: the current step's form ===== -->
+    <div class="card form-card">
+      <!-- Step 1: Basic Information -->
+      <ng-container *ngIf="currentStep === 0">
+        <div class="card-head">
+          <span class="icon-tile"><lucide-icon [img]="icons.ListChecks" [size]="18"></lucide-icon></span>
+          <div>
+            <h2>Basic Information</h2>
+            <p>Enter the fundamental details of the asset</p>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            <span class="field-label">Asset Name <em>*</em></span>
+            <input class="control" [class.is-invalid]="isInvalid('assetName')" [(ngModel)]="form.assetName" placeholder="Enter asset name" />
+          </label>
+
+          <label class="field">
+            <span class="field-label">Asset Tag / Asset ID <em>*</em></span>
+            <span class="control-group" [class.is-invalid]="isInvalid('assetTag')">
+              <input class="control" [(ngModel)]="form.assetTag" placeholder="e.g. GEN-00045" />
+              <button type="button" class="control-addon" title="Scan asset tag" (click)="scanBarcode()">
+                <lucide-icon [img]="icons.ScanLine" [size]="18"></lucide-icon>
+              </button>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Barcode / QR Code</span>
+            <span class="control-group">
+              <input class="control" [(ngModel)]="form.barcode" placeholder="Scan or enter barcode" />
+              <button type="button" class="control-addon" title="Scan barcode" (click)="scanBarcode()">
+                <lucide-icon [img]="icons.ScanLine" [size]="18"></lucide-icon>
+              </button>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">RFID Tag ID</span>
+            <span class="control-group">
+              <input class="control" [(ngModel)]="form.rfidTag" placeholder="Read or enter RFID tag" />
+              <button type="button" class="control-addon" title="Read RFID" (click)="readRfid()">
+                <lucide-icon [img]="icons.ScanLine" [size]="18"></lucide-icon>
+              </button>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Category <em>*</em></span>
+            <span class="select-wrap">
+              <select class="control" [class.is-invalid]="isInvalid('category')" [(ngModel)]="form.category" (ngModelChange)="onCategoryChange()">
+                <option value="" disabled>Select category</option>
+                <option *ngFor="let o of categories" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Sub Category <em>*</em></span>
+            <span class="select-wrap">
+              <select class="control" [class.is-invalid]="isInvalid('subCategory')" [(ngModel)]="form.subCategory" (ngModelChange)="onSubCategoryChange()">
+                <option value="" disabled>Select sub category</option>
+                <option *ngFor="let o of subCategories" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Asset Type <em>*</em></span>
+            <span class="select-wrap">
+              <select class="control" [class.is-invalid]="isInvalid('assetType')" [(ngModel)]="form.assetType" (ngModelChange)="onAssetTypeChange()">
+                <option value="" disabled>Select asset type</option>
+                <option *ngFor="let o of assetTypes" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Model</span>
+            <input class="control" [(ngModel)]="form.model" placeholder="Enter model" />
+          </label>
+
+          <label class="field">
+            <span class="field-label">Manufacturer</span>
+            <span class="select-wrap">
+              <select class="control control--clearable" [(ngModel)]="form.manufacturer">
+                <option value="" disabled>Select manufacturer</option>
+                <option *ngFor="let o of manufacturers" [value]="o.value">{{ o.label }}</option>
+              </select>
+              <button type="button" class="clear-btn" *ngIf="form.manufacturer" title="Clear"
+                (click)="$event.preventDefault(); form.manufacturer = ''">
+                <lucide-icon [img]="icons.X" [size]="10" [strokeWidth]="3"></lucide-icon>
+              </button>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Serial Number</span>
+            <input class="control" [(ngModel)]="form.serialNumber" placeholder="Enter serial number" />
+          </label>
+
+          <div class="form-row-3">
+            <label class="field">
+              <span class="field-label">Status <em>*</em></span>
+              <span class="select-wrap select-wrap--dot">
+                <span class="status-dot" [style.background]="colorOf(statuses, form.status)"></span>
+                <select class="control" [class.is-invalid]="isInvalid('status')" [(ngModel)]="form.status">
+                  <option *ngFor="let o of statuses" [value]="o.value">{{ o.label }}</option>
+                </select>
+              </span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Condition</span>
+              <span class="select-wrap select-wrap--dot">
+                <span class="status-dot" [style.background]="colorOf(conditions, form.condition)"></span>
+                <select class="control" [(ngModel)]="form.condition">
+                  <option *ngFor="let o of conditions" [value]="o.value">{{ o.label }}</option>
+                </select>
+              </span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Criticality</span>
+              <span class="select-wrap select-wrap--dot">
+                <span class="status-dot" [style.background]="colorOf(criticalities, form.criticality)"></span>
+                <select class="control" [(ngModel)]="form.criticality">
+                  <option *ngFor="let o of criticalities" [value]="o.value">{{ o.label }}</option>
+                </select>
+              </span>
+            </label>
+          </div>
+
+          <label class="field field--full">
+            <span class="field-label">Description</span>
+            <span class="textarea-wrap">
+              <textarea class="control" rows="4" [maxlength]="descriptionMax" [(ngModel)]="form.description"
+                placeholder="Describe the asset"></textarea>
+              <span class="char-count">{{ form.description.length }}/{{ descriptionMax }}</span>
+            </span>
+          </label>
+        </div>
+      </ng-container>
+
+      <!-- Step 2: Classification -->
+      <ng-container *ngIf="currentStep === 1">
+        <div class="card-head">
+          <span class="icon-tile"><lucide-icon [img]="icons.LayoutGrid" [size]="18"></lucide-icon></span>
+          <div>
+            <h2>Classification</h2>
+            <p>Define the category, type and key classification details for the asset</p>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label class="field-label" for="cls-category">Category <em>*</em></label>
+            <span class="select-row">
+              <span class="select-wrap">
+                <select id="cls-category" class="control" [class.is-invalid]="isInvalid('category')"
+                  [(ngModel)]="form.category" (ngModelChange)="onCategoryChange()">
+                  <option value="" disabled>Select category</option>
+                  <option *ngFor="let o of categories" [value]="o.value">{{ o.label }}</option>
+                </select>
+              </span>
+              <button type="button" class="square-btn" title="Manage categories" (click)="manageCategories('category')">
+                <lucide-icon [img]="icons.Settings" [size]="18"></lucide-icon>
+              </button>
+            </span>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="cls-subcategory">Sub Category <em>*</em></label>
+            <span class="select-row">
+              <span class="select-wrap">
+                <select id="cls-subcategory" class="control" [class.is-invalid]="isInvalid('subCategory')"
+                  [(ngModel)]="form.subCategory" (ngModelChange)="onSubCategoryChange()">
+                  <option value="" disabled>Select sub category</option>
+                  <option *ngFor="let o of subCategories" [value]="o.value">{{ o.label }}</option>
+                </select>
+              </span>
+              <button type="button" class="square-btn" title="Manage sub categories" (click)="manageCategories('sub category')">
+                <lucide-icon [img]="icons.Settings" [size]="18"></lucide-icon>
+              </button>
+            </span>
+          </div>
+
+          <label class="field">
+            <span class="field-label">Asset Type <em>*</em></span>
+            <span class="select-wrap">
+              <select class="control" [class.is-invalid]="isInvalid('assetType')" [(ngModel)]="form.assetType"
+                (ngModelChange)="onAssetTypeChange()">
+                <option value="" disabled>Select asset type</option>
+                <option *ngFor="let o of assetTypes" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Asset Sub Type</span>
+            <span class="select-wrap">
+              <select class="control" [(ngModel)]="form.assetSubType" [disabled]="!assetSubTypes.length">
+                <option value="" disabled>{{ assetSubTypes.length ? 'Select asset sub type' : 'No sub types' }}</option>
+                <option *ngFor="let o of assetSubTypes" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Function / Purpose</span>
+            <span class="select-wrap">
+              <select class="control" [(ngModel)]="form.functionPurpose">
+                <option value="" disabled>Select function</option>
+                <option *ngFor="let o of functionPurposes" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Criticality <em>*</em></span>
+            <span class="select-wrap select-wrap--dot">
+              <span class="status-dot" [style.background]="colorOf(criticalities, form.criticality)"></span>
+              <select class="control" [class.is-invalid]="isInvalid('criticality')" [(ngModel)]="form.criticality">
+                <option *ngFor="let o of criticalities" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Department <em>*</em></span>
+            <span class="select-wrap">
+              <select class="control" [class.is-invalid]="isInvalid('department')" [(ngModel)]="form.department">
+                <option value="" disabled>Select department</option>
+                <option *ngFor="let o of departments" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Cost Center</span>
+            <span class="select-wrap">
+              <select class="control" [(ngModel)]="form.costCenter">
+                <option value="" disabled>Select cost center</option>
+                <option *ngFor="let o of costCenters" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Business Unit</span>
+            <span class="select-wrap">
+              <select class="control" [(ngModel)]="form.businessUnit">
+                <option value="" disabled>Select business unit</option>
+                <option *ngFor="let o of businessUnits" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <div class="field" role="radiogroup" aria-labelledby="cls-tagging-label">
+            <span class="field-label" id="cls-tagging-label">Tagging Method <em>*</em></span>
+            <span class="radio-row" [class.is-invalid]="isInvalid('taggingMethod')">
+              <label class="radio" *ngFor="let o of taggingMethods">
+                <input type="radio" name="taggingMethod" [value]="o.value" [(ngModel)]="form.taggingMethod" />
+                <span class="radio-mark"></span>
+                {{ o.label }}
+              </label>
+            </span>
+          </div>
+
+          <label class="field">
+            <span class="field-label">Compliance Category</span>
+            <span class="select-wrap">
+              <select class="control" [(ngModel)]="form.complianceCategory">
+                <option value="" disabled>Select compliance category</option>
+                <option *ngFor="let o of complianceCategories" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Lifecycle Stage <em>*</em></span>
+            <span class="select-wrap">
+              <select class="control" [class.is-invalid]="isInvalid('lifecycleStage')" [(ngModel)]="form.lifecycleStage">
+                <option value="" disabled>Select lifecycle stage</option>
+                <option *ngFor="let o of lifecycleStages" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <div class="field field--full">
+            <label class="field-label" for="cls-keywords">Keywords / Tags</label>
+            <span class="chip-input" (click)="keywordInput.focus()">
+              <span class="chip" *ngFor="let k of form.keywords; let i = index">
+                {{ k }}
+                <button type="button" class="chip-remove" [title]="'Remove ' + k"
+                  (click)="$event.stopPropagation(); removeKeyword(i)">
+                  <lucide-icon [img]="icons.X" [size]="14" [strokeWidth]="2.5"></lucide-icon>
+                </button>
+              </span>
+              <input id="cls-keywords" #keywordInput class="chip-input-field" [(ngModel)]="keywordDraft"
+                placeholder="Add tag and press Enter" (keydown.enter)="addKeyword($event)"
+                (keydown.backspace)="onKeywordBackspace()" (blur)="addKeyword()" (keyup)="keywordDraft.includes(',') && addKeyword()" />
+            </span>
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- Step 3: Location & Assignment -->
+      <ng-container *ngIf="currentStep === 2">
+        <div class="card-head">
+          <span class="icon-tile"><lucide-icon [img]="icons.MapPin" [size]="18"></lucide-icon></span>
+          <div>
+            <h2>Location & Assignment</h2>
+            <p>Specify where the asset is located and assign ownership and responsibility</p>
+          </div>
+        </div>
+
+        <div class="sub-head">
+          <span class="icon-tile icon-tile--sm"><lucide-icon [img]="icons.MapPin" [size]="16"></lucide-icon></span>
+          <h3>Location Details</h3>
+        </div>
+
+        <div class="form-grid form-grid--3">
+          <label class="field" *ngFor="let level of locationLevels; let i = index">
+            <span class="field-label">{{ level.label }} <em *ngIf="isLevelRequired(level)">*</em></span>
+            <span class="select-wrap">
+              <select class="control" [class.is-invalid]="isInvalid(level.key)" [(ngModel)]="form[level.key]"
+                (ngModelChange)="onLocationLevelChange(i)" [disabled]="!locationOptions(i).length">
+                <option value="" disabled>{{ level.placeholder }}</option>
+                <option *ngFor="let o of locationOptions(i)" [value]="o.id">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <div class="field field--full">
+            <span class="field-label">Location Path</span>
+            <div class="location-path">
+              <lucide-icon [img]="icons.House" [size]="16"></lucide-icon>
+              <ng-container *ngFor="let n of locationPath; let last = last">
+                <span>{{ n.label }}</span>
+                <lucide-icon *ngIf="!last" class="location-path-sep" [img]="icons.ChevronRight" [size]="14"></lucide-icon>
+              </ng-container>
+              <span class="muted" *ngIf="!locationPath.length">Select a location</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub-head sub-head--spaced">
+          <span class="icon-tile icon-tile--sm"><lucide-icon [img]="icons.Users" [size]="16"></lucide-icon></span>
+          <h3>Assignment Details</h3>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            <span class="field-label">Custodian / Department <em>*</em></span>
+            <span class="select-wrap">
+              <select class="control" [class.is-invalid]="isInvalid('department')" [(ngModel)]="form.department">
+                <option value="" disabled>Select department</option>
+                <option *ngFor="let o of departments" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Assigned To (Person)</span>
+            <span class="select-wrap select-wrap--person" [class.has-avatar]="assignedPerson">
+              <lucide-icon class="person-icon" [img]="icons.User" [size]="17"></lucide-icon>
+              <span class="avatar avatar--sm person-avatar" *ngIf="assignedPerson">{{ assignedPerson.initials }}</span>
+              <select id="loc-assigned" class="control control--clearable" [(ngModel)]="form.assignedTo">
+                <option value="" disabled>Select person</option>
+                <option *ngFor="let p of people" [value]="p.value">{{ p.label }}</option>
+              </select>
+              <button type="button" class="clear-btn" *ngIf="form.assignedTo" title="Clear"
+                (click)="$event.preventDefault(); form.assignedTo = ''">
+                <lucide-icon [img]="icons.X" [size]="10" [strokeWidth]="3"></lucide-icon>
+              </button>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Ownership Type</span>
+            <span class="select-wrap">
+              <select class="control" [(ngModel)]="form.ownershipType">
+                <option value="" disabled>Select ownership type</option>
+                <option *ngFor="let o of ownershipTypes" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Cost Center</span>
+            <span class="select-wrap">
+              <select class="control" [(ngModel)]="form.costCenter">
+                <option value="" disabled>Select cost center</option>
+                <option *ngFor="let o of costCenters" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <div class="form-row-3">
+            <div class="field">
+              <span class="field-label field-label--action">
+                <label for="loc-team">Responsible Team</label>
+                <button type="button" class="label-action" title="Reset to the department's default team"
+                  (click)="resetResponsibleTeam()">
+                  <lucide-icon [img]="icons.RotateCcw" [size]="12" [strokeWidth]="2.5"></lucide-icon>
+                </button>
+              </span>
+              <span class="select-wrap">
+                <select id="loc-team" class="control" [(ngModel)]="form.responsibleTeam">
+                  <option value="" disabled>Select team</option>
+                  <option *ngFor="let o of teams" [value]="o.value">{{ o.label }}</option>
+                </select>
+              </span>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="loc-start">Assignment Start Date</label>
+              <span class="date-control" (click)="openDatePicker(startInput)">
+                <lucide-icon [img]="icons.Calendar" [size]="17"></lucide-icon>
+                <span [class.muted]="!form.assignmentStart">
+                  {{ form.assignmentStart ? (form.assignmentStart | date: 'dd MMM yyyy') : 'Select date' }}
+                </span>
+                <input #startInput id="loc-start" type="date" class="date-native" [(ngModel)]="form.assignmentStart"
+                  [attr.max]="form.assignmentEnd || null" />
+              </span>
+            </div>
+
+            <div class="field">
+              <span class="field-label field-label--action">
+                <label for="loc-end">Assignment End Date</label>
+                <button type="button" class="label-action" title="Clear end date" (click)="form.assignmentEnd = ''">
+                  <lucide-icon [img]="icons.RotateCcw" [size]="12" [strokeWidth]="2.5"></lucide-icon>
+                </button>
+              </span>
+              <span class="date-control" (click)="openDatePicker(endInput)">
+                <lucide-icon [img]="icons.Calendar" [size]="17"></lucide-icon>
+                <span [class.muted]="!form.assignmentEnd">
+                  {{ form.assignmentEnd ? (form.assignmentEnd | date: 'dd MMM yyyy') : 'Select date' }}
+                </span>
+                <input #endInput id="loc-end" type="date" class="date-native" [(ngModel)]="form.assignmentEnd"
+                  [attr.min]="form.assignmentStart || null" />
+              </span>
+            </div>
+          </div>
+
+          <label class="check field--full">
+            <input type="checkbox" [(ngModel)]="form.setAsCurrent" />
+            <span class="check-box"><lucide-icon [img]="icons.Check" [size]="13" [strokeWidth]="3.5"></lucide-icon></span>
+            Set as current location and assignment
+          </label>
+        </div>
+      </ng-container>
+
+      <!-- Step 4: Purchase & Warranty -->
+      <ng-container *ngIf="currentStep === 3">
+        <div class="card-head">
+          <span class="icon-tile"><lucide-icon [img]="icons.ShoppingCart" [size]="18"></lucide-icon></span>
+          <div>
+            <h2>Purchase Information</h2>
+            <p>Enter the procurement and cost details of the asset</p>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            <span class="field-label">Purchase Order Number <em>*</em></span>
+            <input class="control" [class.is-invalid]="isInvalid('purchaseOrder')" [(ngModel)]="form.purchaseOrder"
+              placeholder="e.g. PO-2026-00458" />
+          </label>
+
+          <label class="field">
+            <span class="field-label">Invoice Number</span>
+            <input class="control" [(ngModel)]="form.invoiceNumber" placeholder="e.g. INV-2026-0789" />
+          </label>
+
+          <label class="field">
+            <span class="field-label">Supplier / Vendor <em>*</em></span>
+            <span class="select-wrap">
+              <select class="control control--clearable" [class.is-invalid]="isInvalid('vendor')" [(ngModel)]="form.vendor">
+                <option value="" disabled>Select supplier</option>
+                <option *ngFor="let o of vendors" [value]="o.value">{{ o.label }}</option>
+              </select>
+              <button type="button" class="clear-btn" *ngIf="form.vendor" title="Clear"
+                (click)="$event.preventDefault(); form.vendor = ''">
+                <lucide-icon [img]="icons.X" [size]="10" [strokeWidth]="3"></lucide-icon>
+              </button>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Manufacturer <em>*</em></span>
+            <span class="select-wrap">
+              <select class="control control--clearable" [class.is-invalid]="isInvalid('manufacturer')" [(ngModel)]="form.manufacturer">
+                <option value="" disabled>Select manufacturer</option>
+                <option *ngFor="let o of manufacturers" [value]="o.value">{{ o.label }}</option>
+              </select>
+              <button type="button" class="clear-btn" *ngIf="form.manufacturer" title="Clear"
+                (click)="$event.preventDefault(); form.manufacturer = ''">
+                <lucide-icon [img]="icons.X" [size]="10" [strokeWidth]="3"></lucide-icon>
+              </button>
+            </span>
+          </label>
+
+          <div class="field">
+            <label class="field-label" for="pur-date">Purchase Date <em>*</em></label>
+            <span class="date-control" [class.is-invalid]="isInvalid('purchaseDate')" (click)="openDatePicker(purchaseInput)">
+              <lucide-icon [img]="icons.Calendar" [size]="17"></lucide-icon>
+              <span [class.muted]="!form.purchaseDate">
+                {{ form.purchaseDate ? (form.purchaseDate | date: 'dd MMM yyyy') : 'Select date' }}
+              </span>
+              <input #purchaseInput id="pur-date" type="date" class="date-native" [(ngModel)]="form.purchaseDate"
+                [attr.max]="form.deliveryDate || null" />
+            </span>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="pur-delivery">Delivery Date</label>
+            <span class="date-control" (click)="openDatePicker(deliveryInput)">
+              <lucide-icon [img]="icons.Calendar" [size]="17"></lucide-icon>
+              <span [class.muted]="!form.deliveryDate">
+                {{ form.deliveryDate ? (form.deliveryDate | date: 'dd MMM yyyy') : 'Select date' }}
+              </span>
+              <input #deliveryInput id="pur-delivery" type="date" class="date-native" [(ngModel)]="form.deliveryDate"
+                [attr.min]="form.purchaseDate || null" />
+            </span>
+          </div>
+
+          <label class="field">
+            <span class="field-label">Purchase Cost ({{ form.currency }}) <em>*</em></span>
+            <span class="control-group" [class.is-invalid]="isInvalid('purchaseCost')">
+              <input class="control" inputmode="decimal" placeholder="0.00"
+                [value]="costEditing ? form.purchaseCost : formatAmount(form.purchaseCost)"
+                (focus)="costEditing = true" (blur)="costEditing = false" (input)="onCostInput($event)" />
+              <span class="control-suffix">{{ form.currency }}</span>
+            </span>
+          </label>
+
+          <div class="field">
+            <label class="field-label" for="pur-qty">Quantity <em>*</em></label>
+            <span class="split-row">
+              <input id="pur-qty" class="control" type="number" min="1" step="1" [class.is-invalid]="isInvalid('quantity')"
+                [(ngModel)]="form.quantity" />
+              <span class="select-wrap">
+                <select class="control" [(ngModel)]="form.unit" aria-label="Unit">
+                  <option *ngFor="let o of units" [value]="o.value">{{ o.label }}</option>
+                </select>
+              </span>
+            </span>
+          </div>
+
+          <label class="field">
+            <span class="field-label">Currency</span>
+            <span class="select-wrap">
+              <select class="control" [(ngModel)]="form.currency">
+                <option *ngFor="let o of currencies" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <div class="field">
+            <span class="field-label field-label--action">
+              <label for="pur-tax">Tax (VAT %)</label>
+              <button type="button" class="label-action" title="Reset to the standard VAT rate for this currency"
+                (click)="resetTaxRate()">
+                <lucide-icon [img]="icons.RotateCcw" [size]="12" [strokeWidth]="2.5"></lucide-icon>
+              </button>
+            </span>
+            <span class="control-group">
+              <input id="pur-tax" class="control" type="number" min="0" max="100" step="0.5" [(ngModel)]="form.taxRate" />
+              <span class="control-suffix">%</span>
+            </span>
+          </div>
+
+          <label class="field">
+            <span class="field-label">Total Cost ({{ form.currency }})</span>
+            <input class="control control--readonly" readonly tabindex="-1" [value]="formatAmount(totalCost)"
+              title="Purchase cost × quantity, plus VAT" />
+          </label>
+
+          <label class="field">
+            <span class="field-label">Payment Terms</span>
+            <span class="select-wrap">
+              <select class="control" [(ngModel)]="form.paymentTerms">
+                <option value="" disabled>Select payment terms</option>
+                <option *ngFor="let o of paymentTermsOptions" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Procurement Method</span>
+            <span class="select-wrap">
+              <select class="control" [(ngModel)]="form.procurementMethod">
+                <option value="" disabled>Select procurement method</option>
+                <option *ngFor="let o of procurementMethods" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Project / Reference</span>
+            <input class="control" [(ngModel)]="form.projectReference" placeholder="Project or reference" />
+          </label>
+
+          <label class="field field--full">
+            <span class="field-label">Remarks</span>
+            <span class="textarea-wrap">
+              <textarea class="control" rows="2" [maxlength]="remarksMax" [(ngModel)]="form.remarks"
+                placeholder="Any notes about this purchase"></textarea>
+              <span class="char-count">{{ form.remarks.length }}/{{ remarksMax }}</span>
+            </span>
+          </label>
+        </div>
+      </ng-container>
+
+      <!-- Step 5: Additional Information -->
+      <ng-container *ngIf="currentStep === 4">
+        <div class="card-head">
+          <span class="icon-tile"><lucide-icon [img]="icons.FileText" [size]="18"></lucide-icon></span>
+          <div>
+            <h2>Additional Information</h2>
+            <p>Capture extra details, custom fields and important information for the asset</p>
+          </div>
+        </div>
+
+        <div class="info-tabs" role="tablist" aria-label="Additional information sections">
+          <button type="button" role="tab" class="info-tab" *ngFor="let t of infoTabs"
+            [class.is-active]="activeInfoTab === t.key" [attr.aria-selected]="activeInfoTab === t.key"
+            (click)="activeInfoTab = t.key">
+            <lucide-icon [img]="t.icon" [size]="16"></lucide-icon>
+            {{ t.label }}
+          </button>
+        </div>
+
+        <ng-container [ngSwitch]="activeInfoTab">
+          <ng-container *ngSwitchCase="'technical'">
+            <div class="sub-head sub-head--desc">
+              <span class="icon-tile icon-tile--sm"><lucide-icon [img]="icons.Cpu" [size]="16"></lucide-icon></span>
+              <div>
+                <h3>Technical Specifications</h3>
+                <p>Enter the technical and operational specifications of the asset</p>
+              </div>
+            </div>
+
+            <div class="form-grid spec-grid">
+              <div class="field" *ngFor="let f of specFields" [ngSwitch]="f.kind">
+                <label class="field-label" [attr.for]="'spec-' + f.key">{{ f.label }}</label>
+
+                <span class="split-row split-row--joined split-row--unit" *ngSwitchCase="'unit'">
+                  <input [id]="'spec-' + f.key" class="control" [type]="f.inputType ?? 'number'" [(ngModel)]="form.specs[f.key]" />
+                  <span class="select-wrap">
+                    <select class="control" [attr.aria-label]="f.label + ' unit'" [(ngModel)]="form.specs[f.unitKey!]">
+                      <option *ngFor="let u of f.units" [value]="u.value">{{ u.label }}</option>
+                    </select>
+                  </span>
+                </span>
+
+                <span class="select-wrap" *ngSwitchCase="'select'">
+                  <select [id]="'spec-' + f.key" class="control" [(ngModel)]="form.specs[f.key]">
+                    <option *ngFor="let o of f.options" [value]="o.value">{{ o.label }}</option>
+                  </select>
+                </span>
+
+                <span class="dims-row" *ngSwitchCase="'dimensions'">
+                  <input id="spec-length" class="control" type="number" min="0" aria-label="Length" [(ngModel)]="form.specs.length" />
+                  <span class="dims-x" aria-hidden="true">&times;</span>
+                  <input class="control" type="number" min="0" aria-label="Width" [(ngModel)]="form.specs.width" />
+                  <span class="dims-x" aria-hidden="true">&times;</span>
+                  <input class="control" type="number" min="0" aria-label="Height" [(ngModel)]="form.specs.height" />
+                  <span class="select-wrap">
+                    <select class="control" aria-label="Dimension unit" [(ngModel)]="form.specs.dimensionUnit">
+                      <option *ngFor="let u of f.units" [value]="u.value">{{ u.label }}</option>
+                    </select>
+                  </span>
+                </span>
+              </div>
+
+              <label class="field field--full">
+                <span class="field-label">Technical Remarks</span>
+                <span class="textarea-wrap">
+                  <textarea class="control" rows="2" [maxlength]="technicalRemarksMax" [(ngModel)]="form.specs.remarks"
+                    placeholder="Any technical notes about the asset"></textarea>
+                  <span class="char-count">{{ form.specs.remarks.length }}/{{ technicalRemarksMax }}</span>
+                </span>
+              </label>
+            </div>
+          </ng-container>
+
+          <ng-container *ngSwitchCase="'operational'">
+            <div class="sub-head sub-head--desc">
+              <span class="icon-tile icon-tile--sm"><lucide-icon [img]="icons.Settings" [size]="16"></lucide-icon></span>
+              <div>
+                <h3>Operational Information</h3>
+                <p>Details related to usage, operation and compliance</p>
+              </div>
+            </div>
+            <ng-container *ngTemplateOutlet="operationalFields"></ng-container>
+          </ng-container>
+
+          <ng-container *ngSwitchCase="'custom'">
+            <div class="sub-head sub-head--desc">
+              <span class="icon-tile icon-tile--sm"><lucide-icon [img]="icons.LayoutGrid" [size]="16"></lucide-icon></span>
+              <div>
+                <h3>Custom Fields</h3>
+                <p>Organization specific fields for additional asset information</p>
+              </div>
+              <button type="button" class="btn btn-outline btn-sm" (click)="addCustomField()">
+                <lucide-icon [img]="icons.Plus" [size]="16"></lucide-icon>
+                Add Field
+              </button>
+            </div>
+            <ng-container *ngTemplateOutlet="customFieldsTable"></ng-container>
+          </ng-container>
+
+          <ng-container *ngSwitchCase="'attachments'">
+            <div class="sub-head sub-head--desc">
+              <span class="icon-tile icon-tile--sm"><lucide-icon [img]="icons.Paperclip" [size]="16"></lucide-icon></span>
+              <div>
+                <h3>Attachments</h3>
+                <p>Manuals, certificates, photos and other supporting files</p>
+              </div>
+              <button type="button" class="btn btn-outline btn-sm" (click)="openDocumentPicker('attachments')">
+                <lucide-icon [img]="icons.Upload" [size]="16"></lucide-icon>
+                Upload File
+              </button>
+            </div>
+            <ng-container *ngTemplateOutlet="docPanel; context: { list: 'attachments' }"></ng-container>
+          </ng-container>
+        </ng-container>
+      </ng-container>
+    </div>
+
+    <!-- ===== Right (Classification step): category reference ===== -->
+    <aside class="side-col" *ngIf="currentStep === 1">
+      <div class="card side-card ref-card">
+        <div class="card-head card-head--row">
+          <span class="icon-tile"><lucide-icon [img]="icons.House" [size]="18"></lucide-icon></span>
+          <h2>Category Reference</h2>
+          <button type="button" class="btn btn-outline btn-sm" (click)="focusField('cls-category')">Change Category</button>
+        </div>
+
+        <nav class="ref-path" aria-label="Selected classification">
+          <span>{{ labelOf(categories, form.category) }}</span>
+          <lucide-icon [img]="icons.ChevronRight" [size]="14"></lucide-icon>
+          <span>{{ labelOf(subCategories, form.subCategory) }}</span>
+          <lucide-icon [img]="icons.ChevronRight" [size]="14"></lucide-icon>
+          <span>{{ labelOf(assetTypes, form.assetType) }}</span>
+        </nav>
+
+        <div class="subtype-tiles" *ngIf="assetSubTypeTiles.length">
+          <button type="button" class="subtype-tile" *ngFor="let o of assetSubTypeTiles"
+            [class.is-selected]="form.assetSubType === o.value" [attr.aria-pressed]="form.assetSubType === o.value"
+            (click)="form.assetSubType = o.value">
+            <span class="subtype-check" *ngIf="form.assetSubType === o.value">
+              <lucide-icon [img]="icons.Check" [size]="11" [strokeWidth]="3.5"></lucide-icon>
+            </span>
+            <img [src]="o.image" [alt]="o.label" />
+            <span class="subtype-label">{{ o.label }}</span>
+          </button>
+        </div>
+
+        <h3 class="ref-title">Classification Hierarchy</h3>
+        <div class="tree" role="tree">
+          <div class="tree-node tree-node--root" role="treeitem" aria-expanded="true">
+            <lucide-icon class="tree-caret" [img]="icons.ChevronDown" [size]="14" [strokeWidth]="2.5"></lucide-icon>
+            <lucide-icon class="tree-folder" [img]="icons.Folder" [size]="20"></lucide-icon>
+            {{ labelOf(categories, form.category) }}
+          </div>
+          <div class="tree-branch" role="group">
+            <div class="tree-node" role="treeitem" aria-expanded="true">
+              <lucide-icon class="tree-folder" [img]="icons.Folder" [size]="20"></lucide-icon>
+              {{ labelOf(subCategories, form.subCategory) }}
+            </div>
+            <ul class="tree-branch tree-leaves" role="group">
+              <li *ngFor="let o of assetTypes" role="treeitem" [attr.aria-selected]="form.assetType === o.value">
+                <button type="button" class="tree-leaf" [class.is-selected]="form.assetType === o.value"
+                  (click)="selectAssetType(o.value)">
+                  <lucide-icon [img]="form.assetType === o.value ? icons.FileCog : icons.FileText" [size]="18"></lucide-icon>
+                  {{ o.label }}
+                </button>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="info-note">
+          <span class="info-icon"><lucide-icon [img]="icons.Info" [size]="14" [strokeWidth]="2.5"></lucide-icon></span>
+          <p>Classification helps in reporting, maintenance planning, compliance and lifecycle management.</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ===== Right (Location step): location picker + assignment preview ===== -->
+    <aside class="side-col" *ngIf="currentStep === 2">
+      <div class="card side-card loc-card">
+        <div class="card-head card-head--row">
+          <span class="icon-tile"><lucide-icon [img]="icons.MapIcon" [size]="18"></lucide-icon></span>
+          <h2>Select Location</h2>
+          <div class="seg" role="tablist" aria-label="Location view">
+            <button type="button" role="tab" [class.is-active]="locationView === 'hierarchy'"
+              [attr.aria-selected]="locationView === 'hierarchy'" (click)="locationView = 'hierarchy'">Hierarchy View</button>
+            <button type="button" role="tab" [class.is-active]="locationView === 'map'"
+              [attr.aria-selected]="locationView === 'map'" (click)="locationView = 'map'">Map / Floor Plan</button>
+          </div>
+        </div>
+
+        <label class="search-box" *ngIf="locationView === 'hierarchy'">
+          <lucide-icon [img]="icons.Search" [size]="16"></lucide-icon>
+          <input [(ngModel)]="locationQuery" placeholder="Search location (building, floor, room, etc...)" />
+          <button type="button" class="clear-btn clear-btn--inline" *ngIf="locationQuery" title="Clear search"
+            (click)="$event.preventDefault(); locationQuery = ''">
+            <lucide-icon [img]="icons.X" [size]="10" [strokeWidth]="3"></lucide-icon>
+          </button>
+        </label>
+
+        <div class="loc-body" [class.loc-body--map]="locationView === 'map'">
+          <div class="loc-tree" *ngIf="locationView === 'hierarchy'" role="tree" aria-label="Locations">
+            <ng-container *ngTemplateOutlet="locationBranch; context: { $implicit: visibleLocations(locationTree) }"></ng-container>
+            <p class="loc-empty" *ngIf="!visibleLocations(locationTree).length">No locations match "{{ locationQuery }}".</p>
+          </div>
+
+          <div class="plan" #planPanel>
+            <div class="plan-head">
+              <span class="plan-title">
+                {{ planTitle }}
+              </span>
+              <button type="button" class="plan-btn" title="Zoom in" [disabled]="!mapLevel || !canZoomIn" (click)="zoomPlan(1)">
+                <lucide-icon [img]="icons.Plus" [size]="16"></lucide-icon>
+              </button>
+              <button type="button" class="plan-btn" title="Zoom out" [disabled]="!mapLevel || !canZoomOut" (click)="zoomPlan(-1)">
+                <lucide-icon [img]="icons.Minus" [size]="16"></lucide-icon>
+              </button>
+              <button type="button" class="plan-btn" [title]="isPlanFullscreen ? 'Exit full screen' : 'Full screen'"
+                (click)="togglePlanFullscreen(planPanel)">
+                <lucide-icon [img]="isPlanFullscreen ? icons.Minimize : icons.Maximize" [size]="15"></lucide-icon>
+              </button>
+            </div>
+
+            <div class="plan-viewport" *ngIf="mapLevel; else noFloor">
+              <div class="plan-canvas" [style.--zoom]="planZoom">
+                <img [src]="mapImageSrc" [alt]="'Map of ' + planTitle" />
+                <!-- Object wrapper so the selected pin is worked out once, even when there is none -->
+                <ng-container *ngIf="{ sp: selectedPin } as v">
+                  <button type="button" class="plan-dot" *ngFor="let p of planPins" [class.is-selected]="p.node.id === v.sp?.node?.id"
+                    [style.left.%]="p.x" [style.top.%]="p.y" [title]="p.node.label"
+                    [attr.aria-label]="'Select ' + p.node.label" (click)="selectLocation(p.node)">
+                    <lucide-icon *ngIf="p.node.id === v.sp?.node?.id" [img]="icons.MapPin" [size]="24"></lucide-icon>
+                  </button>
+                  <div class="plan-callout" *ngIf="v.sp as sp" [ngClass]="popupPlacement(sp)" [style.left.%]="sp.x" [style.top.%]="sp.y">
+                    <lucide-icon [img]="icons.MapPin" [size]="18"></lucide-icon>
+                    <span>
+                      <strong>{{ sp.node.label }}</strong>
+                      <small>{{ pinSubtitle(sp) }}</small>
+                    </span>
+                  </div>
+                </ng-container>
+              </div>
+            </div>
+            <ng-template #noFloor>
+              <div class="plan-empty">Select a floor or zone to see its map.</div>
+            </ng-template>
+          </div>
+        </div>
+      </div>
+
+      <div class="card side-card">
+        <div class="card-head card-head--row">
+          <span class="icon-tile"><lucide-icon [img]="icons.Users" [size]="18"></lucide-icon></span>
+          <h2>Current Assignment Preview</h2>
+          <button type="button" class="square-btn square-btn--sm" title="Edit assignment" (click)="focusField('loc-assigned')">
+            <lucide-icon [img]="icons.Pencil" [size]="15"></lucide-icon>
+          </button>
+        </div>
+        <dl class="preview-list">
+          <dt>Location</dt>
+          <dd>{{ locationPathText || '—' }}</dd>
+          <dt>Assigned To</dt>
+          <dd>
+            <span class="preview-person" *ngIf="assignedPerson; else noPerson">
+              <span class="avatar avatar--sm">{{ assignedPerson.initials }}</span>
+              {{ assignedPerson.label }} ({{ labelOf(departments, assignedPerson.department) }})
+            </span>
+            <ng-template #noPerson>—</ng-template>
+          </dd>
+          <dt>Cost Center</dt>
+          <dd>{{ labelOf(costCenters, form.costCenter) }}</dd>
+          <dt>Ownership</dt>
+          <dd>{{ labelOf(ownershipTypes, form.ownershipType) }}</dd>
+          <dt>Start Date</dt>
+          <dd>{{ form.assignmentStart ? (form.assignmentStart | date: 'dd MMM yyyy') : '—' }}</dd>
+        </dl>
+      </div>
+    </aside>
+
+    <!-- ===== Right (Purchase step): documents + warranty ===== -->
+    <aside class="side-col" *ngIf="currentStep === 3">
+      <div class="card side-card">
+        <div class="card-head card-head--row">
+          <span class="icon-tile"><lucide-icon [img]="icons.FileText" [size]="18"></lucide-icon></span>
+          <h2>Invoice & Documents</h2>
+          <button type="button" class="btn btn-outline btn-sm" (click)="openDocumentPicker('purchaseDocuments')">
+            <lucide-icon [img]="icons.Upload" [size]="16"></lucide-icon>
+            Upload Document
+          </button>
+        </div>
+
+        <ng-container *ngTemplateOutlet="docPanel; context: { list: 'purchaseDocuments' }"></ng-container>
+      </div>
+
+      <div class="card side-card">
+        <div class="card-head card-head--row">
+          <span class="icon-tile"><lucide-icon class="icon-filled" [img]="icons.ShieldCheck" [size]="18"></lucide-icon></span>
+          <h2>Warranty & Support Information</h2>
+        </div>
+
+        <div class="form-grid form-grid--3 side-grid">
+          <label class="field">
+            <span class="field-label">Warranty Type</span>
+            <span class="select-wrap">
+              <select class="control" [(ngModel)]="form.warrantyType">
+                <option *ngFor="let o of warrantyTypes" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <div class="field">
+            <label class="field-label" for="war-start">Warranty Start Date</label>
+            <span class="date-control" (click)="openDatePicker(warrantyStartInput)">
+              <lucide-icon [img]="icons.Calendar" [size]="17"></lucide-icon>
+              <span [class.muted]="!form.warrantyStart">
+                {{ form.warrantyStart ? (form.warrantyStart | date: 'dd MMM yyyy') : 'Select date' }}
+              </span>
+              <input #warrantyStartInput id="war-start" type="date" class="date-native" [(ngModel)]="form.warrantyStart" />
+            </span>
+          </div>
+
+          <div class="field">
+            <span class="field-label">Warranty End Date</span>
+            <span class="date-control date-control--readonly" title="Calculated from the start date and warranty period">
+              <lucide-icon [img]="icons.Calendar" [size]="17"></lucide-icon>
+              <span [class.muted]="!warrantyEnd">{{ warrantyEnd ? (warrantyEnd | date: 'dd MMM yyyy') : '—' }}</span>
+            </span>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="war-period">Warranty Period</label>
+            <span class="split-row split-row--joined">
+              <input id="war-period" class="control" type="number" min="1" step="1" [(ngModel)]="form.warrantyPeriod" />
+              <span class="select-wrap">
+                <select class="control" [(ngModel)]="form.warrantyPeriodUnit" aria-label="Warranty period unit">
+                  <option *ngFor="let o of warrantyPeriodUnits" [value]="o.value">{{ o.label }}</option>
+                </select>
+              </span>
+            </span>
+          </div>
+
+          <div class="field">
+            <span class="field-label" id="war-amc">AMC Included</span>
+            <label class="switch">
+              <input type="checkbox" role="switch" aria-labelledby="war-amc" [(ngModel)]="form.amcIncluded" />
+              <span class="switch-track"></span>
+            </label>
+          </div>
+
+          <label class="field">
+            <span class="field-label">Support Coverage</span>
+            <span class="select-wrap">
+              <select class="control" [(ngModel)]="form.supportCoverage">
+                <option *ngFor="let o of supportCoverages" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+        </div>
+
+        <div class="form-grid side-grid side-grid--spaced">
+          <label class="field">
+            <span class="field-label">Service Provider</span>
+            <span class="select-wrap">
+              <select class="control" [(ngModel)]="form.serviceProvider">
+                <option value="" disabled>Select service provider</option>
+                <option *ngFor="let o of serviceProviders" [value]="o.value">{{ o.label }}</option>
+              </select>
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Warranty Reference</span>
+            <input class="control" [(ngModel)]="form.warrantyReference" placeholder="e.g. WARR-2026-CAT-001" />
+          </label>
+        </div>
+
+        <div class="info-note">
+          <span class="info-icon"><lucide-icon [img]="icons.Info" [size]="14" [strokeWidth]="2.5"></lucide-icon></span>
+          <p>Warranty period is automatically calculated based on start date and duration.</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ===== Right (Additional Information step): operational info + custom fields ===== -->
+    <!-- Whichever of the two is open in a tab on the left is hidden here, so it never shows twice -->
+    <aside class="side-col" *ngIf="currentStep === 4">
+      <div class="card side-card" *ngIf="activeInfoTab !== 'operational'">
+        <div class="card-head card-head--action">
+          <span class="icon-tile"><lucide-icon [img]="icons.Settings" [size]="18"></lucide-icon></span>
+          <div>
+            <h2>Operational Information</h2>
+            <p>Details related to usage, operation and compliance</p>
+          </div>
+        </div>
+        <ng-container *ngTemplateOutlet="operationalFields"></ng-container>
+      </div>
+
+      <div class="card side-card" *ngIf="activeInfoTab !== 'custom'">
+        <div class="card-head card-head--action">
+          <span class="icon-tile"><lucide-icon [img]="icons.LayoutGrid" [size]="18"></lucide-icon></span>
+          <div>
+            <h2>Custom Fields</h2>
+            <p>Organization specific fields for additional asset information</p>
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" (click)="addCustomField()">
+            <lucide-icon [img]="icons.Plus" [size]="16"></lucide-icon>
+            Add Field
+          </button>
+        </div>
+        <ng-container *ngTemplateOutlet="customFieldsTable"></ng-container>
+      </div>
+    </aside>
+
+    <!-- ===== Right: images, identification, quick actions ===== -->
+    <aside class="side-col" *ngIf="currentStep === 0">
+      <div class="card side-card">
+        <div class="card-head card-head--row">
+          <span class="icon-tile"><lucide-icon [img]="icons.Images" [size]="18"></lucide-icon></span>
+          <h2>Asset Images</h2>
+          <button type="button" class="btn btn-outline btn-sm" (click)="openImagePicker()">
+            <lucide-icon [img]="icons.Camera" [size]="16"></lucide-icon>
+            Add Images
+          </button>
+        </div>
+
+        <input #imageInput type="file" accept="image/*" multiple hidden (change)="onImagesSelected($event)" />
+
+        <div class="gallery">
+          <div class="gallery-main">
+            <img *ngIf="activeImage" [src]="activeImage.src" [alt]="activeImage.alt" />
+          </div>
+          <div class="gallery-thumbs">
+            <button type="button" class="gallery-thumb" *ngFor="let t of thumbnails" (click)="activeImageIndex = t.index"
+              [title]="t.image.alt">
+              <img [src]="t.image.src" [alt]="t.image.alt" />
+            </button>
+            <button type="button" class="gallery-add" (click)="openImagePicker()">
+              <lucide-icon [img]="icons.Plus" [size]="18"></lucide-icon>
+              Add Photo
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card side-card">
+        <div class="card-head card-head--row">
+          <span class="icon-tile"><lucide-icon [img]="icons.IdCard" [size]="18"></lucide-icon></span>
+          <h2>Identification Preview</h2>
+          <button type="button" class="btn btn-outline btn-sm" (click)="onGenerateQr()">
+            <lucide-icon [img]="icons.QrCode" [size]="16"></lucide-icon>
+            Generate QR Code
+          </button>
+        </div>
+
+        <div class="id-preview">
+          <svg class="qr" [attr.viewBox]="'-1 -1 ' + (qrSize + 2) + ' ' + (qrSize + 2)" shape-rendering="crispEdges"
+            role="img" [attr.aria-label]="'QR code for ' + form.assetTag">
+            <rect x="-1" y="-1" [attr.width]="qrSize + 2" [attr.height]="qrSize + 2" fill="#fff"></rect>
+            <path [attr.d]="qrPath" fill="#0f172a"></path>
+          </svg>
+          <dl class="id-details">
+            <dt>Asset Tag</dt><dd>{{ form.assetTag || '—' }}</dd>
+            <dt>Barcode</dt><dd>{{ form.barcode || '—' }}</dd>
+            <dt>RFID Tag</dt><dd>{{ form.rfidTag || '—' }}</dd>
+            <dt>Asset Name</dt><dd>{{ form.assetName || '—' }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="card side-card">
+        <div class="card-head card-head--row">
+          <span class="icon-tile"><lucide-icon [img]="icons.UsersRound" [size]="18"></lucide-icon></span>
+          <h2>Quick Actions</h2>
+        </div>
+        <div class="quick-actions">
+          <button type="button" class="btn btn-outline" (click)="scanBarcode()">
+            <lucide-icon [img]="icons.ScanBarcode" [size]="18"></lucide-icon>
+            Scan Barcode
+          </button>
+          <button type="button" class="btn btn-outline" (click)="readRfid()">
+            <lucide-icon [img]="icons.Wifi" [size]="18"></lucide-icon>
+            Read RFID
+          </button>
+          <button type="button" class="btn btn-outline" (click)="printLabel()">
+            <lucide-icon [img]="icons.Printer" [size]="18"></lucide-icon>
+            Print Label
+          </button>
+        </div>
+      </div>
+    </aside>
+  </div>
+  </div>
+
+  <!-- Action bar -->
+  <footer class="reg-footer">
+    <button type="button" class="btn btn-outline btn-lg" *ngIf="currentStep > 0; else cancelLeft" (click)="previous()">
+      <lucide-icon [img]="icons.ChevronLeft" [size]="18"></lucide-icon>
+      Back
+    </button>
+    <ng-template #cancelLeft>
+      <button type="button" class="btn btn-outline btn-lg" (click)="backToList()">Cancel</button>
+    </ng-template>
+    <div class="reg-footer-right">
+      <button type="button" class="btn btn-outline btn-lg" *ngIf="currentStep > 0" (click)="backToList()">Cancel</button>
+      <button type="button" class="btn btn-outline btn-lg" (click)="saveDraft()">Save as Draft</button>
+      <button type="button" class="btn btn-primary btn-lg" (click)="next()">
+        {{ isLastStep ? 'Submit' : 'Next' }}
+        <lucide-icon [img]="icons.ArrowRight" [size]="18"></lucide-icon>
+      </button>
+    </div>
+  </footer>
+
+  <div class="toast" *ngIf="toastMessage" role="status">{{ toastMessage }}</div>
+
+  <!-- One level of the location tree; renders itself for expanded children -->
+  <ng-template #locationBranch let-nodes>
+    <ul class="loc-branch" role="group">
+      <li *ngFor="let n of nodes" role="treeitem" [attr.aria-expanded]="n.children.length ? isLocationExpanded(n) : null"
+        [attr.aria-selected]="n.id === selectedLocation?.id">
+        <div class="loc-row">
+          <button type="button" class="loc-caret" *ngIf="n.children.length; else caretSpacer" (click)="toggleLocation(n)"
+            [attr.aria-label]="(isLocationExpanded(n) ? 'Collapse ' : 'Expand ') + n.label">
+            <lucide-icon [img]="isLocationExpanded(n) ? icons.ChevronDown : icons.ChevronRight" [size]="14" [strokeWidth]="2.5"></lucide-icon>
+          </button>
+          <ng-template #caretSpacer><span class="loc-caret"></span></ng-template>
+          <button type="button" class="loc-node" [class.is-selected]="n.id === selectedLocation?.id"
+            [class.is-floor]="n.id === form.floor && n.id !== selectedLocation?.id" [title]="n.label" (click)="onLocationClick(n)">
+            <lucide-icon [img]="locationIcon(n)" [size]="15" [class.icon-check]="isCheckedLocation(n)"></lucide-icon>
+            <span>{{ n.label }}</span>
+          </button>
+        </div>
+        <ng-container *ngIf="n.children.length && isLocationExpanded(n)">
+          <ng-container *ngTemplateOutlet="locationBranch; context: { $implicit: visibleLocations(n.children) }"></ng-container>
+        </ng-container>
+      </li>
+    </ul>
+  </ng-template>
+
+  <!-- Upload area + file list; list is 'purchaseDocuments' (step 4) or 'attachments' (step 5) -->
+  <ng-template #docPanel let-list="list">
+    <input type="file" multiple hidden [id]="'doc-input-' + list" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+      (change)="onDocumentsSelected($event, list)" />
+
+    <div class="dropzone" role="button" tabindex="0" [class.is-dragging]="draggingList === list"
+      aria-label="Upload files: drag and drop files or press Enter to browse"
+      (click)="openDocumentPicker(list)" (keydown.enter)="openDocumentPicker(list)"
+      (keydown.space)="$event.preventDefault(); openDocumentPicker(list)"
+      (dragover)="onDocDragOver($event, list)" (dragleave)="draggingList = null" (drop)="onDocDrop($event, list)">
+      <lucide-icon [img]="icons.CloudUpload" [size]="22"></lucide-icon>
+      <p>Drag & drop files here or <span class="link">click to upload</span></p>
+      <small>PDF, JPG, PNG, DOC, XLS (Max 10 MB each)</small>
+    </div>
+
+    <ul class="doc-list" *ngIf="documentsOf(list).length; else noDocs">
+      <li class="doc-item" *ngFor="let d of documentsOf(list); let i = index">
+        <span class="doc-icon" [ngClass]="'doc-icon--' + docType(d)">
+          <lucide-icon [img]="docIcon(d)" [size]="18"></lucide-icon>
+        </span>
+        <span class="doc-text">
+          <span class="doc-name" [title]="d.name">{{ d.name }}</span>
+          <span class="doc-meta">{{ formatFileSize(d.size) }} &middot; {{ d.uploadedAt | date: 'dd MMM yyyy' }}</span>
+        </span>
+        <button type="button" class="doc-btn" title="Download" [attr.aria-label]="'Download ' + d.name"
+          (click)="downloadDocument(d)">
+          <lucide-icon [img]="icons.Download" [size]="16"></lucide-icon>
+        </button>
+        <span class="doc-menu-wrap">
+          <button type="button" class="doc-btn" title="More actions" aria-haspopup="menu"
+            [attr.aria-expanded]="docMenuKey === list + ':' + i" (click)="toggleDocMenu(list + ':' + i)">
+            <lucide-icon [img]="icons.EllipsisVertical" [size]="16"></lucide-icon>
+          </button>
+          <span class="doc-menu" role="menu" *ngIf="docMenuKey === list + ':' + i">
+            <button type="button" role="menuitem" (click)="downloadDocument(d)">
+              <lucide-icon [img]="icons.Download" [size]="14"></lucide-icon>
+              Download
+            </button>
+            <button type="button" role="menuitem" class="is-danger" (click)="removeDocument(list, i)">
+              <lucide-icon [img]="icons.Trash2" [size]="14"></lucide-icon>
+              Remove
+            </button>
+          </span>
+        </span>
+      </li>
+    </ul>
+    <ng-template #noDocs><p class="docs-empty">No files uploaded yet.</p></ng-template>
+  </ng-template>
+
+  <!-- Step 5 operational fields (right card, or left card when its tab is open) -->
+  <ng-template #operationalFields>
+    <div class="form-grid side-grid">
+      <div class="field">
+        <label class="field-label" for="op-hours">Operating Hours (Per Day)</label>
+        <span class="split-row split-row--joined split-row--unit">
+          <input id="op-hours" class="control" type="number" min="0" max="24" [(ngModel)]="form.operations.operatingHours" />
+          <span class="select-wrap">
+            <select class="control" aria-label="Operating hours unit" [(ngModel)]="form.operations.operatingHoursUnit">
+              <option *ngFor="let u of hourUnits" [value]="u.value">{{ u.label }}</option>
+            </select>
+          </span>
+        </span>
+      </div>
+
+      <label class="field">
+        <span class="field-label">Operating Shift</span>
+        <span class="select-wrap">
+          <select class="control" [(ngModel)]="form.operations.operatingShift">
+            <option *ngFor="let o of operatingShifts" [value]="o.value">{{ o.label }}</option>
+          </select>
+        </span>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Utilization</span>
+        <span class="select-wrap">
+          <select class="control" [(ngModel)]="form.operations.utilization">
+            <option *ngFor="let o of utilizations" [value]="o.value">{{ o.label }}</option>
+          </select>
+        </span>
+      </label>
+
+      <div class="field">
+        <label class="field-label" for="op-maint-freq">Maintenance Frequency</label>
+        <span class="split-row split-row--joined split-row--unit">
+          <input id="op-maint-freq" class="control" type="number" min="0" [(ngModel)]="form.operations.maintenanceFrequency" />
+          <span class="select-wrap">
+            <select class="control" aria-label="Maintenance frequency unit" [(ngModel)]="form.operations.maintenanceFrequencyUnit">
+              <option *ngFor="let u of maintenanceUnits" [value]="u.value">{{ u.label }}</option>
+            </select>
+          </span>
+        </span>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="op-last">Last Maintenance Date</label>
+        <span class="date-control" (click)="openDatePicker(lastMaintInput)">
+          <lucide-icon [img]="icons.Calendar" [size]="17"></lucide-icon>
+          <span [class.muted]="!form.operations.lastMaintenance">
+            {{ form.operations.lastMaintenance ? (form.operations.lastMaintenance | date: 'dd MMM yyyy') : 'Select date' }}
+          </span>
+          <input #lastMaintInput id="op-last" type="date" class="date-native" [(ngModel)]="form.operations.lastMaintenance"
+            [attr.max]="form.operations.nextMaintenance || null" />
+        </span>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="op-next">Next Maintenance Date</label>
+        <span class="date-control" (click)="openDatePicker(nextMaintInput)">
+          <lucide-icon [img]="icons.Calendar" [size]="17"></lucide-icon>
+          <span [class.muted]="!form.operations.nextMaintenance">
+            {{ form.operations.nextMaintenance ? (form.operations.nextMaintenance | date: 'dd MMM yyyy') : 'Select date' }}
+          </span>
+          <input #nextMaintInput id="op-next" type="date" class="date-native" [(ngModel)]="form.operations.nextMaintenance"
+            [attr.min]="form.operations.lastMaintenance || null" />
+        </span>
+      </div>
+
+      <div class="field field--full">
+        <span class="field-label" id="op-compliance">Compliance Standards</span>
+        <span class="chip-input chip-input--select" role="group" aria-labelledby="op-compliance">
+          <span class="chip" *ngFor="let v of form.operations.complianceStandards">
+            {{ labelOf(complianceOptions, v) }}
+            <button type="button" class="chip-remove" [title]="'Remove ' + labelOf(complianceOptions, v)"
+              (click)="removeCompliance(v)">
+              <lucide-icon [img]="icons.X" [size]="14" [strokeWidth]="2.5"></lucide-icon>
+            </button>
+          </span>
+          <span class="select-wrap chip-select" *ngIf="availableCompliance.length">
+            <select class="chip-select-control" aria-label="Add compliance standard" (change)="addCompliance($event)">
+              <option value="">{{ form.operations.complianceStandards.length ? '' : 'Select standards' }}</option>
+              <option *ngFor="let o of availableCompliance" [value]="o.value">{{ o.label }}</option>
+            </select>
+          </span>
+        </span>
+      </div>
+    </div>
+  </ng-template>
+
+  <!-- Step 5 custom fields table (right card, or left card when its tab is open) -->
+  <ng-template #customFieldsTable>
+    <div class="cf-table" role="table" aria-label="Custom fields">
+      <div class="cf-row cf-row--head" role="row">
+        <span role="columnheader">Field Name</span>
+        <span role="columnheader">Value</span>
+      </div>
+      <div class="cf-row" role="row" *ngFor="let f of customFields; let i = index">
+        <span class="cf-name" role="cell">
+          <ng-container *ngIf="!f.userAdded; else editableName">{{ f.label }}</ng-container>
+          <ng-template #editableName>
+            <input [id]="'cf-name-' + i" class="control control--sm" [(ngModel)]="f.label" placeholder="Field name" />
+          </ng-template>
+        </span>
+        <span class="cf-value" role="cell" [ngSwitch]="f.type">
+          <span class="select-wrap" *ngSwitchCase="'select'">
+            <select class="control control--sm" [attr.aria-label]="f.label" [(ngModel)]="f.value">
+              <option *ngFor="let o of f.options" [value]="o.value">{{ o.label }}</option>
+            </select>
+          </span>
+          <span class="date-control date-control--sm" *ngSwitchCase="'date'" (click)="openDatePicker(cfDate)">
+            <lucide-icon [img]="icons.Calendar" [size]="15"></lucide-icon>
+            <span [class.muted]="!f.value">{{ f.value ? (f.value | date: 'dd MMM yyyy') : 'Select date' }}</span>
+            <input #cfDate type="date" class="date-native" [attr.aria-label]="f.label" [(ngModel)]="f.value" />
+          </span>
+          <span class="textarea-wrap" *ngSwitchCase="'textarea'">
+            <textarea class="control control--sm" rows="2" [attr.aria-label]="f.label" [maxlength]="f.maxLength ?? 500"
+              [(ngModel)]="f.value"></textarea>
+            <span class="char-count">{{ f.value.length }}/{{ f.maxLength ?? 500 }}</span>
+          </span>
+          <input *ngSwitchDefault class="control control--sm" [attr.aria-label]="f.label || 'Value'" [(ngModel)]="f.value"
+            placeholder="Value" />
+          <button type="button" class="cf-remove" *ngIf="f.userAdded" title="Remove field" (click)="removeCustomField(i)">
+            <lucide-icon [img]="icons.Trash2" [size]="14"></lucide-icon>
+          </button>
+        </span>
+      </div>
+    </div>
+  </ng-template>
+</section>
