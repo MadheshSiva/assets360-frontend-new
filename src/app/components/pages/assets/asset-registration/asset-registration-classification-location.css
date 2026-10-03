@@ -1,0 +1,981 @@
+/* Steps 2-3 (Classification, Location & Assignment). Loaded after asset-registration.css; split out to stay under the per-stylesheet size budget. */
+
+/* ============ Step 2: Classification ============ */
+/* Select with a square settings button beside it */
+.select-row {
+  display: flex;
+  gap: 8px;
+}
+
+.select-row .select-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.square-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--reg-control-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--reg-accent);
+  cursor: pointer;
+}
+
+.square-btn:hover {
+  border-color: var(--reg-accent);
+  background: var(--reg-accent-soft);
+}
+
+.select-wrap select.control:disabled {
+  background: #f9fafb;
+  color: var(--reg-text-muted);
+  cursor: not-allowed;
+}
+
+.radio-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 22px;
+  min-height: 36px;
+  border-radius: 6px;
+}
+
+.radio-row.is-invalid {
+  outline: 1px solid var(--reg-danger);
+  outline-offset: 2px;
+}
+
+.radio {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.radio input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.radio-mark {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  border: 1.5px solid #9ca3af;
+  border-radius: 50%;
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.radio input:checked + .radio-mark {
+  border: 5px solid var(--reg-accent);
+}
+
+.radio input:focus-visible + .radio-mark {
+  box-shadow: 0 0 0 3px rgba(79, 43, 216, 0.18);
+}
+
+/* Keyword chips + inline input */
+.chip-input {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border: 1px solid var(--reg-control-border);
+  border-radius: 6px;
+  background: #fff;
+  cursor: text;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.chip-input:focus-within {
+  border-color: var(--reg-accent);
+  box-shadow: 0 0 0 3px rgba(79, 43, 216, 0.12);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px 0 12px;
+  border-radius: 999px;
+  background: #ede9fe;
+  color: var(--reg-accent);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.chip-remove {
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--reg-accent);
+  cursor: pointer;
+}
+
+.chip-remove:hover {
+  color: var(--reg-accent-hover);
+}
+
+.chip-input-field {
+  flex: 1 1 140px;
+  min-width: 120px;
+  height: 28px;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--reg-text);
+}
+
+/* ----- Category reference card ----- */
+.ref-card {
+  padding: 16px 18px 18px;
+}
+
+.ref-card .card-head--row h2 {
+  font-size: 15px;
+}
+
+.ref-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-size: 12.5px;
+  color: #374151;
+}
+
+.ref-path lucide-icon {
+  color: #9ca3af;
+}
+
+.subtype-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.subtype-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px 4px 8px;
+  border: 1px solid var(--reg-border);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.subtype-tile:hover {
+  border-color: var(--reg-accent-border);
+}
+
+.subtype-tile.is-selected {
+  border: 1.5px solid var(--reg-accent);
+  background: var(--reg-accent-soft);
+}
+
+.subtype-tile img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 11;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.subtype-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: #374151;
+}
+
+.subtype-tile.is-selected .subtype-label {
+  color: var(--reg-accent);
+  font-weight: 500;
+}
+
+.subtype-check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--reg-accent);
+  color: #fff;
+}
+
+.ref-title {
+  margin: 0 0 10px;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
+/* Hierarchy tree with connector lines */
+.tree {
+  font-size: 13.5px;
+  color: var(--reg-text);
+}
+
+.tree-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 31px;
+}
+
+.tree-caret {
+  margin-left: -2px;
+  color: #374151;
+}
+
+/* lucide renders a child <svg fill="none">, so fills must target the svg itself */
+.tree-folder {
+  color: #f6c344;
+}
+
+.tree-folder ::ng-deep svg {
+  fill: #fcd34d;
+}
+
+.tree-branch {
+  position: relative;
+  margin: 0 0 0 4px;
+  padding: 0 0 0 22px;
+  list-style: none;
+}
+
+.tree-branch::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 15px;
+  border-left: 1px solid #d1d5db;
+}
+
+.tree-branch > .tree-node::before,
+.tree-leaves > li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 14px;
+  border-top: 1px solid #d1d5db;
+}
+
+.tree-branch > .tree-node,
+.tree-leaves > li {
+  position: relative;
+}
+
+.tree-branch > .tree-node::before {
+  left: -22px;
+  top: 15px;
+}
+
+.tree-leaves {
+  margin-left: 30px;
+}
+
+.tree-leaves > li::before {
+  left: -22px;
+  top: 15px;
+}
+
+.tree-leaf {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 31px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  color: var(--reg-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tree-leaf lucide-icon {
+  color: #374151;
+}
+
+.tree-leaf:hover {
+  background: #f9fafb;
+}
+
+.tree-leaf.is-selected {
+  background: #ede9fe;
+  color: var(--reg-accent);
+  font-weight: 500;
+}
+
+.tree-leaf.is-selected lucide-icon {
+  color: var(--reg-accent);
+}
+
+.info-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid #ddd6fe;
+  border-radius: 8px;
+  background: #f5f3ff;
+}
+
+.info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--reg-accent);
+  color: #fff;
+}
+
+.info-note p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #374151;
+}
+
+/* ============ Step 3: Location & Assignment ============ */
+.reg-body--wide-side {
+  grid-template-columns: minmax(0, 1.35fr) minmax(400px, 1fr);
+}
+
+.form-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+
+.sub-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.sub-head h3 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
+.sub-head--spaced {
+  margin-top: 26px;
+}
+
+.icon-tile--sm {
+  width: 30px;
+  height: 30px;
+}
+
+.muted {
+  color: var(--reg-text-muted);
+}
+
+.location-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  min-height: 36px;
+  box-sizing: border-box;
+  padding: 7px 14px;
+  border-radius: 6px;
+  background: #f3f4f6;
+  font-size: 13.5px;
+  color: #374151;
+}
+
+.location-path-sep {
+  color: #9ca3af;
+}
+
+/* Person select: user icon + avatar before the name */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--reg-accent);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.avatar--sm {
+  width: 22px;
+  height: 22px;
+  font-size: 9.5px;
+}
+
+.select-wrap--person select.control {
+  padding-left: 40px;
+}
+
+.select-wrap--person.has-avatar select.control {
+  padding-left: 68px;
+}
+
+.person-icon,
+.person-avatar {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.person-icon {
+  left: 13px;
+  color: #4b5563;
+}
+
+.person-avatar {
+  left: 38px;
+}
+
+/* Label with a small action button after it */
+.field-label--action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.label-action {
+  display: inline-flex;
+  padding: 2px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+.label-action:hover {
+  color: var(--reg-accent);
+  background: var(--reg-accent-soft);
+}
+
+/* Formatted date shown over a visually hidden native date input */
+.date-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--reg-control-border);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13.5px;
+  color: var(--reg-text);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.date-control lucide-icon {
+  color: #4b5563;
+}
+
+.date-control:focus-within {
+  border-color: var(--reg-accent);
+  box-shadow: 0 0 0 3px rgba(79, 43, 216, 0.12);
+}
+
+.date-native {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.check {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  justify-self: start;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.check input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.check-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border: 1.5px solid #9ca3af;
+  border-radius: 4px;
+  background: #fff;
+  color: transparent;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.check input:checked + .check-box {
+  border-color: var(--reg-accent);
+  background: var(--reg-accent);
+  color: #fff;
+}
+
+.check input:focus-visible + .check-box {
+  box-shadow: 0 0 0 3px rgba(79, 43, 216, 0.18);
+}
+
+/* ----- Select location card ----- */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--reg-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.seg button {
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  background: #fff;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--reg-text);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.seg button + button {
+  border-left: 1px solid var(--reg-border);
+}
+
+.seg button.is-active {
+  background: var(--reg-accent-soft);
+  color: var(--reg-accent);
+  box-shadow: inset 0 0 0 1px var(--reg-accent-border);
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  margin-bottom: 12px;
+  padding: 0 12px;
+  border: 1px solid var(--reg-control-border);
+  border-radius: 6px;
+  color: #4b5563;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.search-box:focus-within {
+  border-color: var(--reg-accent);
+  box-shadow: 0 0 0 3px rgba(79, 43, 216, 0.12);
+}
+
+.search-box input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--reg-text);
+}
+
+.clear-btn--inline {
+  position: static;
+  transform: none;
+  flex: 0 0 16px;
+}
+
+.loc-body {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.loc-body--map {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.loc-tree {
+  max-height: 330px;
+  overflow: auto;
+  padding-right: 4px;
+  font-size: 12.5px;
+}
+
+.loc-branch {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.loc-branch .loc-branch {
+  margin-left: 9px;
+  padding-left: 6px;
+  border-left: 1px solid #eceef1;
+}
+
+.loc-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.loc-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+.loc-node {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  height: 25px;
+  margin: 0.5px 0;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  font: inherit;
+  color: var(--reg-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.loc-node span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loc-node lucide-icon {
+  flex: 0 0 auto;
+  color: #374151;
+}
+
+.loc-node:hover {
+  background: #f9fafb;
+}
+
+.loc-node.is-floor {
+  background: #f3f0ff;
+  color: var(--reg-accent);
+}
+
+.loc-node.is-floor lucide-icon {
+  color: var(--reg-accent);
+}
+
+.loc-node.is-selected {
+  border-color: var(--reg-accent-border);
+  background: var(--reg-accent-soft);
+  color: var(--reg-accent);
+  font-weight: 500;
+}
+
+.loc-node.is-selected lucide-icon {
+  color: var(--reg-accent);
+}
+
+/* A selected floor/zone/room shows a filled check box */
+.icon-check ::ng-deep svg {
+  fill: var(--reg-accent);
+  color: #fff;
+}
+
+.loc-empty {
+  margin: 8px 4px;
+  color: var(--reg-text-muted);
+}
+
+/* Floor plan */
+.plan {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--reg-border);
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.plan-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.plan-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.plan-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--reg-border);
+  border-radius: 6px;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+}
+
+.plan-btn:hover:not(:disabled) {
+  border-color: var(--reg-accent-border);
+  color: var(--reg-accent);
+}
+
+.plan-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.plan-viewport {
+  aspect-ratio: 5 / 4;
+  overflow: auto;
+  border: 1px solid var(--reg-border);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.plan-canvas {
+  position: relative;
+  width: calc(100% * var(--zoom, 1));
+  margin: 0 auto;
+}
+
+.plan-canvas img {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+.plan-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--reg-accent-border);
+  box-shadow: 0 0 0 1px var(--reg-accent);
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+
+.plan-dot:hover {
+  background: var(--reg-accent);
+}
+
+/* The selected room becomes a pin whose tip sits on the room */
+.plan-dot.is-selected {
+  width: auto;
+  height: auto;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: #fff;
+  transform: translate(-50%, -100%);
+}
+
+.plan-dot.is-selected ::ng-deep svg {
+  display: block;
+  fill: var(--reg-accent);
+  filter: drop-shadow(0 2px 2px rgba(15, 23, 42, 0.25));
+}
+
+.plan-callout {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.16);
+  white-space: nowrap;
+  transform: translate(-50%, 12px);
+  pointer-events: none;
+}
+
+.plan-callout.is-left {
+  transform: translate(-88%, 12px);
+}
+
+.plan-callout.is-right {
+  transform: translate(-12%, 12px);
+}
+
+.plan-callout.is-above {
+  transform: translate(-50%, calc(-100% - 34px));
+}
+
+.plan-callout.is-above.is-left {
+  transform: translate(-88%, calc(-100% - 34px));
+}
+
+.plan-callout.is-above.is-right {
+  transform: translate(-12%, calc(-100% - 34px));
+}
+
+.plan-callout lucide-icon {
+  color: var(--reg-accent);
+}
+
+.plan-callout span {
+  display: flex;
+  flex-direction: column;
+}
+
+.plan-callout strong {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.plan-callout small {
+  font-size: 11.5px;
+  color: #4b5563;
+}
+
+.plan-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 5 / 4;
+  border: 1px dashed var(--reg-control-border);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12.5px;
+  color: var(--reg-text-muted);
+  text-align: center;
+}
+
+.plan:fullscreen {
+  padding: 20px;
+  background: #fff;
+}
+
+.plan:fullscreen .plan-viewport {
+  flex: 1;
+  aspect-ratio: auto;
+}
+
+.plan:fullscreen .plan-canvas {
+  width: calc(min(100%, (100vh - 110px) * 1.25) * var(--zoom, 1));
+}
+
+/* ----- Assignment preview ----- */
+.square-btn--sm {
+  flex: 0 0 32px;
+  height: 32px;
+}
+
+.preview-list {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px 14px;
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.preview-list dt {
+  color: #4b5563;
+  white-space: nowrap;
+}
+
+.preview-list dt::after {
+  content: ':';
+  padding-left: 28px;
+}
+
+.preview-list dd {
+  margin: 0;
+  color: var(--reg-text);
+  line-height: 1.5;
+}
+
+.preview-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+

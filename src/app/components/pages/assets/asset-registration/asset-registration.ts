@@ -371,7 +371,12 @@ function buildLocationModel(projects: Project[]): LocationModel {
   selector: 'app-asset-registration',
   imports: [CommonModule, FormsModule, RouterModule, LucideAngularModule],
   templateUrl: './asset-registration.html',
-  styleUrls: ['./asset-registration.css'],
+  // Split by step, in cascade order, to keep each stylesheet under the anyComponentStyle budget (20 kB)
+  styleUrls: [
+    './asset-registration.css',
+    './asset-registration-classification-location.css',
+    './asset-registration-purchase-additional.css',
+  ],
 })
 export class AssetRegistration {
   readonly icons = {

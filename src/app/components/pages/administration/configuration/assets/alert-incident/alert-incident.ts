@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ImportColumn, ImportFileModal } from 'shared-ui';
-import { MasterLinkIcons } from '@shared/master-link-icons/master-link-icons';
 import { RowActions } from 'shared-ui';
 
 export interface AlertIncidentEntry {
@@ -28,7 +27,7 @@ export interface AlertIncidentForm {
 @Component({
   standalone: true,
   selector: 'app-asset-alert-incident',
-  imports: [CommonModule, FormsModule, ImportFileModal, MasterLinkIcons, RowActions],
+  imports: [CommonModule, FormsModule, ImportFileModal, RowActions],
   templateUrl: './alert-incident.html',
   styleUrls: ['./alert-incident.css']
 })
