@@ -97,10 +97,21 @@ export class Sidebar {
       path: '/tracking-iot',
       icon: RadioTower,
       children: [
-        { label: 'Analytics & Insights', path: '/tracking-iot/analytics-insights' },
+        { label: 'Tag Management', path: '/tracking-iot/tag-management' },
         { label: 'Tag IDs', path: '/tracking-iot/tag-ids' },
+        { label: 'IoT Device Management', path: '/tracking-iot/device-management' },
+        { label: 'Device Type & Model', path: '/tracking-iot/device-type-model' },
+        { label: 'Gateways', path: '/tracking-iot/gateways' },
+        { label: 'Device Configuration', path: '/tracking-iot/device-configuration' },
+        { label: 'Device Health & Status', path: '/tracking-iot/device-health' },
         { label: 'Firmware & Connectivity', path: '/tracking-iot/firmware-connectivity' },
-        { label: 'Real-time Location', path: '/tracking-iot/real-time-location' }
+        { label: 'Sensor Management', path: '/tracking-iot/sensor-management' },
+        { label: 'Tracking & Telemetry', path: '/tracking-iot/tracking-telemetry' },
+        { label: 'Real-Time Location', path: '/tracking-iot/real-time-location' },
+        { label: 'Geofence & Alerts', path: '/tracking-iot/geofence-alerts' },
+        { label: 'Analytics & Insights', path: '/tracking-iot/analytics-insights' },
+        { label: 'Device Maintenance', path: '/tracking-iot/device-maintenance' },
+        { label: 'Device Replacement', path: '/tracking-iot/device-replacement' }
       ]
     },
     { label: 'Movement & Custody', path: '/movement-custody', icon: ArrowLeftRight },

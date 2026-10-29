@@ -197,7 +197,19 @@ function build(): TagId[] {
 function seedHistory(t: TagId, rng: () => number): TagEvent[] {
   const by = () => USERS[Math.floor(rng() * USERS.length)];
   const h: TagEvent[] = [{ at: t.registeredOn, text: `Registered as ${t.tech} ${t.type.toLowerCase()}`, by: by() }];
-  if (t.status === 'Assigned' && t.asset && t.assignedOn) h.push({ at: t.assignedOn, text: `Assigned to ${t.asset.kind} ${t.asset.tag}`, by: by() });
+  if (t.status === 'Assigned' && t.asset && t.assignedOn) {
+    h.push({ at: t.assignedOn, text: `Assigned to ${t.asset.kind} ${t.asset.tag}`, by: by() });
+    // many tags were on another asset before (tags are reused when an asset is retired or re-tagged)
+    const span = t.assignedOn - t.registeredOn;
+    if (span > 30 * DAY && rng() < 0.6) {
+      const [kind, prefix] = KINDS[t.tech][Math.floor(rng() * KINDS[t.tech].length)];
+      const prior = `${kind} ${prefix}-${String(1 + Math.floor(rng() * 640)).padStart(3, '0')}`;
+      h.push(
+        { at: t.registeredOn + Math.floor(span * (0.1 + rng() * 0.3)), text: `Assigned to ${prior}`, by: by() },
+        { at: t.assignedOn - Math.floor((1 + rng() * 20) * DAY), text: `Unassigned from ${prior}`, by: by() },
+      );
+    }
+  }
   if (t.status === 'Inactive') {
     const at = (t.lastSeen ?? t.registeredOn) + DAY * (1 + Math.floor(rng() * 10));
     h.push({ at, text: rng() < 0.5 ? 'Deactivated: tag damaged' : 'Deactivated: asset disposed', by: by() });

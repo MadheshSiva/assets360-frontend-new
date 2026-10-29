@@ -1,0 +1,689 @@
+{
+ "type": "FeatureCollection",
+ "name": "Riverside Industrial Campus (demo)",
+ "metersPerDegree": {
+  "lat": 110574,
+  "lng": 100891
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "campus",
+    "id": "RIC",
+    "name": "Riverside Industrial Campus",
+    "address": "Jebel Ali Industrial Area 1, Dubai"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.11965,
+       24.998414
+      ],
+      [
+       55.125746,
+       24.998414
+      ],
+      [
+       55.125746,
+       25.001805
+      ],
+      [
+       55.11965,
+       25.001805
+      ],
+      [
+       55.11965,
+       24.998414
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "building",
+    "id": "WH-B",
+    "name": "Warehouse Zone B",
+    "use": "Finished goods storage",
+    "floors": 1,
+    "areaM2": 10800
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.120344,
+       25.000512
+      ],
+      [
+       55.121533,
+       25.000512
+      ],
+      [
+       55.121533,
+       25.001326
+      ],
+      [
+       55.120344,
+       25.001326
+      ],
+      [
+       55.120344,
+       25.000512
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "building",
+    "id": "WH-A",
+    "name": "Warehouse Zone A",
+    "use": "Cold chain & raw materials",
+    "floors": 1,
+    "areaM2": 9000
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.120096,
+       24.998975
+      ],
+      [
+       55.121087,
+       24.998975
+      ],
+      [
+       55.121087,
+       24.999789
+      ],
+      [
+       55.120096,
+       24.999789
+      ],
+      [
+       55.120096,
+       24.998975
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "building",
+    "id": "ADM",
+    "name": "Administration",
+    "use": "Offices & control room",
+    "floors": 2,
+    "areaM2": 3750
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.121285,
+       24.998939
+      ],
+      [
+       55.122029,
+       24.998939
+      ],
+      [
+       55.122029,
+       24.999391
+      ],
+      [
+       55.121285,
+       24.999391
+      ],
+      [
+       55.121285,
+       24.998939
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "building",
+    "id": "MFG",
+    "name": "Manufacturing Building",
+    "use": "Assembly & machining",
+    "floors": 1,
+    "areaM2": 19800
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.122247,
+       24.999119
+      ],
+      [
+       55.123912,
+       24.999119
+      ],
+      [
+       55.123912,
+       25.000205
+      ],
+      [
+       55.12307,
+       25.000205
+      ],
+      [
+       55.12307,
+       25.00006
+      ],
+      [
+       55.122247,
+       25.00006
+      ],
+      [
+       55.122247,
+       24.999119
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "building",
+    "id": "FUEL",
+    "name": "Fuel & Generators",
+    "use": "Fuel store, gensets",
+    "floors": 1,
+    "areaM2": 6300
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.124388,
+       24.999119
+      ],
+      [
+       55.12528,
+       24.999119
+      ],
+      [
+       55.12528,
+       24.999752
+      ],
+      [
+       55.124388,
+       24.999752
+      ],
+      [
+       55.124388,
+       24.999119
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "building",
+    "id": "DSP",
+    "name": "Dispatch Hall",
+    "use": "Loading docks",
+    "floors": 1,
+    "areaM2": 7000
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.122247,
+       25.000693
+      ],
+      [
+       55.123238,
+       25.000693
+      ],
+      [
+       55.123238,
+       25.001326
+      ],
+      [
+       55.122247,
+       25.001326
+      ],
+      [
+       55.122247,
+       25.000693
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "building",
+    "id": "UTL",
+    "name": "Utility Block",
+    "use": "Compressors & water",
+    "floors": 1,
+    "areaM2": 2400
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.123714,
+       25.000783
+      ],
+      [
+       55.124308,
+       25.000783
+      ],
+      [
+       55.124308,
+       25.001145
+      ],
+      [
+       55.123714,
+       25.001145
+      ],
+      [
+       55.123714,
+       25.000783
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "geofence",
+    "id": "GF-WHB",
+    "name": "Warehouse Zone B",
+    "rule": "Entry / exit alerts for forklifts",
+    "building": "WH-B"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.120205,
+       25.000386
+      ],
+      [
+       55.121692,
+       25.000386
+      ],
+      [
+       55.121692,
+       25.001453
+      ],
+      [
+       55.120205,
+       25.001453
+      ],
+      [
+       55.120205,
+       25.000386
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "geofence",
+    "id": "GF-FUEL",
+    "name": "Fuel Store (restricted)",
+    "rule": "No ignition sources",
+    "building": "FUEL"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.124308,
+       24.999047
+      ],
+      [
+       55.125379,
+       24.999047
+      ],
+      [
+       55.125379,
+       24.999843
+      ],
+      [
+       55.124308,
+       24.999843
+      ],
+      [
+       55.124308,
+       24.999047
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "road",
+    "id": "RD-1",
+    "name": "Ring Road"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      55.119848,
+      24.998595
+     ],
+     [
+      55.125547,
+      24.998595
+     ],
+     [
+      55.125547,
+      25.001625
+     ],
+     [
+      55.119848,
+      25.001625
+     ],
+     [
+      55.119848,
+      24.998595
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "road",
+    "id": "RD-2",
+    "name": "Central Avenue"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      55.119848,
+      25.000358
+     ],
+     [
+      55.125547,
+      25.000358
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "road",
+    "id": "RD-3",
+    "name": "Dock Road"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      55.122078,
+      24.998595
+     ],
+     [
+      55.122078,
+      25.001625
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "road",
+    "id": "RD-4",
+    "name": "Service Lane"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      55.12416,
+      24.998595
+     ],
+     [
+      55.12416,
+      25.000358
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "gateway",
+    "id": "GW-01",
+    "name": "GW-01",
+    "model": "RAK7268 LoRaWAN / BLE",
+    "status": "online",
+    "building": "DSP"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     55.122623,
+     25.001507
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "gateway",
+    "id": "GW-02",
+    "name": "GW-02",
+    "model": "RAK7268 LoRaWAN / BLE",
+    "status": "online",
+    "building": "FUEL"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     55.125448,
+     25.000132
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "gateway",
+    "id": "GW-03",
+    "name": "GW-03",
+    "model": "Milesight UG65",
+    "status": "online",
+    "building": "WH-A"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     55.119947,
+     24.999951
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "asset",
+    "id": "FL-008",
+    "name": "FL-008",
+    "icon": "forklift",
+    "status": "online",
+    "building": "WH-B",
+    "route": "RT-FL-008"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     55.121137,
+     25.000856
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "asset",
+    "id": "PMP-118",
+    "name": "PMP-118",
+    "icon": "pump",
+    "status": "warning",
+    "building": "MFG"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     55.123535,
+     25.000331
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "asset",
+    "id": "CR-03",
+    "name": "CR-03",
+    "icon": "cold",
+    "status": "online",
+    "building": "WH-A"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     55.120839,
+     24.999246
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "asset",
+    "id": "GEN-042",
+    "name": "GEN-042",
+    "icon": "generator",
+    "status": "offline",
+    "building": "FUEL"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     55.124963,
+     24.999264
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "device",
+    "id": "TS-80214",
+    "name": "TS-80214",
+    "icon": "sensor",
+    "status": "online",
+    "building": "ADM"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     55.122623,
+     24.998866
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "route",
+    "id": "RT-FL-008",
+    "asset": "FL-008",
+    "speedMps": 1.6
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      55.121137,
+      25.000856
+     ],
+     [
+      55.121394,
+      25.000874
+     ],
+     [
+      55.121434,
+      25.001055
+     ],
+     [
+      55.120939,
+      25.001109
+     ],
+     [
+      55.120542,
+      25.001073
+     ],
+     [
+      55.120483,
+      25.000783
+     ],
+     [
+      55.120641,
+      25.000621
+     ],
+     [
+      55.121038,
+      25.000584
+     ],
+     [
+      55.121335,
+      25.000693
+     ],
+     [
+      55.121137,
+      25.000856
+     ]
+    ]
+   }
+  }
+ ]
+}

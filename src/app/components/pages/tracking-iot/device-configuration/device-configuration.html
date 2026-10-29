@@ -1,0 +1,392 @@
+<section class="dc-page">
+  <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep">/</span><strong>Device Configuration</strong></nav>
+
+  <!-- ===== Header ===== -->
+  <header class="dc-head">
+    <div class="dc-title">
+      <h1>Device Configuration <span *ngIf="dirty" class="unsaved" title="You have unsaved changes"><i></i>Unsaved changes</span></h1>
+      <p>Configure connectivity, telemetry, reporting and alert behavior for deployed IoT devices.</p>
+    </div>
+    <div class="hd-controls">
+      <label class="hd-field"><span>Device</span>
+        <span class="ic-select"><lucide-icon [img]="deviceIcon" [size]="15"></lucide-icon>
+          <select class="control control-sm" [ngModel]="deviceId" (ngModelChange)="selectDevice($event)" aria-label="Device">
+            <option *ngFor="let d of devices" [value]="d.id">{{ d.type }} {{ d.id }}</option>
+          </select></span></label>
+      <label class="hd-field"><span>Linked Asset</span>
+        <span class="ic-select"><lucide-icon [img]="icons.Building2" [size]="15"></lucide-icon>
+          <select class="control control-sm" [ngModel]="assetSel" (ngModelChange)="relinkAsset($event)" aria-label="Linked asset">
+            <option *ngFor="let a of assets" [value]="a">{{ a }}</option>
+          </select></span></label>
+      <div class="hd-field"><span>Status</span>
+        <span class="status-box" [class.is-off]="device.status === 'Offline'"><i></i>{{ device.status }}</span></div>
+      <button type="button" class="btn btn-outline" (click)="saveDraft()"><lucide-icon [img]="icons.Save" [size]="16"></lucide-icon>Save Draft</button>
+      <button type="button" class="btn btn-primary" (click)="apply()"><lucide-icon [img]="icons.Send" [size]="16"></lucide-icon>Apply Configuration</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button *ngFor="let t of tabs" type="button" role="tab" [class.is-active]="tab === t.id" [attr.aria-selected]="tab === t.id" (click)="tab = t.id">{{ t.label }}</button>
+  </nav>
+
+  <!-- ===== Overview ===== -->
+  <div *ngIf="tab === 'overview'" class="ov-grid">
+    <div class="card panel">
+      <div class="sec-head"><span class="sec-ic"><lucide-icon [img]="icons.LayoutDashboard" [size]="16"></lucide-icon></span><h2>Device Status</h2></div>
+      <dl class="kv">
+        <dt>Status</dt><dd><span class="pill" [class.pill--ok]="device.status === 'Online'" [class.pill--bad]="device.status === 'Offline'"><i></i>{{ device.status }}</span></dd>
+        <dt>Last seen</dt><dd>{{ fmt(device.lastSeen) }}</dd>
+        <dt>Model</dt><dd>{{ device.model }}</dd>
+        <dt>Gateway</dt><dd>{{ device.gateway }}</dd>
+        <dt>Linked asset</dt><dd>{{ device.asset }}</dd>
+        <dt>Battery</dt><dd><span class="bar"><i [style.width.%]="device.battery" [class.is-low]="device.battery < 30"></i></span>{{ device.battery }}%</dd>
+        <dt>RSSI</dt><dd>{{ device.rssi }} dBm</dd>
+        <dt *ngIf="device.snr !== null">SNR</dt><dd *ngIf="device.snr !== null">{{ device.snr }} dB</dd>
+      </dl>
+    </div>
+    <div class="card panel">
+      <div class="sec-head"><span class="sec-ic"><lucide-icon [img]="protocolIcon" [size]="16"></lucide-icon></span><h2>Connectivity</h2><span class="grow"></span><button type="button" class="link-btn" (click)="tab = 'connectivity'">Edit</button></div>
+      <dl class="kv"><dt>Protocol</dt><dd>{{ device.protocol }}</dd><ng-container *ngFor="let s of connSummary"><dt>{{ s.k }}</dt><dd class="ellip">{{ s.v }}</dd></ng-container></dl>
+    </div>
+    <div class="card panel">
+      <div class="sec-head"><span class="sec-ic"><lucide-icon [img]="icons.ChartColumn" [size]="16"></lucide-icon></span><h2>Telemetry</h2><span class="grow"></span><button type="button" class="link-btn" (click)="tab = 'telemetry'">Edit</button></div>
+      <p class="small muted mt0">{{ enabledCount }} of {{ form.params.length }} parameters transmitted · sampling every {{ samplingLabel(form.sampling) }} · battery {{ form.batteryInterval | lowercase }}</p>
+      <ul class="plist">
+        <li *ngFor="let p of form.params" [class.is-off]="!p.enabled"><lucide-icon [img]="paramIcon(p)" [size]="15"></lucide-icon><span class="grow">{{ p.name }}</span>
+          <span class="small muted">{{ p.enabled ? p.agg + ' · Δ ≥ ' + p.threshold + ' ' + p.unit : 'Off' }}</span></li>
+      </ul>
+    </div>
+    <div class="card panel">
+      <div class="sec-head"><span class="sec-ic"><lucide-icon [img]="icons.Bell" [size]="16"></lucide-icon></span><h2>Alerts</h2><span class="grow"></span><button type="button" class="link-btn" (click)="tab = 'alerts'">Edit</button></div>
+      <div class="sev-row"><span *ngFor="let c of severityCounts" class="sev" [ngClass]="sevClass(c.s)"><b>{{ c.n }}</b>{{ c.s }}</span></div>
+      <ul class="plist">
+        <li *ngFor="let a of form.alerts" [class.is-off]="!a.enabled"><span class="grow">{{ paramName(a.param) }} {{ a.cond }} {{ a.value }} {{ paramUnit(a.param) }}</span><span class="small muted">{{ a.notify }}</span></li>
+        <li *ngIf="!form.alerts.length" class="muted">No alert rules.</li>
+      </ul>
+    </div>
+    <div class="card panel">
+      <div class="sec-head"><span class="sec-ic"><lucide-icon [img]="icons.Cpu" [size]="16"></lucide-icon></span><h2>Firmware</h2><span class="grow"></span><button type="button" class="link-btn" (click)="tab = 'firmware'">Details</button></div>
+      <dl class="kv"><dt>Installed</dt><dd>{{ device.firmware }}</dd><dt>Latest</dt><dd>{{ device.latestFirmware }} <span *ngIf="fwUpToDate" class="pill pill--ok">Up to date</span><span *ngIf="!fwUpToDate" class="pill pill--warn">Update available</span></dd>
+        <dt>Pending</dt><dd>{{ device.firmwareTarget ? device.firmwareTarget.version + ' at ' + fwWhen : 'None' }}</dd></dl>
+    </div>
+    <div class="card panel">
+      <div class="sec-head"><span class="sec-ic"><lucide-icon [img]="icons.History" [size]="16"></lucide-icon></span><h2>Configuration</h2><span class="grow"></span><button type="button" class="link-btn" (click)="tab = 'history'">History</button></div>
+      <dl class="kv"><dt>Version</dt><dd>v{{ shownVersion.v }} <span class="vs" [ngClass]="statusClass(shownVersion.status)">{{ shownVersion.status }}</span></dd>
+        <dt>Running on device</dt><dd>{{ appliedVersion ? 'v' + appliedVersion.v : '—' }}</dd><dt>Last applied</dt><dd>{{ lastApplied }}</dd>
+        <dt>Checks</dt><dd>{{ 4 - failing.length }} of 4 passing</dd></dl>
+    </div>
+  </div>
+
+  <!-- ===== Connectivity ===== -->
+  <div *ngIf="tab === 'connectivity'" class="cx-grid">
+    <div class="col">
+      <div class="card panel">
+        <div class="sec-head"><span class="sec-ic"><lucide-icon [img]="icons.IdCard" [size]="16"></lucide-icon></span><h2>Device Identity</h2></div>
+        <div class="ident">
+          <div><label>Device ID</label><span>{{ device.id }}</span></div>
+          <div><label>Model</label><span>{{ device.model }}</span></div>
+          <div><label>Protocol</label><span>{{ device.protocol }}</span></div>
+          <div><label>Gateway</label><span>{{ device.gateway }}</span></div>
+          <div><label>Firmware Version</label><span>{{ device.firmware }}</span></div>
+        </div>
+      </div>
+
+      <div class="card panel">
+        <div class="sec-head"><span class="sec-ic"><lucide-icon [img]="protocolIcon" [size]="16"></lucide-icon></span><h2>Connectivity Settings</h2><span class="grow"></span><span class="small muted">{{ device.protocol }}</span></div>
+        <div class="form2">
+          <ng-container *ngIf="device.protocol === 'LoRaWAN'">
+            <label class="field"><span class="field-label">LoRaWAN Region</span><select class="control" [(ngModel)]="form.region"><option *ngFor="let r of regions" [value]="r">{{ r }}</option></select></label>
+            <label class="field"><span class="field-label">Join Mode</span><select class="control" [(ngModel)]="form.joinMode"><option value="OTAA">OTAA</option><option value="ABP">ABP</option></select></label>
+            <label class="field"><span class="field-label">AppEUI</span>
+              <span class="in-btn"><input class="control mono" [class.is-bad]="appEuiError" [(ngModel)]="form.appEui" maxlength="16" spellcheck="false" /><button type="button" class="icon-btn" (click)="copy(form.appEui, 'AppEUI')" [disabled]="!form.appEui" aria-label="Copy AppEUI"><lucide-icon [img]="icons.Copy" [size]="15"></lucide-icon></button></span>
+              <small *ngIf="appEuiError" class="err">{{ appEuiError }}</small></label>
+            <label class="field"><span class="field-label">DevEUI</span>
+              <span class="in-btn"><input class="control mono" [class.is-bad]="devEuiError" [(ngModel)]="form.devEui" maxlength="16" spellcheck="false" /><button type="button" class="icon-btn" (click)="copy(form.devEui, 'DevEUI')" [disabled]="!form.devEui" aria-label="Copy DevEUI"><lucide-icon [img]="icons.Copy" [size]="15"></lucide-icon></button></span>
+              <small *ngIf="devEuiError" class="err">{{ devEuiError }}</small></label>
+          </ng-container>
+          <ng-container *ngIf="device.protocol === 'BLE 5.0'">
+            <label class="field"><span class="field-label">Advertising Interval (ms)</span><input type="number" class="control" [class.is-bad]="advError" [(ngModel)]="form.advInterval" min="20" max="10240" step="10" /><small *ngIf="advError" class="err">{{ advError }}</small></label>
+            <label class="field"><span class="field-label">TX Power</span><select class="control" [(ngModel)]="form.txPower"><option *ngFor="let t of txPowers" [ngValue]="t">{{ t }} dBm</option></select></label>
+          </ng-container>
+          <ng-container *ngIf="device.protocol === 'Cellular'">
+            <label class="field"><span class="field-label">APN</span><input class="control" [class.is-bad]="apnError" [(ngModel)]="form.apn" /><small *ngIf="apnError" class="err">{{ apnError }}</small></label>
+            <label class="field"><span class="field-label">SIM ICCID</span>
+              <span class="in-btn"><input class="control mono" [class.is-bad]="iccidError" [(ngModel)]="form.iccid" maxlength="20" /><button type="button" class="icon-btn" (click)="copy(form.iccid, 'ICCID')" [disabled]="!form.iccid" aria-label="Copy ICCID"><lucide-icon [img]="icons.Copy" [size]="15"></lucide-icon></button></span>
+              <small *ngIf="iccidError" class="err">{{ iccidError }}</small></label>
+            <label class="field"><span class="field-label">Network Mode</span><select class="control" [(ngModel)]="form.networkMode"><option *ngFor="let m of networkModes" [value]="m">{{ m }}</option></select></label>
+          </ng-container>
+
+          <div class="field"><span class="field-label">{{ device.protocol === 'BLE 5.0' ? 'Gateway Upload Interval' : 'Reporting Interval' }}</span>
+            <div class="row-inline">
+              <input type="number" class="control w-num" [class.is-bad]="intervalError" [(ngModel)]="form.interval" min="1" aria-label="Interval" />
+              <select class="control w-unit" [(ngModel)]="form.intervalUnit" aria-label="Interval unit"><option value="minutes">minutes</option><option value="hours">hours</option></select>
+              <span class="menu-wrap"><button type="button" class="icon-btn info" (click)="toggleMenu('info', $event)" aria-label="About reporting interval"><lucide-icon [img]="icons.Info" [size]="16"></lucide-icon></button>
+                <div *ngIf="menuOpen === 'info'" class="pop" (click)="$event.stopPropagation()">How often the device sends a scheduled uplink. Values that change by more than the transmit threshold are also sent between reports. Shorter intervals reduce battery life.</div></span>
+            </div>
+            <small *ngIf="intervalError" class="err">{{ intervalError }}</small></div>
+
+          <ng-container *ngIf="device.protocol === 'LoRaWAN'">
+            <div class="field"><span class="field-label">Confirmed Uplink</span>
+              <span class="tg-line"><button type="button" class="switch" [class.is-on]="form.confirmed" (click)="form.confirmed = !form.confirmed" role="switch" [attr.aria-checked]="form.confirmed" aria-label="Confirmed uplink"><i></i></button>Require acknowledgement from network server</span></div>
+            <div class="field"><span class="field-label">ADR (Adaptive Data Rate)</span>
+              <span class="tg-line"><button type="button" class="switch" [class.is-on]="form.adr" (click)="onAdr(!form.adr)" role="switch" [attr.aria-checked]="form.adr" aria-label="Adaptive data rate"><i></i></button>Enable ADR to optimize data rate and battery life</span></div>
+            <label class="field"><span class="field-label">Data Rate</span>
+              <select class="control" [(ngModel)]="form.dataRate" [disabled]="form.adr"><option *ngIf="form.adr" [value]="autoRate">{{ autoRate }}</option><option *ngFor="let r of dataRates" [value]="r">{{ r }}</option></select>
+              <small class="hint">{{ form.adr ? 'Data rate will be negotiated by the network (ADR).' : 'Fixed data rate; lower DR = longer range, more airtime.' }}</small></label>
+          </ng-container>
+          <ng-container *ngIf="device.protocol === 'BLE 5.0'">
+            <div class="field"><span class="field-label">Connectable Mode</span>
+              <span class="tg-line"><button type="button" class="switch" [class.is-on]="form.connectable" (click)="form.connectable = !form.connectable" role="switch" [attr.aria-checked]="form.connectable" aria-label="Connectable mode"><i></i></button>Allow configuration over a BLE connection</span></div>
+          </ng-container>
+          <ng-container *ngIf="device.protocol === 'Cellular'">
+            <div class="field"><span class="field-label">Data Roaming</span>
+              <span class="tg-line"><button type="button" class="switch" [class.is-on]="form.roaming" (click)="form.roaming = !form.roaming" role="switch" [attr.aria-checked]="form.roaming" aria-label="Data roaming"><i></i></button>Allow uplinks on roaming networks</span></div>
+          </ng-container>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card panel">
+        <div class="sec-head"><span class="sec-ic"><lucide-icon [img]="icons.ChartColumn" [size]="16"></lucide-icon></span><h2>Telemetry Configuration</h2><span class="grow"></span>
+          <label class="inline-field">Sampling Interval <select class="control control-sm" [(ngModel)]="form.sampling"><option *ngFor="let s of samplings" [ngValue]="s">{{ samplingLabel(s) }}</option></select></label></div>
+        <div class="tgrid" role="table">
+          <div class="tg-h" role="row"><span>Parameter</span><span>Unit</span><span>Enabled</span><span>Aggregation</span><span>Transmit Threshold (Change)</span></div>
+          <div *ngFor="let p of sensorParams" class="tg-r" role="row" [class.is-off]="!p.enabled">
+            <span class="pname"><span class="p-ic"><lucide-icon [img]="paramIcon(p)" [size]="15"></lucide-icon></span>{{ p.name }}</span>
+            <span>{{ p.unit }}</span>
+            <span><button type="button" class="switch" [class.is-on]="p.enabled" (click)="p.enabled = !p.enabled" role="switch" [attr.aria-checked]="p.enabled" [attr.aria-label]="'Transmit ' + p.name"><i></i></button></span>
+            <span><select class="control control-xs" [(ngModel)]="p.agg" [disabled]="!p.enabled" [attr.aria-label]="p.name + ' aggregation'"><option *ngFor="let a of aggs" [value]="a">{{ a }}</option></select></span>
+            <span class="thr">≥ <input type="number" class="control control-xs" [(ngModel)]="p.threshold" [disabled]="!p.enabled" min="0" step="0.1" [attr.aria-label]="p.name + ' threshold'" /> {{ p.unit }}</span>
+          </div>
+        </div>
+
+        <div class="batt" *ngIf="batteryParam as b">
+          <span class="p-ic"><lucide-icon [img]="icons.Battery" [size]="16"></lucide-icon></span>
+          <strong>Battery Reporting</strong>
+          <span class="tg-line"><button type="button" class="switch" [class.is-on]="b.enabled" (click)="toggleBattery()" role="switch" [attr.aria-checked]="b.enabled" aria-label="Battery reporting"><i></i></button>Enable battery level reporting</span>
+          <span class="grow"></span>
+          <label class="inline-field">Reporting Interval <select class="control control-sm" [(ngModel)]="form.batteryInterval" [disabled]="!b.enabled"><option *ngFor="let i of batteryIntervals" [value]="i">{{ i }}</option></select></label>
+        </div>
+
+        <div class="prev-head"><h3>Live Preview <span class="muted">(Last 24 hours)</span></h3>
+          <div class="legend"><span *ngFor="let pn of panels" [class.is-off]="!pn.enabled"><i [style.background]="pn.color"></i>{{ pn.name }} ({{ pn.unit }})</span><span class="lg-dot"><b></b>Change-triggered uplink</span></div></div>
+        <div class="chart-wrap" (mouseleave)="hover = null">
+          <svg [attr.viewBox]="'0 0 ' + cw + ' ' + chartH" class="chart" role="img" aria-label="Last 24 hours of measured values, one panel per parameter on a shared time axis">
+            <g *ngFor="let pn of panels" [class.panel-off]="!pn.enabled">
+              <g class="grid"><line *ngFor="let t of pn.ticks" [attr.x1]="pad.l" [attr.x2]="cw - pad.r" [attr.y1]="t.y" [attr.y2]="t.y"></line></g>
+              <g class="axis"><text *ngFor="let t of pn.ticks" [attr.x]="pad.l - 6" [attr.y]="t.y + 3" text-anchor="end">{{ t.label }}</text>
+                <text [attr.x]="pad.l + 4" [attr.y]="pn.top + 9" class="p-label">{{ pn.unit }}</text></g>
+              <path *ngIf="pn.enabled" class="band" [attr.d]="pn.band" [attr.fill]="pn.color"></path>
+              <path class="line" [attr.d]="pn.path" [attr.stroke]="pn.enabled ? pn.color : '#c3c7d1'"></path>
+              <ng-container *ngIf="pn.enabled"><circle *ngFor="let d of pn.dots" class="tx-dot" [attr.cx]="d.x" [attr.cy]="d.y" r="1.9" [attr.fill]="pn.color"></circle></ng-container>
+              <text *ngIf="!pn.enabled" class="off-label" [attr.x]="cw / 2" [attr.y]="pn.top + 36" text-anchor="middle">{{ pn.name }} disabled, not transmitted</text>
+              <ng-container *ngIf="hover !== null && pn.enabled"><circle class="h-dot" [attr.cx]="xs[hover]" [attr.cy]="pn.ys[hover]" r="3.5" [attr.fill]="pn.color"></circle></ng-container>
+            </g>
+            <g class="axis"><text *ngFor="let h of hourTicks" [attr.x]="h.x" [attr.y]="chartH - 5" text-anchor="middle">{{ h.label }}</text></g>
+            <line *ngIf="hover !== null" class="crosshair" [attr.x1]="xs[hover]" [attr.x2]="xs[hover]" [attr.y1]="pad.t" [attr.y2]="chartH - pad.b"></line>
+            <rect *ngFor="let x of xs; let i = index" class="hit" [attr.x]="x - 5" [attr.y]="pad.t" width="10" [attr.height]="chartH - pad.t - pad.b" (mouseenter)="hover = i"></rect>
+          </svg>
+          <div *ngIf="hover !== null" class="tip" [style.left.%]="tipLeft">
+            <strong>{{ timeLabel(hover, true) }}</strong>
+            <span *ngFor="let pn of panels" [class.is-off]="!pn.enabled"><i [style.background]="pn.color"></i>{{ pn.name }}<b>{{ pn.enabled ? (pn.values[hover] | number: '1.1-1') + ' ' + pn.unit : 'Off' }}</b></span>
+          </div>
+          <p *ngIf="!panels.length" class="muted small">This device has no measured parameters.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Telemetry ===== -->
+  <div *ngIf="tab === 'telemetry'" class="card panel">
+    <div class="sec-head"><span class="sec-ic"><lucide-icon [img]="icons.ChartColumn" [size]="16"></lucide-icon></span><h2>Telemetry Parameters</h2><span class="small muted">{{ enabledCount }} of {{ form.params.length }} transmitted</span><span class="grow"></span>
+      <label class="inline-field">Sampling <select class="control control-sm" [(ngModel)]="form.sampling"><option *ngFor="let s of samplings" [ngValue]="s">{{ samplingLabel(s) }}</option></select></label>
+      <label class="inline-field">Battery report <select class="control control-sm" [(ngModel)]="form.batteryInterval"><option *ngFor="let i of batteryIntervals" [value]="i">{{ i }}</option></select></label></div>
+    <div class="table-wrap">
+      <table class="dt">
+        <thead><tr><th>Parameter</th><th>Type</th><th>Unit</th><th>Enabled</th><th>Aggregation</th><th>Transmit Threshold (Change)</th><th>Alert Rules</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let p of form.params" [class.is-off]="!p.enabled">
+            <td><span class="pname"><span class="p-ic"><lucide-icon [img]="paramIcon(p)" [size]="15"></lucide-icon></span>{{ p.name }}</span></td>
+            <td><span class="tag">{{ p.kind === 'sensor' ? 'Measurement' : 'Diagnostic' }}</span></td>
+            <td><select *ngIf="p.units.length > 1" class="control control-xs" [ngModel]="p.unit" (ngModelChange)="changeUnit(p, $event)" [attr.aria-label]="p.name + ' unit'"><option *ngFor="let u of p.units" [value]="u">{{ u }}</option></select><span *ngIf="p.units.length < 2">{{ p.unit }}</span></td>
+            <td><button type="button" class="switch" [class.is-on]="p.enabled" (click)="p.enabled = !p.enabled" role="switch" [attr.aria-checked]="p.enabled" [attr.aria-label]="'Transmit ' + p.name"><i></i></button></td>
+            <td><select class="control control-xs" [(ngModel)]="p.agg" [disabled]="!p.enabled"><option *ngFor="let a of aggs" [value]="a">{{ a }}</option></select></td>
+            <td><span class="thr">≥ <input type="number" class="control control-xs" [(ngModel)]="p.threshold" [disabled]="!p.enabled" min="0" step="0.1" /> {{ p.unit }}</span></td>
+            <td><button type="button" class="link-btn" (click)="tab = 'alerts'">{{ rulesFor(p.key) }} active</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== Alerts ===== -->
+  <div *ngIf="tab === 'alerts'" class="card panel">
+    <div class="sec-head"><span class="sec-ic"><lucide-icon [img]="icons.Bell" [size]="16"></lucide-icon></span><h2>Threshold Alert Rules</h2><span class="grow"></span>
+      <button type="button" class="btn btn-sm btn-primary" (click)="editAlert()"><lucide-icon [img]="icons.Plus" [size]="15"></lucide-icon>Add Rule</button></div>
+    <div class="table-wrap">
+      <table class="dt">
+        <thead><tr><th>Parameter</th><th>Condition</th><th>Value</th><th>Severity</th><th>Notify</th><th>Active</th><th class="col-act2">Actions</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let a of form.alerts" [class.is-off]="!a.enabled">
+            <td>{{ paramName(a.param) }}</td><td class="mono">{{ a.cond }}</td><td>{{ a.value }} {{ paramUnit(a.param) }}</td>
+            <td><span class="sev" [ngClass]="sevClass(a.severity)">{{ a.severity }}</span></td><td>{{ a.notify }}</td>
+            <td><button type="button" class="switch" [class.is-on]="a.enabled" (click)="a.enabled = !a.enabled" role="switch" [attr.aria-checked]="a.enabled" aria-label="Rule active"><i></i></button></td>
+            <td class="col-act2"><button type="button" class="icon-btn" (click)="editAlert(a)" aria-label="Edit rule"><lucide-icon [img]="icons.Pencil" [size]="15"></lucide-icon></button><button type="button" class="icon-btn danger" (click)="deleteAlert(a)" aria-label="Delete rule"><lucide-icon [img]="icons.Trash2" [size]="15"></lucide-icon></button></td>
+          </tr>
+          <tr *ngIf="!form.alerts.length"><td colspan="7" class="empty">No alert rules. Add one to raise alarms on threshold breaches.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== Firmware ===== -->
+  <div *ngIf="tab === 'firmware'" class="fw-grid">
+    <div class="card panel">
+      <div class="sec-head"><span class="sec-ic"><lucide-icon [img]="icons.Cpu" [size]="16"></lucide-icon></span><h2>Installed Firmware</h2></div>
+      <div class="big-v">{{ device.firmware }}</div>
+      <dl class="kv"><dt>Model</dt><dd>{{ device.model }}</dd><dt>Config schema needs</dt><dd>{{ device.minFirmware }} or later</dd>
+        <dt>Compatibility</dt><dd><span class="chk-inline" [ngClass]="'st--' + checks[3].state"><lucide-icon [img]="checkIcon(checks[3].state)" [size]="15"></lucide-icon>{{ checks[3].sub }}</span></dd></dl>
+    </div>
+    <div class="card panel">
+      <div class="sec-head"><span class="sec-ic"><lucide-icon [img]="icons.RotateCcw" [size]="16"></lucide-icon></span><h2>Latest Available</h2><span class="grow"></span>
+        <span *ngIf="fwUpToDate" class="pill pill--ok">Up to date</span><span *ngIf="!fwUpToDate" class="pill pill--warn">Update available</span></div>
+      <div class="big-v">{{ device.latestFirmware }}</div>
+      <h3 class="h3">Release notes</h3>
+      <ul class="notes"><li *ngFor="let n of device.releaseNotes"><lucide-icon [img]="icons.CircleCheck" [size]="15"></lucide-icon>{{ n }}</li></ul>
+    </div>
+    <div class="card panel">
+      <div class="sec-head"><span class="sec-ic"><lucide-icon [img]="icons.Calendar" [size]="16"></lucide-icon></span><h2>Update Schedule</h2></div>
+      <div *ngIf="device.firmwareTarget as t; else noFw" class="pending">
+        <lucide-icon [img]="icons.Clock" [size]="18"></lucide-icon>
+        <div class="grow"><strong>{{ device.firmware }} → {{ t.version }}</strong><span class="block small muted">Pending, installs at {{ fwWhen }}{{ device.status === 'Offline' ? ' (device offline)' : '' }}</span></div>
+        <button type="button" class="btn btn-sm btn-outline" (click)="cancelFirmware()">Cancel</button>
+      </div>
+      <ng-template #noFw><p class="small muted mt0">{{ fwUpToDate ? 'The device runs the latest firmware.' : 'No update scheduled.' }}</p></ng-template>
+      <button type="button" class="btn btn-primary btn-block" (click)="openFirmware()" [disabled]="fwUpToDate || !!device.firmwareTarget"><lucide-icon [img]="icons.Calendar" [size]="16"></lucide-icon>Schedule update</button>
+    </div>
+  </div>
+
+  <!-- ===== History ===== -->
+  <div *ngIf="tab === 'history'" class="hist-grid">
+    <div class="card panel">
+      <div class="sec-head"><span class="sec-ic"><lucide-icon [img]="icons.History" [size]="16"></lucide-icon></span><h2>Configuration Versions</h2></div>
+      <div class="table-wrap">
+        <table class="dt">
+          <thead><tr><th>Version</th><th>Status</th><th>Created By</th><th>Created</th><th>Applied</th><th>Note</th><th class="col-act2">Actions</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let v of device.versions.slice().reverse()">
+              <td><strong>v{{ v.v }}</strong></td>
+              <td><span class="vs" [ngClass]="statusClass(v.status)">{{ v.status }}</span></td>
+              <td>{{ v.createdBy }}</td><td class="nowrap">{{ fmt(v.created) }}</td>
+              <td class="nowrap">{{ v.applied ? fmt(v.applied) : (v.scheduledFor ? 'Scheduled ' + fmt(v.scheduledFor) : '—') }}</td>
+              <td class="muted">{{ v.note }}</td>
+              <td class="col-act2 nowrap"><button type="button" class="link-btn" (click)="diffOf = v"><lucide-icon [img]="icons.Eye" [size]="14"></lucide-icon>View changes</button>
+                <button type="button" class="link-btn ml" (click)="restore(v)" [disabled]="v.status === 'Draft'"><lucide-icon [img]="icons.RotateCcw" [size]="14"></lucide-icon>Restore</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card panel">
+      <div class="sec-head"><span class="sec-ic"><lucide-icon [img]="icons.Clock" [size]="16"></lucide-icon></span><h2>Activity</h2></div>
+      <ul class="timeline"><li *ngFor="let e of device.events"><i></i><div><span>{{ e.text }}</span><small>{{ fmt(e.at) }} · {{ e.by }}</small></div></li></ul>
+    </div>
+  </div>
+
+  <!-- ===== Version / deployment row ===== -->
+  <div class="deploy-row">
+    <div class="card panel">
+      <h3 class="h3">Configuration Version</h3>
+      <div class="ver"><span class="ver-n">v{{ shownVersion.v }}</span><span class="vs" [ngClass]="statusClass(shownVersion.status)">{{ shownVersion.status }}</span><span *ngIf="shownVersion.unsaved" class="small muted">unsaved</span></div>
+      <p class="meta">Created by {{ shownVersion.createdBy }}</p>
+      <p class="meta">Last applied {{ lastApplied }}</p>
+      <p *ngIf="shownVersion.scheduledFor" class="meta">Scheduled {{ fmt(shownVersion.scheduledFor) }}</p>
+      <button *ngIf="dirty" type="button" class="link-btn" (click)="discardChanges()">Discard changes</button>
+    </div>
+    <div class="card panel">
+      <h3 class="h3">Deployment Mode</h3>
+      <label class="radio"><input type="radio" name="dc-deploy" value="immediate" [(ngModel)]="deploy" /><span><b>Immediate</b><small>Apply configuration at next device check-in.</small></span></label>
+      <label class="radio"><input type="radio" name="dc-deploy" value="scheduled" [(ngModel)]="deploy" /><span><b>Scheduled</b><small>Choose a date and time for deployment.</small></span></label>
+      <input *ngIf="deploy === 'scheduled'" type="datetime-local" class="control control-sm sched" [(ngModel)]="scheduleAt" aria-label="Deployment date and time" />
+    </div>
+    <div class="card panel">
+      <h3 class="h3">Rollout Target</h3>
+      <label class="radio"><input type="radio" name="dc-roll" value="device" [(ngModel)]="rollout" /><span><b>This device ({{ device.id }})</b><small>Apply only to the selected device.</small></span></label>
+      <label class="radio"><input type="radio" name="dc-roll" value="group" [(ngModel)]="rollout" /><span><b>Device group</b><small>Select a device group to apply this configuration.</small></span></label>
+      <select class="control control-sm sched" [(ngModel)]="group" [disabled]="rollout !== 'group'" aria-label="Device group"><option *ngFor="let g of device.groups" [value]="g.name">{{ g.name }} ({{ g.count }})</option></select>
+    </div>
+    <div class="card panel">
+      <h3 class="h3 h3-ic"><lucide-icon [img]="icons.ShieldCheck" [size]="16"></lucide-icon>Validation Checklist</h3>
+      <ul class="checks">
+        <li *ngFor="let c of checks" [ngClass]="'st--' + c.state" (click)="tab = c.tab"><lucide-icon [img]="checkIcon(c.state)" [size]="16"></lucide-icon><span><b>{{ c.title }}</b><small>{{ c.sub }}</small></span></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===== Action bar ===== -->
+  <div class="action-bar card">
+    <span class="notice"><lucide-icon [img]="icons.TriangleAlert" [size]="16"></lucide-icon>Changes will be queued until the device next checks in.</span>
+    <span *ngIf="applyError" class="apply-err" role="alert">{{ applyError }}</span>
+    <span class="grow"></span>
+    <button type="button" class="btn btn-outline" (click)="validate()"><lucide-icon [img]="icons.Check" [size]="16"></lucide-icon>Validate Configuration</button>
+    <button type="button" class="btn btn-primary" (click)="apply()"><lucide-icon [img]="icons.Send" [size]="16"></lucide-icon>Apply to Device</button>
+  </div>
+</section>
+
+<!-- ===== Alert rule dialog ===== -->
+<div *ngIf="alertForm as f" class="overlay" (click)="alertForm = null">
+  <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="dc-alert" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="dc-alert">{{ f.isNew ? 'Add' : 'Edit' }} Alert Rule</h2><button type="button" class="icon-btn" (click)="alertForm = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <form class="modal-body" (ngSubmit)="saveAlert()">
+      <label class="field"><span class="field-label">Parameter</span><select class="control" [(ngModel)]="f.param" name="param"><option *ngFor="let p of form.params" [value]="p.key">{{ p.name }} ({{ p.unit }}){{ p.enabled ? '' : ' – not transmitted' }}</option></select></label>
+      <div class="two">
+        <label class="field"><span class="field-label">Condition</span><select class="control" [(ngModel)]="f.cond" name="cond"><option *ngFor="let c of conds" [value]="c">{{ c }}</option></select></label>
+        <label class="field"><span class="field-label">Value ({{ paramUnit(f.param) }})</span><input type="number" class="control" [(ngModel)]="f.value" name="value" step="0.1" /></label>
+      </div>
+      <div class="two">
+        <label class="field"><span class="field-label">Severity</span><select class="control" [(ngModel)]="f.severity" name="sev"><option *ngFor="let s of severities" [value]="s">{{ s }}</option></select></label>
+        <label class="field"><span class="field-label">Notify</span><select class="control" [(ngModel)]="f.notify" name="notify"><option *ngFor="let n of notifyOptions" [value]="n">{{ n }}</option></select></label>
+      </div>
+      <p *ngIf="alertError" class="form-error" role="alert">{{ alertError }}</p>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="alertForm = null">Cancel</button><button type="submit" class="btn btn-primary">Save Rule</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== View changes dialog ===== -->
+<div *ngIf="diffOf as v" class="overlay" (click)="diffOf = null">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dc-diff" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="dc-diff">Changes in v{{ v.v }} <span class="vs" [ngClass]="statusClass(v.status)">{{ v.status }}</span></h2><button type="button" class="icon-btn" (click)="diffOf = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <div class="modal-body">
+      <p class="muted small">{{ v.v > 1 ? 'Compared with v' + (v.v - 1) : 'Initial configuration' }} · {{ v.createdBy }} · {{ fmt(v.created) }} · {{ v.note }}</p>
+      <div class="table-wrap">
+        <table class="dt dt--mini">
+          <thead><tr><th>Field</th><th>{{ v.v > 1 ? 'v' + (v.v - 1) : 'Before' }}</th><th>v{{ v.v }}</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let r of diffRows"><td><strong>{{ r.k }}</strong></td><td class="muted">{{ r.from }}</td><td>{{ r.to }}</td></tr>
+            <tr *ngIf="!diffRows.length"><td colspan="3" class="empty">No differences from the previous version.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="diffOf = null">Close</button><button *ngIf="v.status !== 'Draft'" type="button" class="btn btn-primary" (click)="diffOf = null; restore(v)"><lucide-icon [img]="icons.RotateCcw" [size]="16"></lucide-icon>Restore as draft</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Firmware schedule dialog ===== -->
+<div *ngIf="fwDialog as f" class="overlay" (click)="fwDialog = null">
+  <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="dc-fw" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="dc-fw">Schedule Firmware Update</h2><button type="button" class="icon-btn" (click)="fwDialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <form class="modal-body" (ngSubmit)="scheduleFirmware()">
+      <p>Update <strong>{{ device.id }}</strong> from {{ device.firmware }} to <strong>{{ device.latestFirmware }}</strong>.</p>
+      <label class="radio"><input type="radio" name="when" value="checkin" [(ngModel)]="f.when" /><span><b>Next check-in</b><small>Download and install when the device next reports.</small></span></label>
+      <label class="radio"><input type="radio" name="when" value="scheduled" [(ngModel)]="f.when" /><span><b>Scheduled</b><small>Install at a specific date and time.</small></span></label>
+      <input *ngIf="f.when === 'scheduled'" type="datetime-local" class="control" [(ngModel)]="f.at" name="at" aria-label="Update date and time" />
+      <p *ngIf="fwError" class="form-error" role="alert">{{ fwError }}</p>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="fwDialog = null">Cancel</button><button type="submit" class="btn btn-primary">Schedule</button></div>
+    </form>
+  </div>
+</div>
+
+<div *ngIf="toast" class="toast" role="status">{{ toast }}</div>

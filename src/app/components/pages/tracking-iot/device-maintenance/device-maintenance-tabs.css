@@ -1,0 +1,96 @@
+/* Service Requests / Maintenance Plans / Service History / Vendors tabs, and responsive column hiding. */
+.sec-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; border-bottom: 1px solid var(--dm-border); }
+.sec-head h2 { margin: 0; font-size: 15px; font-weight: 800; }
+.sec-head--bare { padding: 0; border: 0; }
+
+.dt--req .desc { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dt--hist .note { min-width: 180px; color: var(--dm-text-2); }
+
+/* plans */
+.plans { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.plan { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; }
+.plan-head { display: flex; align-items: center; gap: 10px; }
+.plan-head strong { display: block; font-size: 13.5px; }
+.plan-head small { display: block; font-size: 11.5px; color: var(--dm-muted); }
+.plan-kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 8px 10px; border-radius: 8px; background: #f8f8fc; }
+.plan-kv dt { font-size: 11px; color: var(--dm-muted); }
+.plan-kv dd { margin: 0; font-size: 12.5px; font-weight: 700; }
+.plan-sub { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; font-size: 12px; font-weight: 700; color: var(--dm-text-2); }
+.plan-list { flex: 1; margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--dm-text-2); }
+.plan-list li { margin: 2px 0; }
+.plan .link-btn { align-self: flex-start; }
+
+/* vendors */
+.tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag { padding: 2px 7px; border-radius: 6px; background: #f1f2f6; font-size: 11.5px; color: var(--dm-text-2); white-space: nowrap; }
+.contact strong { display: block; font-weight: 600; }
+.contact a { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--dm-accent-2); text-decoration: none; overflow-wrap: anywhere; }
+.contact a:hover { text-decoration: underline; }
+.dt--ven .col-act { width: 96px; }
+
+/* ===== Responsive: driven by the main column width (the docked panel narrows it) ===== */
+.dm-main { container: dmmain / inline-size; }
+.dt--ov th:nth-child(7) { white-space: normal; }
+.dt--ov .due--warn, .dt--ov .due--bad { font-weight: inherit; color: inherit; }
+.ps--badge { padding: 4px 10px; border-radius: 6px; }
+
+@container dmmain (max-width: 1100px) {
+  .dt th, .dt td { padding-left: 7px; padding-right: 7px; }
+}
+
+@container dmmain (max-width: 960px) {
+  .filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .filters .search { grid-column: 1 / -1; }
+  .dt th { white-space: normal; }
+  .dt--req th:nth-child(6), .dt--req td:nth-child(6) { display: none; }
+  .dt--hist th:nth-child(3), .dt--hist td:nth-child(3) { display: none; }
+  .dt--ven th:nth-child(5), .dt--ven td:nth-child(5) { display: none; }
+}
+
+@container dmmain (max-width: 820px) {
+  .dt th, .dt td { padding-left: 6px; padding-right: 6px; }
+  .dt--req th:nth-child(3), .dt--req td:nth-child(3) { display: none; }
+  .dt--req .desc { max-width: 170px; }
+  .dt--hist th:nth-child(7), .dt--hist td:nth-child(7) { display: none; }
+  .dt--ven th:nth-child(3), .dt--ven td:nth-child(3) { display: none; }
+  .dev-ic { width: 26px; height: 26px; }
+  .ps { padding: 3px 7px; }
+}
+
+@container dmmain (max-width: 700px) {
+  .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@container dmmain (max-width: 640px) {
+  .dt--req th:nth-child(8), .dt--req td:nth-child(8) { display: none; }
+  .dt--hist th:nth-child(6), .dt--hist td:nth-child(6) { display: none; }
+  .sec-head .control-sm { flex: 1 1 140px; }
+}
+
+@container dmmain (max-width: 460px) {
+  .filters { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* panel: section titles above the linked asset / location cards */
+.mini-title { display: flex; align-items: center; gap: 8px; margin: 14px 0 0; font-size: 13.5px; font-weight: 800; }
+.mini-title lucide-icon { color: var(--dm-text-2); }
+.dt--ov .asset-link { white-space: nowrap; }
+@container dmmain (max-width: 960px) { .dt--ov .asset-link { white-space: normal; } }
+.p-two .btn { min-width: 0; height: auto; min-height: 34px; padding: 6px 8px; font-size: 12px; line-height: 1.25; white-space: normal; text-align: center; }
+
+/* Overview table always shows every column (incl. Model and Site): text wraps and spacing tightens
+   as the column narrows; below ~660px it scrolls sideways rather than dropping columns. */
+.dt--ov { min-width: 660px; }
+.dt--ov td:nth-child(2), .dt--ov td:nth-child(4) { white-space: nowrap; }
+@container dmmain (max-width: 960px) {
+  .dt--ov { font-size: 12px; }
+  .dt--ov th, .dt--ov td { padding: 8px 4px; }
+  .dt--ov th { font-size: 11.5px; }
+  .dt--ov td:nth-child(2), .dt--ov td:nth-child(4) { white-space: normal; }
+  .dt--ov th:first-child, .dt--ov td:first-child { padding-left: 8px; }
+  .dt--ov .dev { gap: 6px; }
+  .dt--ov .dev-txt small { white-space: normal; }
+  .dt--ov .dev-ic { width: 24px; height: 24px; }
+  .dt--ov .ps--badge { padding: 3px 6px; font-size: 11px; }
+  .dt--ov .col-act { width: 26px; }
+}

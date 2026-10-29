@@ -1,0 +1,314 @@
+<div class="dm-page">
+  <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep">/</span><strong>Device Type &amp; Model</strong></nav>
+  <header class="dm-head">
+    <div class="grow">
+      <h1>Device Type &amp; Model</h1>
+      <p>Define reusable device categories, model specifications and supported capabilities.</p>
+    </div>
+    <button type="button" class="btn btn-outline" (click)="openImport()"><lucide-icon [img]="icons.Upload" [size]="16"></lucide-icon>Import Models</button>
+    <button type="button" class="btn btn-primary" (click)="openAdd()"><lucide-icon [img]="icons.Plus" [size]="17"></lucide-icon>Add Device Model</button>
+  </header>
+
+  <!-- KPIs -->
+  <div class="kpis" *ngIf="kpi as k">
+    <button type="button" class="card kpi" (click)="showAllModels()" title="Show every device type">
+      <span class="kpi-ic kpi-ic--violet"><lucide-icon [img]="icons.Layers" [size]="22"></lucide-icon></span>
+      <span class="kpi-body"><span class="kpi-label">Device Types</span><strong>{{ k.types }}</strong></span>
+    </button>
+    <button type="button" class="card kpi" (click)="clearFilters()" title="Clear filters for this device type">
+      <span class="kpi-ic kpi-ic--blue"><lucide-icon [img]="icons.Box" [size]="22"></lucide-icon></span>
+      <span class="kpi-body"><span class="kpi-label">Models</span><strong>{{ k.models }}</strong></span>
+    </button>
+    <button type="button" class="card kpi" (click)="kpiStatus('Active')" title="Filter to active models">
+      <span class="kpi-ic kpi-ic--green"><lucide-icon [img]="icons.CircleCheck" [size]="22"></lucide-icon></span>
+      <span class="kpi-body"><span class="kpi-label">Active Models</span><strong>{{ k.active }}</strong></span>
+    </button>
+    <button type="button" class="card kpi" (click)="kpiStatus('Draft')" title="Filter to models awaiting approval">
+      <span class="kpi-ic kpi-ic--amber"><lucide-icon [img]="icons.Clock" [size]="22"></lucide-icon></span>
+      <span class="kpi-body"><span class="kpi-label">Pending Review</span><strong>{{ k.draft }}</strong></span>
+    </button>
+  </div>
+
+  <div class="dm-layout" [class.no-panel]="!selected">
+    <section class="dm-main">
+      <div class="dm-work">
+        <!-- Device types -->
+        <section class="card types-card" aria-labelledby="dm-types">
+          <div class="types-head">
+            <h2 id="dm-types">Device Type</h2>
+            <button type="button" class="add-type" (click)="openAddType()" aria-label="Add device type" title="Add device type"><lucide-icon [img]="icons.Plus" [size]="16"></lucide-icon></button>
+          </div>
+          <div class="type-list" role="list">
+            <button *ngFor="let t of types" type="button" role="listitem" class="type-item" [class.is-on]="typeFilter === t.id" (click)="selectType(t.id)" [title]="t.description">
+              <span class="type-ic"><lucide-icon [img]="typeIcon(t.icon)" [size]="16"></lucide-icon></span><span class="type-name">{{ t.name }}</span><span class="type-count">{{ countFor(t.id) }}</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- Models table -->
+        <section class="card table-card" aria-label="Device models">
+          <div class="filters">
+            <label class="search"><lucide-icon [img]="icons.Search" [size]="16"></lucide-icon><input type="search" [(ngModel)]="search" (ngModelChange)="onFilter()" placeholder="Search models, manufacturer..." aria-label="Search models" /></label>
+            <label class="lsel"><span>Manufacturer</span><select [(ngModel)]="mfrFilter" (ngModelChange)="onFilter()"><option value="">All</option><option *ngFor="let x of manufacturers" [value]="x">{{ x }}</option></select></label>
+            <label class="lsel"><span>Connectivity</span><select [(ngModel)]="connFilter" (ngModelChange)="onFilter()"><option value="">All</option><option *ngFor="let c of connOptions" [value]="c">{{ c }}</option></select></label>
+            <label class="lsel"><span>Status</span><select [(ngModel)]="statusFilter" (ngModelChange)="onFilter()"><option value="">All</option><option *ngFor="let s of statuses" [value]="s">{{ statusLabel(s) }}</option></select></label>
+          </div>
+          <div *ngIf="measFilter || attrFilter" class="cap-filters">
+            <span class="muted">Capability:</span>
+            <button *ngIf="measFilter" type="button" class="fchip" (click)="toggleMeas(measFilter)">{{ measFilter }}<lucide-icon [img]="icons.X" [size]="13"></lucide-icon></button>
+            <button *ngIf="attrFilter" type="button" class="fchip" (click)="toggleAttr(attrFilter)">{{ attrFilter }}<lucide-icon [img]="icons.X" [size]="13"></lucide-icon></button>
+          </div>
+
+          <div class="table-wrap">
+            <table class="dt">
+              <thead><tr>
+                <th>Model / Manufacturer</th><th class="c-type">Device Type</th><th class="c-conn">Connectivity</th><th class="c-meas">Supported Measurements</th>
+                <th class="c-power">Power</th><th class="c-proto">Protocol</th><th>Status</th><th class="col-act">Actions</th>
+              </tr></thead>
+              <tbody>
+                <tr *ngFor="let m of pageRows" [class.is-selected]="selected?.id === m.id" [class.is-off]="m.status === 'Retired'" (click)="select(m)" (keydown.enter)="select(m)" tabindex="0">
+                  <td>
+                    <span class="model">
+                      <span class="thumb"><ng-container *ngTemplateOutlet="thumb; context: { $implicit: formOf(m) }"></ng-container></span>
+                      <span class="model-text"><span class="model-name">{{ m.name }}</span><small>{{ m.manufacturer }}</small></span>
+                    </span>
+                  </td>
+                  <td class="c-type">{{ typeName(m.typeId) }}</td>
+                  <td class="c-conn">{{ m.connectivity.join(' / ') }}</td>
+                  <td class="c-meas">{{ measText(m) }}</td>
+                  <td class="c-power">{{ powerShort(m) }}</td>
+                  <td class="c-proto">{{ m.protocol }}</td>
+                  <td><span class="pill pill--badge" [ngClass]="'pill--' + m.status.toLowerCase()">{{ statusLabel(m.status) }}</span></td>
+                  <td class="col-act" (click)="$event.stopPropagation()">
+                    <button type="button" class="icon-btn" (click)="openMenu(m, $event)" aria-haspopup="menu" [attr.aria-expanded]="menuId === m.id" [attr.aria-label]="'Actions for ' + m.name"><lucide-icon [img]="icons.Ellipsis" [size]="18"></lucide-icon></button>
+                  </td>
+                </tr>
+                <tr *ngIf="!pageRows.length"><td colspan="8" class="empty">
+                  <ng-container *ngIf="hasFilters; else noModels">No models match these filters. <button type="button" class="link-btn" (click)="clearFilters()">Clear filters</button></ng-container>
+                  <ng-template #noModels>No models for {{ scopeName }} yet. <button type="button" class="link-btn" (click)="openAdd()">Add Device Model</button></ng-template>
+                </td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager">
+            <span class="muted">{{ showing }}</span>
+            <span class="grow"></span>
+            <button type="button" class="pg-btn" [disabled]="page === 0" (click)="page = page - 1" aria-label="Previous page"><lucide-icon [img]="icons.ChevronLeft" [size]="15"></lucide-icon></button>
+            <span class="pg-num">{{ page + 1 }} / {{ pageCount }}</span>
+            <button type="button" class="pg-btn" [disabled]="page >= pageCount - 1" (click)="page = page + 1" aria-label="Next page"><lucide-icon [img]="icons.ChevronRight" [size]="15"></lucide-icon></button>
+          </div>
+        </section>
+      </div>
+
+      <!-- Capability overview -->
+      <section class="card cap-card" aria-labelledby="dm-cap">
+        <div class="cap-head">
+          <h2 id="dm-cap">Model Capability Overview</h2>
+          <p>Common capabilities and configurable attributes for selected device type models. <span class="scope">{{ scopeName }}</span></p>
+        </div>
+        <div class="cap-grid">
+          <div class="cap-block">
+            <h3>Supported Connectivity</h3>
+            <div class="chips">
+              <button *ngFor="let c of connOptions" type="button" class="cchip" [class.is-used]="connUsed(c) > 0" [class.is-on]="connFilter === c" (click)="toggleConn(c)"
+                [title]="connUsed(c) + ' model(s) in ' + scopeName + ' — click to filter'"><lucide-icon [img]="connIcon(c)" [size]="15"></lucide-icon>{{ c }}</button>
+            </div>
+          </div>
+          <div class="cap-block">
+            <h3>Supported Measurements</h3>
+            <div class="tiles">
+              <button *ngFor="let n of measTiles" type="button" class="mtile" [ngClass]="'tone--' + measTone(n)" [class.is-used]="measUsed(n) > 0" [class.is-on]="measFilter === n" (click)="toggleMeas(n)"
+                [title]="measUsed(n) + ' model(s) in ' + scopeName + ' — click to filter'">
+                <span class="mt-ic"><lucide-icon [img]="measIcon(n)" [size]="16"></lucide-icon></span>
+                <span class="mt-text"><strong>{{ shortOf(n) }}</strong><small>{{ unitOf(n) }}</small></span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="cap-attrs">
+          <h3>Optional Configurable Attributes</h3>
+          <div class="chips">
+            <button *ngFor="let a of attrVisible" type="button" class="cchip" [class.is-used]="attrUsed(a) > 0" [class.is-on]="attrFilter === a" (click)="toggleAttr(a)" [title]="attrUsed(a) + ' model(s) — click to filter'"><lucide-icon [img]="attrIcon(a)" [size]="14"></lucide-icon>{{ a }}</button>
+            <span class="menu-wrap">
+              <button type="button" class="cchip" [class.is-on]="attrHidden.includes(attrFilter)" (click)="$event.stopPropagation(); attrMoreOpen = !attrMoreOpen; menuId = ''" [attr.aria-expanded]="attrMoreOpen" aria-label="More attributes">…</button>
+              <div *ngIf="attrMoreOpen" class="pop attr-pop" (click)="$event.stopPropagation()">
+                <button *ngFor="let a of attrHidden" type="button" class="cchip" [class.is-used]="attrUsed(a) > 0" [class.is-on]="attrFilter === a" (click)="toggleAttr(a)"><lucide-icon [img]="attrIcon(a)" [size]="14"></lucide-icon>{{ a }}</button>
+              </div>
+            </span>
+          </div>
+        </div>
+        <p class="info-strip"><lucide-icon [img]="icons.Info" [size]="16"></lucide-icon>Device Model defines specifications and capabilities; each deployed IoT device remains a separate managed record.</p>
+      </section>
+    </section>
+
+    <!-- ===== Detail panel ===== -->
+    <aside *ngIf="selected as m" class="panel" aria-labelledby="dm-sel">
+      <button type="button" class="icon-btn panel-close" (click)="selectedId = null" aria-label="Close details"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button>
+      <div class="p-head">
+        <span class="thumb thumb--lg"><ng-container *ngTemplateOutlet="thumb; context: { $implicit: formOf(m) }"></ng-container></span>
+        <div class="p-id">
+          <div class="p-title"><h2 id="dm-sel">{{ m.name }}</h2><span class="pill" [ngClass]="'pill--' + m.status.toLowerCase()"><i></i>{{ statusLabel(m.status) }}</span></div>
+          <p>{{ m.manufacturer }}</p>
+          <p class="muted">{{ typeName(m.typeId) }}</p>
+        </div>
+      </div>
+
+      <dl class="spec">
+        <dt>Manufacturer</dt><dd>{{ m.manufacturer }}</dd>
+        <dt>Model Number</dt><dd>{{ m.name }}</dd>
+        <dt>Device Type</dt><dd>{{ typeName(m.typeId) }}</dd>
+        <dt>Radio / Protocol</dt><dd>{{ m.connectivity.join(', ') }}</dd>
+        <dt>Frequency Bands</dt><dd>{{ m.bands.length ? m.bands.join(', ') : '—' }}</dd>
+        <dt>IP Rating</dt><dd>{{ m.ipRating || '—' }}</dd>
+        <dt>Power</dt><dd>{{ m.power || '—' }}</dd>
+        <dt>Battery Life (Est.)</dt><dd>{{ m.batteryLife || (isBattery(m) ? 'Not specified' : 'N/A (wired)') }}</dd>
+        <dt>Operating Temperature</dt><dd>{{ m.opTemp || '—' }}</dd>
+        <dt>Supported Measurement Parameters</dt>
+        <dd><ul *ngIf="m.measurements.length; else noMeas" class="bullets"><li *ngFor="let n of m.measurements">{{ n }} ({{ unitOf(n) }})</li></ul><ng-template #noMeas>—</ng-template></dd>
+        <dt>Configuration Template</dt>
+        <dd><button type="button" class="link-btn file-link" (click)="downloadConfig(m)"><lucide-icon [img]="icons.Download" [size]="14"></lucide-icon>{{ m.name }} Template.json</button></dd>
+        <dt>Firmware Compatibility</dt><dd>{{ fwRange(m) }}</dd>
+        <dt>Status</dt><dd><span class="pill" [ngClass]="'pill--' + m.status.toLowerCase()"><i></i>{{ statusLabel(m.status) }}</span>
+          <button *ngIf="m.status === 'Draft'" type="button" class="link-btn approve" (click)="approve(m)">Approve</button></dd>
+      </dl>
+
+      <div class="p-foot">
+        <button type="button" class="btn btn-primary" (click)="openEdit(m)"><lucide-icon [img]="icons.Pencil" [size]="15"></lucide-icon>Edit Model</button>
+        <button type="button" class="btn btn-outline" (click)="openDuplicate(m)"><lucide-icon [img]="icons.Copy" [size]="15"></lucide-icon>Duplicate</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- Row actions (fixed so the table's scroll box never clips it) -->
+<div *ngIf="menuModel as m" class="menu menu--fixed" role="menu" [style.top.px]="menuPos.top" [style.left.px]="menuPos.left" (click)="$event.stopPropagation()">
+  <button type="button" role="menuitem" (click)="select(m)">View</button>
+  <button type="button" role="menuitem" (click)="openEdit(m)">Edit</button>
+  <button type="button" role="menuitem" (click)="openDuplicate(m)">Duplicate</button>
+  <button *ngIf="m.status === 'Draft'" type="button" role="menuitem" class="ok" (click)="approve(m)">Approve</button>
+  <button *ngIf="m.status === 'Active'" type="button" role="menuitem" (click)="askRetire(m)">Retire</button>
+  <button *ngIf="m.status === 'Retired'" type="button" role="menuitem" (click)="reactivate(m)">Reactivate</button>
+  <button type="button" role="menuitem" class="danger" [class.is-disabled]="m.deployed > 0" (click)="askDelete(m)"
+    [title]="m.deployed > 0 ? m.deployed + ' deployed devices use this model' : 'Delete model'">Delete</button>
+</div>
+
+<!-- ===== Add / edit model ===== -->
+<div *ngIf="dlg('model') as d" class="overlay" (click)="dialog = null">
+  <div class="modal modal--lg" role="dialog" aria-modal="true" aria-labelledby="dm-mdl" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="dm-mdl">{{ d.title }}</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <form class="modal-body" (ngSubmit)="saveModel()">
+      <div class="three">
+        <label class="field"><span class="field-label">Model name <em>*</em></span><input class="control" [(ngModel)]="d.f.name" name="name" placeholder="e.g. EM300-TH" /></label>
+        <label class="field"><span class="field-label">Manufacturer <em>*</em></span><input class="control" [(ngModel)]="d.f.manufacturer" name="mfr" list="dm-mfrs" placeholder="e.g. Milesight" autocomplete="off" /></label>
+        <label class="field"><span class="field-label">Device type <em>*</em></span><select class="control" [(ngModel)]="d.f.typeId" name="type" (ngModelChange)="onFormType()"><option *ngFor="let t of types" [value]="t.id">{{ t.name }}</option></select></label>
+      </div>
+      <fieldset class="field">
+        <legend class="field-label">Connectivity <em>*</em></legend>
+        <div class="chips"><button *ngFor="let c of connOptions" type="button" class="cchip" [class.is-on]="d.f.connectivity.includes(c)" (click)="toggleIn(d.f.connectivity, c)"><lucide-icon [img]="connIcon(c)" [size]="14"></lucide-icon>{{ c }}</button></div>
+      </fieldset>
+      <div class="three">
+        <label class="field"><span class="field-label">Protocol</span><input class="control" [(ngModel)]="d.f.protocol" name="proto" placeholder="e.g. LoRaWAN 1.0.3" /></label>
+        <label class="field"><span class="field-label">Power</span><select class="control" [(ngModel)]="d.f.power" name="power"><option *ngFor="let p of powerOptions" [value]="p">{{ p }}</option></select></label>
+        <label class="field"><span class="field-label">Frequency bands</span><input class="control" [(ngModel)]="d.f.bands" name="bands" placeholder="EU868, US915" /></label>
+      </div>
+      <fieldset class="field">
+        <legend class="field-label">Supported measurements</legend>
+        <div class="chips"><button *ngFor="let x of measOptions" type="button" class="cchip" [class.is-on]="d.f.measurements.includes(x.name)" (click)="toggleIn(d.f.measurements, x.name)">{{ x.name }} <small>{{ x.unit }}</small></button></div>
+      </fieldset>
+      <div class="three">
+        <label class="field"><span class="field-label">IP rating</span><input class="control" [(ngModel)]="d.f.ipRating" name="ip" placeholder="IP67" /></label>
+        <label class="field"><span class="field-label">Battery life (est.)</span><input class="control" [(ngModel)]="d.f.batteryLife" name="bat" placeholder="Up to 10 years (10 min interval)" /></label>
+        <label class="field"><span class="field-label">Operating temperature</span><input class="control" [(ngModel)]="d.f.opTemp" name="temp" placeholder="-30 °C to 70 °C" /></label>
+        <label class="field"><span class="field-label">Firmware from</span><input class="control" [(ngModel)]="d.f.fwMin" name="fwmin" placeholder="1.1.0" /></label>
+        <label class="field"><span class="field-label">Firmware to</span><input class="control" [(ngModel)]="d.f.fwMax" name="fwmax" placeholder="1.4.0" /></label>
+        <label class="field"><span class="field-label">Status</span><select class="control" [(ngModel)]="d.f.status" name="status">
+          <option value="Draft">Draft (Pending Review)</option><option value="Active">Active</option><option *ngIf="d.editId" value="Retired">Retired</option></select></label>
+      </div>
+      <fieldset class="field">
+        <legend class="field-label">Configurable attributes</legend>
+        <div class="chips"><button *ngFor="let a of attrOptions" type="button" class="cchip" [class.is-on]="d.f.attributes.includes(a)" (click)="toggleIn(d.f.attributes, a)">{{ a }}</button></div>
+      </fieldset>
+      <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-primary">{{ d.editId ? 'Save changes' : 'Add model' }}</button></div>
+    </form>
+  </div>
+</div>
+<datalist id="dm-mfrs"><option *ngFor="let x of manufacturers" [value]="x"></option></datalist>
+
+<!-- ===== Add device type ===== -->
+<div *ngIf="dlg('type') as d" class="overlay" (click)="dialog = null">
+  <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="dm-typ" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="dm-typ">Add Device Type</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <form class="modal-body" (ngSubmit)="saveType()">
+      <label class="field"><span class="field-label">Name <em>*</em></span><input class="control" [(ngModel)]="d.name" name="name" placeholder="e.g. Air Quality Monitor" /></label>
+      <fieldset class="field">
+        <legend class="field-label">Icon</legend>
+        <div class="icon-pick"><button *ngFor="let i of typeIcons" type="button" [class.is-on]="d.icon === i" (click)="d.icon = i" [attr.aria-label]="i" [attr.aria-pressed]="d.icon === i"><lucide-icon [img]="typeIcon(i)" [size]="18"></lucide-icon></button></div>
+      </fieldset>
+      <label class="field"><span class="field-label">Thumbnail style</span><select class="control" [(ngModel)]="d.form" name="form"><option *ngFor="let f of forms" [value]="f.id">{{ f.label }}</option></select></label>
+      <label class="field"><span class="field-label">Description</span><textarea class="control control-area" [(ngModel)]="d.description" name="desc" rows="3" placeholder="What devices belong to this type?"></textarea></label>
+      <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-primary">Add type</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== Import ===== -->
+<div *ngIf="dlg('import') as d" class="overlay" (click)="dialog = null">
+  <div class="modal modal--lg" role="dialog" aria-modal="true" aria-labelledby="dm-imp" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="dm-imp">Import Device Models</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <div class="modal-body">
+      <p class="muted">Columns: Model Name, Manufacturer, Device Type, Connectivity, Protocol, Power, Measurements, Frequency Bands, IP Rating, Battery Life, Operating Temperature, Firmware Min, Firmware Max, Status (Draft or Active). Separate lists with commas.</p>
+      <div class="import-actions">
+        <button type="button" class="btn btn-outline btn-sm" (click)="downloadTemplate(false)"><lucide-icon [img]="icons.Download" [size]="15"></lucide-icon>Excel template</button>
+        <button type="button" class="btn btn-outline btn-sm" (click)="downloadTemplate(true)"><lucide-icon [img]="icons.Download" [size]="15"></lucide-icon>CSV template</button>
+        <label class="btn btn-primary btn-sm file-btn"><lucide-icon [img]="icons.Upload" [size]="15"></lucide-icon>Choose file<input type="file" accept=".xlsx,.xls,.csv" (change)="onImportFile($event)" /></label>
+        <span class="muted">{{ d.fileName }}</span>
+      </div>
+      <p *ngIf="d.error" class="form-error" role="alert">{{ d.error }}</p>
+      <div *ngIf="d.rows.length" class="import-table">
+        <table class="dt dt--compact">
+          <thead><tr><th>Row</th><th>Model</th><th>Manufacturer</th><th>Device Type</th><th>Result</th></tr></thead>
+          <tbody><tr *ngFor="let r of d.rows"><td>{{ r.line }}</td><td>{{ r.name || '—' }}</td><td>{{ r.manufacturer || '—' }}</td><td>{{ r.typeName || '—' }}</td>
+            <td><span *ngIf="r.model" class="ok">Ready</span><span *ngIf="!r.model" class="bad">{{ r.error }}</span></td></tr></tbody>
+        </table>
+      </div>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-primary" [disabled]="!importValid" (click)="saveImport()">Import {{ importValid }} model{{ importValid === 1 ? '' : 's' }}</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Retire / delete ===== -->
+<div *ngIf="dlg('retire') as d" class="overlay" (click)="dialog = null">
+  <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="dm-ret" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="dm-ret">Retire {{ byId(d.id)?.name }}</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <div class="modal-body">
+      <p>Retired models can't be chosen for new devices. The {{ byId(d.id)?.deployed }} deployed device(s) keep their records and keep reporting.</p>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-danger-solid" (click)="confirmRetire()">Retire model</button></div>
+    </div>
+  </div>
+</div>
+<div *ngIf="dlg('delete') as d" class="overlay" (click)="dialog = null">
+  <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="dm-del" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="dm-del">Delete {{ byId(d.id)?.name }}</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <div class="modal-body">
+      <p>No devices use this model. Deleting removes its specification and configuration template.</p>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-danger-solid" (click)="confirmDelete()">Delete model</button></div>
+    </div>
+  </div>
+</div>
+
+<div *ngIf="toast" class="toast" role="status">{{ toast }}</div>
+
+<!-- Device illustrations, chosen by form factor -->
+<ng-template #thumb let-form>
+  <ng-container [ngSwitch]="form">
+    <svg *ngSwitchCase="'cylinder'" viewBox="0 0 40 40" aria-hidden="true"><rect x="17" y="31" width="6" height="6" rx="1" fill="#94a3b8" /><path d="M11 9v20c0 2 4 3.4 9 3.4s9-1.4 9-3.4V9" fill="#fff" stroke="#c4cbd6" /><ellipse cx="20" cy="9" rx="9" ry="3.4" fill="#f1f4f8" stroke="#c4cbd6" /><path d="M11 23c0 2 4 3.4 9 3.4s9-1.4 9-3.4" fill="none" stroke="#dde2ea" /><circle cx="20" cy="17" r="1.7" fill="#0f9f94" /></svg>
+    <svg *ngSwitchCase="'beacon'" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="14" fill="#fff" stroke="#c4cbd6" /><circle cx="20" cy="20" r="9.5" fill="#f1f4f8" stroke="#e1e5ec" /><path d="M17 16.5l6 6.5-3 2.6V14.4l3 2.6-6 6.5" fill="none" stroke="#2563eb" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
+    <svg *ngSwitchCase="'gateway'" viewBox="0 0 40 40" aria-hidden="true"><path d="M12 15V4M28 15V4" stroke="#475569" stroke-width="2.2" stroke-linecap="round" /><rect x="7" y="14" width="26" height="21" rx="3.5" fill="#fff" stroke="#c4cbd6" /><rect x="11" y="18.5" width="18" height="3" rx="1.5" fill="#eef1f6" /><circle cx="13" cy="29" r="1.5" fill="#22c55e" /><circle cx="18" cy="29" r="1.5" fill="#22c55e" /><circle cx="23" cy="29" r="1.5" fill="#f59e0b" /></svg>
+    <svg *ngSwitchCase="'reader'" viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="6" width="28" height="28" rx="4" fill="#fff" stroke="#c4cbd6" /><rect x="10" y="10" width="20" height="20" rx="2.5" fill="#f1f4f8" stroke="#e1e5ec" /><path d="M14.5 22a5.5 5.5 0 0 1 11 0M17.3 22a2.7 2.7 0 0 1 5.4 0" fill="none" stroke="#6d28d9" stroke-width="1.5" stroke-linecap="round" /><circle cx="29.5" cy="30.5" r="1.3" fill="#22c55e" /></svg>
+    <svg *ngSwitchCase="'tracker'" viewBox="0 0 40 40" aria-hidden="true"><rect x="15" y="29" width="10" height="5" rx="1" fill="#64748b" /><rect x="7" y="9" width="26" height="21" rx="3.5" fill="#1f2937" /><rect x="10" y="12.5" width="20" height="3" rx="1.5" fill="#374151" /><circle cx="12" cy="24" r="1.6" fill="#22c55e" /><circle cx="17" cy="24" r="1.6" fill="#f59e0b" /></svg>
+    <svg *ngSwitchCase="'meter'" viewBox="0 0 40 40" aria-hidden="true"><rect x="8" y="5" width="24" height="30" rx="4" fill="#fff" stroke="#c4cbd6" /><rect x="12" y="9" width="16" height="8" rx="1.5" fill="#1f2937" /><path d="M14.5 13h7" stroke="#4ade80" stroke-width="1.6" /><circle cx="20" cy="26" r="4" fill="#f1f4f8" stroke="#dde2ea" /></svg>
+    <svg *ngSwitchDefault viewBox="0 0 40 40" aria-hidden="true"><rect x="10" y="4.5" width="20" height="31" rx="4" fill="#fff" stroke="#c4cbd6" /><rect x="13.5" y="9" width="13" height="10" rx="2" fill="#eef1f6" /><path d="M15.5 12h9M15.5 15h6" stroke="#d3d9e2" stroke-linecap="round" /><circle cx="20" cy="26" r="2.2" fill="#22c55e" /><path d="M15 31.5h10" stroke="#d3d9e2" stroke-linecap="round" /></svg>
+  </ng-container>
+</ng-template>

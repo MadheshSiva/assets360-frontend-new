@@ -1,0 +1,243 @@
+<section class="tt-page">
+  <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep">/</span><strong>Tracking &amp; Telemetry</strong></nav>
+
+  <header class="tt-head">
+    <div class="grow">
+      <h1>Tracking &amp; Telemetry</h1>
+      <p>View live locations, device status and sensor data together across your asset estate.</p>
+    </div>
+    <span class="live" title="Live data, local time"><i></i>LIVE<span class="live-clock">{{ clock }}</span></span>
+    <label class="ic-sel"><lucide-icon [img]="icons.Building2" [size]="16"></lucide-icon>
+      <select class="control" [(ngModel)]="site" aria-label="Site"><option value="">All Sites</option><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></label>
+    <label class="ic-sel"><lucide-icon [img]="icons.Calendar" [size]="16"></lucide-icon>
+      <select class="control" [(ngModel)]="range" aria-label="Time range"><option *ngFor="let r of ranges" [value]="r.key">{{ r.label }}</option></select></label>
+    <button type="button" class="btn btn-primary" (click)="exportData()"><lucide-icon [img]="icons.Download" [size]="16"></lucide-icon>Export</button>
+  </header>
+
+  <!-- KPIs -->
+  <div class="kpis">
+    <div *ngFor="let k of kpis" class="card kpi">
+      <span class="kpi-ic" [ngClass]="'kpi-ic--' + k.key">
+        <lucide-icon *ngIf="k.key === 'tracked'" [img]="icons.Box" [size]="22"></lucide-icon>
+        <lucide-icon *ngIf="k.key === 'online'" [img]="icons.Wifi" [size]="22"></lucide-icon>
+        <lucide-icon *ngIf="k.key === 'alerts'" [img]="icons.TriangleAlert" [size]="22"></lucide-icon>
+        <lucide-icon *ngIf="k.key === 'points'" [img]="icons.Signal" [size]="22"></lucide-icon>
+      </span>
+      <span class="kpi-body">
+        <span class="kpi-label">{{ k.label }}</span>
+        <span class="kpi-row"><strong>{{ k.value }}</strong><small *ngIf="k.note" class="muted">{{ k.note }}</small>
+          <span class="delta" [class.bad]="!k.good"><lucide-icon [img]="icons.ArrowUp" [size]="12"></lucide-icon>{{ k.delta }}</span></span>
+      </span>
+      <svg class="kpi-spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><path [attr.d]="sparkPath(kpiSparks[k.key], 100, 30)" [attr.stroke]="k.color"></path></svg>
+    </div>
+  </div>
+
+  <div class="tt-grid">
+    <!-- Map -->
+    <section class="card map-card" aria-label="Campus map">
+      <app-tt-map [selectedId]="selectedId" [layers]="layers" [statuses]="statuses" [satellite]="satellite" (select)="selectAsset($event)" (moved)="onMoved($event)" (ready)="drawMap = $event"></app-tt-map>
+      <app-map-draw-tools [map]="drawMap" storageKey="tracking-telemetry" [top]="54" [inset]="52"></app-map-draw-tools>
+
+      <div class="mo mo-top">
+        <select class="control control-sm" [(ngModel)]="mapSite" aria-label="Map site"><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select>
+        <select class="control control-sm" [(ngModel)]="building" (ngModelChange)="onBuilding()" aria-label="Building"><option value="">All Buildings</option><option *ngFor="let b of buildings" [value]="b.id">{{ b.name }}</option></select>
+      </div>
+      <div class="mo mo-layers" role="group" aria-label="Map layers">
+        <label><input type="checkbox" [checked]="layers.assets" (change)="toggleLayer('assets')" />Assets</label>
+        <label><input type="checkbox" [checked]="layers.devices" (change)="toggleLayer('devices')" />Devices</label>
+        <label><input type="checkbox" [checked]="layers.gateways" (change)="toggleLayer('gateways')" />Gateways</label>
+        <label><input type="checkbox" [checked]="layers.geofences" (change)="toggleLayer('geofences')" />Geofences</label>
+      </div>
+      <div class="mo mo-zoom">
+        <button type="button" (click)="zoomIn()" aria-label="Zoom in" title="Zoom in"><lucide-icon [img]="icons.Plus" [size]="16"></lucide-icon></button>
+        <button type="button" (click)="zoomOut()" aria-label="Zoom out" title="Zoom out"><lucide-icon [img]="icons.Minus" [size]="16"></lucide-icon></button>
+        <button type="button" (click)="locate()" aria-label="Centre on selection" title="Centre on selection"><lucide-icon [img]="icons.Locate" [size]="16"></lucide-icon></button>
+      </div>
+      <div class="mo mo-legend" aria-label="Legend">
+        <span><i class="lg lg--on"></i>Online</span>
+        <span><i class="lg lg--warn"></i>Warning</span>
+        <span><i class="lg lg--off"></i>Offline</span>
+        <span><i class="lg lg--geo"></i>Geofence</span>
+      </div>
+      <div class="mo mo-base" role="group" aria-label="Base map">
+        <button type="button" [class.is-on]="!satellite" (click)="satellite = false">Map</button>
+        <button type="button" [class.is-on]="satellite" (click)="satellite = true">Satellite</button>
+      </div>
+    </section>
+
+    <!-- Selected asset -->
+    <section class="card sel-card" *ngIf="selected as a" aria-labelledby="tt-sel">
+      <div class="sel-head">
+        <span class="sel-ic" [ngClass]="'mk--' + a.icon"><lucide-icon [img]="markerIcon(a)" [size]="30"></lucide-icon></span>
+        <div class="grow min0">
+          <div class="sel-title"><h2 id="tt-sel">{{ a.name }}</h2><span class="st" [ngClass]="'st--' + a.status"><i></i>{{ statusLabel(a.status) }}</span></div>
+          <p class="sel-loc"><lucide-icon [img]="icons.MapPin" [size]="14"></lucide-icon>{{ buildingName(a.building) }}<span class="sep">|</span>{{ campus }}</p>
+        </div>
+        <div class="sel-upd"><small>Last update</small><span><i [class.off]="a.status === 'offline'"></i>{{ agoLabel(a.id) }}</span></div>
+      </div>
+
+      <div class="sel-facts">
+        <div><small>Asset Type</small><span><lucide-icon [img]="markerIcon(a)" [size]="17"></lucide-icon>{{ a.type }}</span></div>
+        <div><small>Asset ID</small><span>{{ a.id }}</span></div>
+        <div><small>Linked {{ a.device.protocol.startsWith('BLE') ? 'BLE ' : '' }}Device</small><span class="lnk"><lucide-icon [img]="icons.Link" [size]="15"></lucide-icon>{{ a.device.id }}</span></div>
+        <div><small>Device Health</small><span class="hl" [ngClass]="'hl--' + a.health.toLowerCase()"><lucide-icon [img]="icons.Heart" [size]="17"></lucide-icon>{{ a.health }}</span></div>
+      </div>
+
+      <nav class="tabs" role="tablist" aria-label="Asset details">
+        <button type="button" role="tab" [class.is-on]="tab === 'live'" (click)="tab = 'live'">Live<span class="tab-long"> Telemetry</span></button>
+        <button type="button" role="tab" [class.is-on]="tab === 'location'" (click)="tab = 'location'">Location<span class="tab-long"> &amp; Geofence</span></button>
+        <button type="button" role="tab" [class.is-on]="tab === 'device'" (click)="tab = 'device'">Device<span class="tab-long"> Details</span></button>
+        <button type="button" role="tab" [class.is-on]="tab === 'alerts'" (click)="tab = 'alerts'">Alerts ({{ openAlerts(a).length }})</button>
+        <button type="button" role="tab" [class.is-on]="tab === 'history'" (click)="tab = 'history'">History</button>
+      </nav>
+
+      <div class="tab-body">
+        <!-- live -->
+        <div *ngIf="tab === 'live'" class="tiles">
+          <div class="tile">
+            <span class="tile-ic tile-ic--blue"><lucide-icon [img]="icons.Thermometer" [size]="20"></lucide-icon></span>
+            <span class="tile-txt"><small>Temperature</small><strong>{{ tileValue(a, 'temp') }}<em *ngIf="a.live.temp !== null"> °C</em></strong></span>
+            <svg class="tile-spark" viewBox="0 0 120 30" preserveAspectRatio="none" aria-hidden="true"><path [attr.d]="sparkPath(spark[a.id].temp)" stroke="#3b82f6"></path></svg>
+          </div>
+          <div class="tile">
+            <span class="tile-ic tile-ic--violet"><lucide-icon [img]="icons.Activity" [size]="20"></lucide-icon></span>
+            <span class="tile-txt"><small>Vibration</small><strong>{{ tileValue(a, 'vib') }}<em *ngIf="a.live.vib !== null"> mm/s</em></strong></span>
+            <svg class="tile-spark" viewBox="0 0 120 30" preserveAspectRatio="none" aria-hidden="true"><path [attr.d]="sparkPath(spark[a.id].vib)" stroke="#22c55e"></path></svg>
+          </div>
+          <div class="tile">
+            <span class="tile-ic tile-ic--violet"><lucide-icon [img]="(a.live.battery ?? 100) < 20 ? icons.BatteryLow : icons.Battery" [size]="20"></lucide-icon></span>
+            <span class="tile-txt"><small>Battery</small><strong [class.c-red]="(a.live.battery ?? 100) < a.thresholds.battery">{{ tileValue(a, 'battery') }}<em *ngIf="a.live.battery !== null">%</em></strong></span>
+            <svg class="tile-spark" viewBox="0 0 120 30" preserveAspectRatio="none" aria-hidden="true"><path [attr.d]="sparkPath(spark[a.id].battery)" stroke="#8b5cf6"></path></svg>
+          </div>
+          <div class="tile">
+            <span class="tile-ic tile-ic--teal"><lucide-icon [img]="icons.Signal" [size]="20"></lucide-icon></span>
+            <span class="tile-txt"><small>RSSI</small><strong>{{ tileValue(a, 'rssi') }}<em *ngIf="a.live.rssi !== null"> dBm</em></strong></span>
+            <svg class="tile-spark" viewBox="0 0 120 30" preserveAspectRatio="none" aria-hidden="true"><path [attr.d]="sparkPath(spark[a.id].rssi)" stroke="#14b8a6"></path></svg>
+          </div>
+          <p *ngIf="a.status === 'offline'" class="note note--bad"><lucide-icon [img]="icons.TriangleAlert" [size]="15"></lucide-icon>No data from {{ a.device.id }} for {{ agoLabel(a.id).replace(' ago', '') }}. Last values are not shown.</p>
+        </div>
+
+        <!-- location -->
+        <dl *ngIf="tab === 'location'" class="kv">
+          <dt>Building</dt><dd>{{ buildingName(a.building) }}</dd>
+          <dt>Site</dt><dd>{{ campus }}</dd>
+          <dt>Geofences</dt><dd><ng-container *ngIf="geofencesHere.length; else noGf"><span *ngFor="let g of geofencesHere" class="gf-pill">Inside {{ g }}</span></ng-container><ng-template #noGf><span class="muted">Outside all geofences</span></ng-template></dd>
+          <dt *ngIf="enteredAt">Entered</dt><dd *ngIf="enteredAt">{{ enteredAt }}</dd>
+          <dt>Position</dt><dd class="mono"><ng-container *ngIf="position as p">{{ fmtCoord(p[1]) }}, {{ fmtCoord(p[0]) }}</ng-container><small *ngIf="a.id === 'FL-008'" class="muted block">Moving · updates every second</small></dd>
+          <dt>Nearest gateway</dt><dd><ng-container *ngIf="nearestGateway as g">{{ g.id }} · {{ g.m }} m</ng-container></dd>
+          <dd class="kv-wide"><button type="button" class="btn btn-outline btn-sm" (click)="centerSelected()"><lucide-icon [img]="icons.Locate" [size]="15"></lucide-icon>Centre on map</button></dd>
+        </dl>
+
+        <!-- device -->
+        <dl *ngIf="tab === 'device'" class="kv">
+          <dt>Device ID</dt><dd>{{ a.device.id }}</dd>
+          <dt>Type / Model</dt><dd>{{ a.device.type }} · {{ a.device.model }}</dd>
+          <dt>Protocol</dt><dd>{{ a.device.protocol }}</dd>
+          <dt>Gateway</dt><dd>{{ a.device.gateway }}</dd>
+          <dt>Firmware</dt><dd>{{ a.device.firmware }}</dd>
+          <dt>Serial Number</dt><dd class="mono">{{ a.device.serial }}</dd>
+          <dt>Installed</dt><dd>{{ a.device.installed }}</dd>
+          <dt>Last payload</dt><dd>{{ agoLabel(a.id) }}</dd>
+        </dl>
+
+        <!-- alerts -->
+        <div *ngIf="tab === 'alerts'" class="alerts">
+          <div *ngFor="let al of a.alerts" class="al" [class.is-ack]="al.acknowledged" [ngClass]="'al--' + al.severity.toLowerCase()">
+            <lucide-icon [img]="icons.TriangleAlert" [size]="17"></lucide-icon>
+            <span class="grow min0"><strong>{{ al.title }}</strong><small>{{ al.detail }} · {{ historyTime(al.minsAgo) }}</small></span>
+            <button *ngIf="!al.acknowledged" type="button" class="btn btn-outline btn-xs" (click)="acknowledge(a, al)"><lucide-icon [img]="icons.Check" [size]="14"></lucide-icon>Acknowledge</button>
+            <span *ngIf="al.acknowledged" class="muted small">Acknowledged</span>
+          </div>
+          <p *ngIf="!a.alerts.length" class="muted small">No alerts for {{ a.name }}.</p>
+          <button type="button" class="link-btn" (click)="openConfig(null, a)"><lucide-icon [img]="icons.Bell" [size]="14"></lucide-icon>Configure alert thresholds</button>
+        </div>
+
+        <!-- history -->
+        <ol *ngIf="tab === 'history'" class="hist">
+          <li *ngFor="let h of a.history"><span class="hist-dot"></span><span class="grow"><strong>{{ h.text }}</strong><small>{{ historyTime(h.minsAgo) }} · {{ h.by }}</small></span></li>
+        </ol>
+      </div>
+    </section>
+  </div>
+
+  <!-- Trend -->
+  <section class="card trend-card" aria-label="Telemetry trend">
+    <div class="trend-head">
+      <h2>Telemetry Trend ({{ ranges[range === '1h' ? 0 : range === '24h' ? 1 : 2].label }})<span class="muted"> · {{ selected.name }}</span></h2>
+      <label *ngFor="let m of metrics" class="ck"><input type="checkbox" [checked]="show[m]" (change)="toggleMetric(m)" [style.accent-color]="metricMeta[m].color" />{{ metricMeta[m].label }}</label>
+      <span class="grow"></span>
+      <select class="control control-sm" [(ngModel)]="range" aria-label="Trend range"><option *ngFor="let r of ranges" [value]="r.key">{{ r.label }}</option></select>
+    </div>
+    <div class="chart-box" #chartBox (mousemove)="onChartMove($event)" (mouseleave)="hoverIdx = null">
+      <svg *ngIf="trend as tr" class="chart" [attr.width]="chartW" [attr.height]="tr.height" [attr.viewBox]="'0 0 ' + chartW + ' ' + tr.height" role="img" [attr.aria-label]="'Telemetry for ' + selected.name">
+        <g *ngFor="let b of tr.bands">
+          <g class="grid"><line *ngFor="let t of b.ticks" [attr.x1]="chartLeft" [attr.x2]="chartW - 18" [attr.y1]="t.y" [attr.y2]="t.y"></line></g>
+          <g class="axis"><text *ngFor="let t of b.ticks" [attr.x]="chartLeft - 8" [attr.y]="t.y + 3.5" text-anchor="end">{{ t.label }}</text></g>
+          <text class="ylab" [attr.transform]="'translate(12,' + (b.top + b.h / 2) + ') rotate(-90)'" text-anchor="middle">{{ b.label }}</text>
+          <g *ngIf="b.threshold as th">
+            <line class="thr" [attr.x1]="chartLeft" [attr.x2]="chartW - 18" [attr.y1]="th.y" [attr.y2]="th.y"></line>
+            <text class="thr-txt" [attr.x]="chartLeft + 14" [attr.y]="th.y - 5">{{ th.label }}</text>
+          </g>
+          <path class="line" [attr.d]="b.path" [attr.stroke]="b.color"></path>
+          <g *ngIf="b.alert as al" class="alert-mk">
+            <line [attr.x1]="al.x" [attr.x2]="al.x" [attr.y1]="b.top" [attr.y2]="b.top + b.h"></line>
+            <circle [attr.cx]="al.x" [attr.cy]="al.y" r="3.5"></circle>
+            <path [attr.d]="'M' + al.x + ',' + (b.top - 9) + 'l7,12h-14z'"></path>
+            <text [attr.x]="al.x + 12" [attr.y]="b.top + 1"><tspan font-weight="700">{{ b.metric === 'temp' ? 'Temp' : b.metric === 'vib' ? 'Vibration' : 'Battery' }} alert</tspan><tspan [attr.x]="al.x + 12" dy="12">{{ al.value }}</tspan><tspan [attr.x]="al.x + 12" dy="12">{{ al.time }}</tspan></text>
+          </g>
+        </g>
+        <g class="axis"><text *ngFor="let t of tr.xTicks" [attr.x]="t.x" [attr.y]="tr.height - 5" text-anchor="middle">{{ t.label }}</text></g>
+        <line *ngIf="hoverIdx !== null" class="cross" [attr.x1]="hoverX()" [attr.x2]="hoverX()" y1="8" [attr.y2]="tr.height - 20"></line>
+      </svg>
+      <div *ngIf="hoverIdx !== null" class="tip" [style.left.px]="hoverX()" [class.tip--left]="hoverX() > chartW * 0.72">
+        <strong>{{ hoverTime() }}</strong>
+        <span *ngFor="let r of hoverRows()"><i [style.background]="r.color"></i>{{ r.label }}<b>{{ r.value }}</b></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Events -->
+  <section class="card ev-card" aria-label="Recent telemetry and location events">
+    <h2 class="ev-title">Recent telemetry &amp; location events</h2>
+    <div class="table-wrap">
+      <table class="dt">
+        <thead><tr><th>Timestamp</th><th>Asset / Device</th><th>Event</th><th>Reading / Location</th><th>Severity</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let e of events" [class.is-sel]="e.assetId === selectedId">
+            <td class="nowrap">{{ eventTime(e) }}</td>
+            <td><span class="ad"><span class="ad-ic" [ngClass]="'mk--' + assetOf(e).icon"><lucide-icon [img]="markerIcon(assetOf(e))" [size]="17"></lucide-icon></span><b>{{ assetOf(e).name }}</b>
+              <span class="ad-dev"><lucide-icon [img]="icons.Link" [size]="13"></lucide-icon>{{ e.deviceId }}</span></span></td>
+            <td><span class="evt"><lucide-icon class="evt-ic" [ngClass]="'evt--' + e.icon" [img]="eventIcon(e)" [size]="16"></lucide-icon>{{ e.event }}</span></td>
+            <td>{{ e.reading }}</td>
+            <td><span class="sev" [ngClass]="sevClass(e.severity)"><i></i>{{ e.severity }}</span></td>
+            <td class="acts">
+              <button type="button" class="link-btn" (click)="viewAsset(e.assetId)">View asset</button>
+              <ng-container *ngIf="e.configurable"><span class="bar">|</span><button type="button" class="link-btn" (click)="openConfig(e)">Configure alert</button></ng-container>
+              <span class="bar">|</span><button type="button" class="link-btn" (click)="viewHistory(e.assetId)">View history</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</section>
+
+<!-- Configure alert -->
+<div *ngIf="config as c" class="overlay" (click)="config = null">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tt-cfg" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="tt-cfg">Configure alert · {{ configAsset()?.name }}</h2><button type="button" class="icon-btn" (click)="config = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <form class="modal-body" (ngSubmit)="saveConfig()">
+      <label class="field"><span class="field-label">Metric</span>
+        <select class="control" [(ngModel)]="c.metric" name="metric" (ngModelChange)="onConfigMetric()"><option *ngFor="let m of metrics" [value]="m">{{ metricMeta[m].label }}</option></select></label>
+      <label class="field"><span class="field-label">{{ c.metric === 'battery' ? 'Alert when below' : 'Alert when above' }} ({{ metricMeta[c.metric].unit }})</span>
+        <input class="control" type="number" step="0.1" [(ngModel)]="c.value" name="value" /></label>
+      <div class="field"><span class="field-label">Notify</span>
+        <label class="ck"><input type="checkbox" [(ngModel)]="c.email" name="email" />Email operations team</label>
+        <label class="ck"><input type="checkbox" [(ngModel)]="c.sms" name="sms" />SMS on-call technician</label></div>
+      <p *ngIf="c.error" class="form-error">{{ c.error }}</p>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="config = null">Cancel</button><button type="submit" class="btn btn-primary">Save alert</button></div>
+    </form>
+  </div>
+</div>
+
+<div *ngIf="toast" class="toast" role="status">{{ toast }}</div>

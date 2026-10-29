@@ -1,0 +1,201 @@
+<section class="rl-page">
+  <header class="rl-head">
+    <div class="grow">
+      <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep">/</span><strong>Real-Time Location</strong></nav>
+      <h1>Real-Time Location</h1>
+      <p>See where tracked assets are now, where they have moved and whether they crossed a zone boundary.</p>
+    </div>
+    <div class="head-side">
+      <div class="head-status">
+        <span class="live"><i></i>LIVE</span>
+        <label class="ic-select"><lucide-icon [img]="icons.Building2" [size]="15"></lucide-icon>
+          <select class="control control-sm" [(ngModel)]="site" (ngModelChange)="onSite($event)" aria-label="Site"><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></label>
+        <span class="updated"><lucide-icon [img]="icons.Clock" [size]="15"></lucide-icon>Updated {{ updatedSec }} sec ago</span>
+      </div>
+      <div class="head-actions">
+        <button type="button" class="btn btn-primary" (click)="openLocate()"><lucide-icon [img]="icons.Crosshair" [size]="16"></lucide-icon>Locate Asset</button>
+        <button type="button" class="btn btn-outline" (click)="configureGeofences()"><lucide-icon [img]="icons.Settings" [size]="16"></lucide-icon>Configure Geofences</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- KPIs -->
+  <div class="kpis" *ngIf="kpi as k">
+    <button type="button" class="card kpi" (click)="clearFilters()"><span class="kpi-ic kpi-ic--violet"><lucide-icon [img]="icons.Box" [size]="24"></lucide-icon></span>
+      <span class="kpi-body"><span class="kpi-label">Assets in View</span><strong>{{ k.total }}</strong></span></button>
+    <button type="button" class="card kpi" [class.is-on]="statusFilter === 'moving'" (click)="setStatus('moving')"><span class="kpi-ic kpi-ic--green"><lucide-icon [img]="icons.Play" [size]="22"></lucide-icon></span>
+      <span class="kpi-body"><span class="kpi-label">Moving</span><strong>{{ k.moving }}</strong></span></button>
+    <button type="button" class="card kpi" [class.is-on]="statusFilter === 'stationary'" (click)="setStatus('stationary')"><span class="kpi-ic kpi-ic--grey"><lucide-icon [img]="icons.Pause" [size]="22"></lucide-icon></span>
+      <span class="kpi-body"><span class="kpi-label">Stationary</span><strong>{{ k.stationary }}</strong></span></button>
+    <button type="button" class="card kpi" [class.is-on]="statusFilter === 'alerts'" (click)="setStatus('alerts')"><span class="kpi-ic kpi-ic--red"><lucide-icon [img]="icons.TriangleAlert" [size]="24"></lucide-icon></span>
+      <span class="kpi-body"><span class="kpi-label">Location Alerts</span><strong class="c-red">{{ k.alerts }}</strong></span></button>
+  </div>
+
+  <div class="rl-grid">
+    <div class="rl-left">
+      <!-- Facility map -->
+      <section class="card map-card" aria-label="Facility map">
+        <div class="map-head">
+          <h2 class="grow">Facility Map</h2>
+          <select class="control control-sm level-sel" [(ngModel)]="level" (ngModelChange)="onLevel($event)" aria-label="Level">
+            <option *ngFor="let l of levels" [value]="l.id">{{ l.name }}</option></select>
+          <span class="menu-wrap">
+            <button type="button" class="tool" [class.is-on]="layersOpen" (click)="$event.stopPropagation(); layersOpen = !layersOpen" title="Layers" aria-label="Layers"><lucide-icon [img]="icons.Layers" [size]="17"></lucide-icon></button>
+            <div *ngIf="layersOpen" class="pop layers-pop" (click)="$event.stopPropagation()">
+              <strong>Map layers</strong>
+              <label><input type="checkbox" [ngModel]="layers.assets" (ngModelChange)="setLayer('assets', $event)" />Assets</label>
+              <label><input type="checkbox" [ngModel]="layers.zones" (ngModelChange)="setLayer('zones', $event)" />Zones &amp; geofences</label>
+              <label><input type="checkbox" [ngModel]="layers.gateways" (ngModelChange)="setLayer('gateways', $event)" />Gateways / APs</label>
+              <label><input type="checkbox" [ngModel]="layers.trails" (ngModelChange)="setLayer('trails', $event)" />Movement trails</label>
+              <label><input type="checkbox" [ngModel]="layers.labels" (ngModelChange)="setLayer('labels', $event)" />Zone &amp; aisle labels</label>
+              <label><input type="checkbox" [(ngModel)]="imagery" />Aerial imagery (faint)</label>
+            </div>
+          </span>
+          <button type="button" class="tool" (click)="locate()" title="Centre on selected asset" aria-label="Centre on selected asset"><lucide-icon [img]="icons.LocateFixed" [size]="17"></lucide-icon></button>
+          <button type="button" class="tool" (click)="zoomIn()" title="Zoom in" aria-label="Zoom in"><lucide-icon [img]="icons.Plus" [size]="17"></lucide-icon></button>
+          <button type="button" class="tool" (click)="zoomOut()" title="Zoom out" aria-label="Zoom out"><lucide-icon [img]="icons.Minus" [size]="17"></lucide-icon></button>
+        </div>
+        <div class="map-box">
+          <app-rl-map [selectedId]="selectedId" [layers]="layers" [imagery]="imagery" (select)="select($event)" (live)="onLive($event)" (replayDone)="onReplayDone()" (ready)="drawMap = $event"></app-rl-map>
+          <app-map-draw-tools [map]="drawMap" storageKey="real-time-location"></app-map-draw-tools>
+          <span *ngIf="replaying" class="replay-chip"><lucide-icon [img]="icons.Route" [size]="14"></lucide-icon>Replaying last 30 min</span>
+        </div>
+        <div class="legend">
+          <span><i class="lg" style="background:#16a34a"></i>Live (moving)</span>
+          <span><i class="lg" style="background:#2563eb"></i>Live (stationary)</span>
+          <span><i class="lg" style="background:#d97706"></i>Stale (&gt; 2 min)</span>
+          <span><i class="lg" style="background:#6b7280"></i>Low-confidence</span>
+          <span><i class="lg" style="background:#dc2626"></i>Offline</span>
+          <span><lucide-icon class="lg-ic red" [img]="icons.TriangleAlert" [size]="14"></lucide-icon>Geofence breach</span>
+          <span><lucide-icon class="lg-ic violet" [img]="icons.Wifi" [size]="14"></lucide-icon>Gateway / AP</span>
+        </div>
+      </section>
+
+      <!-- Events -->
+      <section class="card events-card" aria-label="Recent location events">
+        <div class="ev-head"><h2 class="grow">Recent Location Events</h2>
+          <button type="button" class="link-btn" (click)="eventsAll = !eventsAll">{{ eventsAll ? 'Show Recent' : 'View All Events (' + eventCount + ')' }}</button></div>
+        <div class="table-wrap" [class.is-tall]="eventsAll">
+          <table class="dt ev-table">
+            <thead><tr><th>Time</th><th>Asset ID</th><th>Asset Name</th><th>Event</th><th>Zone</th><th>Details</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let e of shownEvents" (click)="select(e.assetId)" class="clickable">
+                <td class="nowrap">{{ clock(e.at, true) }}</td>
+                <td class="nowrap"><strong>{{ e.assetId }}</strong></td>
+                <td>{{ e.assetName }}</td>
+                <td class="nowrap"><span class="ev" [ngClass]="eventClass(e)"><lucide-icon [img]="eventIcon(e)" [size]="12"></lucide-icon></span>{{ e.event }}</td>
+                <td class="nowrap">{{ e.zone }}</td>
+                <td>{{ e.details }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="rl-right">
+      <!-- Asset list -->
+      <section class="card list-card" aria-label="Assets">
+        <h2>Assets ({{ rows.length }}<ng-container *ngIf="hasFilters"> of {{ kpi.total }}</ng-container>)</h2>
+        <label class="search"><lucide-icon [img]="icons.Search" [size]="15"></lucide-icon><input type="search" [(ngModel)]="search" placeholder="Search assets by ID, name or tag..." aria-label="Search assets" /></label>
+        <div class="list-filters">
+          <label class="lsel"><span>Asset Type</span><select class="control control-sm" [(ngModel)]="typeFilter"><option value="">All Types</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
+          <label class="lsel"><span>Status</span><select class="control control-sm" [(ngModel)]="statusFilter"><option value="">All Statuses</option><option value="moving">Moving</option><option value="stationary">Stationary</option><option value="stale">Stale</option><option value="offline">Offline</option><option value="breach">Geofence breach</option><option value="alerts">Any alert</option></select></label>
+          <label class="lsel"><span>Zone</span><select class="control control-sm" [(ngModel)]="zoneFilter"><option value="">All Zones</option><option *ngFor="let z of zones" [value]="z.name">{{ z.name }}</option></select></label>
+        </div>
+        <div class="list-wrap">
+          <table class="dt list-table">
+            <thead><tr><th class="c-dot"></th><th>ID</th><th>Name</th><th>Zone</th><th>Last Seen</th><th>Accuracy</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let a of rows; trackBy: trackId" [class.is-selected]="a.id === selectedId" (click)="select(a.id)" tabindex="0" (keydown.enter)="select(a.id)">
+                <td class="c-dot"><i class="dot" [style.background]="dotColor(a)" [title]="stateLabel(a)"></i></td>
+                <td class="nowrap"><strong>{{ a.id }}</strong></td>
+                <td>{{ a.name }}</td>
+                <td>{{ zoneName(a) }}</td>
+                <td class="nowrap" [class.c-amber]="a.state === 'stale'" [class.c-red]="a.state === 'offline'">{{ ago(seenSec(a)) }}</td>
+                <td class="nowrap">{{ a.accuracy }} m</td>
+              </tr>
+              <tr *ngIf="!rows.length"><td colspan="6" class="empty">No assets match. <button type="button" class="link-btn" (click)="clearFilters()">Clear filters</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Selected asset -->
+      <section *ngIf="selected as a" class="card sel-card" aria-label="Selected asset">
+        <div class="sel-head">
+          <i class="dot" [style.background]="dotColor(a)"></i>
+          <span class="sel-ic"><lucide-icon [img]="a.type === 'Forklift' ? icons.Forklift : icons.Package" [size]="20"></lucide-icon></span>
+          <div class="grow"><h2>{{ a.id }}</h2><small>{{ a.name }}</small></div>
+          <button type="button" class="icon-btn" (click)="selectedId = ''" aria-label="Close details"><lucide-icon [img]="icons.X" [size]="17"></lucide-icon></button>
+        </div>
+        <div class="sel-body">
+          <span class="photo" [ngClass]="'photo--' + a.state"><lucide-icon [img]="a.type === 'Forklift' ? icons.Forklift : icons.Package" [size]="40"></lucide-icon></span>
+          <dl class="facts">
+            <div><dt>Current Zone</dt><dd>{{ place(a) }}</dd></div>
+            <div><dt>Speed</dt><dd>{{ speedText(a) }}</dd></div>
+            <div><dt>Last Update</dt><dd>{{ ago(seenSec(a)) }}<small>{{ fixTime(a) }}</small></dd></div>
+          </dl>
+          <dl class="facts facts--ic">
+            <div><dt><lucide-icon class="c-green" [img]="icons.Signal" [size]="18"></lucide-icon>Location Confidence</dt><dd>{{ confidence(a) }} ({{ a.accuracy }} m)</dd></div>
+            <div><dt><lucide-icon class="c-violet" [img]="icons.Wifi" [size]="18"></lucide-icon>Location Source</dt><dd>{{ a.source }}</dd></div>
+            <div><dt><lucide-icon class="c-violet" [img]="icons.Tag" [size]="18"></lucide-icon>Assigned Device</dt><dd class="c-violet">{{ a.device }}</dd></div>
+          </dl>
+        </div>
+        <p *ngIf="a.state === 'breach'" class="breach-note"><lucide-icon [img]="icons.ShieldAlert" [size]="15"></lucide-icon>Inside the Restricted Zone boundary. Location alert raised.</p>
+
+        <h3 class="sub-h"><span>Location Comparison</span><lucide-icon class="muted" [img]="icons.Info" [size]="14" title="Where the tracking device reports vs the asset's own registered location"></lucide-icon><span class="grow"></span><small *ngIf="comparison as c">{{ c.dist }} m apart</small></h3>
+        <div class="cmp" *ngIf="comparison as c">
+          <div class="cmp-box"><i class="ring ring--blue"></i><span><b>Device Location ({{ a.device }})</b>{{ coord(c.dev.lat) }}, {{ coord(c.dev.lng) }}<small>({{ c.dev.acc }} m) · {{ ago(c.dev.sec) }}</small></span></div>
+          <div class="cmp-box"><i class="ring ring--green"></i><span><b>Registered Asset Location ({{ a.id }})</b>{{ coord(c.reg.lat) }}, {{ coord(c.reg.lng) }}<small>({{ c.reg.acc }} m) · {{ ago(c.reg.sec) }}</small></span></div>
+        </div>
+
+        <h3 class="sub-h"><span>Recent Trail (Last 30 mins)</span><span class="grow"></span><button type="button" class="link-btn" (click)="trackHistory(a)">View Full History</button></h3>
+        <ol class="trail">
+          <li *ngFor="let p of trailPoints; let last = last" [class.is-moved]="p.moved" [class.is-now]="last" [title]="p.place"><i></i><span>{{ clock(p.at) }}</span></li>
+        </ol>
+
+        <div class="sel-actions">
+          <button type="button" class="btn btn-primary" (click)="viewAsset(a)"><lucide-icon [img]="icons.Eye" [size]="16"></lucide-icon>View Asset</button>
+          <button type="button" class="btn btn-outline" (click)="trackHistory(a)" [disabled]="replaying"><lucide-icon [img]="icons.Route" [size]="16"></lucide-icon>Track History</button>
+          <button type="button" class="btn btn-outline" (click)="openAlert(a)"><lucide-icon [img]="icons.Bell" [size]="16"></lucide-icon>Create Alert</button>
+        </div>
+      </section>
+      <section *ngIf="!selected" class="card sel-empty"><lucide-icon [img]="icons.MapPin" [size]="22"></lucide-icon><p>Select an asset on the map or in the list to see its location details.</p></section>
+    </div>
+  </div>
+</section>
+
+<!-- Locate asset -->
+<div *ngIf="locateOpen" class="overlay" (click)="locateOpen = false">
+  <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="rl-loc" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="rl-loc">Locate Asset</h2><button type="button" class="icon-btn" (click)="locateOpen = false" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <div class="modal-body">
+      <label class="search"><lucide-icon [img]="icons.Search" [size]="15"></lucide-icon><input type="search" [(ngModel)]="locateQuery" placeholder="Asset ID, name or device" aria-label="Find asset" autofocus /></label>
+      <ul class="loc-list">
+        <li *ngFor="let a of locateResults"><button type="button" (click)="select(a.id)"><i class="dot" [style.background]="dotColor(a)"></i><span class="grow"><strong>{{ a.id }}</strong> {{ a.name }}<small>{{ place(a) }} · {{ ago(seenSec(a)) }}</small></span><lucide-icon [img]="icons.Crosshair" [size]="15"></lucide-icon></button></li>
+        <li *ngIf="!locateResults.length" class="muted small">No asset matches “{{ locateQuery }}”.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Create alert -->
+<div *ngIf="alertForm as f" class="overlay" (click)="alertForm = null">
+  <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="rl-al" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="rl-al">Create Location Alert · {{ f.assetId }}</h2><button type="button" class="icon-btn" (click)="alertForm = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <form class="modal-body" (ngSubmit)="saveAlert()">
+      <label class="field"><span class="field-label">Trigger when the asset</span>
+        <select class="control" [(ngModel)]="f.rule" name="rule"><option value="enter">{{ ruleLabel.enter }}</option><option value="exit">{{ ruleLabel.exit }}</option><option value="dwell">{{ ruleLabel.dwell }}</option><option value="boundary">{{ ruleLabel.boundary }}</option></select></label>
+      <div class="two">
+        <label class="field"><span class="field-label">Zone</span><select class="control" [(ngModel)]="f.zone" name="zone"><option *ngFor="let z of zones" [value]="z.name">{{ z.name }}</option></select></label>
+        <label class="field" *ngIf="f.rule === 'dwell'"><span class="field-label">Minutes</span><input class="control" type="number" min="1" [(ngModel)]="f.minutes" name="min" /></label>
+      </div>
+      <label class="field"><span class="field-label">Notify</span><select class="control" [(ngModel)]="f.notify" name="notify"><option>Operations team</option><option>Warehouse supervisor</option><option>Security desk</option><option>Me only</option></select></label>
+      <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="alertForm = null">Cancel</button><button type="submit" class="btn btn-primary">Create Alert</button></div>
+    </form>
+  </div>
+</div>
+
+<div *ngIf="toast" class="toast" role="status">{{ toast }}</div>

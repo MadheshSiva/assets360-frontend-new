@@ -1,0 +1,100 @@
+/* Leaflet map for Geofence & Alerts. Not encapsulated (Leaflet builds its own DOM), so every class is prefixed gz-. */
+app-geofence-map { display: block; width: 100%; height: 100%; }
+.gz-map { width: 100%; height: 100%; background: #e5e7eb; font-family: var(--piq-font, 'Red Hat Display', sans-serif); }
+.gz-map.is-draw, .gz-map.is-draw .leaflet-interactive { cursor: crosshair !important; }
+.gz-map .leaflet-tile-pane { transition: filter 0.4s ease; }
+.gz-map:not(.is-sat) .gz-tiles { filter: saturate(0.85) brightness(1.02); }
+
+/* smooth state changes on zone shapes */
+.gz-map path.leaflet-interactive.gz-zone { transition: fill-opacity 0.25s ease, stroke-width 0.2s ease, stroke-opacity 0.25s ease; }
+.gz-map path.gz-zone.is-sel { filter: drop-shadow(0 2px 6px rgba(15, 23, 42, 0.25)); }
+.gz-map path.gz-vtx { transition: r 0.2s ease; }
+.gz-map path.gz-draft { animation: gz-dash 1s linear infinite; stroke-dasharray: 8 6; }
+@keyframes gz-dash { to { stroke-dashoffset: -14; } }
+
+/* zone label chip */
+.gz-label-wrap { overflow: visible; }
+.gz-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 2px 9px;
+  border: 1.5px solid var(--c);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--c);
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+  transform: translate(-50%, 6px);
+  pointer-events: none;
+}
+
+/* asset markers */
+.gz-asset-wrap, .gz-gw-wrap, .gz-alert-wrap, .gz-handle-wrap { background: none; border: 0; }
+.gz-asset {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #16a34a;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
+  transition: transform 0.15s ease;
+}
+.gz-asset svg { width: 13px; height: 13px; }
+.gz-asset.is-alert { background: #dc2626; }
+.leaflet-marker-icon:hover .gz-asset { transform: scale(1.15); }
+
+/* pulsing alert */
+.gz-alert {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #dc2626;
+  font-size: 12px;
+  font-weight: 900;
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.45);
+  cursor: pointer;
+}
+.gz-alert::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid #dc2626;
+  animation: gz-pulse 1.6s ease-out infinite;
+}
+@keyframes gz-pulse { from { opacity: 0.8; transform: scale(1); } to { opacity: 0; transform: scale(2.4); } }
+
+/* gateways */
+.gz-gw { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1.5px solid #374151; border-radius: 50%; background: #fff; color: #111827; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25); }
+.gz-gw svg { width: 14px; height: 14px; }
+
+/* edit handles */
+.gz-handle { display: block; width: 16px; height: 16px; border: 2.5px solid #6d28d9; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35); cursor: grab; transition: transform 0.12s ease; }
+.gz-handle:hover { transform: scale(1.2); }
+.gz-handle--mid { width: 12px; height: 12px; border-width: 2px; opacity: 0.75; }
+
+/* tooltips */
+.leaflet-tooltip.gz-tip { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; border: 1px solid #e6e8ef; border-radius: 8px; background: #fff; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16); font: 12px var(--piq-font, 'Red Hat Display', sans-serif); color: #111827; }
+.leaflet-tooltip.gz-tip span { color: #6b7280; }
+.leaflet-tooltip.gz-tip::before { display: none; }
+
+/* scale + attribution */
+.gz-map .leaflet-control-scale { margin: 0 12px 12px 0; }
+.gz-map .leaflet-control-scale-line { border-color: #374151; background: rgba(255, 255, 255, 0.88); font-size: 10.5px; color: #374151; }
+.gz-map .leaflet-control-attribution { font-size: 9.5px; background: rgba(255, 255, 255, 0.7); }
+
+@media (prefers-reduced-motion: reduce) {
+  .gz-alert::after, .gz-map path.gz-draft { animation: none; }
+}

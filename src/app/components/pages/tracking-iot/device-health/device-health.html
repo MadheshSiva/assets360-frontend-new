@@ -1,0 +1,344 @@
+<div class="dh-layout" [class.no-panel]="!selected">
+  <section class="dh-main">
+    <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep">/</span><strong>Device Health &amp; Status</strong></nav>
+    <header class="dh-head">
+      <div class="grow">
+        <h1>Device Health &amp; Status</h1>
+        <p>Monitor connectivity, battery, signal quality and device faults across your connected asset fleet.</p>
+      </div>
+      <div class="head-filters">
+        <label class="ic-select"><lucide-icon [img]="icons.Building" [size]="16"></lucide-icon>
+          <select class="control" [(ngModel)]="site" (ngModelChange)="onFilter()" aria-label="Site"><option value="">All Sites</option>
+            @for (s of sites; track s.name) { <option [value]="s.name">{{ s.name }}</option> }</select></label>
+        <label class="ic-select"><lucide-icon [img]="icons.Calendar" [size]="16"></lucide-icon>
+          <select class="control" [ngModel]="range" (ngModelChange)="setRange($event)" aria-label="Time range">
+            @for (r of ranges; track r.key) { <option [value]="r.key">{{ r.label }}</option> }</select></label>
+      </div>
+    </header>
+
+    <!-- KPIs -->
+    @let c = counts;
+    <div class="kpis">
+      <button type="button" class="card kpi" (click)="kpi('')">
+        <span class="kpi-ic kpi-ic--violet"><lucide-icon [img]="icons.Cpu" [size]="22"></lucide-icon></span>
+        <span class="kpi-txt"><span class="kpi-label">Total Devices</span><strong class="c-violet">{{ c.total | number }}</strong></span>
+      </button>
+      <button type="button" class="card kpi" [class.is-on]="statusFilter === 'Healthy'" (click)="kpi('Healthy')">
+        <span class="kpi-ic kpi-ic--green"><lucide-icon [img]="icons.Check" [size]="22" [strokeWidth]="3"></lucide-icon></span>
+        <span class="kpi-txt"><span class="kpi-label">Healthy</span><strong class="c-green">{{ c.Healthy | number }}</strong><small>{{ pct(c.Healthy, c.total) }}% of total devices</small></span>
+      </button>
+      <button type="button" class="card kpi" [class.is-on]="statusFilter === 'attention'" (click)="kpi('attention')">
+        <span class="kpi-ic kpi-ic--amber"><lucide-icon [img]="icons.TriangleAlert" [size]="21" [strokeWidth]="2.5"></lucide-icon></span>
+        <span class="kpi-txt"><span class="kpi-label">Attention Required</span><strong class="c-amber">{{ c.attention | number }}</strong><small>{{ pct(c.attention, c.total) }}% of total devices</small></span>
+      </button>
+      <button type="button" class="card kpi" [class.is-on]="statusFilter === 'Offline'" (click)="kpi('Offline')">
+        <span class="kpi-ic kpi-ic--red"><lucide-icon [img]="icons.X" [size]="22" [strokeWidth]="3"></lucide-icon></span>
+        <span class="kpi-txt"><span class="kpi-label">Offline</span><strong class="c-red">{{ c.Offline | number }}</strong><small>{{ pct(c.Offline, c.total) }}% of total devices</small></span>
+      </button>
+    </div>
+
+    <!-- Charts -->
+    <div class="chart-row">
+      <section class="card chart-card" aria-label="Device health trend">
+        <div class="card-head"><h2 class="grow">Device Health Trend</h2>
+          <div class="seg" role="group" aria-label="Trend range">
+            @for (r of ranges; track r.key) { <button type="button" [class.is-on]="range === r.key" (click)="setRange(r.key)">{{ r.key }}</button> }
+          </div></div>
+        @let tr = trend;
+        <div class="chart-wrap" (mouseleave)="hoverTrend = null">
+          <svg [attr.viewBox]="'0 0 ' + tw + ' ' + th" class="chart" role="img" aria-label="Online, warning and offline devices over the selected period">
+            <g class="grid">@for (t of tr.yTicks; track t.label) { <line [attr.x1]="tp.l" [attr.x2]="tw - tp.r" [attr.y1]="t.y" [attr.y2]="t.y"></line> }</g>
+            <g class="axis">
+              @for (t of tr.yTicks; track t.label) { <text [attr.x]="tp.l - 8" [attr.y]="t.y + 3.5" text-anchor="end">{{ t.label }}</text> }
+              @for (t of tr.xTicks; track t.x) { <text [attr.x]="t.x" [attr.y]="th - 7" text-anchor="middle">{{ t.label }}</text> }
+            </g>
+            @if (hoverTrend !== null) { <line class="crosshair" [attr.x1]="tr.xs[hoverTrend]" [attr.x2]="tr.xs[hoverTrend]" [attr.y1]="tp.t" [attr.y2]="th - tp.b"></line> }
+            @for (s of tr.series; track s.key) {
+              <path class="line" [attr.d]="s.d" [attr.stroke]="s.color"></path>
+              @for (p of s.pts; track $index) { <circle class="pt" [attr.cx]="p.x" [attr.cy]="p.y" [attr.r]="hoverTrend === $index ? trendR + 1.5 : trendR" [attr.stroke]="s.color"></circle> }
+            }
+            @for (x of tr.xs; track $index) { <rect class="hit" [attr.x]="x - tr.hitW / 2" [attr.y]="tp.t" [attr.width]="tr.hitW" [attr.height]="th - tp.t - tp.b" (mouseenter)="hoverTrend = $index"></rect> }
+          </svg>
+          @if (hoverTrend !== null) {
+            <div class="tip" [style.left.%]="(tr.xs[hoverTrend] / tw) * 100" [class.tip--left]="tr.xs[hoverTrend] > tw * 0.7" [class.tip--right]="tr.xs[hoverTrend] < tw * 0.25">
+              <strong>{{ trendLabel(hoverTrend) }}</strong>
+              @for (s of tr.series; track s.key) { <span><i [style.background]="s.color"></i>{{ s.label }}<b>{{ s.values[hoverTrend] | number }}</b></span> }
+            </div>
+          }
+        </div>
+        <div class="legend">@for (s of tr.series; track s.key) { <span><i [style.background]="s.color"></i>{{ s.label }} ({{ s.last | number }})</span> }</div>
+      </section>
+
+      <section class="card chart-card" aria-label="Device status distribution">
+        <div class="card-head"><h2 class="grow">Device Status Distribution</h2></div>
+        @let dn = donut;
+        <div class="dist">
+          <div class="donut-wrap" (mouseleave)="hoverSeg = null">
+            <svg viewBox="0 0 160 160" class="donut" role="img" [attr.aria-label]="dn.total + ' devices by status'">
+              <circle cx="80" cy="80" [attr.r]="dn.r" class="donut-bg"></circle>
+              @for (s of dn.segs; track s.key) {
+                @if (s.n) { <circle cx="80" cy="80" [attr.r]="dn.r" class="donut-seg" [class.is-dim]="hoverSeg && hoverSeg !== s.key" [attr.stroke]="s.color" [attr.stroke-dasharray]="s.dash" [attr.stroke-dashoffset]="s.offset" (mouseenter)="hoverSeg = s.key" (click)="kpi(s.key)"></circle> }
+              }
+            </svg>
+            <div class="donut-center">
+              @if (hoverSegRow; as h) { <strong [style.color]="h.color">{{ h.n | number }}</strong><span>{{ h.label }} · {{ h.pct }}%</span> }
+              @else { <strong>{{ dn.total | number }}</strong><span>Devices</span> }
+            </div>
+          </div>
+          <table class="dist-table">
+            <tbody>
+              @for (s of dn.segs; track s.key) {
+                <tr [class.is-on]="statusFilter === s.key" [class.is-hover]="hoverSeg === s.key" (mouseenter)="hoverSeg = s.key" (mouseleave)="hoverSeg = null" (click)="kpi(s.key)" tabindex="0" (keydown.enter)="kpi(s.key)">
+                  <td><i class="sw" [style.background]="s.color"></i>{{ s.label }}</td><td class="num">{{ s.n | number }}</td><td class="num muted">{{ s.pct }}%</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- Device table -->
+    <section class="card table-card" aria-label="Devices">
+      <div class="filters">
+        <label class="search"><lucide-icon [img]="icons.Search" [size]="16"></lucide-icon><input type="search" [(ngModel)]="search" (ngModelChange)="onFilter()" placeholder="Search by Device ID, model, asset or site..." aria-label="Search devices" /></label>
+        <select class="control" [(ngModel)]="statusFilter" (ngModelChange)="onFilter()" aria-label="Health status">
+          <option value="">All Statuses</option><option value="Healthy">Healthy</option><option value="attention">Attention Required</option><option value="Warning">Warning</option><option value="Critical">Critical</option><option value="Offline">Offline</option><option value="Maintenance">Maintenance</option>
+        </select>
+        <select class="control" [(ngModel)]="typeFilter" (ngModelChange)="onFilter()" aria-label="Device type"><option value="">All Device Types</option>
+          @for (t of types; track t) { <option [value]="t">{{ t }}</option> }</select>
+        <select class="control" [(ngModel)]="site" (ngModelChange)="onFilter()" aria-label="Site filter"><option value="">All Sites</option>
+          @for (s of sites; track s.name) { <option [value]="s.name">{{ s.name }}</option> }</select>
+        <span class="menu-wrap">
+          <button type="button" class="btn btn-outline btn-filter" [class.is-on]="moreCount" (click)="$event.stopPropagation(); moreOpen = !moreOpen; menuId = ''" [attr.aria-expanded]="moreOpen">
+            <lucide-icon [img]="icons.SlidersHorizontal" [size]="16"></lucide-icon>More Filters{{ moreCount ? ' (' + moreCount + ')' : '' }}</button>
+          @if (moreOpen) {
+            <div class="pop more-pop" (click)="$event.stopPropagation()">
+              <label class="check"><input type="checkbox" [(ngModel)]="lowBattery" (ngModelChange)="onFilter()" />Battery below 20%</label>
+              <label class="check"><input type="checkbox" [(ngModel)]="poorSignal" (ngModelChange)="onFilter()" />Signal quality: Poor</label>
+              <label class="check"><input type="checkbox" [(ngModel)]="staleOnly" (ngModelChange)="onFilter()" />Last seen more than 1 hour ago</label>
+              <div class="pop-foot"><button type="button" class="link-btn" (click)="clearMore()">Clear</button><button type="button" class="link-btn" (click)="moreOpen = false">Done</button></div>
+            </div>
+          }
+        </span>
+      </div>
+
+      <div class="table-wrap">
+        <table class="dt">
+          <thead><tr>
+            <th>Device ID / Model</th><th class="col-asset">Linked Asset</th><th class="col-site">Site / Gateway</th><th>Connectivity</th><th>Signal</th><th>Battery / Power</th><th class="col-seen">Last Seen</th><th>Health</th><th class="col-act">Actions</th>
+          </tr></thead>
+          <tbody>
+            @for (d of pageRows; track d.id; let i = $index, n = $count) {
+              <tr [class.is-selected]="selectedId === d.id" (click)="select(d)" (keydown.enter)="select(d)" tabindex="0">
+                <td><div class="cell-dev"><span class="dev-ic"><lucide-icon [img]="typeIcon(d)" [size]="16"></lucide-icon></span>
+                  <span class="min0"><button type="button" class="dev-id" (click)="$event.stopPropagation(); select(d)">{{ d.id }}</button><small class="sub">{{ d.model }}</small></span></div></td>
+                <td class="col-asset">@if (d.asset; as a) { <div class="cell-ic"><lucide-icon [img]="assetIcon(d)" [size]="15"></lucide-icon><span class="min0 nm-wrap" [title]="a.code">{{ a.name }}</span></div> } @else { <span class="muted">—</span> }</td>
+                <td class="col-site"><div class="cell-ic"><lucide-icon [img]="icons.MapPin" [size]="15"></lucide-icon><span class="nm">{{ d.site }}</span></div>
+                  <div class="cell-ic sub"><lucide-icon [img]="icons.Wifi" [size]="13"></lucide-icon>{{ d.gateway }}</div></td>
+                <td><span class="pill" [ngClass]="connClass(d)"><i></i>{{ d.conn }}</span><small class="sub seen-inline">{{ ago(d.lastSeenMin) }}</small></td>
+                <td><div class="cell-ic" [ngClass]="qualityClass(d)"><lucide-icon [img]="signalIcon(d)" [size]="16"></lucide-icon><span class="ink nowrap">{{ d.rssi }} dBm</span></div><small class="sub q" [ngClass]="qualityClass(d)">{{ quality(d) }}</small></td>
+                <td>@if (d.battery !== null) { <div class="cell-ic" [ngClass]="batteryClass(d)"><lucide-icon [img]="batteryIcon(d)" [size]="17"></lucide-icon><span [class.ink]="d.battery >= 20">{{ d.battery }}%</span></div> }
+                  @else { <div class="cell-ic"><lucide-icon [img]="icons.Plug" [size]="15"></lucide-icon><span class="nowrap">{{ d.power === 'PoE' ? 'PoE' : 'External power' }}</span></div> }</td>
+                <td class="col-seen nowrap">{{ ago(d.lastSeenMin) }}</td>
+                <td><span class="pill" [ngClass]="healthClass(d)"><i></i>{{ healthLabel(d) }}</span></td>
+                <td class="col-act" (click)="$event.stopPropagation()"><span class="menu-wrap">
+                  <button type="button" class="icon-btn" (click)="toggleMenu(d.id, $event)" [attr.aria-label]="'Actions for ' + d.id" [attr.aria-expanded]="menuId === d.id"><lucide-icon [img]="icons.Ellipsis" [size]="18"></lucide-icon></button>
+                  @if (menuId === d.id) {
+                    <div class="pop menu" [class.menu--up]="n > 3 && i >= n - 2" (click)="$event.stopPropagation()">
+                      <button type="button" (click)="select(d)">View details</button>
+                      <button type="button" (click)="runDiagnostics(d)">Run diagnostics</button>
+                      <button type="button" (click)="openConfig(d)">Open configuration</button>
+                      <button type="button" (click)="openIssue(d)">Create issue</button>
+                    </div>
+                  }
+                </span></td>
+              </tr>
+            } @empty { <tr><td colspan="9" class="empty">No devices match the current filters.</td></tr> }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pager">
+        <span class="grow muted">{{ rangeText }}</span>
+        <button type="button" class="pg-btn" [disabled]="page <= 1" (click)="goPage(page - 1)" aria-label="Previous page"><lucide-icon [img]="icons.ChevronLeft" [size]="15"></lucide-icon></button>
+        @for (p of pages; track $index) {
+          @if (p === null) { <span class="pg-gap">…</span> }
+          @else { <button type="button" class="pg-btn" [class.is-on]="p === page" (click)="goPage(p)">{{ p }}</button> }
+        }
+        <button type="button" class="pg-btn" [disabled]="page >= pageCount" (click)="goPage(page + 1)" aria-label="Next page"><lucide-icon [img]="icons.ChevronRight" [size]="15"></lucide-icon></button>
+      </div>
+    </section>
+
+    <p class="note"><lucide-icon [img]="icons.Info" [size]="15"></lucide-icon>Health rules are configurable by device type and communication protocol.</p>
+  </section>
+
+  @if (selected; as d) {
+    <aside class="panel" aria-label="Device details">
+      <div class="p-head">
+        <span class="dev-ic dev-ic--lg"><lucide-icon [img]="typeIcon(d)" [size]="20"></lucide-icon></span>
+        <div class="min0 grow"><h2>{{ d.id }}</h2><p>{{ d.model }}</p></div>
+        <span class="pill" [ngClass]="d.conn === 'Offline' ? 'pill--red' : connClass(d)"><i></i>{{ d.conn }}</span>
+        <button type="button" class="icon-btn" (click)="closePanel()" aria-label="Close details"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button>
+      </div>
+      <div class="p-tabs" role="tablist">
+        <button type="button" role="tab" [class.is-on]="tab === 'overview'" (click)="tab = 'overview'">Overview</button>
+        <button type="button" role="tab" [class.is-on]="tab === 'diagnostics'" (click)="tab = 'diagnostics'">Diagnostics</button>
+        <button type="button" role="tab" [class.is-on]="tab === 'events'" (click)="tab = 'events'">Events</button>
+        <button type="button" role="tab" [class.is-on]="tab === 'configuration'" (click)="tab = 'configuration'">Configuration</button>
+      </div>
+
+      <div class="p-body">
+        @switch (tab) {
+          @case ('overview') {
+            @let co = callout;
+            <div class="score-row">
+              <div class="gauge">
+                <svg viewBox="0 0 84 84"><circle cx="42" cy="42" r="35" class="gauge-bg"></circle>
+                  <circle cx="42" cy="42" r="35" class="gauge-arc" [attr.stroke]="scoreColor" [attr.stroke-dasharray]="scoreDash"></circle></svg>
+                <span class="gauge-val"><strong [style.color]="scoreColor">{{ score }}</strong><small>/100</small></span>
+              </div>
+              <div class="min0 grow"><span class="p-label">Health Score</span>
+                <div class="callout" [ngClass]="'callout--' + co.level"><lucide-icon [img]="co.level === 'green' ? icons.CircleCheck : icons.CircleAlert" [size]="18"></lucide-icon><span><b>{{ co.title }}</b>{{ co.text }}</span></div></div>
+            </div>
+
+            <div class="tiles">
+              <div class="tile"><span class="tile-ic" [ngClass]="d.conn === 'Offline' ? 'c-red' : d.conn === 'Warning' ? 'c-amber' : 'c-green'"><lucide-icon [img]="d.conn === 'Offline' ? icons.WifiOff : icons.Wifi" [size]="22"></lucide-icon></span>
+                <div class="tile-txt"><span class="p-label">Connectivity</span>
+                @if (d.conn === 'Offline') { <small>Offline since</small><strong class="c-red">{{ timeAt(d.sinceMin) }}</strong><small>({{ ago(d.sinceMin) }})</small> }
+                @else { <strong [class.c-green]="d.conn === 'Online'" [class.c-amber]="d.conn === 'Warning'">{{ d.conn }}</strong><small>Heartbeat {{ ago(d.lastSeenMin) }}</small> }</div></div>
+              <div class="tile"><span class="tile-ic" [ngClass]="d.battery === null ? 'c-violet' : batteryClass(d)"><lucide-icon [img]="d.battery === null ? icons.Plug : batteryIcon(d)" [size]="22"></lucide-icon></span>
+                <div class="tile-txt"><span class="p-label">Battery Level</span>
+                @if (d.battery !== null) { @let bw = batteryWord(d); <strong [ngClass]="batteryClass(d)">{{ d.battery }}%</strong><span class="pill pill--sm" [ngClass]="'pill--' + bw.level">{{ bw.label }}</span> }
+                @else { <strong>{{ d.power === 'PoE' ? 'PoE' : 'External' }}</strong><small>No battery</small> }</div></div>
+              <div class="tile">@let sw = signalWord(d); <span class="tile-ic" [ngClass]="qualityClass(d)"><lucide-icon [img]="icons.Signal" [size]="22"></lucide-icon></span>
+                <div class="tile-txt"><span class="p-label">Signal Strength</span><strong>{{ d.rssi }} dBm</strong><span class="pill pill--sm" [ngClass]="'pill--' + sw.level">{{ sw.label }}</span></div></div>
+              <div class="tile"><span class="tile-ic c-violet"><lucide-icon [img]="icons.FileText" [size]="22"></lucide-icon></span>
+                <div class="tile-txt"><span class="p-label">Last Payload</span><strong>{{ timeAt(d.lastSeenMin) }}</strong><small>({{ ago(d.lastSeenMin) }})</small></div></div>
+              <div class="tile"><span class="tile-ic c-violet"><lucide-icon [img]="icons.RadioTower" [size]="22"></lucide-icon></span>
+                <div class="tile-txt"><span class="p-label">Gateway</span><strong>{{ d.gateway }}</strong><small>{{ d.site }}</small></div></div>
+              <div class="tile"><span class="tile-ic c-violet"><lucide-icon [img]="icons.Cpu" [size]="22"></lucide-icon></span>
+                <div class="tile-txt"><span class="p-label">Firmware Version</span><strong>{{ d.firmware }}</strong>
+                @if (d.firmware === d.latestFirmware) { <span class="pill pill--sm pill--green">Up to date</span> } @else { <span class="pill pill--sm pill--purple">{{ d.latestFirmware }} available</span> }</div></div>
+            </div>
+
+            @if (tele; as t) {
+              <div class="mini">
+                <div class="mini-head"><h3 class="grow">Battery Level Trend <span>(Last 24 hours)</span></h3><b [style.color]="batColor">{{ d.battery !== null ? d.battery + '%' : '—' }}</b></div>
+                @if (d.battery !== null) {
+                  <div class="chart-wrap" (mouseleave)="hoverBat = null">
+                    <svg [attr.viewBox]="'0 0 ' + mw + ' ' + mh" class="chart" role="img" aria-label="Battery level over the last 24 hours">
+                      <g class="grid">@for (k of t.bTicks; track k.label) { <line [attr.x1]="mp.l" [attr.x2]="mw - mp.r" [attr.y1]="k.y" [attr.y2]="k.y"></line> }</g>
+                      <g class="axis">@for (k of t.bTicks; track k.label) { <text [attr.x]="mp.l - 5" [attr.y]="k.y + 3" text-anchor="end">{{ k.label }}</text> }
+                        @for (k of t.xTicks; track k.x) { <text [attr.x]="k.x" [attr.y]="mh - 4" text-anchor="middle">{{ k.label }}</text> }</g>
+                      <path [attr.d]="t.bArea" [attr.fill]="batColor" class="area"></path>
+                      <path [attr.d]="t.bLine" [attr.stroke]="batColor" class="line line--thin"></path>
+                      @if (hoverBat !== null) { <line class="crosshair" [attr.x1]="t.xs[hoverBat]" [attr.x2]="t.xs[hoverBat]" [attr.y1]="mp.t" [attr.y2]="mh - mp.b"></line>
+                        <circle class="pt" [attr.cx]="t.xs[hoverBat]" [attr.cy]="t.by[hoverBat]" r="3" [attr.stroke]="batColor"></circle> }
+                      @for (x of t.xs; track $index) { <rect class="hit" [attr.x]="x - t.hitW / 2" [attr.y]="mp.t" [attr.width]="t.hitW" [attr.height]="mh - mp.t - mp.b" (mouseenter)="hoverBat = $index"></rect> }
+                    </svg>
+                    @if (hoverBat !== null) { <div class="tip tip--sm" [style.left.%]="(t.xs[hoverBat] / mw) * 100" [class.tip--left]="t.xs[hoverBat] > mw * 0.7"><strong>{{ timeAt(t.mins[hoverBat]) }}</strong><span>Battery<b>{{ t.battery[hoverBat] }}%</b></span></div> }
+                  </div>
+                } @else { <p class="muted small">Externally powered: no battery readings.</p> }
+              </div>
+
+              <div class="mini">
+                <div class="mini-head"><h3 class="grow">RSSI Trend <span>(Last 24 hours)</span></h3><b class="c-violet">{{ d.rssi }} dBm</b></div>
+                <div class="chart-wrap" (mouseleave)="hoverRssi = null">
+                  <svg [attr.viewBox]="'0 0 ' + mw + ' ' + mh" class="chart" role="img" aria-label="Signal strength over the last 24 hours">
+                    <g class="grid">@for (k of t.rTicks; track k.label) { <line [attr.x1]="mp.l" [attr.x2]="mw - mp.r" [attr.y1]="k.y" [attr.y2]="k.y"></line> }</g>
+                    <g class="axis">@for (k of t.rTicks; track k.label) { <text [attr.x]="mp.l - 5" [attr.y]="k.y + 3" text-anchor="end">{{ k.label }}</text> }
+                      @for (k of t.xTicks; track k.x) { <text [attr.x]="k.x" [attr.y]="mh - 4" text-anchor="middle">{{ k.label }}</text> }</g>
+                    <path [attr.d]="t.rLine" [attr.stroke]="colors.purple" class="line line--thin"></path>
+                    @for (x of t.xs; track $index) { <circle class="pt pt--sm" [attr.cx]="x" [attr.cy]="t.ry[$index]" r="2" [attr.stroke]="colors.purple"></circle> }
+                    @if (hoverRssi !== null) { <line class="crosshair" [attr.x1]="t.xs[hoverRssi]" [attr.x2]="t.xs[hoverRssi]" [attr.y1]="mp.t" [attr.y2]="mh - mp.b"></line>
+                      <circle class="pt" [attr.cx]="t.xs[hoverRssi]" [attr.cy]="t.ry[hoverRssi]" r="3" [attr.stroke]="colors.purple"></circle> }
+                    @for (x of t.xs; track $index) { <rect class="hit" [attr.x]="x - t.hitW / 2" [attr.y]="mp.t" [attr.width]="t.hitW" [attr.height]="mh - mp.t - mp.b" (mouseenter)="hoverRssi = $index"></rect> }
+                  </svg>
+                  @if (hoverRssi !== null) { <div class="tip tip--sm" [style.left.%]="(t.xs[hoverRssi] / mw) * 100" [class.tip--left]="t.xs[hoverRssi] > mw * 0.7"><strong>{{ timeAt(t.mins[hoverRssi]) }}</strong><span>RSSI<b>{{ t.rssi[hoverRssi] }} dBm</b></span></div> }
+                </div>
+              </div>
+            }
+
+            <div class="mini-head"><h3 class="grow">Recent Events</h3><button type="button" class="link-btn" (click)="tab = 'events'">View All</button></div>
+            <ul class="timeline timeline--line">
+              @for (e of selEvents.slice(0, 3); track $index) {
+                <li><span class="tl-dot" [ngClass]="'tl--' + e.level"></span><span class="min0 grow"><strong>{{ e.title }}</strong><small>{{ e.detail }}</small></span><time>{{ whenAt(e.min) }}</time></li>
+              }
+            </ul>
+          }
+
+          @case ('diagnostics') {
+            @if (runningSel) {
+              <div class="diag-run"><lucide-icon [img]="icons.LoaderCircle" [size]="18" class="spin"></lucide-icon><span>Running diagnostics… {{ runStep }} / {{ checkNames.length }}</span></div>
+              <div class="progress"><span [style.width.%]="(runStep / checkNames.length) * 100"></span></div>
+              <ul class="checks">
+                @for (n of checkNames; track n; let i = $index) {
+                  <li [class.is-done]="i < runStep"><lucide-icon [img]="i < runStep ? icons.CircleCheck : icons.LoaderCircle" [size]="16" [class.spin]="i === runStep"></lucide-icon><span class="grow">{{ n }}</span><small class="muted">{{ i < runStep ? 'Checked' : i === runStep ? 'Checking…' : 'Queued' }}</small></li>
+                }
+              </ul>
+            } @else if (selDiag; as run) {
+              <div class="diag-sum">
+                <span class="p-label grow">Last run {{ timeAt(run.at) }} · {{ dateAt(run.at) }}</span>
+                <span class="pill pill--sm pill--green">{{ diagCount('pass') }} passed</span>
+                @if (diagCount('warn')) { <span class="pill pill--sm pill--amber">{{ diagCount('warn') }} warning</span> }
+                @if (diagCount('fail')) { <span class="pill pill--sm pill--red">{{ diagCount('fail') }} failed</span> }
+              </div>
+              <ul class="checks">
+                @for (ck of run.checks; track ck.name) {
+                  <li [ngClass]="'ck--' + ck.result"><lucide-icon [img]="checkIcon(ck.result)" [size]="16"></lucide-icon><span class="min0 grow"><strong>{{ ck.name }}</strong><small>{{ ck.detail }}</small></span></li>
+                }
+              </ul>
+            } @else {
+              <div class="empty-state"><lucide-icon [img]="icons.HeartPulse" [size]="26"></lucide-icon><strong>No diagnostics run this session</strong><span>Checks heartbeat, gateway reachability, battery and RSSI.</span>
+                <button type="button" class="btn btn-sm btn-primary" (click)="runDiagnostics(d)"><lucide-icon [img]="icons.Play" [size]="14"></lucide-icon>Run Diagnostics</button></div>
+            }
+          }
+
+          @case ('events') {
+            <ul class="timeline timeline--full">
+              @for (e of selEvents; track $index) {
+                <li><span class="tl-dot" [ngClass]="'tl--' + e.level"></span><span class="min0 grow"><strong>{{ e.title }}</strong><small>{{ e.detail }}</small></span><time>{{ whenAt(e.min) }}<small>{{ ago(e.min) }}</small></time></li>
+              }
+            </ul>
+          }
+
+          @case ('configuration') {
+            <dl class="kv">
+              @for (row of config(d); track row.k) { <dt>{{ row.k }}</dt><dd>{{ row.v }}</dd> }
+            </dl>
+            <p class="muted small">Read-only view. Changes are made on the device configuration page.</p>
+            <button type="button" class="link-btn" (click)="openConfig(d)"><lucide-icon [img]="icons.Settings" [size]="14"></lucide-icon>Edit configuration<lucide-icon [img]="icons.ExternalLink" [size]="13"></lucide-icon></button>
+          }
+        }
+      </div>
+
+      <div class="p-foot">
+        <button type="button" class="btn btn-primary" [disabled]="!!running" (click)="runDiagnostics(d)"><lucide-icon [img]="running ? icons.LoaderCircle : icons.Play" [size]="15" [class.spin]="!!running"></lucide-icon>{{ running ? 'Running…' : 'Run Diagnostics' }}</button>
+          <button type="button" class="btn btn-outline" (click)="openConfig(d)"><lucide-icon [img]="icons.ExternalLink" [size]="15"></lucide-icon>Open Device</button>
+          <button type="button" class="btn btn-outline" (click)="openIssue(d)"><lucide-icon [img]="icons.Plus" [size]="15"></lucide-icon>Create Issue</button>
+      </div>
+    </aside>
+  }
+</div>
+
+@if (issueForm; as f) {
+  <div class="overlay" (click)="issueForm = null">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dh-issue-title" (click)="$event.stopPropagation()">
+      <div class="modal-head"><h2 id="dh-issue-title">Create Issue</h2><button type="button" class="icon-btn" (click)="issueForm = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+      <div class="modal-body">
+        <p class="muted small">Device <b>{{ selectedId }}</b> · {{ callout.title }}</p>
+        <label class="field"><span class="field-label">Title <em>*</em></span><input class="control" [(ngModel)]="f.title" /></label>
+        <div class="two">
+          <label class="field"><span class="field-label">Priority</span><select class="control" [(ngModel)]="f.priority">@for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }</select></label>
+          <label class="field"><span class="field-label">Assignee</span><select class="control" [(ngModel)]="f.assignee">@for (a of assignees; track a) { <option [value]="a">{{ a }}</option> }</select></label>
+        </div>
+        <label class="field"><span class="field-label">Notes</span><textarea class="control control-area" rows="3" [(ngModel)]="f.notes" placeholder="Optional details for the assignee"></textarea></label>
+        @if (formError) { <p class="form-error">{{ formError }}</p> }
+        <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="issueForm = null">Cancel</button><button type="button" class="btn btn-primary" (click)="saveIssue()">Create Issue</button></div>
+      </div>
+    </div>
+  </div>
+}
+
+@if (toast) { <div class="toast" role="status">{{ toast }}</div> }

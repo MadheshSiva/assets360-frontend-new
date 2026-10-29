@@ -1,0 +1,296 @@
+<div class="ti-layout" [class.no-panel]="!selected">
+  <section class="ti-main">
+    <header class="ti-head">
+      <div class="grow">
+        <nav class="crumbs" aria-label="Breadcrumb"><lucide-icon class="crumb-home" [img]="icons.House" [size]="15"></lucide-icon><span>IoT &amp; Tracking</span><span class="sep">/</span><span>Tag Management</span></nav>
+        <h1>Tag Management</h1>
+        <p>Register, assign and monitor identification tags across your asset estate.</p>
+      </div>
+      <button type="button" class="btn btn-outline" (click)="openImport()"><lucide-icon [img]="icons.Download" [size]="17"></lucide-icon>Import Tags</button>
+      <button type="button" class="btn btn-primary" (click)="openRegister()"><lucide-icon [img]="icons.Plus" [size]="17"></lucide-icon>Add Tag</button>
+    </header>
+
+    <!-- KPIs -->
+    <div class="kpis" *ngIf="counts as c">
+      <button type="button" class="kpi kpi--violet" (click)="setStatus('')"><span class="kpi-ic"><lucide-icon [img]="icons.Tag" [size]="24"></lucide-icon></span>
+        <span class="kpi-body"><span class="kpi-label">Total Tags</span><strong>{{ c.Total | number }}</strong></span>
+        <span class="kpi-trend" [class.down]="trend.Total < 0"><b><lucide-icon [img]="trend.Total < 0 ? icons.ArrowDown : icons.ArrowUp" [size]="12"></lucide-icon>{{ trend.Total < 0 ? '-' : '+' }}{{ abs(trend.Total) }}%</b><small>vs. last month</small></span></button>
+      <button type="button" class="kpi kpi--green" [class.is-on]="statusFilter === 'Assigned'" (click)="setStatus('Assigned')"><span class="kpi-ic"><lucide-icon [img]="icons.Link2" [size]="24"></lucide-icon></span>
+        <span class="kpi-body"><span class="kpi-label">Assigned</span><strong>{{ c.Assigned | number }}</strong></span>
+        <span class="kpi-trend" [class.down]="trend.Assigned < 0"><b><lucide-icon [img]="trend.Assigned < 0 ? icons.ArrowDown : icons.ArrowUp" [size]="12"></lucide-icon>{{ trend.Assigned < 0 ? '-' : '+' }}{{ abs(trend.Assigned) }}%</b><small>vs. last month</small></span></button>
+      <button type="button" class="kpi kpi--blue" [class.is-on]="statusFilter === 'Available'" (click)="setStatus('Available')"><span class="kpi-ic"><lucide-icon [img]="icons.Box" [size]="24"></lucide-icon></span>
+        <span class="kpi-body"><span class="kpi-label">Available</span><strong>{{ c.Available | number }}</strong></span>
+        <span class="kpi-trend" [class.down]="trend.Available < 0"><b><lucide-icon [img]="trend.Available < 0 ? icons.ArrowDown : icons.ArrowUp" [size]="12"></lucide-icon>{{ trend.Available < 0 ? '-' : '+' }}{{ abs(trend.Available) }}%</b><small>vs. last month</small></span></button>
+      <button type="button" class="kpi kpi--red" [class.is-on]="statusFilter === 'Inactive'" (click)="setStatus('Inactive')"><span class="kpi-ic"><lucide-icon [img]="icons.CircleSlash" [size]="24"></lucide-icon></span>
+        <span class="kpi-body"><span class="kpi-label">Inactive</span><strong>{{ c.Inactive | number }}</strong></span>
+        <span class="kpi-trend" [class.down]="trend.Inactive < 0"><b><lucide-icon [img]="trend.Inactive < 0 ? icons.ArrowDown : icons.ArrowUp" [size]="12"></lucide-icon>{{ trend.Inactive < 0 ? '-' : '+' }}{{ abs(trend.Inactive) }}%</b><small>vs. last month</small></span></button>
+    </div>
+
+    <!-- Table -->
+    <section class="card table-card" aria-label="Tags">
+      <div class="filters">
+        <label class="search"><lucide-icon [img]="icons.Search" [size]="17"></lucide-icon><input type="search" [(ngModel)]="search" (ngModelChange)="onFilter()" placeholder="Search tag ID or asset..." aria-label="Search tags" /></label>
+        <label class="lsel"><span>Tag Type</span><select class="control" [(ngModel)]="typeFilter" (ngModelChange)="onFilter()"><option value="">All Types</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
+        <label class="lsel"><span>Technology</span><select class="control" [(ngModel)]="techFilter" (ngModelChange)="onFilter()"><option value="">All Technologies</option><option *ngFor="let t of techs" [value]="t">{{ t }}</option></select></label>
+        <label class="lsel"><span>Status</span><select class="control" [(ngModel)]="statusFilter" (ngModelChange)="onFilter()"><option value="">All Statuses</option><option *ngFor="let s of statuses" [value]="s">{{ s }}</option></select></label>
+        <label class="lsel"><span>Site</span><select class="control" [(ngModel)]="siteFilter" (ngModelChange)="onFilter()"><option value="">All Sites</option><option *ngFor="let s of sites" [value]="s.name">{{ s.name }}</option></select></label>
+      </div>
+
+      <div *ngIf="checked.size" class="bulk" role="status">
+        <strong>{{ checked.size }} selected</strong>
+        <button type="button" class="link-btn" (click)="exportRows()"><lucide-icon [img]="icons.Download" [size]="14"></lucide-icon>Export selected</button>
+        <span class="grow"></span>
+        <button type="button" class="link-btn" (click)="clearChecked()">Clear selection</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="dt dt--tm">
+          <thead><tr>
+            <th class="col-chk"><input type="checkbox" [checked]="pageAllChecked" [indeterminate]="pageSomeChecked" (change)="togglePage()" aria-label="Select all tags on this page" /></th>
+            <th>Tag ID</th><th>Tag Type</th><th>Technology</th><th>Linked Asset</th><th>Site / Location</th><th>Status</th><th>Last Seen</th><th class="col-act">Actions</th>
+          </tr></thead>
+          <tbody>
+            <tr *ngFor="let t of pageRows" [class.is-selected]="selected?.id === t.id" [class.is-checked]="isChecked(t)" (click)="select(t)" (keydown.enter)="select(t)" tabindex="0">
+              <td class="col-chk" (click)="$event.stopPropagation()"><input type="checkbox" [checked]="isChecked(t)" (change)="toggleCheck(t)" [attr.aria-label]="'Select ' + t.id" /></td>
+              <td><span class="tag-id">{{ t.id }}</span></td>
+              <td>{{ typeLabel(t) }}</td>
+              <td>{{ t.tech }}</td>
+              <td (click)="$event.stopPropagation()"><button *ngIf="t.asset; else noAsset" type="button" class="asset-link" (click)="select(t); viewAsset(t)" [title]="'Open ' + t.asset.tag">{{ assetLabel(t.asset) }}</button><ng-template #noAsset><span class="muted">—</span></ng-template></td>
+              <td>{{ siteLabel(t) }}</td>
+              <td><span class="st" [ngClass]="'st--' + t.status.toLowerCase()"><lucide-icon [img]="t.status === 'Inactive' ? icons.Ban : icons.CircleCheck" [size]="14"></lucide-icon>{{ t.status }}</span></td>
+              <td class="nowrap">{{ fmtSeen(t.lastSeen) }}</td>
+              <td class="col-act" (click)="$event.stopPropagation()"><span class="menu-wrap">
+                <button type="button" class="icon-btn" (click)="toggleMenu(t.id, $event)" aria-haspopup="menu" [attr.aria-label]="'Actions for ' + t.id"><lucide-icon [img]="icons.Ellipsis" [size]="20"></lucide-icon></button>
+                <div *ngIf="menuOpen === t.id" class="pop menu" role="menu" (click)="$event.stopPropagation()">
+                  <ng-container *ngTemplateOutlet="tagActions; context: { $implicit: t }"></ng-container>
+                </div></span></td>
+            </tr>
+            <tr *ngIf="!pageRows.length"><td colspan="9" class="empty">No tags match these filters. <button type="button" class="link-btn" (click)="clearFilters()">Clear filters</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <span class="muted">{{ showing }}</span>
+        <span class="grow"></span>
+        <select class="control control-pp" [(ngModel)]="pageSize" (ngModelChange)="onFilter()" aria-label="Rows per page"><option *ngFor="let n of pageSizes" [ngValue]="n">{{ n }} per page</option></select>
+        <button type="button" class="pg-btn" [disabled]="page === 0" (click)="page = page - 1" aria-label="Previous page"><lucide-icon [img]="icons.ChevronLeft" [size]="16"></lucide-icon></button>
+        <ng-container *ngFor="let p of pages"><button *ngIf="p !== null; else gap" type="button" class="pg-btn" [class.is-on]="p === page" (click)="page = p">{{ p + 1 }}</button></ng-container>
+        <ng-template #gap><span class="pg-gap">…</span></ng-template>
+        <button type="button" class="pg-btn" [disabled]="page >= pageCount - 1" (click)="page = page + 1" aria-label="Next page"><lucide-icon [img]="icons.ChevronRight" [size]="16"></lucide-icon></button>
+      </div>
+    </section>
+
+    <!-- Explainer -->
+    <section class="card explain-tm" aria-labelledby="tm-ex">
+      <div class="ex-head">
+        <h2 id="tm-ex"><lucide-icon class="ex-badge" [img]="icons.Info" [size]="18"></lucide-icon>Asset ≠ Tag ≠ IoT Device<lucide-icon class="ex-q" [img]="icons.Info" [size]="16"></lucide-icon></h2>
+        <a class="link-btn ex-more" routerLink="/tracking-iot/tag-ids">Learn more<lucide-icon [img]="icons.ExternalLink" [size]="14"></lucide-icon></a>
+      </div>
+      <p class="ex-sub">One asset can have multiple tags; tags can be replaced without losing asset history.</p>
+      <div class="ex-flow">
+        <div class="ex-box"><span class="ex-ic ex-ic--violet"><lucide-icon [img]="icons.Box" [size]="22"></lucide-icon></span>
+          <span><strong>Asset</strong><small>Physical item in your estate</small><small>e.g. Generator, Pump, Forklift</small><em class="ex-pill ex-pill--violet">One asset</em></span></div>
+        <lucide-icon class="ex-arrow" [img]="icons.ArrowRight" [size]="22"></lucide-icon>
+        <div class="ex-box"><span class="ex-ic ex-ic--green"><lucide-icon [img]="icons.Link2" [size]="22"></lucide-icon></span>
+          <span><strong>Tag Assignment</strong><small>Links a tag to an asset (with history)</small><small>Track assignment, location and changes</small><em class="ex-pill ex-pill--green">Many-to-many</em></span></div>
+        <lucide-icon class="ex-arrow" [img]="icons.ArrowRight" [size]="22"></lucide-icon>
+        <div class="ex-box"><span class="ex-ic ex-ic--blue"><lucide-icon [img]="icons.Tag" [size]="22"></lucide-icon></span>
+          <span><strong>Tag</strong><small>Identification label or device</small><small>e.g. QR Label, RFID, BLE Beacon</small><em class="ex-pill ex-pill--blue">Multiple tags</em></span></div>
+      </div>
+    </section>
+  </section>
+
+  <!-- ===== Side panel ===== -->
+  <aside *ngIf="selected as t" class="panel" aria-labelledby="tm-sel">
+    <button type="button" class="icon-btn panel-close" (click)="selectedId = null" aria-label="Close details"><lucide-icon [img]="icons.X" [size]="20"></lucide-icon></button>
+    <div class="panel-title"><h2 id="tm-sel">{{ t.id }}</h2><span class="st" [ngClass]="'st--' + t.status.toLowerCase()"><lucide-icon [img]="t.status === 'Inactive' ? icons.Ban : icons.CircleCheck" [size]="14"></lucide-icon>{{ t.status }}</span></div>
+    <nav class="panel-tabs" role="tablist" aria-label="Tag sections">
+      <button type="button" role="tab" [class.is-active]="panelTab === 'details'" [attr.aria-selected]="panelTab === 'details'" (click)="panelTab = 'details'">Details</button>
+      <button type="button" role="tab" [class.is-active]="panelTab === 'telemetry'" [attr.aria-selected]="panelTab === 'telemetry'" (click)="panelTab = 'telemetry'">Telemetry</button>
+      <button type="button" role="tab" [class.is-active]="panelTab === 'history'" [attr.aria-selected]="panelTab === 'history'" (click)="panelTab = 'history'">History</button>
+    </nav>
+
+    <!-- Details -->
+    <ng-container *ngIf="panelTab === 'details'">
+      <h3 class="p-h3">Tag Information</h3>
+      <dl class="info">
+        <dt>Tag ID</dt><dd>{{ t.id }}</dd>
+        <dt>Tag Type</dt><dd>{{ typeLabel(t) }}</dd>
+        <dt>Technology</dt><dd>{{ techLong(t) }}</dd>
+        <dt>{{ codeLabel(t) }}</dt><dd class="code">{{ t.code }}</dd>
+        <ng-container *ngIf="isBle(t)"><dt>Firmware Version</dt><dd>{{ firmware(t) }}</dd></ng-container>
+      </dl>
+
+      <h3 class="p-h3">Linked Asset</h3>
+      <div *ngIf="t.asset as a; else noLink" class="p-card">
+        <span class="p-ic"><lucide-icon [img]="assetIcon(a)" [size]="22"></lucide-icon></span>
+        <span class="grow"><button type="button" class="asset-link p-strong" (click)="viewAsset(t)">{{ assetLabel(a) }}</button><small>{{ a.kind }}{{ a.real ? ' · in asset register' : '' }}</small></span>
+        <button type="button" class="link-btn p-link" (click)="viewAsset(t)"><lucide-icon [img]="icons.ExternalLink" [size]="14"></lucide-icon>View Asset</button>
+      </div>
+      <ng-template #noLink><p class="p-empty">Not linked to an asset. <button *ngIf="t.status !== 'Inactive'" type="button" class="link-btn" (click)="openAssign(t)">Assign</button></p></ng-template>
+
+      <h3 class="p-h3">Location</h3>
+      <div class="p-card">
+        <span class="p-ic p-ic--round"><lucide-icon [img]="icons.MapPin" [size]="18"></lucide-icon></span>
+        <span class="grow"><span class="p-text">{{ siteLabel(t) }}</span><small>{{ t.lastSeen !== null ? 'Last read by ' + t.reader : 'Not read yet' }}</small></span>
+      </div>
+
+      <ng-container *ngIf="isBle(t)">
+        <h3 class="p-h3">Battery &amp; Connectivity</h3>
+        <div class="bc">
+          <span class="bc-bat" [ngClass]="'bc--' + batteryLevel(t)"><lucide-icon [img]="batteryIcon(t)" [size]="28"></lucide-icon>
+            <span class="grow"><b>{{ battery(t) }}%</b><span class="bar"><i [style.width.%]="battery(t)"></i></span></span></span>
+          <span class="bc-sig"><lucide-icon [img]="signalIcon(rssi(t))" [size]="26"></lucide-icon><span><b>{{ signalWord(rssi(t)) }}</b><small>{{ rssi(t) }} dBm</small></span></span>
+        </div>
+      </ng-container>
+
+      <h3 class="p-h3">Assignment History</h3>
+      <ol *ngIf="assignHistory(t).length; else noHist" class="ah">
+        <li *ngFor="let e of assignHistory(t); let i = index" [class.is-past]="i > 0 && !e.text.startsWith('Assigned')">
+          <span class="ah-dot"></span>
+          <span class="grow">
+            <strong *ngIf="histAsset(t, e) as h; else plain">{{ h.lead }}<button type="button" class="asset-link" (click)="viewAsset(t)">{{ h.asset }}</button></strong>
+            <ng-template #plain><strong>{{ e.text }}</strong></ng-template>
+            <small>{{ fmtWhen(e.at) }}</small><small>by {{ e.by }}</small>
+          </span>
+        </li>
+      </ol>
+      <ng-template #noHist><p class="p-empty">No assignments yet.</p></ng-template>
+    </ng-container>
+
+    <!-- Telemetry -->
+    <ng-container *ngIf="panelTab === 'telemetry'">
+      <h3 class="p-h3">Recent Reads</h3>
+      <p class="p-note">{{ isBle(t) ? 'Beacon advertisements received by ' + t.reader + '.' : t.tech + ' tags are read when they pass a reader or are scanned.' }}</p>
+      <table *ngIf="reads(t).length; else noReads" class="reads">
+        <thead><tr><th>Time</th><th>Reader</th><th *ngIf="isBle(t)">RSSI</th><th *ngIf="isBle(t)">Battery</th></tr></thead>
+        <tbody><tr *ngFor="let r of reads(t)"><td class="nowrap">{{ fmtSeen(r.at) }}</td><td>{{ r.reader }}</td><td *ngIf="isBle(t)" class="nowrap">{{ r.rssi }} dBm</td><td *ngIf="isBle(t)">{{ r.battery }}%</td></tr></tbody>
+      </table>
+      <ng-template #noReads><p class="p-empty">This tag hasn't been read yet.</p></ng-template>
+      <button *ngIf="t.lastSeen !== null" type="button" class="link-btn" (click)="viewOnMap(t)"><lucide-icon [img]="icons.MapPin" [size]="14"></lucide-icon>Show on Real-Time Location</button>
+    </ng-container>
+
+    <!-- History -->
+    <ol *ngIf="panelTab === 'history'" class="ah ah--full">
+      <li *ngFor="let e of t.history"><span class="ah-dot"></span><span class="grow"><strong>{{ e.text }}</strong><small>{{ fmtWhen(e.at) }} · {{ e.by }}</small></span></li>
+    </ol>
+
+    <div class="panel-actions">
+      <h3 class="p-h3">Actions</h3>
+      <div class="act-row" [ngSwitch]="t.status">
+        <ng-container *ngSwitchCase="'Assigned'">
+          <button type="button" class="btn btn-primary" (click)="viewAsset(t)"><lucide-icon [img]="icons.ExternalLink" [size]="16"></lucide-icon>View Asset</button>
+          <button type="button" class="btn btn-outline" (click)="openAssign(t)"><lucide-icon [img]="icons.ArrowLeftRight" [size]="16"></lucide-icon>Reassign</button>
+          <button type="button" class="btn btn-outline" (click)="openUnassign(t)"><lucide-icon [img]="icons.Unlink" [size]="16"></lucide-icon>Unassign</button>
+        </ng-container>
+        <ng-container *ngSwitchCase="'Available'">
+          <button type="button" class="btn btn-primary" (click)="openAssign(t)"><lucide-icon [img]="icons.Link2" [size]="16"></lucide-icon>Assign to Asset</button>
+          <button type="button" class="btn btn-danger" (click)="openStatus(t, 'Inactive')"><lucide-icon [img]="icons.Ban" [size]="16"></lucide-icon>Deactivate</button>
+        </ng-container>
+        <ng-container *ngSwitchCase="'Inactive'">
+          <button type="button" class="btn btn-primary" (click)="openStatus(t, 'Available')"><lucide-icon [img]="icons.CircleCheck" [size]="16"></lucide-icon>Reactivate</button>
+        </ng-container>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<ng-template #tagActions let-t>
+  <button type="button" role="menuitem" (click)="select(t)">View details</button>
+  <button *ngIf="t.status === 'Assigned'" type="button" role="menuitem" (click)="viewAsset(t)">View asset</button>
+  <button *ngIf="t.status !== 'Inactive'" type="button" role="menuitem" (click)="openAssign(t)">{{ t.status === 'Assigned' ? 'Reassign' : 'Assign to asset' }}</button>
+  <button *ngIf="t.status === 'Assigned'" type="button" role="menuitem" (click)="openUnassign(t)">Unassign</button>
+  <button *ngIf="t.status !== 'Inactive'" type="button" role="menuitem" class="danger" (click)="openStatus(t, 'Inactive')">Deactivate</button>
+  <button *ngIf="t.status === 'Inactive'" type="button" role="menuitem" (click)="openStatus(t, 'Available')">Reactivate</button>
+</ng-template>
+
+<!-- ===== Add tag ===== -->
+<div *ngIf="dlg('register') as d" class="overlay" (click)="dialog = null">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tm-reg" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="tm-reg">Add Tag</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <form class="modal-body" (ngSubmit)="saveRegister()">
+      <div class="two">
+        <label class="field"><span class="field-label">Technology</span><select class="control" [(ngModel)]="d.tech" name="tech" (ngModelChange)="onRegisterTech()"><option *ngFor="let t of techs" [value]="t">{{ t }}</option></select></label>
+        <label class="field"><span class="field-label">Tag type</span><select class="control" [(ngModel)]="d.type" name="type"><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
+        <label class="field"><span class="field-label">Tag number <em>*</em></span><input class="control" [(ngModel)]="d.number" name="num" inputmode="numeric" (ngModelChange)="fillCode()" /><small class="muted">Tag ID: <strong>{{ registerPreview }}</strong></small></label>
+        <label class="field"><span class="field-label">{{ d.tech === 'Passive RFID' ? 'EPC' : d.tech === 'BLE' ? 'Serial number (MAC)' : 'Encoded value' }} <em>*</em></span><input class="control mono" [(ngModel)]="d.code" name="code" /></label>
+        <label class="field"><span class="field-label">Site</span><select class="control" [(ngModel)]="d.site" name="site" (ngModelChange)="d.location = locationsOf(d.site)[0] ?? ''"><option *ngFor="let s of sites" [value]="s.name">{{ s.name }}</option></select></label>
+        <label class="field"><span class="field-label">Location</span><select class="control" [(ngModel)]="d.location" name="loc" [disabled]="!locationsOf(d.site).length"><option value="">—</option><option *ngFor="let l of locationsOf(d.site)" [value]="l">{{ l }}</option></select></label>
+      </div>
+      <label class="field"><span class="field-label">Link to asset (optional)</span><input class="control" [(ngModel)]="d.asset" name="asset" list="tm-assets" placeholder="Asset code, e.g. FL-008" /></label>
+      <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-primary">Add Tag</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== Assign / reassign ===== -->
+<div *ngIf="dlg('assign') as d" class="overlay" (click)="dialog = null">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tm-asg" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="tm-asg">{{ tagById(d.tagId)?.asset ? 'Reassign' : 'Assign' }} {{ d.tagId }}</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <form class="modal-body" (ngSubmit)="saveAssign()">
+      <p *ngIf="tagById(d.tagId)?.asset as cur" class="muted">Currently linked to <strong>{{ assetLabel(cur) }}</strong>. The link stays in the tag's assignment history.</p>
+      <label class="field"><span class="field-label">Asset <em>*</em></span><input class="control" [(ngModel)]="d.asset" name="asset" list="tm-assets" placeholder="Asset code, e.g. GEN-00045" autocomplete="off" /></label>
+      <div class="two">
+        <label class="field"><span class="field-label">Site</span><select class="control" [(ngModel)]="d.site" name="site" (ngModelChange)="d.location = locationsOf(d.site)[0] ?? ''"><option *ngFor="let s of sites" [value]="s.name">{{ s.name }}</option></select></label>
+        <label class="field"><span class="field-label">Location</span><select class="control" [(ngModel)]="d.location" name="loc" [disabled]="!locationsOf(d.site).length"><option value="">—</option><option *ngFor="let l of locationsOf(d.site)" [value]="l">{{ l }}</option></select></label>
+      </div>
+      <label class="field"><span class="field-label">Note</span><input class="control" [(ngModel)]="d.note" name="note" placeholder="e.g. tag moved after repair" /></label>
+      <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== Unassign ===== -->
+<div *ngIf="dlg('unassign') as d" class="overlay" (click)="dialog = null">
+  <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="tm-una" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="tm-una">Unassign {{ d.tagId }}</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <form class="modal-body" (ngSubmit)="saveUnassign()">
+      <p>The tag becomes <strong>Available</strong>. {{ tagById(d.tagId)?.asset?.tag }} keeps this link in its history.</p>
+      <label class="field"><span class="field-label">Reason</span><input class="control" [(ngModel)]="d.reason" name="reason" placeholder="e.g. tag replaced" /></label>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-danger-solid">Unassign</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== Deactivate / reactivate ===== -->
+<div *ngIf="dlg('status') as d" class="overlay" (click)="dialog = null">
+  <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="tm-st" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="tm-st">{{ d.to === 'Inactive' ? 'Deactivate' : 'Reactivate' }} {{ d.tagId }}</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <form class="modal-body" (ngSubmit)="saveStatus()">
+      <p>{{ d.to === 'Inactive' ? 'Inactive tags are ignored by readers and cannot be assigned until reactivated.' : 'The tag becomes Available for assignment.' }}</p>
+      <label class="field"><span class="field-label">Reason <em *ngIf="d.to === 'Inactive'">*</em></span><input class="control" [(ngModel)]="d.reason" name="reason" [placeholder]="d.to === 'Inactive' ? 'e.g. tag damaged' : 'e.g. tag re-tested'" /></label>
+      <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" [class]="d.to === 'Inactive' ? 'btn btn-danger-solid' : 'btn btn-primary'">{{ d.to === 'Inactive' ? 'Deactivate' : 'Reactivate' }}</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== Import ===== -->
+<div *ngIf="dlg('import') as d" class="overlay" (click)="dialog = null">
+  <div class="modal modal--lg" role="dialog" aria-modal="true" aria-labelledby="tm-imp" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="tm-imp">Import Tags</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <div class="modal-body">
+      <p class="muted">Columns: Technology, Tag Number, Type, Encoded Value, Site, Location, Asset Code. Leave Encoded Value empty to generate it.</p>
+      <div class="import-actions">
+        <button type="button" class="btn btn-outline btn-sm" (click)="downloadTemplate()"><lucide-icon [img]="icons.Download" [size]="16"></lucide-icon>Download template</button>
+        <label class="btn btn-primary btn-sm file-btn"><lucide-icon [img]="icons.Upload" [size]="16"></lucide-icon>Choose file<input type="file" accept=".xlsx,.xls,.csv" (change)="onImportFile($event)" /></label>
+        <span class="muted">{{ d.fileName }}</span>
+      </div>
+      <p *ngIf="d.error" class="form-error" role="alert">{{ d.error }}</p>
+      <div *ngIf="d.rows.length" class="table-wrap import-table">
+        <table class="dt dt--compact">
+          <thead><tr><th>Row</th><th>Tag ID</th><th>Technology</th><th>Site</th><th>Asset</th><th>Result</th></tr></thead>
+          <tbody><tr *ngFor="let r of d.rows"><td>{{ r.line }}</td><td>{{ r.id || '—' }}</td><td>{{ r.tech ?? '—' }}</td><td>{{ r.site || '—' }}</td><td>{{ r.asset || '—' }}</td>
+            <td><span *ngIf="!r.error" class="ok">Ready</span><span *ngIf="r.error" class="bad">{{ r.error }}</span></td></tr></tbody>
+        </table>
+      </div>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-primary" [disabled]="!importValid" (click)="saveImport()">Import {{ importValid }} tag{{ importValid === 1 ? '' : 's' }}</button></div>
+    </div>
+  </div>
+</div>
+
+<datalist id="tm-assets"><option *ngFor="let a of assetOptions" [value]="a.tag">{{ a.kind }}</option></datalist>
+
+<div *ngIf="toast" class="toast" role="status">{{ toast }}</div>

@@ -1,0 +1,102 @@
+<div class="md-bar" [style.top.px]="top" [style.left.px]="side === 'left' ? inset : null" [style.right.px]="side === 'right' ? inset : null" role="toolbar" aria-label="Drawing tools">
+  <button type="button" (click)="fitAll()" title="Fit drawn areas" aria-label="Fit drawn areas"><lucide-icon [img]="icons.Maximize" [size]="17"></lucide-icon></button>
+  <button type="button" [class.is-on]="mode === 'draw'" (click)="startDraw()" title="Draw an area" aria-label="Draw an area"><lucide-icon [img]="icons.Pentagon" [size]="18"></lucide-icon></button>
+  <button type="button" [class.is-on]="mode === 'edit'" [disabled]="!selectedArea" (click)="toggleEdit()" title="Edit the selected area" aria-label="Edit the selected area"><lucide-icon [img]="icons.SquarePen" [size]="17"></lucide-icon></button>
+  <span class="md-color-wrap">
+    <button type="button" [class.is-on]="colorsOpen" (click)="$event.stopPropagation(); colorsOpen = !colorsOpen" [title]="selectedArea ? 'Colour of ' + selectedArea.name : 'Colour for new areas'" aria-label="Area colour"><i class="md-swatch" [style.background]="selectedArea?.color || color"></i></button>
+    <div *ngIf="colorsOpen" class="md-colors" (click)="$event.stopPropagation()">
+      <button *ngFor="let c of colors" type="button" class="md-swatch-btn" [class.is-on]="(selectedArea?.color || color) === c" [style.background]="c" (click)="setColor(c)" [attr.aria-label]="'Colour ' + c"></button>
+    </div>
+  </span>
+  <button type="button" [class.is-on]="mode === 'place' || pickerOpen" [class.is-dark]="mode === 'place'" [disabled]="!selectedArea" (click)="openPicker()" title="Plot a device in the selected area" aria-label="Plot a device in the selected area"><lucide-icon [img]="icons.Smartphone" [size]="17"></lucide-icon></button>
+  <button type="button" class="md-danger" [disabled]="!selected" (click)="askDelete()" title="Delete the selected area or device" aria-label="Delete the selected area or device"><lucide-icon [img]="icons.Trash2" [size]="17"></lucide-icon></button>
+</div>
+
+<div *ngIf="mode === 'draw'" class="md-banner" role="status">
+  <span class="md-grow"><strong>Draw an area</strong>Click to add corners ({{ drawCount }}). Click the first corner, double-click or press Enter to close.</span>
+  <button type="button" class="md-btn" (click)="undoPoint()" [disabled]="!drawCount"><lucide-icon [img]="icons.Undo2" [size]="14"></lucide-icon>Undo</button>
+  <button type="button" class="md-btn md-btn--primary" (click)="finishDraw()" [disabled]="drawCount < 3"><lucide-icon [img]="icons.Check" [size]="14"></lucide-icon>Finish</button>
+  <button type="button" class="md-btn" (click)="cancel()">Cancel</button>
+</div>
+<div *ngIf="mode === 'edit' && selectedArea as a" class="md-banner" role="status">
+  <span class="md-grow"><strong>Editing {{ a.name }}</strong>Drag corners, drag a midpoint to add a corner, double-click a corner to remove it. Plotted devices can be dragged.</span>
+  <button type="button" class="md-btn md-btn--primary" (click)="cancel()"><lucide-icon [img]="icons.Check" [size]="14"></lucide-icon>Done</button>
+</div>
+<div *ngIf="mode === 'place' && placing as d" class="md-banner" role="status">
+  <span class="md-grow"><strong>Place {{ d.name }} ({{ d.id }})</strong>Click inside {{ placeArea?.name }} to plot the device.</span>
+  <button type="button" class="md-btn" (click)="openPicker()">Change device</button>
+  <button type="button" class="md-btn" (click)="cancel()">Cancel</button>
+</div>
+
+<div *ngIf="mode === 'idle' && selectedArea as a" class="md-info">
+  <i [style.background]="a.color"></i><strong>{{ a.name }}</strong><span>{{ devicesIn(a) }} device{{ devicesIn(a) === 1 ? '' : 's' }}</span>
+</div>
+
+<div *ngIf="mode === 'idle' && reading as r" class="md-card" role="status" aria-live="off">
+  <div class="md-card-head">
+    <span class="md-card-ic" [style.background]="r.color"><lucide-icon [img]="icons.Smartphone" [size]="16"></lucide-icon></span>
+    <div class="md-grow"><strong>{{ r.name }}</strong><small>{{ r.id }} · {{ r.type }}</small></div>
+    <span class="md-pill" [class.is-live]="r.live">{{ r.live ? 'LIVE' : 'DEMO' }}</span>
+    <button type="button" class="md-x" (click)="closeReading()" aria-label="Close device details"><lucide-icon [img]="icons.X" [size]="15"></lucide-icon></button>
+  </div>
+  <dl class="md-card-grid">
+    <div><dt>Zone</dt><dd [class.is-out]="r.outside">{{ r.outside ? 'Outside ' : '' }}{{ r.area }}</dd></div>
+    <div><dt>Status</dt><dd>{{ r.speed > 0.2 ? 'Moving · ' + r.speed + ' m/s' : 'Stationary' }}</dd></div>
+    <div><dt>Latitude</dt><dd class="md-mono">{{ r.lat | number: '1.6-6' }}</dd></div>
+    <div><dt>Longitude</dt><dd class="md-mono">{{ r.lng | number: '1.6-6' }}</dd></div>
+    <div><dt>Accuracy</dt><dd>±{{ r.accuracy }} m</dd></div>
+    <div><dt>Last fix</dt><dd>{{ r.at | date: 'HH:mm:ss' }}</dd></div>
+    <div *ngIf="r.battery !== null"><dt>Battery</dt><dd>{{ r.battery }}%</dd></div>
+    <div><dt>Source</dt><dd>{{ r.live ? 'Location feed' : 'Simulated (no feed yet)' }}</dd></div>
+  </dl>
+</div>
+
+<div *ngIf="toast" class="md-toast" role="status">{{ toast }}</div>
+
+<!-- Name a new area -->
+<div *ngIf="naming as n" class="md-overlay" mdPortal (click)="discardName()">
+  <form class="md-modal md-modal--sm" role="dialog" aria-modal="true" aria-labelledby="md-name-h" (click)="$event.stopPropagation()" (ngSubmit)="saveName()">
+    <div class="md-modal-head"><h2 id="md-name-h">Save Area</h2><button type="button" class="md-x" (click)="discardName()" aria-label="Discard"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <div class="md-modal-body">
+      <label class="md-field"><span>Area name</span><input class="md-input" name="areaName" [(ngModel)]="n.name" maxlength="40" autofocus /></label>
+      <div class="md-field"><span>Colour</span>
+        <div class="md-colors md-colors--inline"><button *ngFor="let c of colors" type="button" class="md-swatch-btn" [class.is-on]="color === c" [style.background]="c" (click)="color = c" [attr.aria-label]="'Colour ' + c"></button></div></div>
+      <p class="md-hint">{{ n.points.length }} corners. You can reshape it later with the edit tool.</p>
+    </div>
+    <div class="md-modal-foot"><button type="button" class="md-btn" (click)="discardName()">Discard</button><button type="submit" class="md-btn md-btn--primary">Save Area</button></div>
+  </form>
+</div>
+
+<!-- Select device -->
+<div *ngIf="pickerOpen" class="md-overlay" mdPortal (click)="pickerOpen = false">
+  <div class="md-modal" role="dialog" aria-modal="true" aria-labelledby="md-pick-h" (click)="$event.stopPropagation()">
+    <div class="md-modal-head"><h2 id="md-pick-h">Select Device<small *ngIf="selectedArea as a">Plot into {{ a.name }}</small></h2><button type="button" class="md-x" (click)="pickerOpen = false" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <div class="md-modal-body">
+      <label class="md-search"><lucide-icon [img]="icons.Search" [size]="16"></lucide-icon><input type="search" [(ngModel)]="pickerQuery" (ngModelChange)="refreshPick()" placeholder="Search device name, ID, type or serial" aria-label="Search devices" autofocus /></label>
+      <div class="md-table-wrap">
+        <table class="md-table">
+          <thead><tr><th>Device Name</th><th>Type</th><th>Unique ID</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let r of pickRows; trackBy: trackRow" [class.is-plotted]="r.plotted" (click)="pick(r.d)" tabindex="0" (keydown.enter)="pick(r.d)" [title]="r.plotted ? 'Plotted in ' + r.plotted + '. Selecting it moves it.' : 'Plot this device'">
+              <td><strong>{{ r.d.name }}</strong><small>{{ r.d.id }}</small></td>
+              <td>{{ r.d.type }}</td>
+              <td>{{ r.d.serial }}</td>
+              <td><span class="md-status" [class.is-plotted]="r.plotted">{{ r.plotted ? 'Already plotted' : 'Available' }}</span></td>
+            </tr>
+            <tr *ngIf="!pickRows.length"><td colspan="4" class="md-empty">No device matches “{{ pickerQuery }}”.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="md-hint" *ngIf="pickTotal > pickRows.length">Showing {{ pickRows.length }} of {{ pickTotal | number }} devices. Search to narrow the list.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Delete -->
+<div *ngIf="confirmDelete" class="md-overlay" mdPortal (click)="confirmDelete = false">
+  <div class="md-modal md-modal--sm" role="alertdialog" aria-modal="true" aria-labelledby="md-del-h" (click)="$event.stopPropagation()">
+    <div class="md-modal-head"><h2 id="md-del-h">{{ selectedDevice ? 'Remove Device' : 'Delete Area' }}</h2><button type="button" class="md-x" (click)="confirmDelete = false" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <div class="md-modal-body"><p class="md-text">{{ deleteText }}</p></div>
+    <div class="md-modal-foot"><button type="button" class="md-btn" (click)="confirmDelete = false">Cancel</button><button type="button" class="md-btn md-btn--danger" (click)="doDelete()">{{ selectedDevice ? 'Remove' : 'Delete' }}</button></div>
+  </div>
+</div>

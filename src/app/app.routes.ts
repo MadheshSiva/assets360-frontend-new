@@ -6,7 +6,18 @@ import { SectionUnavailable } from './section-unavailable/section-unavailable';
 import { ModulePlaceholder } from './module-placeholder/module-placeholder';
 import { AnalyticsInsights } from './components/pages/tracking-iot/analytics-insights/analytics-insights';
 import { TagIds } from './components/pages/tracking-iot/tag-ids/tag-ids';
+import { TagManagement } from './components/pages/tracking-iot/tag-management/tag-management';
 import { FirmwareConnectivity } from './components/pages/tracking-iot/firmware-connectivity/firmware-connectivity';
+import { GeofenceAlerts } from './components/pages/tracking-iot/geofence-alerts/geofence-alerts';
+import { SensorManagement } from './components/pages/tracking-iot/sensor-management/sensor-management';
+import { TrackingTelemetry } from './components/pages/tracking-iot/tracking-telemetry/tracking-telemetry';
+import { RealTimeLocation } from './components/pages/tracking-iot/real-time-location/real-time-location';
+import { DeviceManagement } from './components/pages/tracking-iot/device-management/device-management';
+import { DeviceConfiguration } from './components/pages/tracking-iot/device-configuration/device-configuration';
+import { DeviceHealth } from './components/pages/tracking-iot/device-health/device-health';
+import { DeviceMaintenance } from './components/pages/tracking-iot/device-maintenance/device-maintenance';
+import { DeviceTypeModel } from './components/pages/tracking-iot/device-type-model/device-type-model';
+import { DeviceReplacement } from './components/pages/tracking-iot/device-replacement/device-replacement';
 import { AssetRegistration } from './components/pages/assets/asset-registration/asset-registration';
 import { AssetList } from './components/pages/assets/asset-list/asset-list';
 import { AssetCategories } from './components/pages/assets/asset-categories/asset-categories';
@@ -108,7 +119,20 @@ export const routes: Routes = [
       { path: 'tracking-iot/analytics-insights', component: AnalyticsInsights },
       { path: 'tracking-iot/tag-ids', component: TagIds },
       { path: 'tracking-iot/firmware-connectivity', component: FirmwareConnectivity },
-      { path: 'tracking-iot/real-time-location', loadChildren: remoteRoutes('locating') },
+      { path: 'tracking-iot/geofence-alerts', component: GeofenceAlerts },
+      { path: 'tracking-iot/device-configuration', component: DeviceConfiguration },
+      { path: 'tracking-iot/device-health', component: DeviceHealth },
+      { path: 'tracking-iot/device-maintenance', component: DeviceMaintenance },
+      { path: 'tracking-iot/device-type-model', component: DeviceTypeModel },
+      { path: 'tracking-iot/device-replacement', component: DeviceReplacement },
+      { path: 'tracking-iot/real-time-location', component: RealTimeLocation },
+      // previous floor-plan Locating module (federated remote), kept reachable
+      { path: 'tracking-iot/locating-classic', loadChildren: remoteRoutes('locating') },
+      { path: 'tracking-iot/tag-management', component: TagManagement },
+      { path: 'tracking-iot/device-management', component: DeviceManagement },
+      { path: 'tracking-iot/gateways', component: ModulePlaceholder, data: { title: 'Gateways' } },
+      { path: 'tracking-iot/sensor-management', component: SensorManagement },
+      { path: 'tracking-iot/tracking-telemetry', component: TrackingTelemetry },
       { path: 'master-data-management', loadChildren: remoteRoutes('masterDataManagement') },
       { path: 'movement-custody', component: ModulePlaceholder, data: { title: 'Movement & Custody' } },
       { path: 'maintenance', component: ModulePlaceholder, data: { title: 'Maintenance' } },
