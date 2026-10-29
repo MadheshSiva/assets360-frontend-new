@@ -1,0 +1,102 @@
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a [routerLink]="basePath">Reports &amp; Analytics</a>
+  <span>/</span>
+  <strong>Custom Reports</strong>
+</nav>
+
+<header class="ra-head cr-head">
+  <div class="ra-head__text">
+    <h1>Custom Reports</h1>
+    <p>Build flexible reports from Asset360 data using fields, filters, grouping and visualizations.</p>
+  </div>
+  <div class="cr-head__side">
+    <div class="cr-stats">
+      <div class="kpi">
+        <span class="kpi__icon" data-tone="purple"><lucide-icon [img]="icons.FileText" [size]="22" /></span>
+        <span class="kpi__body"><span class="kpi__value">{{ stats.total }}</span><span class="kpi__label">Custom Reports</span></span>
+      </div>
+      <div class="kpi">
+        <span class="kpi__icon" data-tone="green"><lucide-icon [img]="icons.Funnel" [size]="22" /></span>
+        <span class="kpi__body"><span class="kpi__value">{{ stats.published }}</span><span class="kpi__label">Published</span></span>
+      </div>
+      <div class="kpi">
+        <span class="kpi__icon" data-tone="blue"><lucide-icon [img]="icons.Calendar" [size]="22" /></span>
+        <span class="kpi__body"><span class="kpi__value">{{ stats.scheduled }}</span><span class="kpi__label">Scheduled</span></span>
+      </div>
+      <div class="kpi">
+        <span class="kpi__icon" data-tone="orange"><lucide-icon [img]="icons.File" [size]="22" /></span>
+        <span class="kpi__body"><span class="kpi__value">{{ stats.drafts }}</span><span class="kpi__label">Drafts</span></span>
+      </div>
+    </div>
+    <div class="ra-head__actions cr-head__actions">
+      <button type="button" class="btn btn--primary" (click)="newReport()"><lucide-icon [img]="icons.Plus" [size]="16" /> Create Custom Report</button>
+      <button type="button" class="btn btn--outline" (click)="chooseImport()"><lucide-icon [img]="icons.Upload" [size]="16" /> Import Template</button>
+      <button type="button" class="btn btn--outline" (click)="exportReports()"><lucide-icon [img]="icons.Download" [size]="16" /> Export Reports</button>
+      <input #importInput type="file" accept=".json,application/json" class="cr-file-input" (change)="onImportFile($event)" aria-label="Import report template" />
+    </div>
+  </div>
+</header>
+
+<div class="filters">
+  <label class="search cr-search">
+    <lucide-icon [img]="icons.Search" [size]="16" />
+    <input type="search" placeholder="Search custom reports..." [(ngModel)]="search" (ngModelChange)="refilter()" aria-label="Search custom reports" />
+  </label>
+  <label class="filter">
+    <span>Owner</span>
+    <select [(ngModel)]="owner" (ngModelChange)="refilter()">
+      <option value="">All owners</option>
+      @for (o of owners; track o) { <option [value]="o">{{ o }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Module</span>
+    <select [(ngModel)]="module" (ngModelChange)="refilter()">
+      <option value="">All modules</option>
+      @for (m of modules; track m) { <option [value]="m">{{ m }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Status</span>
+    <select [(ngModel)]="status" (ngModelChange)="refilter()">
+      <option value="">All statuses</option>
+      @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Last Updated</span>
+    <select [(ngModel)]="updated" (ngModelChange)="refilter()">
+      @for (u of updatedRanges; track u.key) { <option [value]="u.key">{{ u.label }}</option> }
+    </select>
+  </label>
+  @if (hasFilters) {
+    <button type="button" class="btn btn--link" (click)="clearFilters()">Clear filters</button>
+  }
+</div>
+
+<div class="cr-layout">
+  <section class="widget cr-library-card">
+    <cr-report-library [reports]="filtered" [selectedId]="draft.id" [sort]="librarySort" (sortChange)="setSort($event)"
+      (open)="openReport($event)" (favourite)="toggleFavourite($event)" (duplicate)="duplicate($event)"
+      (remove)="askDelete($event)" (togglePublish)="togglePublish($event)" />
+  </section>
+
+  <section class="widget cr-builder" #builderAnchor>
+    <cr-report-builder [report]="draft" (notice)="notify($event)" />
+  </section>
+</div>
+
+<section class="widget cr-config-card">
+  <cr-report-config [report]="draft" [nameError]="nameError" [showErrors]="showErrors"
+    (saveDraft)="saveDraft()" (preview)="previewReport()" (saveReport)="saveReport()" (publish)="publish()" />
+</section>
+
+@if (confirmDelete) {
+  <cr-confirm-dialog title="Delete custom report?"
+    [message]="'“' + confirmDelete.name + '” will be removed from the library for everyone it is shared with. This cannot be undone.'"
+    (confirm)="confirmRemove()" (cancel)="confirmDelete = null" />
+}
+
+@if (toast) {
+  <div class="toast" role="status">{{ toast }}</div>
+}

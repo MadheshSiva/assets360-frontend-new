@@ -1,0 +1,85 @@
+:host {
+  height: 100%;
+}
+
+.idb-widget,
+.idb-kpi {
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.idb-kpi {
+  padding-left: 26px;
+}
+
+.idb-kpi__grip {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.idb-edit {
+  border-style: dashed;
+  border-color: #c4b5fd;
+}
+
+.idb-edit .widget__grip {
+  color: var(--ra-purple);
+  cursor: move;
+}
+
+.idb-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.idb-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.idb-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.idb-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+/* Heatmap: site rows × period columns */
+.idb-heat {
+  display: grid;
+  gap: 3px;
+  overflow-x: auto;
+  font-size: 11.5px;
+}
+
+.idb-heat__col {
+  text-align: center;
+  color: var(--ra-muted);
+  white-space: nowrap;
+}
+
+.idb-heat__row {
+  align-self: center;
+  white-space: nowrap;
+  font-weight: 600;
+  color: #334155;
+}
+
+.idb-heat__cell {
+  display: grid;
+  place-items: center;
+  min-height: 26px;
+  border-radius: 4px;
+  font-weight: 600;
+}

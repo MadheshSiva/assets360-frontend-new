@@ -1,0 +1,64 @@
+<div class="cr-builder__head">
+  <h2>Report Builder</h2>
+  <span class="muted">{{ report.id ? 'Editing ' + report.name : 'New report' }}</span>
+</div>
+
+<ol class="cr-stepper" aria-label="Builder steps">
+  @for (s of steps; track s; let i = $index) {
+    <li [class.cr-stepper__item--active]="i === step" [class.cr-stepper__item--done]="isDone(i)">
+      <button type="button" (click)="goTo(i)" [attr.aria-current]="i === step ? 'step' : null">
+        <span class="cr-stepper__num">
+          @if (isDone(i)) { <lucide-icon [img]="Check" [size]="14" /> } @else { {{ i + 1 }} }
+        </span>
+        <span class="cr-stepper__label">{{ s }}</span>
+      </button>
+    </li>
+  }
+</ol>
+
+@if (step < 5) {
+  <div class="cr-builder__body">
+    <div class="cr-builder__main">
+      @switch (step) {
+        @case (0) { <cr-source-step [report]="report" (notice)="relay($event)" /> }
+        @case (1) { <cr-fields-step [report]="report" (notice)="relay($event)" /> }
+        @case (2) { <cr-filters-step [report]="report" /> }
+        @case (3) { <cr-group-sort-step [report]="report" /> }
+        @case (4) { <cr-visualize-step [report]="report" /> }
+      }
+    </div>
+    <div class="cr-builder__side">
+      <section class="cr-panel">
+        <cr-selected-fields [report]="report" (notice)="relay($event)" />
+      </section>
+      <section class="cr-panel">
+        <cr-report-preview [definition]="report" [reportName]="report.name" [compact]="true" />
+      </section>
+    </div>
+  </div>
+} @else {
+  <div class="cr-summary">
+    <div><span>Data source</span><strong>{{ sourceLabel }}</strong></div>
+    <div><span>Fields</span><strong>{{ report.fields.length }} selected{{ report.calcFields.length ? ' · ' + report.calcFields.length + ' calculated' : '' }}</strong></div>
+    <div><span>Filters</span><strong>{{ filterSummary }}</strong></div>
+    <div><span>Group &amp; sort</span><strong>{{ groupSummary }}</strong></div>
+  </div>
+  @if (firstProblem) {
+    <p class="cr-error">{{ firstProblem }}</p>
+  }
+  <section class="cr-panel">
+    <cr-report-preview [definition]="report" [reportName]="report.name" heading="Report preview" />
+  </section>
+}
+
+<div class="cr-builder__nav">
+  <button type="button" class="btn" (click)="back()" [disabled]="step === 0">
+    <lucide-icon [img]="ChevronLeft" [size]="15" /> Back
+  </button>
+  <span class="muted">Step {{ step + 1 }} of {{ steps.length }}</span>
+  @if (step < steps.length - 1) {
+    <button type="button" class="btn btn--primary" (click)="next()">
+      Next: {{ steps[step + 1] }} <lucide-icon [img]="ChevronRight" [size]="15" />
+    </button>
+  }
+</div>

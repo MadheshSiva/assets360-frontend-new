@@ -1,0 +1,305 @@
+<nav class="crumbs" aria-label="Breadcrumb">
+  <lucide-icon [img]="icons.House" [size]="15" />
+  <a routerLink="/dashboard">Asset360</a>
+  <span>/</span>
+  <a [routerLink]="basePath">Reports &amp; Analytics</a>
+  <span>/</span>
+  <strong>Predictive Analytics</strong>
+</nav>
+
+<header class="ra-head">
+  <div class="ra-head__text">
+    <h1>Predictive Analytics</h1>
+    <p>Predict failures early, optimize maintenance timing and reduce operational risk.</p>
+  </div>
+  <div class="ra-head__actions">
+    <span class="live"><i></i>Live predictions</span>
+    <span class="updated">
+      <button type="button" (click)="refresh()" [disabled]="refreshing" aria-label="Refresh predictions">
+        <lucide-icon [img]="icons.RefreshCw" [size]="16" />
+      </button>
+      {{ refreshing ? 'Re-scoring assets…' : updatedText }}
+    </span>
+    <button type="button" class="btn" [class.ra-compare-on]="compare" [attr.aria-pressed]="compare" (click)="toggleCompare()">
+      <lucide-icon [img]="icons.GitCompareArrows" [size]="16" /> Compare Periods
+    </button>
+    <button type="button" class="btn" (click)="exportPage()"><lucide-icon [img]="icons.Download" [size]="16" /> Export</button>
+    <button type="button" class="btn btn--primary" (click)="savingView = true"><lucide-icon [img]="icons.Bookmark" [size]="16" /> Save View</button>
+  </div>
+</header>
+
+<div class="filters">
+  <label class="filter filter--period">
+    <span>Period</span>
+    <select [(ngModel)]="period" (ngModelChange)="recompute()">
+      @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Organization</span>
+    <select [(ngModel)]="organization" (ngModelChange)="recompute()">
+      @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Location</span>
+    <select [(ngModel)]="location" (ngModelChange)="recompute()">
+      @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Asset Category</span>
+    <select [(ngModel)]="category" (ngModelChange)="recompute()">
+      @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Asset Type</span>
+    <select [(ngModel)]="assetType" (ngModelChange)="recompute()">
+      @for (t of assetTypes; track t) { <option [value]="t">{{ t }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Risk Level</span>
+    <select [(ngModel)]="riskLevel" (ngModelChange)="recompute()">
+      @for (r of riskOptions; track r) { <option [value]="r">{{ r }}</option> }
+    </select>
+  </label>
+</div>
+
+@if (!view.monitored.length) {
+  <div class="ra-notice">
+    No monitored assets match the selected filters.
+    <button type="button" class="btn btn--link" (click)="resetFilters()">Reset filters</button>
+  </div>
+}
+
+<div class="ra-layout">
+  <div class="pa-main">
+    <div class="kpis">
+      @for (k of kpis; track k.id) {
+        <ra-kpi-card [kpi]="k" (action)="kpiAction($event, k)" />
+      }
+    </div>
+
+    <div class="widgets">
+      <!-- Failure Risk Trend -->
+      <section class="widget span-2" id="pa-risk">
+        <header class="widget__head">
+          <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+          <h2>Failure Risk Trend <span class="widget__info" title="Average AI risk score (0–100) of the assets in each risk band; 80+ is above the high-risk threshold."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+          <ra-menu label="Failure Risk Trend actions" (select)="widgetAction($event, 'risk', 'Failure Risk Trend', riskTpl)" />
+        </header>
+        <div class="widget__body"><ng-container [ngTemplateOutlet]="riskTpl" /></div>
+      </section>
+      <ng-template #riskTpl>
+        <ra-cartesian-chart [labels]="view.labels" [series]="view.riskTrend" [max]="100" [height]="230" yTitle="Risk Score (0-100)" ariaLabel="Failure risk trend" />
+      </ng-template>
+
+      <!-- Remaining Useful Life Forecast -->
+      <section class="widget span-2" id="pa-rul">
+        <header class="widget__head">
+          <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+          <h2>Remaining Useful Life Forecast <span class="widget__info" title="Average predicted remaining useful life in hours, with the model's confidence band for critical assets."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+          <ra-menu label="Remaining Useful Life Forecast actions" (select)="widgetAction($event, 'rul', 'Remaining Useful Life Forecast', rulTpl)" />
+        </header>
+        <div class="widget__body"><ng-container [ngTemplateOutlet]="rulTpl" /></div>
+      </section>
+      <ng-template #rulTpl>
+        <ra-cartesian-chart [labels]="view.labels" [series]="view.rulForecast" [format]="hoursFormat" [height]="230" yTitle="Remaining Useful Life (Hours)" ariaLabel="Remaining useful life forecast" />
+      </ng-template>
+
+      <!-- Risk Distribution -->
+      <section class="widget span-2" id="pa-distribution">
+        <header class="widget__head">
+          <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+          <h2>Risk Distribution <span class="widget__info" title="Monitored assets by AI risk level; the slices add up to Assets Monitored."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+          <ra-menu label="Risk Distribution actions" (select)="widgetAction($event, 'distribution', 'Risk Distribution', distributionTpl)" />
+        </header>
+        <div class="widget__body"><ng-container [ngTemplateOutlet]="distributionTpl" /></div>
+      </section>
+      <ng-template #distributionTpl>
+        <ra-donut-chart [slices]="view.riskSlices" centerLabel="Total Assets" [size]="160" ariaLabel="Risk distribution" />
+      </ng-template>
+
+      <!-- Anomaly Detection Events -->
+      <section class="widget span-2" id="pa-anomalies">
+        <header class="widget__head">
+          <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+          <h2>Anomaly Detection Events <span class="widget__info" title="Sensor anomalies detected per month, by signal."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+          <ra-menu label="Anomaly Detection Events actions" (select)="widgetAction($event, 'anomalies', 'Anomaly Detection Events', anomaliesTpl)" />
+        </header>
+        <div class="widget__body"><ng-container [ngTemplateOutlet]="anomaliesTpl" /></div>
+      </section>
+      <ng-template #anomaliesTpl>
+        <ra-cartesian-chart kind="bar" [stacked]="true" [labels]="view.labels" [series]="view.anomalies" [height]="230" yTitle="Number of Events" ariaLabel="Anomaly detection events" />
+      </ng-template>
+
+      <!-- Prediction Accuracy -->
+      <section class="widget span-2" id="pa-accuracy">
+        <header class="widget__head">
+          <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+          <h2>Prediction Accuracy <span class="widget__info" title="Share of predictions confirmed by inspections and work orders, against a {{ accuracyTarget }}% target."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+          <ra-menu label="Prediction Accuracy actions" (select)="widgetAction($event, 'accuracy', 'Prediction Accuracy', accuracyTpl)" />
+        </header>
+        <div class="widget__body"><ng-container [ngTemplateOutlet]="accuracyTpl" /></div>
+      </section>
+      <ng-template #accuracyTpl>
+        <div class="pa-accuracy">
+          <ra-gauge-chart [value]="view.accuracy" [target]="accuracyTarget" [display]="view.accuracy + '%'" [caption]="'Model Accuracy · Target ' + accuracyTarget + '%'" [color]="colors.purple" [size]="200" />
+          <ul class="pa-metrics">
+            <li><i [style.background]="colors.green"></i><span>Precision</span><strong>{{ view.precision }}%</strong></li>
+            <li><i [style.background]="colors.blue"></i><span>Recall</span><strong>{{ view.recall }}%</strong></li>
+            <li><i [style.background]="colors.orange"></i><span>False Positive Rate</span><strong>{{ view.falsePositiveRate }}%</strong></li>
+          </ul>
+        </div>
+      </ng-template>
+
+      <!-- Predicted Maintenance Cost -->
+      <section class="widget span-2" id="pa-cost">
+        <header class="widget__head">
+          <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+          <h2>Predicted Maintenance Cost <span class="widget__info" title="Preventive and corrective spend (AED) with the downtime cost avoided by acting on predictions."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+          <ra-menu label="Predicted Maintenance Cost actions" (select)="widgetAction($event, 'cost', 'Predicted Maintenance Cost', costTpl)" />
+        </header>
+        <div class="widget__body"><ng-container [ngTemplateOutlet]="costTpl" /></div>
+      </section>
+      <ng-template #costTpl>
+        <ra-cartesian-chart kind="bar" [stacked]="true" [labels]="view.labels" [series]="view.costForecast" [format]="costFormat" [height]="230" yTitle="Cost (AED)" ariaLabel="Predicted maintenance cost" />
+      </ng-template>
+
+      <!-- High-Risk Assets Requiring Action -->
+      <section class="widget span-6" id="pa-actions">
+        <header class="widget__head">
+          <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+          <h2>High-Risk Assets Requiring Action <span class="widget__info" title="Critical and high risk assets, highest risk score first."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+          <ra-menu label="High-Risk Assets actions" (select)="widgetAction($event, 'actions', 'High-Risk Assets Requiring Action', actionsTpl)" />
+        </header>
+        <div class="widget__body"><ng-container [ngTemplateOutlet]="actionsTpl" /></div>
+      </section>
+      <ng-template #actionsTpl>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th><button type="button" class="sort" (click)="sortActions('id')">Asset ID <lucide-icon [img]="actionIcon('id')" [size]="12" /></button></th>
+                <th><button type="button" class="sort" (click)="sortActions('name')">Asset Name <lucide-icon [img]="actionIcon('name')" [size]="12" /></button></th>
+                <th><button type="button" class="sort" (click)="sortActions('location')">Location <lucide-icon [img]="actionIcon('location')" [size]="12" /></button></th>
+                <th><button type="button" class="sort" (click)="sortActions('riskScore')">Risk Score <lucide-icon [img]="actionIcon('riskScore')" [size]="12" /></button></th>
+                <th>Predicted Failure Window</th>
+                <th class="num"><button type="button" class="sort" (click)="sortActions('rulHours')">Remaining Useful Life <lucide-icon [img]="actionIcon('rulHours')" [size]="12" /></button></th>
+                <th>Recommended Action</th>
+                <th><button type="button" class="sort" (click)="sortActions('owner')">Owner <lucide-icon [img]="actionIcon('owner')" [size]="12" /></button></th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (a of actionRows; track a.id) {
+                <tr>
+                  <td>{{ a.id }}</td>
+                  <td><button type="button" class="link" (click)="showAsset(a)">{{ a.name }}</button></td>
+                  <td>{{ a.site.name }}</td>
+                  <td><span class="score" [attr.data-tone]="scoreTone(a.riskScore)">{{ a.riskScore }}</span></td>
+                  <td><span class="pa-window" [class.pa-window--soon]="a.failureWindowDays !== null">{{ windowText(a) }}</span></td>
+                  <td class="num">{{ a.rulHours.toLocaleString('en-US') }} hrs</td>
+                  <td>{{ recommendation(a) }}</td>
+                  <td>{{ a.owner }}</td>
+                  <td><span class="ra-status" [attr.data-tone]="riskTone(a.risk)"><i></i>{{ a.risk }}</span></td>
+                  <td>
+                    <span class="ra-row-actions">
+                      <button type="button" class="btn btn--sm" (click)="showAsset(a)">View</button>
+                      <ra-menu [items]="rowMenu" [label]="a.name + ' actions'" (select)="rowAction($event, a)" />
+                    </span>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="10" class="empty">No high-risk assets for the current filters.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (view.actionList.length > 5) {
+          <div class="ra-widget-foot">
+            <button type="button" class="btn btn--link" (click)="openActionList()">View all {{ view.actionList.length }} high-risk assets</button>
+          </div>
+        }
+      </ng-template>
+
+      <!-- Model Performance by Asset Type -->
+      <section class="widget span-6" id="pa-models">
+        <header class="widget__head">
+          <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+          <h2>Model Performance by Asset Type <span class="widget__info" title="Accuracy, precision and recall of the model trained for each asset type."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+          <ra-menu label="Model Performance actions" (select)="widgetAction($event, 'models', 'Model Performance by Asset Type', modelsTpl)" />
+        </header>
+        <div class="widget__body"><ng-container [ngTemplateOutlet]="modelsTpl" /></div>
+      </section>
+      <ng-template #modelsTpl>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th><button type="button" class="sort" (click)="sortModels('type')">Asset Type <lucide-icon [img]="modelIcon('type')" [size]="12" /></button></th>
+                <th class="num"><button type="button" class="sort" (click)="sortModels('monitored')">Monitored <lucide-icon [img]="modelIcon('monitored')" [size]="12" /></button></th>
+                <th class="num"><button type="button" class="sort" (click)="sortModels('accuracy')">Accuracy <lucide-icon [img]="modelIcon('accuracy')" [size]="12" /></button></th>
+                <th class="num"><button type="button" class="sort" (click)="sortModels('precision')">Precision <lucide-icon [img]="modelIcon('precision')" [size]="12" /></button></th>
+                <th class="num"><button type="button" class="sort" (click)="sortModels('recall')">Recall <lucide-icon [img]="modelIcon('recall')" [size]="12" /></button></th>
+                <th><button type="button" class="sort" (click)="sortModels('status')">Model Status <lucide-icon [img]="modelIcon('status')" [size]="12" /></button></th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (m of modelRows; track m.type; let i = $index) {
+                <tr>
+                  <td>{{ i + 1 }}</td>
+                  <td>{{ m.type }}</td>
+                  <td class="num">{{ m.monitored }}</td>
+                  <td class="num">{{ m.accuracy }}%</td>
+                  <td class="num">{{ m.precision }}%</td>
+                  <td class="num">{{ m.recall }}%</td>
+                  <td><span class="ra-status" [attr.data-tone]="m.status === 'Online' ? 'green' : 'orange'"><i></i>{{ m.status }}</span></td>
+                  <td><button type="button" class="btn btn--sm" (click)="showModel(m)">View</button></td>
+                </tr>
+              } @empty {
+                <tr><td colspan="8" class="empty">No monitored assets for the current filters.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </ng-template>
+    </div>
+  </div>
+
+  <aside class="insights" aria-label="Predictive insights">
+    <header class="widget__head ra-insights-head">
+      <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+      <h2>Predictive Insights <span class="widget__info" title="AI-generated from the current filters."><lucide-icon [img]="icons.Sparkles" [size]="14" /></span></h2>
+    </header>
+    @for (i of insights; track i.id) {
+      <ra-insight-card [insight]="i" (action)="insightAction($event)" />
+    }
+  </aside>
+</div>
+
+@if (expanded) {
+  <ra-expand-dialog [title]="expanded.title" (close)="expanded = null">
+    <div class="ra-expanded"><ng-container [ngTemplateOutlet]="expanded.tpl" /></div>
+  </ra-expand-dialog>
+}
+@if (records) {
+  <ra-records-dialog [data]="records" (close)="records = null" />
+}
+@if (detail) {
+  <ra-detail-dialog [data]="detail" (close)="detail = null" (primary)="detailPrimary()" />
+}
+@if (action) {
+  <ra-action-dialog [request]="action" (close)="action = null" (submitted)="submitAction($event)" />
+}
+@if (savingView) {
+  <ra-save-view-dialog [taken]="viewNames" (close)="savingView = false" (save)="confirmSaveView($event)" />
+}
+@if (toast) {
+  <div class="toast" role="status">{{ toast }}</div>
+}

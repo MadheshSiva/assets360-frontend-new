@@ -1,0 +1,184 @@
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a [routerLink]="basePath">Reports &amp; Analytics</a>
+  <span>/</span>
+  <strong>KPI Dashboard</strong>
+</nav>
+
+<header class="ra-head">
+  <div class="ra-head__text">
+    <h1>KPI Dashboard</h1>
+    <p>Track critical performance indicators, targets, trends and exceptions across Asset360.</p>
+  </div>
+  <div class="ra-head__actions">
+    <span class="updated">
+      <button type="button" aria-label="Refresh data" [disabled]="refreshing" (click)="refresh()">
+        <lucide-icon [img]="icons.RefreshCw" [size]="16" [class.kd-spin]="refreshing" />
+      </button>
+      {{ updatedText }}
+    </span>
+    <button type="button" class="btn" (click)="layoutOpen = true"><lucide-icon [img]="icons.Settings" [size]="16" /> Edit KPI Layout</button>
+    <button type="button" class="btn" (click)="shareOpen = true"><lucide-icon [img]="icons.Share2" [size]="16" /> Share</button>
+    <button type="button" class="btn" (click)="exportAll()"><lucide-icon [img]="icons.Upload" [size]="16" /> Export</button>
+    <button type="button" class="btn btn--primary" (click)="form = 'new'"><lucide-icon [img]="icons.CirclePlus" [size]="16" /> Create KPI</button>
+  </div>
+</header>
+
+<div class="kd-viewbar">
+  <label class="filter kd-dashboard">
+    <span>Dashboard</span>
+    <select [ngModel]="activeKey" (ngModelChange)="selectView($event)" aria-label="Dashboard">
+      @for (v of views; track v.key) { <option [value]="v.key">{{ v.dashboard }}</option> }
+    </select>
+  </label>
+  <div class="seg" role="tablist" aria-label="KPI views">
+    @for (v of standardViews; track v.key) {
+      <button type="button" role="tab" [class.active]="activeKey === v.key" [attr.aria-selected]="activeKey === v.key" (click)="selectView(v.key)">{{ v.label }}</button>
+    }
+    <span class="row-menu kd-custom">
+      <button type="button" role="tab" [class.active]="activeView.custom" [attr.aria-selected]="!!activeView.custom" [attr.aria-expanded]="customMenuOpen"
+        (click)="customMenuOpen = !customMenuOpen">
+        {{ customLabel }} <lucide-icon [img]="icons.ChevronDown" [size]="14" />
+      </button>
+      @if (customMenuOpen) {
+        <div class="menu" role="menu">
+          @for (v of customViews; track v.key) {
+            <button type="button" role="menuitem" (click)="selectView(v.key)">{{ v.label }}</button>
+          }
+          <button type="button" role="menuitem" (click)="customMenuOpen = false; saveCustomOpen = true">Save current tiles as a custom view…</button>
+        </div>
+      }
+    </span>
+  </div>
+</div>
+
+<div class="filters">
+  <label class="filter filter--period">
+    <span>Period</span>
+    <select [(ngModel)]="period" (ngModelChange)="apply()">
+      @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Organization</span>
+    <select [(ngModel)]="organization" (ngModelChange)="apply()">
+      @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Location</span>
+    <select [(ngModel)]="location" (ngModelChange)="apply()">
+      @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Business Unit</span>
+    <select [(ngModel)]="businessUnit" (ngModelChange)="apply()">
+      @for (b of businessUnits; track b) { <option [value]="b">{{ b }}</option> }
+    </select>
+  </label>
+</div>
+
+<div class="ra-layout">
+  <div class="kd-main">
+    @if (tiles.length) {
+      <section class="kd-tiles" aria-label="KPI tiles">
+        @for (t of tiles; track t.state.def.id) {
+          <app-ra-kpi-tile [state]="t.state" [icon]="t.icon" [tone]="t.tone" (action)="tileAction(t, $event)" />
+        }
+      </section>
+    } @else {
+      <div class="empty kd-no-tiles">
+        All tiles are hidden in this view.
+        <button type="button" class="btn btn--link" (click)="layoutOpen = true">Edit KPI layout</button>
+      </div>
+    }
+
+    <div class="widgets">
+      <app-ra-widget class="span-3" title="KPI Performance Trend" info="Average attainment vs target of the KPIs in this view (100% = on target)" (exportCsv)="exportTrend()">
+        <select widget-tools class="select kd-small-select" aria-label="Trend granularity" [(ngModel)]="granularity" (ngModelChange)="setGranularity()">
+          @for (g of granularities; track g) { <option [value]="g">{{ g }}</option> }
+        </select>
+        <ra-cartesian-chart [labels]="trendLabels" [series]="trendSeries" kind="line" [height]="240" [min]="80" [max]="120" [format]="percentFormat"
+          yTitle="KPI Score (%)" ariaLabel="KPI performance trend" />
+      </app-ra-widget>
+
+      <app-ra-widget class="span-3" title="KPI Target vs Actual" info="Average attainment vs target per module for the KPIs in this view" (exportCsv)="exportTargets()">
+        @if (targetRows.length) {
+          <ra-hbar-chart [rows]="targetRows" [max]="130" [labelWidth]="96" />
+          <p class="muted kd-note">Track = target (100%). Green at or above target, orange within 3%, red below.</p>
+        } @else {
+          <div class="empty">No KPIs with data in this view.</div>
+        }
+      </app-ra-widget>
+
+      <app-ra-widget class="span-6" title="KPI Exceptions" info="KPIs in this view that are not on track" (exportCsv)="exportExceptions()">
+        <select widget-tools class="select kd-small-select" aria-label="Exception status" [(ngModel)]="exceptionStatus" (ngModelChange)="filterExceptions()">
+          @for (s of exceptionStatuses; track s) { <option [value]="s">{{ s }}</option> }
+        </select>
+        <app-ra-kpi-exceptions-table [rows]="exceptions" (view)="openDetail($event)" />
+      </app-ra-widget>
+    </div>
+  </div>
+
+  <aside class="kd-side">
+    <section class="insights" aria-label="KPI insights">
+      <div class="widget__head"><h2>KPI Insights</h2></div>
+      @for (ins of insights; track ins.title) {
+        <article class="insight" [attr.data-tone]="ins.tone">
+          <div class="insight__head">
+            <lucide-icon class="insight__icon" [img]="ins.icon" [size]="24" />
+            <div>
+              <h3>{{ ins.title }}</h3>
+              <p>{{ ins.text }}</p>
+            </div>
+          </div>
+          <div class="insight__actions">
+            <button type="button" class="btn btn--sm btn--outline" (click)="insightAction(ins)">{{ ins.action.label }}</button>
+          </div>
+        </article>
+      }
+    </section>
+
+    <section class="widget kd-library" aria-label="KPI library">
+      <div class="widget__head"><h2>KPI Library</h2></div>
+      <ul>
+        @for (l of library; track l.module) {
+          <li>
+            <button type="button" (click)="openLibrary(l.module)">
+              <lucide-icon [img]="moduleIcons[l.module]" [size]="16" />
+              <span>{{ l.module }}</span>
+              <b>{{ l.count }}</b>
+            </button>
+          </li>
+        }
+      </ul>
+      <button type="button" class="btn btn--primary kd-add" (click)="form = 'new'"><lucide-icon [img]="icons.CirclePlus" [size]="16" /> Add KPI</button>
+    </section>
+  </aside>
+</div>
+
+@if (layoutOpen) {
+  <app-ra-kpi-layout-dialog [viewLabel]="activeView.dashboard" [layout]="layoutItems" (saved)="saveLayout($event)" (reset)="resetLayout()" (closed)="layoutOpen = false" />
+}
+@if (form) {
+  <app-ra-kpi-form-dialog [kpi]="formKpi" [defaultModule]="formModule" [takenNames]="takenNames" (saved)="saveKpi($event)" (closed)="form = null" />
+}
+@if (shareOpen) {
+  <app-ra-share-dialog [title]="activeView.dashboard" [link]="shareLink" (notify)="notify($event)" (shared)="shared($event)" (closed)="shareOpen = false" />
+}
+@if (saveCustomOpen) {
+  <app-ra-save-view-dialog title="Save as custom view" description="Saves the tiles currently shown as a new custom view." defaultName="My KPI view"
+    (saved)="saveCustomView($event)" (closed)="saveCustomOpen = false" />
+}
+@if (list) {
+  <app-ra-list-dialog [title]="list.title" [subtitle]="list.subtitle" [header]="list.header" [rows]="list.rows" [fileName]="list.fileName" (closed)="list = null" />
+}
+@if (detail) {
+  <app-ra-detail-dialog [title]="detail.title" [subtitle]="detail.subtitle" [fields]="detail.fields" actionLabel="Edit KPI" (action)="editFromDetail()" (closed)="detail = null" />
+}
+@if (plan) {
+  <app-ra-action-plan-dialog [context]="plan.context" [defaultTitle]="plan.title" [defaultOwner]="plan.owner" (saved)="planSaved($event)" (closed)="plan = null" />
+}
+@if (toast) {
+  <div class="toast" role="status">{{ toast }}</div>
+}

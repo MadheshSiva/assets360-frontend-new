@@ -1,0 +1,11 @@
+/* Inventory Analytics extras (tables) */
+.rai-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rai-more {
+  margin-top: 8px;
+  font-size: 12.5px;
+}

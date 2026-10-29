@@ -1,0 +1,122 @@
+<ra-c-page-head
+  title="WIP / Production Analytics"
+  subtitle="Monitor production output, work-in-progress, asset utilization, downtime and operational bottlenecks."
+  [basePath]="basePath"
+  [updatedText]="updatedText"
+  [refreshing]="refreshing"
+  [compare]="compare"
+  (refresh)="refresh()"
+  (compareChange)="setCompare($event)"
+  (exportCsv)="exportPage()"
+  (saveView)="openSaveView()" />
+
+<section class="filters" aria-label="Filters">
+  <label class="filter filter--period">
+    <span>Period</span>
+    <select [(ngModel)]="period" (ngModelChange)="apply()">
+      @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Organization</span>
+    <select [(ngModel)]="organization" (ngModelChange)="apply()">
+      @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Plant</span>
+    <select [(ngModel)]="plant" (ngModelChange)="apply()">
+      @for (p of plants; track p) { <option [value]="p">{{ p }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Production Line</span>
+    <select [(ngModel)]="line" (ngModelChange)="apply()">
+      @for (l of lineOptions; track l) { <option [value]="l">{{ l }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Work Center</span>
+    <select [(ngModel)]="workCenter" (ngModelChange)="apply()">
+      @for (c of workCenters; track c) { <option [value]="c">{{ c }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Product</span>
+    <select [(ngModel)]="product" (ngModelChange)="apply()">
+      @for (p of products; track p) { <option [value]="p">{{ p }}</option> }
+    </select>
+  </label>
+</section>
+
+<section class="kpis" aria-label="Key figures">
+  @for (k of kpis; track k.id) {
+    <ra-c-kpi [kpi]="k" [compare]="compare" (action)="kpiAction(k, $event)" />
+  }
+</section>
+
+<div class="ra-layout">
+  <div class="widgets">
+    <ra-c-widget class="span-2" title="Production Output Trend" info="Units produced per period against plan and target" (exportCsv)="exportOutput()">
+      <ra-cartesian-chart [labels]="view.window.labels" [series]="outputSeries" kind="bar" [height]="230" yTitle="Units" ariaLabel="Production output trend" />
+    </ra-c-widget>
+
+    <ra-c-widget class="span-2" title="WIP by Production Stage" info="Work-in-progress value at the end of each period by stage, in AED" (exportCsv)="exportStages()">
+      <ra-cartesian-chart [labels]="view.window.labels" [series]="stageSeries" kind="bar" [stacked]="true" [height]="230" yTitle="WIP Value (AED)" ariaLabel="WIP by production stage" />
+    </ra-c-widget>
+
+    <ra-c-widget class="span-2" title="Work Order Status" info="Work orders raised in the period by current status" (exportCsv)="exportStatus()">
+      @if (view.hasScope) {
+        <ra-donut-chart [slices]="statusSlices" [centerValue]="totalOrdersText" centerLabel="Total Work Orders" legend="bottom" [size]="160" ariaLabel="Work order status" />
+      } @else {
+        <p class="empty">No work orders for the current filters.</p>
+      }
+    </ra-c-widget>
+
+    <ra-c-widget class="span-2" title="Equipment Utilization by Line" info="Equipment utilization per production line against the 85% target" (exportCsv)="exportLines()">
+      @if (lineLabels.length) {
+        <ra-cartesian-chart [labels]="lineLabels" [series]="lineSeries" kind="bar" [stacked]="true" [max]="100" [format]="pct" [showValues]="true"
+          [height]="230" yTitle="Utilization (%)" ariaLabel="Equipment utilization by line" />
+      } @else {
+        <p class="empty">No production lines for the current filters.</p>
+      }
+    </ra-c-widget>
+
+    <ra-c-widget class="span-2" title="Downtime by Cause" info="Production downtime hours in the period by cause" (exportCsv)="exportDowntime()">
+      <ra-cartesian-chart [labels]="downtimeLabels" [series]="downtimeSeries" kind="bar" [showValues]="true" [format]="hours" [legend]="false"
+        [height]="230" yTitle="Downtime (Hours)" ariaLabel="Downtime by cause" />
+    </ra-c-widget>
+
+    <ra-c-widget class="span-2" title="Production Efficiency Trend" info="OEE and its components: availability × performance × quality" (exportCsv)="exportEfficiency()">
+      @if (view.hasScope) {
+        <ra-cartesian-chart [labels]="view.window.labels" [series]="efficiencySeries" kind="line" [min]="60" [max]="100" [format]="pct"
+          [height]="230" yTitle="Percentage (%)" ariaLabel="Production efficiency trend" />
+      } @else {
+        <p class="empty">No production lines for the current filters.</p>
+      }
+    </ra-c-widget>
+
+    <ra-c-widget class="span-3" title="Active Production Orders" info="Open job orders, most urgent first" (exportCsv)="exportOrders()">
+      <app-ra-wip-order-table [rows]="view.orders" (action)="orderAction($event)" (viewAll)="viewAllOrders()" />
+    </ra-c-widget>
+
+    <ra-c-widget class="span-3" title="Bottleneck Work Centers" info="Work centers ranked by capacity used, with queue and average wait" (exportCsv)="exportWorkCenters()">
+      <app-ra-wip-work-center-table [rows]="view.workCenters" (view)="viewWorkCenter($event)" />
+    </ra-c-widget>
+  </div>
+
+  <ra-c-insights title="Production Insights" [insights]="insights" (action)="onInsight($event)" />
+</div>
+
+@if (listDialog) {
+  <ra-c-list-dialog [data]="listDialog" (closed)="listDialog = null" />
+}
+@if (detailsDialog) {
+  <ra-c-details-dialog [data]="detailsDialog" (closed)="detailsDialog = null" />
+}
+@if (formDialog) {
+  <ra-c-form-dialog [data]="formDialog" (closed)="closeForm()" (submitted)="formSubmitted($event)" />
+}
+@if (toast) {
+  <div class="toast" role="status">{{ toast }}</div>
+}

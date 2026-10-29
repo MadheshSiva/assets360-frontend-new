@@ -1,0 +1,53 @@
+/* Predictive Analytics extras */
+.pa-main {
+  min-width: 0;
+}
+
+.pa-accuracy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+}
+
+.pa-metrics {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pa-metrics li {
+  display: grid;
+  grid-template-columns: 10px auto;
+  column-gap: 8px;
+  align-items: center;
+}
+
+.pa-metrics i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.pa-metrics span {
+  color: var(--ra-muted);
+  font-size: 12px;
+}
+
+.pa-metrics strong {
+  grid-column: 2;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.pa-window {
+  white-space: nowrap;
+}
+
+.pa-window--soon {
+  color: #dc2626;
+  font-weight: 700;
+}

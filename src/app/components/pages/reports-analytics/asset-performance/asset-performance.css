@@ -1,0 +1,20 @@
+/* Asset Performance extras */
+.ap-foot {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
+.ap-mini-icon {
+  color: var(--ra-purple);
+}
+
+.ap-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 700;
+  color: #059669;
+}

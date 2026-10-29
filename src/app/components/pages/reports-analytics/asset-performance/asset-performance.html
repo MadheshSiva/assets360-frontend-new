@@ -1,0 +1,296 @@
+<nav class="crumbs" aria-label="Breadcrumb">
+  <lucide-icon [img]="icons.House" [size]="15" />
+  <a routerLink="/dashboard">Asset360</a>
+  <span>/</span>
+  <a [routerLink]="basePath">Reports &amp; Analytics</a>
+  <span>/</span>
+  <strong>Asset Performance</strong>
+</nav>
+
+<header class="ra-head">
+  <div class="ra-head__text">
+    <h1>Asset Performance</h1>
+    <p>Analyze asset health, utilization, reliability, downtime and lifecycle performance.</p>
+  </div>
+  <div class="ra-head__actions">
+    <span class="updated">
+      <button type="button" (click)="refresh()" [disabled]="refreshing" aria-label="Refresh data">
+        <lucide-icon [img]="icons.RefreshCw" [size]="16" />
+      </button>
+      {{ refreshing ? 'Refreshing…' : updatedText }}
+    </span>
+    <button type="button" class="btn" [class.ra-compare-on]="compare" [attr.aria-pressed]="compare" (click)="toggleCompare()">
+      <lucide-icon [img]="icons.GitCompareArrows" [size]="16" /> Compare Periods
+    </button>
+    <button type="button" class="btn" (click)="exportPage()"><lucide-icon [img]="icons.Download" [size]="16" /> Export</button>
+    <button type="button" class="btn btn--primary" (click)="savingView = true"><lucide-icon [img]="icons.Bookmark" [size]="16" /> Save View</button>
+  </div>
+</header>
+
+<div class="filters">
+  <label class="filter">
+    <span>View</span>
+    <select [(ngModel)]="currentView" (ngModelChange)="applyView($event)">
+      @for (v of views; track v.name) { <option [value]="v.name">{{ v.name }}</option> }
+    </select>
+  </label>
+  <label class="filter filter--period">
+    <span>Period</span>
+    <select [(ngModel)]="period" (ngModelChange)="recompute()">
+      @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Organization</span>
+    <select [(ngModel)]="organization" (ngModelChange)="recompute()">
+      @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Location</span>
+    <select [(ngModel)]="location" (ngModelChange)="recompute()">
+      @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Category</span>
+    <select [(ngModel)]="category" (ngModelChange)="recompute()">
+      @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Asset Type</span>
+    <select [(ngModel)]="assetType" (ngModelChange)="recompute()">
+      @for (t of assetTypes; track t) { <option [value]="t">{{ t }}</option> }
+    </select>
+  </label>
+</div>
+
+@if (!view.total) {
+  <div class="ra-notice">
+    No assets match the selected filters.
+    <button type="button" class="btn btn--link" (click)="resetFilters()">Reset filters</button>
+  </div>
+}
+
+<div class="kpis">
+  @for (k of kpis; track k.id) {
+    <ra-kpi-card [kpi]="k" (action)="kpiAction($event, k)" />
+  }
+</div>
+
+<div class="ra-layout">
+  <div class="widgets">
+    <!-- Asset Health Score Trend -->
+    <section class="widget span-3" id="ap-trend">
+      <header class="widget__head">
+        <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+        <h2>Asset Health Score Trend <span class="widget__info" title="Share of assets in each health state per month (healthy ≥ 60, at risk 40–59, critical < 40)."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <ra-menu label="Asset Health Score Trend actions" (select)="widgetAction($event, 'trend', 'Asset Health Score Trend', trendTpl)" />
+      </header>
+      <div class="widget__body"><ng-container [ngTemplateOutlet]="trendTpl" /></div>
+    </section>
+    <ng-template #trendTpl>
+      <ra-cartesian-chart [labels]="view.labels" [series]="view.healthTrend" [max]="100" [format]="percentFormat" ariaLabel="Asset health score trend" />
+    </ng-template>
+
+    <!-- Utilization by Asset Category -->
+    <section class="widget span-3" id="ap-category">
+      <header class="widget__head">
+        <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+        <h2>Utilization by Asset Category <span class="widget__info" title="Average share of available hours each category is in use, idle or down for maintenance."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <ra-menu label="Utilization by Asset Category actions" (select)="widgetAction($event, 'category', 'Utilization by Asset Category', categoryTpl)" />
+      </header>
+      <div class="widget__body"><ng-container [ngTemplateOutlet]="categoryTpl" /></div>
+    </section>
+    <ng-template #categoryTpl>
+      <ra-cartesian-chart kind="bar" [stacked]="true" [labels]="view.categoryLabels" [series]="view.categoryUtilization" [max]="100" [format]="percentFormat" ariaLabel="Utilization by asset category" />
+    </ng-template>
+
+    <!-- Performance Score Distribution -->
+    <section class="widget span-2" id="ap-distribution">
+      <header class="widget__head">
+        <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+        <h2>Performance Score Distribution <span class="widget__info" title="Assets per health score band; the bands add up to Total Assets."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <ra-menu label="Performance Score Distribution actions" (select)="widgetAction($event, 'distribution', 'Performance Score Distribution', distributionTpl)" />
+      </header>
+      <div class="widget__body"><ng-container [ngTemplateOutlet]="distributionTpl" /></div>
+    </section>
+    <ng-template #distributionTpl>
+      <ra-hbar-chart [rows]="view.distribution" [labelWidth]="118" />
+      <p class="muted ap-foot">{{ view.total.toLocaleString('en-US') }} assets · average health {{ view.health }}</p>
+    </ng-template>
+
+    <!-- Reliability & Availability -->
+    <section class="widget span-2" id="ap-reliability">
+      <header class="widget__head">
+        <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+        <h2>Reliability &amp; Availability <span class="widget__info" title="Mean time between failures (assets) and mean time to repair (corrective and emergency work orders)."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <ra-menu label="Reliability & Availability actions" (select)="widgetAction($event, 'reliability', 'Reliability & Availability', reliabilityTpl)" />
+      </header>
+      <div class="widget__body"><ng-container [ngTemplateOutlet]="reliabilityTpl" /></div>
+    </section>
+    <ng-template #reliabilityTpl>
+      <div class="mini-stats">
+        <div class="mini-stat">
+          <lucide-icon [img]="icons.Settings" [size]="22" class="ap-mini-icon" />
+          <div>
+            <span>MTBF</span>
+            <strong>{{ view.mtbf.toLocaleString('en-US') }} hrs</strong>
+            <em class="ap-delta"><lucide-icon [img]="icons.ArrowUp" [size]="12" />{{ deltas.mtbf }}%</em>
+          </div>
+        </div>
+        <div class="mini-stat">
+          <lucide-icon [img]="icons.Clock" [size]="22" class="ap-mini-icon" />
+          <div>
+            <span>MTTR</span>
+            <strong>{{ view.mttr }} hrs</strong>
+            <em class="ap-delta"><lucide-icon [img]="icons.ArrowDown" [size]="12" />{{ deltas.mttr }}%</em>
+          </div>
+        </div>
+      </div>
+      <ra-cartesian-chart [labels]="view.labels" [series]="view.reliability" [height]="190" yTitle="Hours" ariaLabel="MTBF and MTTR trend" />
+    </ng-template>
+
+    <!-- Downtime Analysis -->
+    <section class="widget span-2" id="ap-downtime">
+      <header class="widget__head">
+        <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+        <h2>Downtime Analysis <span class="widget__info" title="Downtime hours from work orders: planned (preventive, inspection) vs unplanned (corrective, emergency)."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <ra-menu label="Downtime Analysis actions" (select)="widgetAction($event, 'downtime', 'Downtime Analysis', downtimeTpl)" />
+      </header>
+      <div class="widget__body"><ng-container [ngTemplateOutlet]="downtimeTpl" /></div>
+    </section>
+    <ng-template #downtimeTpl>
+      <ra-cartesian-chart kind="bar" [stacked]="true" [labels]="view.labels" [series]="view.downtime" [height]="250" yTitle="Hours" ariaLabel="Downtime analysis" />
+      <p class="muted ap-foot">{{ view.downtimeHours.toLocaleString('en-US') }} downtime hours in the period</p>
+    </ng-template>
+
+    <!-- Top and Bottom Performing Assets -->
+    <section class="widget span-3" id="ap-assets">
+      <header class="widget__head">
+        <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+        <h2>Top and Bottom Performing Assets <span class="widget__info" title="The three healthiest and two weakest assets for the current filters."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <ra-menu label="Top and Bottom Performing Assets actions" (select)="widgetAction($event, 'assets', 'Top and Bottom Performing Assets', assetsTpl)" />
+      </header>
+      <div class="widget__body"><ng-container [ngTemplateOutlet]="assetsTpl" /></div>
+    </section>
+    <ng-template #assetsTpl>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th><button type="button" class="sort" (click)="sortAssets('id')">Asset ID <lucide-icon [img]="assetSortIcon('id')" [size]="12" /></button></th>
+              <th><button type="button" class="sort" (click)="sortAssets('name')">Asset Name <lucide-icon [img]="assetSortIcon('name')" [size]="12" /></button></th>
+              <th><button type="button" class="sort" (click)="sortAssets('location')">Location <lucide-icon [img]="assetSortIcon('location')" [size]="12" /></button></th>
+              <th><button type="button" class="sort" (click)="sortAssets('health')">Health Score <lucide-icon [img]="assetSortIcon('health')" [size]="12" /></button></th>
+              <th class="num"><button type="button" class="sort" (click)="sortAssets('utilization')">Utilization <lucide-icon [img]="assetSortIcon('utilization')" [size]="12" /></button></th>
+              <th class="num"><button type="button" class="sort" (click)="sortAssets('availability')">Availability <lucide-icon [img]="assetSortIcon('availability')" [size]="12" /></button></th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of assetRows; track r.id; let i = $index) {
+              <tr>
+                <td>{{ i + 1 }}</td>
+                <td>{{ r.id }}</td>
+                <td><button type="button" class="link" (click)="showAsset(r.asset)">{{ r.name }}</button></td>
+                <td>{{ r.location }}</td>
+                <td><span class="score" [attr.data-tone]="scoreTone(r.health)">{{ r.health }}</span></td>
+                <td class="num">{{ r.utilization }}%</td>
+                <td class="num">{{ r.availability }}%</td>
+                <td>
+                  <span class="ra-status" [attr.data-tone]="r.status === 'Top Performer' ? 'green' : 'red'"><i></i>{{ r.status }}</span>
+                </td>
+                <td>
+                  <span class="ra-row-actions">
+                    <button type="button" class="btn btn--sm" (click)="showAsset(r.asset)">View details</button>
+                    <ra-menu [items]="rowMenu" [label]="r.name + ' actions'" (select)="rowAction($event, r)" />
+                  </span>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="9" class="empty">No assets for the current filters.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </ng-template>
+
+    <!-- Asset Performance by Location -->
+    <section class="widget span-3" id="ap-locations">
+      <header class="widget__head">
+        <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+        <h2>Asset Performance by Location <span class="widget__info" title="Average health, utilization (target {{ utilizationTarget }}%) and availability per site."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <ra-menu label="Asset Performance by Location actions" (select)="widgetAction($event, 'locations', 'Asset Performance by Location', locationsTpl)" />
+      </header>
+      <div class="widget__body"><ng-container [ngTemplateOutlet]="locationsTpl" /></div>
+    </section>
+    <ng-template #locationsTpl>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th><button type="button" class="sort" (click)="sortLocations('name')">Location <lucide-icon [img]="locationSortIcon('name')" [size]="12" /></button></th>
+              <th class="num"><button type="button" class="sort" (click)="sortLocations('health')">Avg Health Score <lucide-icon [img]="locationSortIcon('health')" [size]="12" /></button></th>
+              <th><button type="button" class="sort" (click)="sortLocations('utilization')">Utilization <lucide-icon [img]="locationSortIcon('utilization')" [size]="12" /></button></th>
+              <th class="num"><button type="button" class="sort" (click)="sortLocations('availability')">Availability <lucide-icon [img]="locationSortIcon('availability')" [size]="12" /></button></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (l of locationRows; track l.name; let i = $index) {
+              <tr>
+                <td>{{ i + 1 }}</td>
+                <td><button type="button" class="link" (click)="showLocation(l)">{{ l.name }}</button></td>
+                <td class="num"><strong [style.color]="scoreColor(l.health)">{{ l.health }}</strong></td>
+                <td>
+                  <span class="ra-meter-cell">
+                    <span class="meter"><i [style.width.%]="l.utilization" [style.background]="meterColor(l.utilization)"></i></span>
+                    <span>{{ l.utilization }}%</span>
+                  </span>
+                </td>
+                <td class="num">{{ l.availability }}%</td>
+              </tr>
+            } @empty {
+              <tr><td colspan="5" class="empty">No locations for the current filters.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </ng-template>
+  </div>
+
+  <aside class="insights" aria-label="Performance insights">
+    <header class="widget__head ra-insights-head">
+      <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+      <h2>Performance Insights <span class="widget__info" title="Generated from the current filters."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+    </header>
+    @for (i of insights; track i.id) {
+      <ra-insight-card [insight]="i" (action)="insightAction($event)" />
+    }
+  </aside>
+</div>
+
+@if (expanded) {
+  <ra-expand-dialog [title]="expanded.title" (close)="expanded = null">
+    <div class="ra-expanded"><ng-container [ngTemplateOutlet]="expanded.tpl" /></div>
+  </ra-expand-dialog>
+}
+@if (records) {
+  <ra-records-dialog [data]="records" (close)="records = null" />
+}
+@if (detail) {
+  <ra-detail-dialog [data]="detail" (close)="detail = null" (primary)="detailPrimary()" />
+}
+@if (action) {
+  <ra-action-dialog [request]="action" (close)="action = null" (submitted)="submitAction($event)" />
+}
+@if (savingView) {
+  <ra-save-view-dialog [taken]="viewNames" (close)="savingView = false" (save)="confirmSaveView($event)" />
+}
+@if (toast) {
+  <div class="toast" role="status">{{ toast }}</div>
+}

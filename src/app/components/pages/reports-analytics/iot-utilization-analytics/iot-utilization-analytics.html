@@ -1,0 +1,511 @@
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a [routerLink]="basePath">Reports &amp; Analytics</a>
+  <span>/</span>
+  <strong>IoT / Utilization Analytics</strong>
+</nav>
+
+<header class="ra-head">
+  <div class="ra-head__text">
+    <h1>IoT / Utilization Analytics</h1>
+    <p>Monitor connected assets, telemetry, utilization, uptime, sensor health and real-time operational events</p>
+  </div>
+  <div class="ra-head__actions">
+    <span class="live"><i></i> Live data</span>
+    <span class="updated">
+      <button type="button" (click)="refresh()" [disabled]="refreshing" title="Refresh now" aria-label="Refresh now">
+        <lucide-icon [img]="icons.RefreshCw" [size]="16" [class.iot-spin]="refreshing" />
+      </button>
+      {{ updatedText }}
+    </span>
+    <label class="switch iot-auto">
+      <input type="checkbox" [ngModel]="autoRefresh" (ngModelChange)="setAutoRefresh($event)" />
+      <i></i> Auto refresh
+    </label>
+    <button type="button" class="btn btn--outline" [class.iot-on]="compare" (click)="toggleCompare()" [attr.aria-pressed]="compare">
+      <lucide-icon [img]="icons.GitCompareArrows" [size]="16" /> Compare Periods
+    </button>
+    <button type="button" class="btn btn--outline" (click)="exportAll()">
+      <lucide-icon [img]="icons.Download" [size]="16" /> Export
+    </button>
+    <button type="button" class="btn btn--primary" (click)="openSaveView()">
+      <lucide-icon [img]="icons.Bookmark" [size]="16" /> Save View
+    </button>
+  </div>
+</header>
+
+<section class="filters" aria-label="Filters">
+  <label class="filter filter--period"><span>Period</span>
+    <select [(ngModel)]="period" (ngModelChange)="onFilterChange()">
+      @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
+    </select>
+  </label>
+  <label class="filter"><span>Organization</span>
+    <select [(ngModel)]="organization" (ngModelChange)="onFilterChange()">
+      @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
+    </select>
+  </label>
+  <label class="filter"><span>Location</span>
+    <select [(ngModel)]="location" (ngModelChange)="onFilterChange()">
+      @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
+    </select>
+  </label>
+  <label class="filter"><span>Asset Category</span>
+    <select [(ngModel)]="category" (ngModelChange)="onFilterChange()">
+      @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
+    </select>
+  </label>
+  <label class="filter"><span>Device Type</span>
+    <select [(ngModel)]="deviceType" (ngModelChange)="onFilterChange()">
+      @for (d of deviceTypes; track d) { <option [value]="d">{{ d }}</option> }
+    </select>
+  </label>
+  <label class="filter"><span>Connectivity Status</span>
+    <select [(ngModel)]="connectivity" (ngModelChange)="onFilterChange()">
+      @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
+    </select>
+  </label>
+</section>
+
+<section class="kpis" aria-label="Key figures">
+  @for (k of kpis; track k.key) {
+    <article class="kpi">
+      <span class="kpi__icon" [attr.data-tone]="k.tone"><lucide-icon [img]="k.icon" [size]="24" /></span>
+      <div class="kpi__body">
+        <span class="kpi__label">{{ k.label }}</span>
+        <strong class="kpi__value">{{ k.value }}</strong>
+        <span class="kpi__delta" [class.kpi__delta--bad]="!k.good">
+          <lucide-icon [img]="k.delta >= 0 ? icons.ArrowUp : icons.ArrowDown" [size]="13" />
+          {{ k.delta > 0 ? '+' : '' }}{{ k.delta }}%
+          <small>{{ compare ? 'prev. ' + k.prev : 'vs. previous period' }}</small>
+        </span>
+      </div>
+      <div class="kpi__menu row-menu">
+        <button type="button" class="icon-btn" (click)="toggleMenu('kpi-' + k.key, $event)" [attr.aria-label]="k.label + ' options'">
+          <lucide-icon [img]="icons.Ellipsis" [size]="18" />
+        </button>
+        @if (menu === 'kpi-' + k.key) {
+          <div class="menu" role="menu">
+            <button type="button" (click)="openBreakdown(k)">View by location</button>
+            <button type="button" (click)="exportKpi(k)">Export CSV</button>
+          </div>
+        }
+      </div>
+    </article>
+  }
+</section>
+
+@if (!assets.length) {
+  <div class="widget empty">
+    No connected assets match these filters.
+    <button type="button" class="btn btn--link" (click)="resetFilters()">Reset filters</button>
+  </div>
+} @else {
+  <div class="ra-layout">
+    <div class="widgets">
+      <section class="widget span-2">
+        <ng-container *ngTemplateOutlet="headTpl; context: { $implicit: 'trend', info: 'Share of scheduled hours spent in production, idle, maintenance and offline.' }"></ng-container>
+        <div class="widget__body"><ng-container *ngTemplateOutlet="trendTpl; context: { $implicit: 220 }"></ng-container></div>
+      </section>
+      <section class="widget span-2">
+        <ng-container *ngTemplateOutlet="headTpl; context: { $implicit: 'telemetry', info: 'Average sensor readings normalised to 0–100% of each channel’s operating range.' }"></ng-container>
+        <div class="widget__body"><ng-container *ngTemplateOutlet="telemetryTpl; context: { $implicit: 220 }"></ng-container></div>
+      </section>
+      <section class="widget span-2">
+        <ng-container *ngTemplateOutlet="headTpl; context: { $implicit: 'connectivity', info: 'Current connectivity of every IoT-enabled asset.' }"></ng-container>
+        <div class="widget__body"><ng-container *ngTemplateOutlet="connectivityTpl; context: { $implicit: 160 }"></ng-container></div>
+      </section>
+
+      <section class="widget span-2">
+        <ng-container *ngTemplateOutlet="headTpl; context: { $implicit: 'category', info: 'Average utilization per category against its target.' }"></ng-container>
+        <div class="widget__body"><ng-container *ngTemplateOutlet="categoryTpl; context: { $implicit: 220 }"></ng-container></div>
+      </section>
+      <section class="widget span-2">
+        <ng-container *ngTemplateOutlet="headTpl; context: { $implicit: 'health', info: 'Sensors returning usable readings (healthy or warning) out of all sensors.' }"></ng-container>
+        <div class="widget__body"><ng-container *ngTemplateOutlet="healthTpl; context: { $implicit: 200 }"></ng-container></div>
+      </section>
+      <section class="widget span-2">
+        <ng-container *ngTemplateOutlet="headTpl; context: { $implicit: 'events', info: 'IoT events raised in each period, by severity.' }"></ng-container>
+        <div class="widget__body"><ng-container *ngTemplateOutlet="eventsTpl; context: { $implicit: 220 }"></ng-container></div>
+      </section>
+
+      <section class="widget span-2">
+        <ng-container *ngTemplateOutlet="headTpl; context: { $implicit: 'map', info: 'Pins show connectivity clusters per site. Never-connected devices have no position.' }"></ng-container>
+        <div class="widget__body"><ng-container *ngTemplateOutlet="mapTpl; context: { $implicit: 230 }"></ng-container></div>
+      </section>
+      <section class="widget span-4">
+        <ng-container *ngTemplateOutlet="headTpl; context: { $implicit: 'variance', info: 'Assets furthest below their category utilization target.' }"></ng-container>
+        <div class="widget__body"><ng-container *ngTemplateOutlet="varianceTpl"></ng-container></div>
+      </section>
+
+      <section class="widget span-6">
+        <ng-container *ngTemplateOutlet="headTpl; context: { $implicit: 'devices', info: 'Connectivity and sensor performance per device type.' }"></ng-container>
+        <div class="widget__body"><ng-container *ngTemplateOutlet="devicesTpl"></ng-container></div>
+      </section>
+    </div>
+
+    <aside class="insights" aria-label="IoT insights">
+      <div class="widget__head">
+        <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+        <h2>IoT Insights <span class="widget__info" title="Generated from the alerts and telemetry in the current filters."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+      </div>
+      @for (i of insights; track i.key) {
+        <article class="insight" [attr.data-tone]="i.tone">
+          <div class="insight__head">
+            <lucide-icon class="insight__icon" [img]="icons.TriangleAlert" [size]="22" />
+            <div>
+              <h3>{{ i.title }}</h3>
+              <p>{{ i.text }}</p>
+            </div>
+          </div>
+          <div class="insight__actions">
+            <button type="button" class="btn btn--sm" (click)="openInsight(i)">{{ i.view }}</button>
+            <button type="button" class="btn btn--sm btn--primary" (click)="planFor(i)">Create action plan</button>
+          </div>
+        </article>
+      } @empty {
+        <p class="empty">No open IoT issues for these filters.</p>
+      }
+    </aside>
+  </div>
+}
+
+<!-- ===== Widget head and bodies (also rendered large in the Expand dialog) ===== -->
+
+<ng-template #headTpl let-key let-info="info">
+  <div class="widget__head">
+    <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+    <h2>{{ titleOf(key) }} <span class="widget__info" [title]="info"><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+    <div class="row-menu">
+      <button type="button" class="icon-btn" (click)="toggleMenu('w-' + key, $event)" [attr.aria-label]="titleOf(key) + ' options'">
+        <lucide-icon [img]="icons.Ellipsis" [size]="18" />
+      </button>
+      @if (menu === 'w-' + key) {
+        <div class="menu" role="menu">
+          <button type="button" (click)="expand(key)">Expand</button>
+          <button type="button" (click)="exportWidget(key)">Export CSV</button>
+        </div>
+      }
+    </div>
+  </div>
+</ng-template>
+
+<ng-template #trendTpl let-h>
+  <ra-cartesian-chart [labels]="trendLabels" [series]="trendSeries" kind="line" [height]="h" [min]="0" [max]="100" yTitle="Utilization (%)" [format]="percent" ariaLabel="Utilization trend" />
+</ng-template>
+
+<ng-template #telemetryTpl let-h>
+  <ra-cartesian-chart [labels]="trendLabels" [series]="telemetrySeries" kind="line" [height]="h" [min]="0" [max]="100" yTitle="Normalized Value (%)" ariaLabel="Telemetry overview" />
+</ng-template>
+
+<ng-template #connectivityTpl let-size>
+  <ra-donut-chart [slices]="connectivitySlices" [centerValue]="num(assets.length)" centerLabel="Total Assets" [size]="size" [thickness]="32" ariaLabel="Connectivity status" />
+</ng-template>
+
+<ng-template #categoryTpl let-h>
+  <ra-cartesian-chart [labels]="categoryLabels" [series]="categorySeries" kind="bar" [height]="h" [min]="0" [max]="100" [showValues]="true" yTitle="Utilization (%)" [format]="percent" ariaLabel="Utilization by asset category" />
+</ng-template>
+
+<ng-template #healthTpl let-size>
+  <div class="iot-health">
+    <ra-gauge-chart [value]="sensorHealth" [target]="95" caption="Sensor Health" [color]="sensorHealth >= 95 ? colors.green : colors.orange" [size]="size" />
+    <ul class="iot-health__legend">
+      <li><i [style.background]="colors.green"></i><span>Healthy</span><b>{{ num(healthCounts.Healthy) }}</b></li>
+      <li><i [style.background]="colors.orange"></i><span>Warning</span><b>{{ num(healthCounts.Warning) }}</b></li>
+      <li><i [style.background]="colors.red"></i><span>Failed</span><b>{{ num(healthCounts.Failed) }}</b></li>
+    </ul>
+  </div>
+</ng-template>
+
+<ng-template #eventsTpl let-h>
+  <ra-cartesian-chart [labels]="trendLabels" [series]="eventSeries" kind="bar" [stacked]="true" [height]="h" yTitle="Number of Events" ariaLabel="IoT events and alerts" />
+</ng-template>
+
+<ng-template #mapTpl let-h>
+  <app-ra-site-map [points]="mapPoints" [height]="h" />
+  <div class="iot-map-legend">
+    <span><i [style.background]="colors.green"></i>Online <b>{{ num(mapLegend.online) }}</b></span>
+    <span><i [style.background]="colors.orange"></i>Intermittent <b>{{ num(mapLegend.intermittent) }}</b></span>
+    <span><i [style.background]="colors.red"></i>Offline <b>{{ num(mapLegend.offline) }}</b></span>
+  </div>
+</ng-template>
+
+<ng-template #varianceTpl>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th><button type="button" class="sort" (click)="sortVariance('id')">Asset ID <lucide-icon [img]="sortIcon(varianceSort === 'id', varianceAsc)" [size]="12" /></button></th>
+          <th><button type="button" class="sort" (click)="sortVariance('name')">Asset Name <lucide-icon [img]="sortIcon(varianceSort === 'name', varianceAsc)" [size]="12" /></button></th>
+          <th><button type="button" class="sort" (click)="sortVariance('site')">Location <lucide-icon [img]="sortIcon(varianceSort === 'site', varianceAsc)" [size]="12" /></button></th>
+          <th class="num"><button type="button" class="sort" (click)="sortVariance('utilization')">Utilization <lucide-icon [img]="sortIcon(varianceSort === 'utilization', varianceAsc)" [size]="12" /></button></th>
+          <th class="num"><button type="button" class="sort" (click)="sortVariance('target')">Target <lucide-icon [img]="sortIcon(varianceSort === 'target', varianceAsc)" [size]="12" /></button></th>
+          <th class="num"><button type="button" class="sort" (click)="sortVariance('variance')">Variance <lucide-icon [img]="sortIcon(varianceSort === 'variance', varianceAsc)" [size]="12" /></button></th>
+          <th><button type="button" class="sort" (click)="sortVariance('lastSeen')">Last Telemetry <lucide-icon [img]="sortIcon(varianceSort === 'lastSeen', varianceAsc)" [size]="12" /></button></th>
+          <th><button type="button" class="sort" (click)="sortVariance('status')">Status <lucide-icon [img]="sortIcon(varianceSort === 'status', varianceAsc)" [size]="12" /></button></th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (r of varianceRows; track r.asset.id; let i = $index) {
+          <tr>
+            <td>{{ i + 1 }}</td>
+            <td><button type="button" class="link" (click)="openDetailFor(r.asset)">{{ r.asset.id }}</button></td>
+            <td>{{ r.asset.name }}</td>
+            <td>{{ r.asset.site }}</td>
+            <td class="num"><span class="iot-util" [attr.data-tone]="r.variance <= -20 ? 'red' : 'orange'">{{ percent(r.utilization) }}</span></td>
+            <td class="num">{{ r.asset.target }}%</td>
+            <td class="num"><span class="score" [attr.data-tone]="r.variance <= -20 ? 'red' : 'orange'">{{ r.variance }} pts</span></td>
+            <td class="iot-nowrap">{{ telemetryTime(r.asset.lastSeenMin) }}</td>
+            <td><span class="pill" [attr.data-tone]="statusTone(r.asset.status)"><i></i>{{ r.asset.status }}</span></td>
+            <td><button type="button" class="btn btn--sm btn--outline" (click)="openDetailFor(r.asset)">View</button></td>
+          </tr>
+        } @empty {
+          <tr><td colspan="10" class="empty">Every asset in scope is at or above its utilization target.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</ng-template>
+
+<ng-template #devicesTpl>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th><button type="button" class="sort" (click)="sortDevices('type')">Device Type <lucide-icon [img]="sortIcon(deviceSort === 'type', deviceAsc)" [size]="12" /></button></th>
+          <th class="num"><button type="button" class="sort" (click)="sortDevices('connected')">Connected <lucide-icon [img]="sortIcon(deviceSort === 'connected', deviceAsc)" [size]="12" /></button></th>
+          <th class="num"><button type="button" class="sort" (click)="sortDevices('availability')">Availability <lucide-icon [img]="sortIcon(deviceSort === 'availability', deviceAsc)" [size]="12" /></button></th>
+          <th class="num"><button type="button" class="sort" (click)="sortDevices('signal')">Avg. Signal <lucide-icon [img]="sortIcon(deviceSort === 'signal', deviceAsc)" [size]="12" /></button></th>
+          <th class="num"><button type="button" class="sort" (click)="sortDevices('failed')">Failed Sensors <lucide-icon [img]="sortIcon(deviceSort === 'failed', deviceAsc)" [size]="12" /></button></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (d of sortedDevices; track d.type; let i = $index) {
+          <tr>
+            <td>{{ i + 1 }}</td>
+            <td>{{ d.type }}</td>
+            <td class="num">{{ num(d.connected) }}</td>
+            <td class="num">{{ d.availability }}%</td>
+            <td class="num"><span class="iot-signal" [attr.data-tone]="signalTone(d.signal)"><lucide-icon [img]="icons.Signal" [size]="14" /> {{ d.signal }} dBm</span></td>
+            <td class="num"><span [class.iot-bad]="d.failed > 10">{{ d.failed }}</span></td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</ng-template>
+
+<!-- ===== Dialogs ===== -->
+
+@if (expanded) {
+  <div class="overlay" (click)="expanded = null">
+    <div class="dialog dialog--wide" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" [attr.aria-label]="titles[expanded]">
+      <div class="iot-dialog-head">
+        <h2>{{ titles[expanded] }}</h2>
+        <button type="button" class="icon-btn" (click)="expanded = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18" /></button>
+      </div>
+      <p class="muted">{{ period }} · {{ organization }} · {{ location }}</p>
+      @switch (expanded) {
+        @case ('trend') { <ng-container *ngTemplateOutlet="trendTpl; context: { $implicit: 380 }"></ng-container> }
+        @case ('telemetry') { <ng-container *ngTemplateOutlet="telemetryTpl; context: { $implicit: 380 }"></ng-container> }
+        @case ('connectivity') { <ng-container *ngTemplateOutlet="connectivityTpl; context: { $implicit: 240 }"></ng-container> }
+        @case ('category') { <ng-container *ngTemplateOutlet="categoryTpl; context: { $implicit: 380 }"></ng-container> }
+        @case ('health') { <ng-container *ngTemplateOutlet="healthTpl; context: { $implicit: 300 }"></ng-container> }
+        @case ('events') { <ng-container *ngTemplateOutlet="eventsTpl; context: { $implicit: 380 }"></ng-container> }
+        @case ('map') { <ng-container *ngTemplateOutlet="mapTpl; context: { $implicit: 460 }"></ng-container> }
+        @case ('variance') { <ng-container *ngTemplateOutlet="varianceTpl"></ng-container> }
+        @case ('devices') { <ng-container *ngTemplateOutlet="devicesTpl"></ng-container> }
+      }
+      <div class="dialog__actions">
+        <button type="button" class="btn" (click)="exportWidget(expanded)"><lucide-icon [img]="icons.Download" [size]="16" /> Export CSV</button>
+        <button type="button" class="btn btn--primary" (click)="expanded = null">Close</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (breakdown) {
+  <div class="overlay" (click)="breakdown = null">
+    <div class="dialog dialog--wide" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Breakdown by location">
+      <div class="iot-dialog-head">
+        <h2>{{ breakdown.label }} by location</h2>
+        <button type="button" class="icon-btn" (click)="breakdown = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18" /></button>
+      </div>
+      <p class="muted">{{ breakdown.label }}: <b>{{ breakdown.value }}</b> · {{ period }}</p>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Location</th>
+              <th class="num" [class.iot-col-hi]="breakdown.key === 'connected'">Connected Assets</th>
+              <th class="num" [class.iot-col-hi]="breakdown.key === 'utilization'">Avg. Utilization</th>
+              <th class="num" [class.iot-col-hi]="breakdown.key === 'availability'">Telemetry Availability</th>
+              <th class="num" [class.iot-col-hi]="breakdown.key === 'alerts'">Active Alerts</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of siteRows; track r.site) {
+              <tr>
+                <td>{{ r.site }}</td>
+                <td class="num" [class.iot-col-hi]="breakdown.key === 'connected'">{{ num(r.connected) }}</td>
+                <td class="num" [class.iot-col-hi]="breakdown.key === 'utilization'">{{ r.utilization }}%</td>
+                <td class="num" [class.iot-col-hi]="breakdown.key === 'availability'">{{ r.availability }}%</td>
+                <td class="num" [class.iot-col-hi]="breakdown.key === 'alerts'">{{ r.alerts }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="dialog__actions">
+        <button type="button" class="btn" (click)="exportKpi(breakdown)"><lucide-icon [img]="icons.Download" [size]="16" /> Export CSV</button>
+        <button type="button" class="btn btn--primary" (click)="breakdown = null">Close</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (list) {
+  <div class="overlay" (click)="list = null">
+    <div class="dialog dialog--wide" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" [attr.aria-label]="list.title">
+      <div class="iot-dialog-head">
+        <h2>{{ list.title }}</h2>
+        <button type="button" class="icon-btn" (click)="list = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18" /></button>
+      </div>
+      <p class="muted">{{ list.subtitle }}</p>
+      <div class="table-wrap iot-list">
+        @switch (list.kind) {
+          @case ('alerts') {
+            <table class="table">
+              <thead><tr><th>Alert ID</th><th>Asset</th><th>Location</th><th>Alert</th><th>Reading</th><th>Severity</th><th>Raised</th><th></th></tr></thead>
+              <tbody>
+                @for (a of list.alerts; track a.id) {
+                  <tr>
+                    <td>{{ a.id }}</td>
+                    <td><b>{{ a.asset.name }}</b><br /><span class="muted">{{ a.asset.id }}</span></td>
+                    <td>{{ a.asset.site }}</td>
+                    <td>{{ a.type }}</td>
+                    <td>{{ a.reading }}</td>
+                    <td><span class="pill" [attr.data-tone]="a.severity === 'Critical' ? 'red' : 'orange'"><i></i>{{ a.severity }}</span></td>
+                    <td class="iot-nowrap">{{ agoText(a.raisedMin) }}</td>
+                    <td><button type="button" class="btn btn--sm btn--outline" (click)="openDetailFor(a.asset)">View</button></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+          @case ('assets') {
+            <table class="table">
+              <thead><tr><th>Asset ID</th><th>Asset Name</th><th>Category</th><th>Location</th><th class="num">Utilization</th><th class="num">Target</th><th class="num">Variance</th><th></th></tr></thead>
+              <tbody>
+                @for (r of list.rows; track r.asset.id) {
+                  <tr>
+                    <td>{{ r.asset.id }}</td>
+                    <td>{{ r.asset.name }}</td>
+                    <td>{{ r.asset.category }}</td>
+                    <td>{{ r.asset.site }}</td>
+                    <td class="num">{{ r.utilization }}%</td>
+                    <td class="num">{{ r.asset.target }}%</td>
+                    <td class="num"><span class="score" [attr.data-tone]="r.variance <= -20 ? 'red' : 'orange'">{{ r.variance }} pts</span></td>
+                    <td><button type="button" class="btn btn--sm btn--outline" (click)="openDetailFor(r.asset)">View</button></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+          @case ('devices') {
+            <table class="table">
+              <thead><tr><th>Device ID</th><th>Device Type</th><th>Asset</th><th>Location</th><th>Last Telemetry</th><th>Offline For</th><th></th></tr></thead>
+              <tbody>
+                @for (a of list.assets; track a.id) {
+                  <tr>
+                    <td>{{ a.deviceId }}</td>
+                    <td>{{ a.deviceType }}</td>
+                    <td><b>{{ a.name }}</b><br /><span class="muted">{{ a.id }}</span></td>
+                    <td>{{ a.site }}</td>
+                    <td class="iot-nowrap">{{ telemetryTime(a.lastSeenMin) }}</td>
+                    <td><span class="pill" data-tone="red">{{ agoText(a.lastSeenMin) }}</span></td>
+                    <td><button type="button" class="btn btn--sm btn--outline" (click)="openDetailFor(a)">View</button></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        }
+      </div>
+      <div class="dialog__actions">
+        <button type="button" class="btn btn--primary" (click)="list = null">Close</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (detail) {
+  <div class="overlay" (click)="detail = null">
+    <div class="dialog" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Asset details">
+      <div class="iot-dialog-head">
+        <div>
+          <h2>{{ detail.asset.name }}</h2>
+          <span class="muted">{{ detail.asset.id }}</span>
+        </div>
+        <button type="button" class="icon-btn" (click)="detail = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18" /></button>
+      </div>
+      <dl class="iot-facts">
+        <div><dt>Category</dt><dd>{{ detail.asset.category }}</dd></div>
+        <div><dt>Location</dt><dd>{{ detail.asset.site }}</dd></div>
+        <div><dt>Organization</dt><dd>{{ detail.asset.org }}</dd></div>
+        <div><dt>Device</dt><dd>{{ detail.asset.deviceType }} · {{ detail.asset.deviceId }}</dd></div>
+        <div><dt>Connectivity</dt><dd><span class="pill" [attr.data-tone]="statusTone(detail.asset.status)"><i></i>{{ detail.asset.status }}</span></dd></div>
+        <div><dt>Sensor health</dt><dd>{{ detail.asset.health }}</dd></div>
+        <div><dt>Last telemetry</dt><dd>{{ telemetryTime(detail.asset.lastSeenMin) }} ({{ agoText(detail.asset.lastSeenMin) }})</dd></div>
+        <div><dt>Avg. signal</dt><dd>{{ detail.asset.signal === null ? '—' : detail.asset.signal + ' dBm' }}</dd></div>
+        <div><dt>Telemetry availability</dt><dd>{{ detail.asset.availability === null ? '—' : detail.asset.availability + '%' }}</dd></div>
+        <div><dt>Utilization / target</dt><dd>{{ detail.asset.utilization === null ? '—' : detail.utilization + '%' }} / {{ detail.asset.target }}%</dd></div>
+      </dl>
+      @if (detail.asset.utilization !== null) {
+        <div class="iot-spark">
+          <span class="muted">Utilization, last 12 weeks</span>
+          <ra-sparkline [values]="sparkFor(detail)" [color]="colors.purple" [width]="240" [height]="44" [area]="true" />
+        </div>
+      }
+      @if (alertsFor(detail.asset).length) {
+        <h3 class="iot-sub">Active alerts</h3>
+        <ul class="iot-alerts">
+          @for (a of alertsFor(detail.asset); track a.id) {
+            <li><span class="pill" [attr.data-tone]="a.severity === 'Critical' ? 'red' : 'orange'"><i></i>{{ a.severity }}</span> {{ a.type }} — {{ a.reading }} <span class="muted">({{ agoText(a.raisedMin) }})</span></li>
+          }
+        </ul>
+      }
+      <div class="dialog__actions">
+        <button type="button" class="btn btn--primary" (click)="detail = null">Close</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (actionPlan) {
+  <app-iot-action-plan [title]="actionPlan.title" [context]="actionPlan.context" (saved)="onPlanSaved($event)" (cancel)="actionPlan = null" />
+}
+
+@if (saveViewOpen) {
+  <div class="overlay" (click)="saveViewOpen = false">
+    <form class="dialog" (click)="$event.stopPropagation()" (ngSubmit)="confirmSaveView()" novalidate role="dialog" aria-modal="true" aria-label="Save view">
+      <h2>Save view</h2>
+      <p>Saves the current period and filters so you can open this view again.</p>
+      <div class="field" [class.invalid]="viewTried && !viewName.trim()">
+        <label for="iot-view-name">View name <span class="req">*</span></label>
+        <input id="iot-view-name" name="viewName" [(ngModel)]="viewName" maxlength="80" placeholder="e.g. Dubai HQ telemetry" />
+        @if (viewTried && !viewName.trim()) { <small>Enter a name for the view.</small> }
+      </div>
+      <div class="dialog__actions">
+        <button type="button" class="btn" (click)="saveViewOpen = false">Cancel</button>
+        <button type="submit" class="btn btn--primary">Save View</button>
+      </div>
+    </form>
+  </div>
+}
+
+@if (toast) {
+  <div class="toast" role="status">{{ toast }}</div>
+}

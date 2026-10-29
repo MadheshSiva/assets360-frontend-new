@@ -1,0 +1,95 @@
+/* Extras for the shared analytics parts (page head, KPI card, widget frame, dialogs). */
+:host {
+  height: 100%;
+}
+
+.rac-spin {
+  animation: rac-spin 0.8s linear infinite;
+}
+
+@keyframes rac-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.kpi {
+  height: 100%;
+}
+
+.rac-kpi-prev {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--ra-muted);
+}
+
+/* Widget frame fills its grid cell; when expanded the same frame becomes a wide dialog */
+.rac-widget-wrap,
+.rac-widget {
+  height: 100%;
+}
+
+.overlay .rac-widget {
+  height: auto;
+}
+
+.rac-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rac-dialog-head p {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.rac-scroll {
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.rac-scroll th {
+  position: sticky;
+  top: 0;
+}
+
+.rac-grow {
+  flex: 1;
+  align-self: center;
+}
+
+.rac-details {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 8px 14px;
+  margin: 0;
+}
+
+.rac-details dt {
+  color: var(--ra-muted);
+}
+
+.rac-details dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.rac-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 14px;
+}
+
+.rac-form-grid .rac-wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 560px) {
+  .rac-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

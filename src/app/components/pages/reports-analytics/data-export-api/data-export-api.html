@@ -1,0 +1,163 @@
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a [routerLink]="basePath">Reports &amp; Analytics</a>
+  <span>/</span>
+  <strong>Data Export / API</strong>
+</nav>
+
+<header class="ra-head">
+  <div class="ra-head__text">
+    <h1>Data Export / API</h1>
+    <p>Connect, export and securely share Asset360 data with enterprise systems and analytics tools.</p>
+  </div>
+  <div class="ra-head__actions">
+    <span class="updated">
+      {{ updatedText }}
+      <button type="button" (click)="refresh()" [disabled]="refreshing" aria-label="Refresh data">
+        <lucide-icon [img]="icons.RefreshCw" [size]="14"></lucide-icon>
+      </button>
+    </span>
+    <button type="button" class="btn btn--outline" (click)="showDocs = true">
+      <lucide-icon [img]="icons.BookOpen" [size]="16"></lucide-icon> View Documentation
+    </button>
+    <button type="button" class="btn btn--outline" (click)="showAddConnection = true">
+      <lucide-icon [img]="icons.Share2" [size]="16"></lucide-icon> Add API Connection
+    </button>
+    <button type="button" class="btn btn--primary" (click)="createExport()">
+      <lucide-icon [img]="icons.CirclePlus" [size]="16"></lucide-icon> Create Export
+    </button>
+  </div>
+</header>
+
+<div class="dx-toolbar">
+  <div class="tabs dx-tabs" role="tablist">
+    @for (t of tabs; track t.key) {
+      <button type="button" role="tab" [class.active]="tab === t.key" [attr.aria-selected]="tab === t.key" (click)="setTab(t.key)">{{ t.label }}</button>
+    }
+  </div>
+  <label class="search dx-search">
+    <lucide-icon [img]="icons.Search" [size]="15"></lucide-icon>
+    <input [(ngModel)]="search" [placeholder]="searchPlaceholder" aria-label="Search" />
+  </label>
+  @if (tab === 'exports') {
+    <select class="select" [(ngModel)]="formatFilter" aria-label="Type">
+      <option value="">Type</option>
+      @for (f of formats; track f) {
+        <option [value]="f">{{ f }}</option>
+      }
+    </select>
+    <select class="select" [(ngModel)]="statusFilter" aria-label="Status">
+      <option value="">Status</option>
+      @for (s of statuses; track s) {
+        <option [value]="s">{{ s }}</option>
+      }
+    </select>
+    <select class="select" [(ngModel)]="ownerFilter" aria-label="Owner">
+      <option value="">Owner</option>
+      @for (o of owners; track o) {
+        <option [value]="o">{{ o }}</option>
+      }
+    </select>
+    <select class="select" [(ngModel)]="lastRunFilter" aria-label="Last run">
+      <option value="">Last Run</option>
+      <option value="24h">Last 24 hours</option>
+      <option value="7d">Last 7 days</option>
+      <option value="never">Never run</option>
+    </select>
+    @if (filtersActive) {
+      <button type="button" class="btn btn--link" (click)="clearFilters()">Clear</button>
+    }
+  }
+</div>
+
+@switch (tab) {
+  @case ('exports') {
+    <div class="kpis dx-kpis">
+      @for (k of kpis; track k.label) {
+        <div class="kpi">
+          <span class="kpi__icon" [attr.data-tone]="k.tone"><lucide-icon [img]="k.icon" [size]="22"></lucide-icon></span>
+          <div class="kpi__body">
+            <span class="kpi__label">
+              {{ k.label }}
+              <lucide-icon class="widget__info" [img]="icons.Info" [size]="12" [title]="k.info"></lucide-icon>
+            </span>
+            <span class="dx-kpi-row">
+              <span class="kpi__value">{{ k.value }}</span>
+              <ra-sparkline [values]="k.trend" [color]="k.color" [width]="72" [height]="26" [area]="true"></ra-sparkline>
+            </span>
+            <span class="kpi__delta" [class.kpi__delta--bad]="!k.up">
+              <lucide-icon [img]="k.up ? icons.ArrowUp : icons.ArrowDown" [size]="12"></lucide-icon>
+              {{ k.delta }} <small>vs last week</small>
+            </span>
+          </div>
+        </div>
+      }
+    </div>
+
+    <div class="dx-main">
+      <dx-export-jobs
+        [jobs]="filteredJobs"
+        [highlightId]="highlightId"
+        (run)="runJob($event)"
+        (download)="downloadJob($event)"
+        (edit)="editJob($event)"
+        (pause)="pauseJob($event)"
+        (resume)="resumeJob($event)"
+        (remove)="askDeleteJob($event)"
+      ></dx-export-jobs>
+      <div class="dx-side">
+        <dx-connections-panel
+          [connections]="service.connections"
+          (test)="testConnection($event)"
+          (open)="openConnection($event)"
+          (remove)="askRemoveConnection($event)"
+          (viewAll)="setTab('connections')"
+        ></dx-connections-panel>
+        <dx-export-builder (draftSaved)="onDraftSaved($event)" (runRequested)="onRunRequested($event)"></dx-export-builder>
+      </div>
+    </div>
+
+    <div class="dx-bottom">
+      <dx-delivery-health [version]="healthVersion"></dx-delivery-health>
+      <dx-integration-status></dx-integration-status>
+      <dx-access-security></dx-access-security>
+      <dx-insights (act)="onInsight($event)" (viewAll)="setTab('logs')"></dx-insights>
+    </div>
+  }
+  @case ('connections') {
+    <dx-connections-tab
+      [search]="search"
+      (add)="showAddConnection = true"
+      (test)="testConnection($event)"
+      (open)="openConnection($event)"
+      (remove)="askRemoveConnection($event)"
+    ></dx-connections-tab>
+  }
+  @case ('datasets') {
+    <dx-datasets-tab [search]="search" (createExport)="onDatasetExport($event)" (downloaded)="onDatasetDownloaded($event)"></dx-datasets-tab>
+  }
+  @case ('logs') {
+    <dx-access-logs-tab [search]="search" [resource]="logResource" (resourceCleared)="logResource = ''"></dx-access-logs-tab>
+  }
+}
+
+@if (showDocs) {
+  <dx-docs-dialog (closed)="showDocs = false"></dx-docs-dialog>
+}
+@if (showAddConnection) {
+  <dx-connection-dialog (saved)="onConnectionSaved($event)" (closed)="showAddConnection = false"></dx-connection-dialog>
+}
+@if (detailsConnection; as con) {
+  <dx-connection-details
+    [connection]="con"
+    [jobs]="detailsJobs"
+    (test)="testConnection($event)"
+    (rotate)="rotateCertificate($event)"
+    (closed)="detailsId = ''"
+  ></dx-connection-details>
+}
+@if (confirm; as c) {
+  <dx-confirm-dialog [title]="c.title" [message]="c.message" confirmLabel="Delete" (confirm)="onConfirm()" (cancel)="confirm = null"></dx-confirm-dialog>
+}
+@if (toast) {
+  <div class="toast" role="status">{{ toast }}</div>
+}

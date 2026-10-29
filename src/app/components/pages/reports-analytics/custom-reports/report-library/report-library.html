@@ -1,0 +1,56 @@
+<div class="cr-library__head">
+  <h2>Custom Report Library</h2>
+  <span class="muted">{{ reports.length }}</span>
+  <div class="row-menu">
+    <button type="button" class="icon-btn" (click)="toggleSort($event)" aria-label="Sort library" [attr.aria-expanded]="sortOpen">
+      <lucide-icon [img]="SlidersHorizontal" [size]="17" />
+    </button>
+    @if (sortOpen) {
+      <div class="menu" role="menu">
+        @for (s of sorts; track s.key) {
+          <button type="button" role="menuitemradio" [attr.aria-checked]="sort === s.key" [class.cr-menu-active]="sort === s.key"
+            (click)="pickSort(s.key)">{{ s.label }}</button>
+        }
+      </div>
+    }
+  </div>
+</div>
+
+<ul class="cr-library">
+  @for (r of reports; track r.id) {
+    <li class="cr-lib-item" [class.cr-lib-item--active]="r.id === selectedId">
+      <button type="button" class="cr-lib-item__main" (click)="open.emit(r)" [attr.aria-label]="'Open ' + r.name + ' in the builder'">
+        <span class="kpi__icon cr-lib-item__icon" [attr.data-tone]="toneOf(r)"><lucide-icon [img]="iconOf(r)" [size]="20" /></span>
+        <span class="cr-lib-item__text">
+          <strong>{{ r.name }}</strong>
+          <small>{{ r.owner }} <i>|</i> {{ r.module }}</small>
+          <small>Updated {{ updatedText(r) }}</small>
+        </span>
+      </button>
+      <div class="cr-lib-item__side">
+        <div class="cr-lib-item__tools">
+          <button type="button" class="icon-btn cr-star" [class.cr-star--on]="r.favourite" (click)="star($event, r)"
+            [attr.aria-pressed]="r.favourite" [attr.aria-label]="(r.favourite ? 'Remove ' : 'Add ') + r.name + (r.favourite ? ' from' : ' to') + ' favourites'">
+            <lucide-icon [img]="Star" [size]="17" />
+          </button>
+          <div class="row-menu">
+            <button type="button" class="icon-btn" (click)="toggleMenu($event, r)" [attr.aria-label]="'Actions for ' + r.name" [attr.aria-expanded]="menuId === r.id">
+              <lucide-icon [img]="Ellipsis" [size]="17" />
+            </button>
+            @if (menuId === r.id) {
+              <div class="menu" role="menu">
+                <button type="button" role="menuitem" (click)="act($event, 'open', r)">Open in builder</button>
+                <button type="button" role="menuitem" (click)="act($event, 'duplicate', r)">Duplicate</button>
+                <button type="button" role="menuitem" (click)="act($event, 'publish', r)">{{ r.status === 'Published' ? 'Unpublish' : 'Publish' }}</button>
+                <button type="button" role="menuitem" class="danger" (click)="act($event, 'remove', r)">Delete</button>
+              </div>
+            }
+          </div>
+        </div>
+        <span class="pill" [attr.data-tone]="statusTone(r)">{{ r.status }}</span>
+      </div>
+    </li>
+  } @empty {
+    <li class="empty">No custom reports match the filters.</li>
+  }
+</ul>

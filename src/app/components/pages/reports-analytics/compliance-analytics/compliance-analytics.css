@@ -1,0 +1,46 @@
+/* Compliance Analytics extras (shared layout lives in ../shared/analytics-page.css) */
+.ca-capa {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.ca-capa__stats {
+  flex-direction: column;
+  flex: 1;
+  min-width: 140px;
+  margin-bottom: 0;
+}
+
+.ca-capa__stats .mini-stat {
+  flex: none;
+}
+
+.ca-good {
+  color: #059669;
+}
+
+.ca-bad {
+  color: #dc2626;
+}
+
+.ca-overdue {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.ca-more {
+  margin-top: 10px;
+}
+
+.ca-spin {
+  animation: ca-spin 0.8s linear infinite;
+}
+
+@keyframes ca-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

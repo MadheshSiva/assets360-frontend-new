@@ -23,6 +23,7 @@ import {
 } from 'lucide-angular';
 import { MASTER_DATA_BASE_PATH, MASTER_DATA_MENU } from 'shared-ui';
 import { ADMINISTRATION_BASE_PATH, ADMINISTRATION_MENU } from '../../pages/administration/administration-menu';
+import { REPORTS_ANALYTICS_BASE_PATH, REPORTS_ANALYTICS_MENU } from '../../pages/reports-analytics/reports-analytics-menu';
 
 export interface NavItem {
   label: string;
@@ -129,7 +130,13 @@ export class Sidebar {
     { label: 'Audit & Compliance', path: '/audit-compliance', icon: ShieldCheck },
     { label: 'Contracts & Warranty', path: '/contracts-warranty', icon: FilePen },
     { label: 'Financial', path: '/financial', icon: CircleDollarSign },
-    { label: 'Reports & Analytics', path: '/reports-analytics', icon: ChartColumn },
+    {
+      label: 'Reports & Analytics',
+      path: REPORTS_ANALYTICS_BASE_PATH,
+      icon: ChartColumn,
+      hasPage: true,
+      children: REPORTS_ANALYTICS_MENU.map((m) => ({ label: m.label, path: `${REPORTS_ANALYTICS_BASE_PATH}/${m.slug}` }))
+    },
     // { label: 'Locating', path: '/locating', icon: this.assetUrl('trackingpurple.png') },
     // { label: 'Events', path: '/events', icon: this.assetUrl('Events-purple.png') },
     // { label: 'Report', path: '/report', icon: this.assetUrl('reports-purple.png') },

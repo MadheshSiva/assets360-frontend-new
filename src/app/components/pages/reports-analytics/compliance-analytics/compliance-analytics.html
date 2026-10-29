@@ -1,0 +1,152 @@
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a [routerLink]="basePath">Reports &amp; Analytics</a>
+  <span>/</span>
+  <strong>Compliance Analytics</strong>
+</nav>
+
+<header class="ra-head">
+  <div class="ra-head__text">
+    <h1>Compliance Analytics</h1>
+    <p>Monitor audits, regulatory obligations, permits, certifications, findings and corrective actions.</p>
+  </div>
+  <div class="ra-head__actions">
+    <span class="updated">
+      <button type="button" aria-label="Refresh data" [disabled]="refreshing" (click)="refresh()">
+        <lucide-icon [img]="icons.RefreshCw" [size]="16" [class.ca-spin]="refreshing" />
+      </button>
+      {{ updatedText }}
+    </span>
+    <button type="button" class="btn" [class.btn--outline]="compare" [attr.aria-pressed]="compare" (click)="toggleCompare()">
+      <lucide-icon [img]="icons.GitCompareArrows" [size]="16" /> Compare Periods
+    </button>
+    <button type="button" class="btn" (click)="exportAll()"><lucide-icon [img]="icons.Upload" [size]="16" /> Export</button>
+    <button type="button" class="btn btn--primary" (click)="saveOpen = true"><lucide-icon [img]="icons.Bookmark" [size]="16" /> Save View</button>
+  </div>
+</header>
+
+<div class="filters">
+  <label class="filter filter--period">
+    <span>Period</span>
+    <select [(ngModel)]="period" (ngModelChange)="apply()">
+      @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Organization</span>
+    <select [(ngModel)]="organization" (ngModelChange)="apply()">
+      @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Location</span>
+    <select [(ngModel)]="location" (ngModelChange)="apply()">
+      @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Compliance Area</span>
+    <select [(ngModel)]="area" (ngModelChange)="apply()">
+      @for (a of areas; track a) { <option [value]="a">{{ a }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Regulation</span>
+    <select [(ngModel)]="regulation" (ngModelChange)="apply()">
+      @for (r of regulations; track r) { <option [value]="r">{{ r }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Risk Level</span>
+    <select [(ngModel)]="risk" (ngModelChange)="apply()">
+      @for (r of riskLevels; track r) { <option [value]="r">{{ r }}</option> }
+    </select>
+  </label>
+</div>
+
+<section class="kpis" aria-label="Key figures">
+  @for (k of kpis; track k.key) {
+    <app-ra-kpi-card [icon]="k.icon" [tone]="k.tone" [label]="k.label" [value]="k.value" [delta]="k.delta" [up]="k.up" [good]="k.good"
+      (action)="kpiAction(k, $event)" />
+  }
+</section>
+
+<div class="ra-layout">
+  <div class="widgets">
+    <app-ra-widget class="span-2" title="Compliance Score Trend" info="Monthly compliance score overall and for regulatory, safety and environmental obligations" (exportCsv)="exportScore()">
+      <ra-cartesian-chart [labels]="view.labels" [series]="scoreSeries" kind="line" [height]="230" [min]="70" [max]="100" [format]="percentFormat"
+        yTitle="Compliance Score (%)" ariaLabel="Compliance score trend" />
+    </app-ra-widget>
+
+    <app-ra-widget class="span-2" title="Audit Findings by Severity" info="Audit findings raised per month, stacked by severity" (exportCsv)="exportSeverity()">
+      <ra-cartesian-chart [labels]="view.labels" [series]="severitySeries" kind="bar" [stacked]="true" [height]="230" yTitle="Number of Findings" ariaLabel="Audit findings by severity" />
+    </app-ra-widget>
+
+    <app-ra-widget class="span-2" title="Compliance Status" info="Compliance status of every asset assessed in scope" (exportCsv)="exportStatus()">
+      <ra-donut-chart [slices]="statusSlices" [centerValue]="statusTotal" centerLabel="Assets Assessed" legend="bottom" [size]="170" ariaLabel="Compliance status" />
+    </app-ra-widget>
+
+    <app-ra-widget class="span-2" title="Findings by Compliance Area" info="Open audit findings by compliance area" (exportCsv)="exportAreas()">
+      <ra-cartesian-chart [labels]="areaLabels" [series]="areaSeries" kind="bar" [showValues]="true" [legend]="false" [height]="230" yTitle="Number of Findings" ariaLabel="Findings by compliance area" />
+    </app-ra-widget>
+
+    <app-ra-widget class="span-2" title="CAPA Closure Rate" info="Corrective and preventive actions closed out of all raised in the period" (exportCsv)="exportCapa()">
+      <div class="ca-capa">
+        <ra-gauge-chart [value]="view.capaRate" [display]="capaDisplay" caption="CAPA Closure Rate" [target]="capaTarget" [size]="180" />
+        <div class="mini-stats ca-capa__stats">
+          <div class="mini-stat"><div><span>Total CAPA Actions</span><strong>{{ capaTotal }}</strong></div></div>
+          <div class="mini-stat"><div><span>Closed</span><strong class="ca-good">{{ view.capaClosed }}</strong></div></div>
+          <div class="mini-stat"><div><span>Open</span><strong class="ca-bad">{{ view.capaOpen.length }}</strong></div></div>
+        </div>
+      </div>
+      <ra-cartesian-chart [labels]="view.labels" [series]="capaSeries" kind="line" [height]="120" [min]="70" [max]="100" [format]="percentFormat" [legend]="false" ariaLabel="CAPA closure trend" />
+    </app-ra-widget>
+
+    <app-ra-widget class="span-2" title="Permit & Certification Expiry" info="Permits, certifications and licences by expiry month (next 10 months)" (exportCsv)="exportExpiry()">
+      <ra-cartesian-chart [labels]="expiryLabels" [series]="expirySeries" kind="bar" [stacked]="true" [height]="240" yTitle="Number of Items" ariaLabel="Permit and certification expiry" />
+    </app-ra-widget>
+
+    <app-ra-widget class="span-6" title="Open Compliance Findings" info="Open audit findings, most severe first" (exportCsv)="exportFindings()">
+      <app-ra-compliance-findings-table [rows]="view.findings" (view)="openFinding($event)" (viewAll)="viewAllFindings()" />
+    </app-ra-widget>
+
+    <app-ra-widget class="span-6" title="Regulatory Compliance by Location" info="Score, open findings, expiring items and risk per location" (exportCsv)="exportLocations()">
+      <app-ra-compliance-location-table [rows]="view.locations" (view)="openLocation($event)" />
+    </app-ra-widget>
+  </div>
+
+  <aside class="insights" aria-label="Compliance insights">
+    <div class="widget__head"><h2>Compliance Insights</h2></div>
+    @for (ins of insights; track ins.title) {
+      <article class="insight" [attr.data-tone]="ins.tone">
+        <div class="insight__head">
+          <lucide-icon class="insight__icon" [img]="ins.icon" [size]="24" />
+          <div>
+            <h3>{{ ins.title }}</h3>
+            <p>{{ ins.text }}</p>
+          </div>
+        </div>
+        <div class="insight__actions">
+          <button type="button" class="btn btn--sm btn--outline" (click)="insightAction(ins, ins.primary.action)">{{ ins.primary.label }}</button>
+          <button type="button" class="btn btn--sm btn--primary" (click)="insightAction(ins, ins.secondary.action)">{{ ins.secondary.label }}</button>
+        </div>
+      </article>
+    }
+  </aside>
+</div>
+
+@if (list) {
+  <app-ra-list-dialog [title]="list.title" [subtitle]="list.subtitle" [header]="list.header" [rows]="list.rows" [fileName]="list.fileName" (closed)="list = null" />
+}
+@if (detail) {
+  <app-ra-detail-dialog [title]="detail.title" [subtitle]="detail.subtitle" [fields]="detail.fields"
+    [actionLabel]="detail.finding ? 'Create action plan' : ''" (action)="detailAction()" (closed)="detail = null" />
+}
+@if (plan) {
+  <app-ra-action-plan-dialog [context]="plan.context" [defaultTitle]="plan.title" [defaultOwner]="plan.owner" (saved)="planSaved($event)" (closed)="plan = null" />
+}
+@if (saveOpen) {
+  <app-ra-save-view-dialog defaultName="Compliance Analytics – {{ location }}" (saved)="saveNamedView($event)" (closed)="saveOpen = false" />
+}
+@if (toast) {
+  <div class="toast" role="status">{{ toast }}</div>
+}

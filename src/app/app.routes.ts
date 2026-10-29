@@ -45,6 +45,7 @@ import { Layout } from './components/shared/layout/layout';
 // DEMO MODE: Auth guard import kept for reference
 // import { authGuard } from './components/guard/auth-guard';
 import { Administration } from './components/pages/administration/administration/administration';
+import { ReportsAnalytics } from './components/pages/reports-analytics/reports-analytics/reports-analytics';
 
 import { AssetLifecycle } from './components/pages/assets/asset-lifecycle/asset-lifecycle';
 import { ProcessAutomation } from './components/pages/process-automation/process-automation/process-automation';
@@ -135,7 +136,63 @@ export const routes: Routes = [
       { path: 'audit-compliance', component: ModulePlaceholder, data: { title: 'Audit & Compliance' } },
       { path: 'contracts-warranty', component: ModulePlaceholder, data: { title: 'Contracts & Warranty' } },
       { path: 'financial', component: ModulePlaceholder, data: { title: 'Financial' } },
-      { path: 'reports-analytics', component: ModulePlaceholder, data: { title: 'Reports & Analytics' } },
+      { path: 'reports-analytics', component: ReportsAnalytics },
+      {
+        path: 'reports-analytics/standard-reports',
+        loadComponent: () => import('./components/pages/reports-analytics/standard-reports/standard-reports').then((m) => m.StandardReportsPage)
+      },
+      {
+        path: 'reports-analytics/custom-reports',
+        loadComponent: () => import('./components/pages/reports-analytics/custom-reports/custom-reports').then((m) => m.CustomReportsPage)
+      },
+      {
+        path: 'reports-analytics/interactive-dashboards',
+        loadComponent: () => import('./components/pages/reports-analytics/interactive-dashboards/interactive-dashboards').then((m) => m.InteractiveDashboardsPage)
+      },
+      {
+        path: 'reports-analytics/asset-performance',
+        loadComponent: () => import('./components/pages/reports-analytics/asset-performance/asset-performance').then((m) => m.AssetPerformancePage)
+      },
+      {
+        path: 'reports-analytics/maintenance-analytics',
+        loadComponent: () => import('./components/pages/reports-analytics/maintenance-analytics/maintenance-analytics').then((m) => m.MaintenanceAnalyticsPage)
+      },
+      {
+        path: 'reports-analytics/inspection-analytics',
+        loadComponent: () => import('./components/pages/reports-analytics/inspection-analytics/inspection-analytics').then((m) => m.InspectionAnalyticsPage)
+      },
+      {
+        path: 'reports-analytics/wip-production-analytics',
+        loadComponent: () => import('./components/pages/reports-analytics/wip-production-analytics/wip-production-analytics').then((m) => m.WipProductionAnalyticsPage)
+      },
+      {
+        path: 'reports-analytics/inventory-analytics',
+        loadComponent: () => import('./components/pages/reports-analytics/inventory-analytics/inventory-analytics').then((m) => m.InventoryAnalyticsPage)
+      },
+      {
+        path: 'reports-analytics/financial-analytics',
+        loadComponent: () => import('./components/pages/reports-analytics/financial-analytics/financial-analytics').then((m) => m.FinancialAnalyticsPage)
+      },
+      {
+        path: 'reports-analytics/compliance-analytics',
+        loadComponent: () => import('./components/pages/reports-analytics/compliance-analytics/compliance-analytics').then((m) => m.ComplianceAnalyticsPage)
+      },
+      {
+        path: 'reports-analytics/iot-utilization-analytics',
+        loadComponent: () => import('./components/pages/reports-analytics/iot-utilization-analytics/iot-utilization-analytics').then((m) => m.IotUtilizationAnalyticsPage)
+      },
+      {
+        path: 'reports-analytics/predictive-analytics',
+        loadComponent: () => import('./components/pages/reports-analytics/predictive-analytics/predictive-analytics').then((m) => m.PredictiveAnalyticsPage)
+      },
+      {
+        path: 'reports-analytics/kpi-dashboard',
+        loadComponent: () => import('./components/pages/reports-analytics/kpi-dashboard/kpi-dashboard').then((m) => m.KpiDashboardPage)
+      },
+      {
+        path: 'reports-analytics/data-export-api',
+        loadComponent: () => import('./components/pages/reports-analytics/data-export-api/data-export-api').then((m) => m.DataExportApiPage)
+      },
       { path: 'locating', redirectTo: 'tracking-iot/real-time-location', pathMatch: 'full' },
       { path: 'events', component: Events },
       { path: 'report', component: Reports },

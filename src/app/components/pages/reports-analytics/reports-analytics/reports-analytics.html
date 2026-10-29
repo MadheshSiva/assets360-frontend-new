@@ -1,0 +1,13 @@
+<div class="admin-container">
+  <h2 class="admin-title">Reports &amp; Analytics</h2>
+  <p class="admin-intro">Reports, dashboards and analytics across assets, maintenance, inventory and operations.</p>
+
+  <nav class="admin-grid" aria-label="Reports and analytics modules">
+    @for (m of modules; track m.slug) {
+      <a class="admin-card" [routerLink]="basePath + '/' + m.slug">
+        <strong>{{ m.label }}</strong>
+        <span>{{ m.description }}</span>
+      </a>
+    }
+  </nav>
+</div>

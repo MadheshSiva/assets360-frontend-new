@@ -1,0 +1,127 @@
+@if (data.kpi; as k) {
+  <article class="kpi idb-kpi" [class.idb-edit]="editMode">
+    @if (!bare) {
+      <span class="widget__grip idb-kpi__grip" title="Drag to reorder (Edit Dashboard)"><lucide-icon [img]="icons.GripVertical" [size]="16" /></span>
+    }
+    <span class="kpi__icon" [attr.data-tone]="k.tone"><lucide-icon [img]="kpiIcon" [size]="26" /></span>
+    <div class="kpi__body">
+      <span class="kpi__label">{{ config.title }}</span>
+      <strong class="kpi__value">{{ k.value }}</strong>
+      <span class="kpi__delta" [class.kpi__delta--bad]="!k.good">
+        <lucide-icon [img]="k.delta >= 0 ? icons.ArrowUp : icons.ArrowDown" [size]="13" />
+        {{ k.delta > 0 ? '+' : '' }}{{ k.delta }}%
+        <small>{{ filters.compare ? 'prev. ' + k.prev : 'vs. previous period' }}</small>
+      </span>
+    </div>
+    @if (!bare) {
+      <div class="kpi__menu row-menu">
+        <ng-container *ngTemplateOutlet="menuTpl"></ng-container>
+      </div>
+    }
+  </article>
+} @else {
+  <section class="widget idb-widget" [class.idb-edit]="editMode">
+    @if (!bare) {
+      <div class="widget__head">
+        <span class="widget__grip" title="Drag to reorder (Edit Dashboard)"><lucide-icon [img]="icons.GripVertical" [size]="16" /></span>
+        <h2>{{ config.title }}</h2>
+        <div class="row-menu">
+          <ng-container *ngTemplateOutlet="menuTpl"></ng-container>
+        </div>
+      </div>
+    }
+    <div class="widget__body">
+      @if (data.empty) {
+        <p class="empty">No data for the current filters.</p>
+      } @else if (data.attention; as rows) {
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr><th>#</th><th>Asset ID</th><th>Asset Name</th><th>Location</th><th>Health Score</th><th>Issue</th><th>Action</th><th></th></tr>
+            </thead>
+            <tbody>
+              @for (a of rows; track a.id; let i = $index) {
+                <tr>
+                  <td>{{ i + 1 }}</td>
+                  <td>{{ a.id }}</td>
+                  <td>{{ a.name }}</td>
+                  <td>{{ a.site }}</td>
+                  <td><span class="score" [attr.data-tone]="scoreTone(a.score)">{{ a.score }}</span></td>
+                  <td>{{ a.issue }}</td>
+                  <td><button type="button" class="btn btn--sm btn--outline" (click)="viewAsset.emit(a)">View Details</button></td>
+                  <td>
+                    <div class="row-menu">
+                      <button type="button" class="icon-btn" (click)="toggleRowMenu(a.id, $event)" [attr.aria-label]="'More actions for ' + a.name">
+                        <lucide-icon [img]="icons.Ellipsis" [size]="16" />
+                      </button>
+                      @if (rowMenu === a.id) {
+                        <div class="menu" role="menu">
+                          <button type="button" (click)="rowAction(a, 'work order created')">Create work order</button>
+                          <button type="button" (click)="rowAction(a, 'inspection scheduled')">Schedule inspection</button>
+                        </div>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else if (data.table; as table) {
+        <div class="table-wrap idb-scroll">
+          <table class="table">
+            <thead><tr>@for (c of table.columns; track $index) { <th [class.num]="$index > 0">{{ c }}</th> }</tr></thead>
+            <tbody>
+              @for (r of table.rows; track $index) {
+                <tr>@for (cell of r; track $index) { <td [class.num]="$index > 0">{{ cell }}</td> }</tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else if (data.slices) {
+        <ra-donut-chart [slices]="data.slices" [centerValue]="data.centerValue ?? null" [centerLabel]="data.centerLabel ?? ''" [format]="format"
+          [size]="height < 260 ? 160 : 230" [thickness]="30" [ariaLabel]="config.title" />
+      } @else if (data.hbars) {
+        <ra-hbar-chart [rows]="data.hbars" [labelWidth]="120" />
+      } @else if (data.points) {
+        <app-ra-site-map [points]="data.points" [height]="height - 30" />
+        <div class="idb-legend">
+          @for (l of data.legend; track l.label) {
+            <span><i [style.background]="l.color"></i>{{ l.label }} ({{ l.count }})</span>
+          }
+        </div>
+      } @else if (data.heat; as heat) {
+        <div class="idb-heat" [style.grid-template-columns]="heatColumns" role="table" [attr.aria-label]="config.title">
+          <span></span>
+          @for (c of heat.cols; track $index) { <span class="idb-heat__col">{{ c }}</span> }
+          @for (row of heat.rows; track row; let ri = $index) {
+            <span class="idb-heat__row">{{ row }}</span>
+            @for (v of heat.values[ri]; track $index) {
+              <span class="idb-heat__cell" [style.background]="heatBackground(v)" [style.color]="heatText(v)" [title]="row + ': ' + v + '%'">{{ v }}</span>
+            }
+          }
+        </div>
+      } @else if (data.labels && data.series) {
+        <ra-cartesian-chart [labels]="data.labels" [series]="data.series" [kind]="config.type === 'bar' ? 'bar' : 'line'" [stacked]="data.stacked ?? false"
+          [height]="height" [max]="data.max ?? null" [format]="format" [showValues]="config.type === 'bar' && data.series.length === 1" [ariaLabel]="config.title" />
+      }
+    </div>
+  </section>
+}
+
+<ng-template #menuTpl>
+  <button type="button" class="icon-btn" (click)="toggleMenu($event)" [attr.aria-label]="config.title + ' options'">
+    <lucide-icon [img]="icons.Ellipsis" [size]="18" />
+  </button>
+  @if (menuOpen) {
+    <div class="menu" role="menu">
+      <button type="button" (click)="act('expand')">Expand</button>
+      <button type="button" (click)="act('export')">Export CSV</button>
+      @if (editMode) {
+        <button type="button" (click)="act('wider')">Make wider</button>
+        <button type="button" (click)="act('narrower')">Make narrower</button>
+        <button type="button" class="danger" (click)="act('remove')">Remove widget</button>
+      }
+    </div>
+  }
+</ng-template>

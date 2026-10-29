@@ -1,0 +1,37 @@
+/* Inspection Analytics extras (shared layout lives in ../shared/analytics-page.css) */
+.ia-compliance {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.ia-compliance__delta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ia-compliance__delta strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #059669;
+  font-size: 16px;
+}
+
+.ia-compliance__delta span {
+  font-size: 12px;
+  font-style: italic;
+}
+
+.ia-spin {
+  animation: ia-spin 0.8s linear infinite;
+}
+
+@keyframes ia-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

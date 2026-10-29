@@ -1,0 +1,113 @@
+<ra-c-page-head
+  title="Inventory Analytics"
+  subtitle="Optimize stock levels, inventory value, warehouse performance and material availability."
+  [basePath]="basePath"
+  [updatedText]="updatedText"
+  [refreshing]="refreshing"
+  [compare]="compare"
+  (refresh)="refresh()"
+  (compareChange)="setCompare($event)"
+  (exportCsv)="exportPage()"
+  (saveView)="openSaveView()" />
+
+<section class="filters" aria-label="Filters">
+  <label class="filter filter--period">
+    <span>Period</span>
+    <select [(ngModel)]="period" (ngModelChange)="apply()">
+      @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Organization</span>
+    <select [(ngModel)]="organization" (ngModelChange)="apply()">
+      @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Warehouse</span>
+    <select [(ngModel)]="warehouse" (ngModelChange)="apply()">
+      <option [value]="allWarehouses">{{ allWarehouses }}</option>
+      @for (w of warehouseOptions; track w.code) { <option [value]="w.name">{{ w.name }} · {{ w.site }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Store / Bin</span>
+    <select [(ngModel)]="store" (ngModelChange)="apply()">
+      @for (s of storeOptions; track s) { <option [value]="s">{{ s }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Item Category</span>
+    <select [(ngModel)]="category" (ngModelChange)="apply()">
+      @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Stock Status</span>
+    <select [(ngModel)]="status" (ngModelChange)="apply()">
+      @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
+    </select>
+  </label>
+</section>
+
+<section class="kpis" aria-label="Key figures">
+  @for (k of kpis; track k.id) {
+    <ra-c-kpi [kpi]="k" [compare]="compare" (action)="kpiAction(k, $event)" />
+  }
+</section>
+
+<div class="ra-layout">
+  <div class="widgets">
+    <ra-c-widget class="span-2" title="Inventory Value Trend" info="Month-end stock value with receipts and issues in AED" (exportCsv)="exportTrend()">
+      <ra-cartesian-chart [labels]="view.window.labels" [series]="trendSeries" kind="line" [height]="230" yTitle="Value (AED)" ariaLabel="Inventory value trend" />
+    </ra-c-widget>
+
+    <ra-c-widget class="span-2" title="Stock by Category" info="Units on hand at the end of each period, by item category" (exportCsv)="exportCategories()">
+      <ra-cartesian-chart [labels]="view.window.labels" [series]="categorySeries" kind="bar" [stacked]="true" [height]="230" yTitle="Units" ariaLabel="Stock by category" />
+    </ra-c-widget>
+
+    <ra-c-widget class="span-2" title="Stock Status Distribution" info="Units on hand by stock status at the end of the period" (exportCsv)="exportStatus()">
+      @if (view.stockItems) {
+        <ra-donut-chart [slices]="statusSlices" [centerValue]="totalItemsText" centerLabel="Total Items" legend="bottom" [size]="160" ariaLabel="Stock status distribution" />
+      } @else {
+        <p class="empty">No stock for the current filters.</p>
+      }
+    </ra-c-widget>
+
+    <ra-c-widget class="span-3" title="Inventory Consumption Trend" info="Units issued per period by consuming department" (exportCsv)="exportConsumption()">
+      <ra-cartesian-chart [labels]="view.window.labels" [series]="consumptionSeries" kind="line" [height]="210" yTitle="Units" ariaLabel="Inventory consumption trend" />
+    </ra-c-widget>
+
+    <ra-c-widget class="span-3" title="Warehouse Utilization" info="Storage capacity used in each warehouse" (exportCsv)="exportUtilization()">
+      @if (utilLabels.length) {
+        <ra-cartesian-chart [labels]="utilLabels" [series]="utilSeries" kind="bar" [stacked]="true" [max]="100" [format]="pct" [showValues]="true"
+          [height]="210" yTitle="Utilization (%)" ariaLabel="Warehouse utilization" />
+      } @else {
+        <p class="empty">No warehouses for the current filters.</p>
+      }
+    </ra-c-widget>
+
+    <ra-c-widget class="span-3" title="Items Below Reorder Level" info="Items at or below their reorder level, highest risk first" (exportCsv)="exportReorder()">
+      <app-ra-inv-reorder-table [rows]="view.reorderItems" (createRequest)="createRequest($event)" (view)="viewItem($event)" (viewAll)="viewAllReorder()" />
+    </ra-c-widget>
+
+    <ra-c-widget class="span-3" title="Top Inventory Suppliers" info="Suppliers by number of stock items supplied in the period" (exportCsv)="exportSuppliers()">
+      <app-ra-inv-supplier-table [rows]="view.suppliers" (view)="viewSupplier($event)" />
+    </ra-c-widget>
+  </div>
+
+  <ra-c-insights title="Inventory Insights" [insights]="insights" (action)="onInsight($event)" />
+</div>
+
+@if (listDialog) {
+  <ra-c-list-dialog [data]="listDialog" (closed)="listDialog = null" />
+}
+@if (detailsDialog) {
+  <ra-c-details-dialog [data]="detailsDialog" (closed)="detailsDialog = null" />
+}
+@if (formDialog) {
+  <ra-c-form-dialog [data]="formDialog" (closed)="closeForm()" (submitted)="formSubmitted($event)" />
+}
+@if (toast) {
+  <div class="toast" role="status">{{ toast }}</div>
+}

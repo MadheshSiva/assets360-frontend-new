@@ -1,0 +1,37 @@
+/* Financial Analytics extras (budget utilization widget, tables) */
+.raf-budget {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.raf-budget__stats {
+  flex-direction: column;
+  flex: 1;
+  min-width: 150px;
+  margin-bottom: 0;
+}
+
+.raf-mini-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+.raf-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.raf-over {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.raf-under {
+  color: #059669;
+  font-weight: 600;
+}

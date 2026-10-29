@@ -1,0 +1,647 @@
+/* Data Export / API extras (shared layout comes from ../shared/analytics-page.css) */
+
+/* ===== Tabs + filter toolbar ===== */
+.dx-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 0 4px;
+  background: #fff;
+  border: 1px solid var(--ra-border);
+  border-radius: 12px;
+}
+
+.dx-tabs {
+  flex: 1;
+  margin-bottom: 0;
+  border-bottom: 0;
+  min-width: 300px;
+}
+
+.dx-tabs button {
+  padding: 13px 14px;
+  border-bottom-width: 3px;
+}
+
+.dx-search {
+  min-width: 240px;
+  height: 36px;
+}
+
+.dx-toolbar .select {
+  height: 36px;
+}
+
+.dx-toolbar > :last-child {
+  margin-right: 6px;
+}
+
+.dx-select-sm {
+  height: 30px;
+  font-size: 12px;
+}
+
+/* ===== KPI cards ===== */
+.dx-kpis {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.dx-kpi-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ===== Main grid ===== */
+.dx-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 14px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+.dx-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.dx-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.2fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+/* ===== Export jobs table ===== */
+.dx-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ra-purple);
+}
+
+.dx-name strong {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.dx-lock {
+  margin-left: 4px;
+  color: var(--ra-green);
+  vertical-align: middle;
+}
+
+.dx-format {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--ra-border);
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 11.5px;
+}
+
+.dx-dest {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #334155;
+}
+
+.dx-dest lucide-icon {
+  color: var(--ra-purple);
+}
+
+.dx-two {
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.dx-two small {
+  display: block;
+  color: var(--ra-muted);
+  font-size: 11px;
+}
+
+.dx-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dx-act {
+  color: var(--ra-purple);
+}
+
+.dx-act:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.table tr.dx-row-hl td {
+  background: var(--ra-purple-soft);
+}
+
+.dx-spin {
+  animation: dx-spin 0.9s linear infinite;
+}
+
+@keyframes dx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ===== API connections panel ===== */
+.dx-cons {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dx-cons li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f2f6;
+}
+
+.dx-cons li:last-child {
+  border-bottom: 0;
+}
+
+.dx-con-logo {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 800;
+  background: var(--tone-soft, var(--ra-purple-soft));
+  color: var(--tone, var(--ra-purple));
+}
+
+.dx-con-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.dx-con-text .link {
+  display: block;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.dx-con-text small,
+.dx-con-status small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ra-muted);
+  font-size: 11px;
+}
+
+.dx-con-status {
+  text-align: right;
+}
+
+/* ===== Export builder ===== */
+.dx-steps {
+  display: flex;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.dx-steps li {
+  position: relative;
+  flex: 1;
+  text-align: center;
+}
+
+.dx-steps li + li::before {
+  content: '';
+  position: absolute;
+  top: 13px;
+  right: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--ra-border);
+  z-index: 0;
+}
+
+.dx-steps li.done::before,
+.dx-steps li.active::before {
+  background: var(--ra-purple);
+}
+
+.dx-steps button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dx-step-num {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--ra-border);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ra-muted);
+}
+
+.dx-steps li.active .dx-step-num,
+.dx-steps li.done .dx-step-num {
+  border-color: var(--ra-purple);
+  background: var(--ra-purple);
+  color: #fff;
+}
+
+.dx-step-label {
+  font-size: 10.5px;
+  color: var(--ra-muted);
+  line-height: 1.2;
+}
+
+.dx-steps li.active .dx-step-label {
+  color: var(--ra-purple);
+  font-weight: 700;
+}
+
+.dx-step-body {
+  min-height: 150px;
+}
+
+.dx-row-field {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.dx-row-field > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.dx-row-field .select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+}
+
+.dx-row-field .req {
+  color: var(--ra-red);
+}
+
+.dx-enc {
+  grid-template-columns: 96px auto minmax(0, 1fr);
+  padding-top: 10px;
+  border-top: 1px solid #f1f2f6;
+}
+
+.dx-enc small {
+  text-align: right;
+}
+
+.dx-radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.dx-radios label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.dx-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dx-field-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.dx-field-tools .select {
+  height: 32px;
+}
+
+.dx-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.dx-field-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  border: 1px solid var(--ra-border);
+  border-radius: 8px;
+}
+
+.dx-field-list strong {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.dx-field-list strong:first-child {
+  margin-top: 0;
+}
+
+.dx-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 2px 6px;
+  cursor: pointer;
+}
+
+.dx-filter-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 1fr) 30px;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.dx-filter-row .select {
+  min-width: 0;
+  height: 32px;
+  font-size: 12px;
+}
+
+.dx-builder-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.dx-error {
+  margin: 8px 0 0;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ===== Definition lists (review, connection details) ===== */
+.dx-dl {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 12px 0;
+}
+
+.dx-dl dt {
+  color: var(--ra-muted);
+  font-weight: 600;
+}
+
+.dx-dl dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.dx-dl--tight {
+  grid-template-columns: 70px minmax(0, 1fr);
+  font-size: 12px;
+}
+
+.dx-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+
+.dx-warn {
+  color: #d97706;
+  font-weight: 600;
+}
+
+.dx-small {
+  font-size: 11.5px;
+}
+
+.dx-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 12px;
+}
+
+/* ===== Bottom cards ===== */
+.dx-health-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.dx-h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dx-status-list,
+.dx-sec-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dx-status-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f2f6;
+  color: #334155;
+}
+
+.dx-status-list li > span:nth-child(2) {
+  flex: 1;
+}
+
+.dx-status-list lucide-icon {
+  color: var(--ra-purple);
+}
+
+.dx-sec-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f2f6;
+}
+
+.dx-sec-list li:last-child,
+.dx-status-list li:last-child {
+  border-bottom: 0;
+}
+
+.dx-sec-list li > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+
+.dx-sec-list small {
+  display: block;
+  color: var(--ra-muted);
+  font-size: 11.5px;
+}
+
+.dx-sec-list a.btn {
+  text-decoration: none;
+}
+
+.dx-icon-sm {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+
+.dx-insights {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dx-insights .insight {
+  padding: 10px;
+}
+
+.dx-insights .insight h3 {
+  font-size: 13px;
+}
+
+/* ===== Tabs content ===== */
+.dx-uptime {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 130px;
+}
+
+.dx-pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dx-chip-x {
+  margin-left: 2px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dx-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.dx-docs {
+  margin: 8px 0 14px;
+}
+
+.dx-code {
+  margin: 0 0 10px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  border-radius: 10px;
+  background: #1e1b2e;
+  color: #e9e5f5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+a.btn {
+  text-decoration: none;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 1400px) {
+  .dx-bottom {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  dx-delivery-health {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1200px) {
+  .dx-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dx-side {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .dx-bottom,
+  .dx-side,
+  .dx-health-grid,
+  .dx-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dx-toolbar .select,
+  .dx-search {
+    flex: 1;
+  }
+}
+
+/* Child cards fill their grid cell so a row of cards lines up */
+:host > .widget {
+  height: 100%;
+  box-sizing: border-box;
+}

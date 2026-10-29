@@ -1,0 +1,153 @@
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a [routerLink]="basePath">Reports &amp; Analytics</a>
+  <span>/</span>
+  <strong>Standard Reports</strong>
+</nav>
+
+<header class="ra-head">
+  <div class="ra-head__text">
+    <h1>Standard Reports</h1>
+    <p>Track reporting periods, generated dates and upcoming schedules across all standard reports.</p>
+    <span class="updated">
+      {{ updatedText }}
+      <button type="button" aria-label="Refresh" [disabled]="refreshing" (click)="refresh()">
+        <lucide-icon [img]="icons.RefreshCw" [size]="14" />
+      </button>
+    </span>
+  </div>
+  <div class="sr-tiles">
+    <div class="kpi sr-tile" data-tone="purple">
+      <span class="kpi__icon" data-tone="purple"><lucide-icon [img]="icons.FileText" [size]="22" /></span>
+      <div class="kpi__body"><span class="kpi__value">{{ total }}</span><span class="kpi__label">Total Reports</span></div>
+    </div>
+    <div class="kpi sr-tile" data-tone="green">
+      <span class="kpi__icon" data-tone="green"><lucide-icon [img]="icons.Funnel" [size]="22" /></span>
+      <div class="kpi__body"><span class="kpi__value">{{ withDateFilters }}</span><span class="kpi__label">With Date Filters</span></div>
+    </div>
+    <div class="kpi sr-tile" data-tone="blue">
+      <span class="kpi__icon" data-tone="blue"><lucide-icon [img]="icons.CalendarDays" [size]="22" /></span>
+      <div class="kpi__body"><span class="kpi__value">{{ scheduledCount }}</span><span class="kpi__label">Scheduled</span></div>
+    </div>
+    <div class="kpi sr-tile" data-tone="orange">
+      <span class="kpi__icon" data-tone="orange"><lucide-icon [img]="icons.RefreshCw" [size]="22" /></span>
+      <div class="kpi__body"><span class="kpi__value">{{ updatedThisMonth }}</span><span class="kpi__label">Updated This Month</span></div>
+    </div>
+  </div>
+</header>
+
+<div class="sr-top">
+  <app-sr-period-panel [period]="reportingPeriod" [today]="service.today" (apply)="applyPeriod($event)" />
+  <app-sr-report-calendar [reports]="service.reports" [today]="service.today" [selected]="dayFilter" (selectDay)="selectDay($event)" />
+</div>
+
+<section class="widget sr-list">
+  <div class="sr-list__head">
+    <h2>All Standard Reports</h2>
+    @if (dayFilter) {
+      <span class="pill" data-tone="purple">
+        Generated or scheduled {{ dayFilterText }}
+        <button type="button" class="sr-pill-x" aria-label="Clear day filter" (click)="selectDay(null)">
+          <lucide-icon [img]="icons.X" [size]="12" />
+        </button>
+      </span>
+    }
+    <label class="search sr-list__search">
+      <lucide-icon [img]="icons.Search" [size]="16" />
+      <input type="search" placeholder="Search reports..." aria-label="Search reports" [(ngModel)]="search" (ngModelChange)="searchChanged()" />
+    </label>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table sr-table">
+      <thead>
+        <tr>
+          @for (c of columns; track c.key) {
+            <th [attr.aria-sort]="ariaSort(c.key)">
+              <button type="button" class="sort" (click)="sortBy(c.key)">
+                {{ c.label }} <lucide-icon [img]="sortIcon(c.key)" [size]="13" />
+              </button>
+            </th>
+          }
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (r of pageRows; track r.id) {
+          <tr>
+            <td>
+              <div class="sr-name">
+                <span class="sr-name__icon" [attr.data-tone]="moduleTone(r)"><lucide-icon [img]="moduleIcon(r)" [size]="16" /></span>
+                <button type="button" class="link" (click)="view(r)">{{ r.name }}</button>
+              </div>
+            </td>
+            <td><span class="pill" [attr.data-tone]="moduleTone(r)">{{ r.module }}</span></td>
+            <td>
+              <span class="sr-period-cell">
+                <lucide-icon [img]="icons.CalendarDays" [size]="14" />{{ periodText(r) }}
+              </span>
+            </td>
+            <td class="sr-nowrap">{{ stamp(r.generatedOn) }}</td>
+            <td class="sr-nowrap">{{ stamp(r.nextScheduled) }}</td>
+            <td><span class="pill" [attr.data-tone]="frequencyTone(r)">{{ r.frequency }}</span></td>
+            <td><span class="pill" [attr.data-tone]="statusTone(r)"><i></i>{{ r.status }}</span></td>
+            <td>
+              <div class="sr-actions">
+                <button type="button" class="btn btn--sm" (click)="view(r)"><lucide-icon [img]="icons.Eye" [size]="14" /> View</button>
+                <button type="button" class="btn btn--sm" (click)="openSchedule(r)"><lucide-icon [img]="icons.CalendarClock" [size]="14" /> Schedule</button>
+                <button type="button" class="btn btn--sm" (click)="exportCsv(r)"><lucide-icon [img]="icons.Upload" [size]="14" /> Export</button>
+                <div class="row-menu">
+                  <button
+                    type="button"
+                    class="btn btn--sm"
+                    [attr.aria-label]="'More actions for ' + r.name"
+                    aria-haspopup="menu"
+                    [attr.aria-expanded]="menuId === r.id"
+                    (click)="toggleMenu(r.id, $event)"
+                  >
+                    <lucide-icon [img]="icons.Ellipsis" [size]="14" />
+                  </button>
+                  @if (menuId === r.id) {
+                    <div class="menu" role="menu">
+                      <button type="button" role="menuitem" (click)="runNow(r)">Run now</button>
+                      <button type="button" role="menuitem" (click)="duplicate(r)">Duplicate to custom report</button>
+                      <button type="button" role="menuitem" [disabled]="r.status !== 'Needs review'" (click)="markReviewed(r)">Mark reviewed</button>
+                    </div>
+                  }
+                </div>
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="8" class="empty">No reports match the current search or day.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sr-pager">
+    <span class="muted">{{ rangeText }}</span>
+    @if (pageCount > 1) {
+      <div class="sr-pager__buttons">
+        <button type="button" class="btn btn--sm" [disabled]="currentPage === 1" (click)="goTo(currentPage - 1)">Previous</button>
+        @for (p of pages; track p) {
+          <button type="button" class="btn btn--sm" [class.btn--primary]="p === currentPage" [attr.aria-current]="p === currentPage ? 'page' : null" (click)="goTo(p)">{{ p }}</button>
+        }
+        <button type="button" class="btn btn--sm" [disabled]="currentPage === pageCount" (click)="goTo(currentPage + 1)">Next</button>
+      </div>
+    }
+  </div>
+</section>
+
+@if (viewing) {
+  <app-sr-report-viewer [report]="viewing" (close)="viewing = null" (exportCsv)="exportCsv($event)" />
+}
+
+@if (scheduling) {
+  <app-sr-schedule-dialog [report]="scheduling" (close)="scheduling = null" (save)="saveSchedule($event)" />
+}
+
+@if (toast) {
+  <div class="toast" role="status">{{ toast }}</div>
+}

@@ -1,0 +1,292 @@
+<nav class="crumbs" aria-label="Breadcrumb">
+  <lucide-icon [img]="icons.House" [size]="15" />
+  <a routerLink="/dashboard">Asset360</a>
+  <span>/</span>
+  <a [routerLink]="basePath">Reports &amp; Analytics</a>
+  <span>/</span>
+  <strong>Maintenance Analytics</strong>
+</nav>
+
+<header class="ra-head">
+  <div class="ra-head__text">
+    <h1>Maintenance Analytics</h1>
+    <p>Optimize maintenance performance, cost, reliability and resource utilization.</p>
+  </div>
+  <div class="ra-head__actions">
+    <span class="updated">
+      <button type="button" (click)="refresh()" [disabled]="refreshing" aria-label="Refresh data">
+        <lucide-icon [img]="icons.RefreshCw" [size]="16" />
+      </button>
+      {{ refreshing ? 'Refreshing…' : updatedText }}
+    </span>
+    <button type="button" class="btn" [class.ra-compare-on]="compare" [attr.aria-pressed]="compare" (click)="toggleCompare()">
+      <lucide-icon [img]="icons.GitCompareArrows" [size]="16" /> Compare Periods
+    </button>
+    <button type="button" class="btn" (click)="exportPage()"><lucide-icon [img]="icons.Download" [size]="16" /> Export</button>
+    <button type="button" class="btn btn--primary" (click)="savingView = true"><lucide-icon [img]="icons.Bookmark" [size]="16" /> Save View</button>
+  </div>
+</header>
+
+<div class="filters">
+  <label class="filter filter--period">
+    <span>Period</span>
+    <select [(ngModel)]="period" (ngModelChange)="recompute()">
+      @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Organization</span>
+    <select [(ngModel)]="organization" (ngModelChange)="recompute()">
+      @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Location</span>
+    <select [(ngModel)]="location" (ngModelChange)="recompute()">
+      @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Asset Category</span>
+    <select [(ngModel)]="category" (ngModelChange)="recompute()">
+      @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Maintenance Type</span>
+    <select [(ngModel)]="maintenanceType" (ngModelChange)="recompute()">
+      @for (t of maintenanceTypes; track t) { <option [value]="t">{{ t }}</option> }
+    </select>
+  </label>
+</div>
+
+@if (!view.assets.length) {
+  <div class="ra-notice">
+    No assets match the selected filters.
+    <button type="button" class="btn btn--link" (click)="resetFilters()">Reset filters</button>
+  </div>
+}
+
+<div class="kpis">
+  @for (k of kpis; track k.id) {
+    <ra-kpi-card [kpi]="k" (action)="kpiAction($event, k)" />
+  }
+</div>
+
+<div class="ra-layout">
+  <div class="widgets">
+    <!-- Maintenance Cost Trend -->
+    <section class="widget span-2" id="ma-cost">
+      <header class="widget__head">
+        <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+        <h2>Maintenance Cost Trend <span class="widget__info" title="Monthly work order cost in AED: planned (preventive + inspection), corrective and emergency."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <ra-menu label="Maintenance Cost Trend actions" (select)="widgetAction($event, 'cost', 'Maintenance Cost Trend', costTpl)" />
+      </header>
+      <div class="widget__body"><ng-container [ngTemplateOutlet]="costTpl" /></div>
+    </section>
+    <ng-template #costTpl>
+      <ra-cartesian-chart kind="bar" [stacked]="true" [labels]="view.labels" [series]="view.costTrend" [format]="costFormat" [height]="240" ariaLabel="Maintenance cost trend" />
+    </ng-template>
+
+    <!-- Work Orders by Type -->
+    <section class="widget span-2" id="ma-types">
+      <header class="widget__head">
+        <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+        <h2>Work Orders by Type <span class="widget__info" title="Work orders raised in the period; the columns add up to the total in Work Order Status."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <ra-menu label="Work Orders by Type actions" (select)="widgetAction($event, 'types', 'Work Orders by Type', typesTpl)" />
+      </header>
+      <div class="widget__body"><ng-container [ngTemplateOutlet]="typesTpl" /></div>
+    </section>
+    <ng-template #typesTpl>
+      <ra-cartesian-chart kind="bar" [stacked]="true" [showValues]="true" [labels]="typeLabels" [series]="view.typeSeries" [height]="240" ariaLabel="Work orders by type" />
+    </ng-template>
+
+    <!-- Work Order Status -->
+    <section class="widget span-2" id="ma-status">
+      <header class="widget__head">
+        <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+        <h2>Work Order Status <span class="widget__info" title="Current status of the work orders raised in the period."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <ra-menu label="Work Order Status actions" (select)="widgetAction($event, 'status', 'Work Order Status', statusTpl)" />
+      </header>
+      <div class="widget__body"><ng-container [ngTemplateOutlet]="statusTpl" /></div>
+    </section>
+    <ng-template #statusTpl>
+      <ra-donut-chart [slices]="view.statusSlices" centerLabel="Total WOs" [size]="160" ariaLabel="Work order status" />
+    </ng-template>
+
+    <!-- Preventive Maintenance Compliance -->
+    <section class="widget span-2" id="ma-pm">
+      <header class="widget__head">
+        <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+        <h2>Preventive Maintenance Compliance <span class="widget__info" title="Preventive work orders completed on schedule, against a {{ pmTarget }}% target."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <ra-menu label="Preventive Maintenance Compliance actions" (select)="widgetAction($event, 'pm', 'Preventive Maintenance Compliance', pmTpl)" />
+      </header>
+      <div class="widget__body"><ng-container [ngTemplateOutlet]="pmTpl" /></div>
+    </section>
+    <ng-template #pmTpl>
+      <div class="ma-gauge">
+        <ra-gauge-chart [value]="view.pmCompliance" [target]="pmTarget" [display]="view.pmCompliance + '%'" [caption]="'Target ' + pmTarget + '%'" [color]="colors.green" [size]="190" />
+        <span class="kpi__delta"><lucide-icon [img]="icons.ArrowUp" [size]="13" /> +{{ deltas.pm }}% <small>vs. previous period</small></span>
+      </div>
+      <ra-cartesian-chart [labels]="view.labels" [series]="view.pmTrend" [min]="60" [max]="100" [format]="percentFormat" [height]="150" [legend]="false" ariaLabel="PM compliance trend" />
+    </ng-template>
+
+    <!-- MTTR vs MTBF -->
+    <section class="widget span-2" id="ma-reliability">
+      <header class="widget__head">
+        <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+        <h2>MTTR vs MTBF <span class="widget__info" title="Mean time to repair (left axis) from breakdown work orders, mean time between failures (right axis) from the asset register."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <ra-menu label="MTTR vs MTBF actions" (select)="widgetAction($event, 'reliability', 'MTTR vs MTBF', reliabilityTpl)" />
+      </header>
+      <div class="widget__body"><ng-container [ngTemplateOutlet]="reliabilityTpl" /></div>
+    </section>
+    <ng-template #reliabilityTpl>
+      <ra-cartesian-chart [labels]="view.labels" [series]="view.reliability" [height]="260" yTitle="MTTR (hrs)" ariaLabel="MTTR vs MTBF" />
+    </ng-template>
+
+    <!-- Downtime by Cause -->
+    <section class="widget span-2" id="ma-downtime">
+      <header class="widget__head">
+        <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+        <h2>Downtime by Cause <span class="widget__info" title="Downtime hours from work orders, by root cause."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <ra-menu label="Downtime by Cause actions" (select)="widgetAction($event, 'downtime', 'Downtime by Cause', downtimeTpl)" />
+      </header>
+      <div class="widget__body"><ng-container [ngTemplateOutlet]="downtimeTpl" /></div>
+    </section>
+    <ng-template #downtimeTpl>
+      <ra-cartesian-chart kind="bar" [stacked]="true" [labels]="view.labels" [series]="view.downtimeByCause" [height]="260" yTitle="Hours" ariaLabel="Downtime by cause" />
+    </ng-template>
+
+    <!-- Maintenance Backlog -->
+    <section class="widget span-3" id="ma-backlog">
+      <header class="widget__head">
+        <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+        <h2>Maintenance Backlog <span class="widget__info" title="Work orders not yet completed, highest priority and oldest first."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <ra-menu label="Maintenance Backlog actions" (select)="widgetAction($event, 'backlog', 'Maintenance Backlog', backlogTpl)" />
+      </header>
+      <div class="widget__body"><ng-container [ngTemplateOutlet]="backlogTpl" /></div>
+    </section>
+    <ng-template #backlogTpl>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th><button type="button" class="sort" (click)="sortBacklog('priority')">Priority <lucide-icon [img]="backlogIcon('priority')" [size]="12" /></button></th>
+              <th><button type="button" class="sort" (click)="sortBacklog('id')">Work Order <lucide-icon [img]="backlogIcon('id')" [size]="12" /></button></th>
+              <th><button type="button" class="sort" (click)="sortBacklog('asset')">Asset <lucide-icon [img]="backlogIcon('asset')" [size]="12" /></button></th>
+              <th><button type="button" class="sort" (click)="sortBacklog('location')">Location <lucide-icon [img]="backlogIcon('location')" [size]="12" /></button></th>
+              <th class="num"><button type="button" class="sort" (click)="sortBacklog('age')">Age (days) <lucide-icon [img]="backlogIcon('age')" [size]="12" /></button></th>
+              <th><button type="button" class="sort" (click)="sortBacklog('technician')">Assigned To <lucide-icon [img]="backlogIcon('technician')" [size]="12" /></button></th>
+              <th><button type="button" class="sort" (click)="sortBacklog('status')">Status <lucide-icon [img]="backlogIcon('status')" [size]="12" /></button></th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (o of backlogRows; track o.id; let i = $index) {
+              <tr>
+                <td>{{ i + 1 }}</td>
+                <td><span class="pill" [attr.data-tone]="priorityTone(o.priority)"><i></i>{{ o.priority }}</span></td>
+                <td><button type="button" class="link" (click)="showOrder(o)">{{ o.id }}</button></td>
+                <td>{{ o.asset.name }}</td>
+                <td>{{ o.asset.site.name }}</td>
+                <td class="num"><span class="score" [attr.data-tone]="ageTone(o.ageDays)">{{ o.ageDays }}</span></td>
+                <td>{{ o.technician }}</td>
+                <td><span class="ra-status" [attr.data-tone]="statusTone(o.status)"><i></i>{{ o.status }}</span></td>
+                <td>
+                  <span class="ra-row-actions">
+                    <button type="button" class="btn btn--sm" (click)="showOrder(o)">View</button>
+                    <ra-menu [items]="rowMenu" [label]="o.id + ' actions'" (select)="rowAction($event, o)" />
+                  </span>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="9" class="empty">No open work orders for the current filters.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (view.backlog.length > 5) {
+        <div class="ra-widget-foot">
+          <button type="button" class="btn btn--link" (click)="openBacklog()">View all {{ view.backlog.length }} work orders</button>
+        </div>
+      }
+    </ng-template>
+
+    <!-- Technician Performance -->
+    <section class="widget span-3" id="ma-technicians">
+      <header class="widget__head">
+        <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+        <h2>Technician Performance <span class="widget__info" title="Completed work orders in the period per technician."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <ra-menu label="Technician Performance actions" (select)="widgetAction($event, 'technicians', 'Technician Performance', techniciansTpl)" />
+      </header>
+      <div class="widget__body"><ng-container [ngTemplateOutlet]="techniciansTpl" /></div>
+    </section>
+    <ng-template #techniciansTpl>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th><button type="button" class="sort" (click)="sortTechs('name')">Technician <lucide-icon [img]="techIcon('name')" [size]="12" /></button></th>
+              <th class="num"><button type="button" class="sort" (click)="sortTechs('completed')">Completed <lucide-icon [img]="techIcon('completed')" [size]="12" /></button></th>
+              <th><button type="button" class="sort" (click)="sortTechs('firstTimeFix')">First-Time Fix Rate <lucide-icon [img]="techIcon('firstTimeFix')" [size]="12" /></button></th>
+              <th class="num"><button type="button" class="sort" (click)="sortTechs('response')">Avg. Response <lucide-icon [img]="techIcon('response')" [size]="12" /></button></th>
+              <th class="num"><button type="button" class="sort" (click)="sortTechs('sla')">SLA Compliance <lucide-icon [img]="techIcon('sla')" [size]="12" /></button></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (t of technicianRows; track t.name; let i = $index) {
+              <tr>
+                <td>{{ i + 1 }}</td>
+                <td><button type="button" class="link" (click)="showTechnician(t)">{{ t.name }}</button></td>
+                <td class="num">{{ t.completed }}</td>
+                <td>
+                  <span class="ra-meter-cell">
+                    <span>{{ t.firstTimeFix }}%</span>
+                    <span class="meter"><i [style.width.%]="t.firstTimeFix" [style.background]="rateColor(t.firstTimeFix)"></i></span>
+                  </span>
+                </td>
+                <td class="num">{{ t.response }} hrs</td>
+                <td class="num"><span class="ra-status" [attr.data-tone]="t.sla >= 90 ? 'green' : 'orange'"><i></i>{{ t.sla }}%</span></td>
+              </tr>
+            } @empty {
+              <tr><td colspan="6" class="empty">No completed work orders for the current filters.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </ng-template>
+  </div>
+
+  <aside class="insights" aria-label="Maintenance insights">
+    <header class="widget__head ra-insights-head">
+      <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
+      <h2>Maintenance Insights <span class="widget__info" title="Generated from the current filters."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+    </header>
+    @for (i of insights; track i.id) {
+      <ra-insight-card [insight]="i" (action)="insightAction($event)" />
+    }
+  </aside>
+</div>
+
+@if (expanded) {
+  <ra-expand-dialog [title]="expanded.title" (close)="expanded = null">
+    <div class="ra-expanded"><ng-container [ngTemplateOutlet]="expanded.tpl" /></div>
+  </ra-expand-dialog>
+}
+@if (records) {
+  <ra-records-dialog [data]="records" (close)="records = null" />
+}
+@if (detail) {
+  <ra-detail-dialog [data]="detail" (close)="detail = null" (primary)="detailPrimary()" />
+}
+@if (action) {
+  <ra-action-dialog [request]="action" (close)="action = null" (submitted)="submitAction($event)" />
+}
+@if (savingView) {
+  <ra-save-view-dialog [taken]="viewNames" (close)="savingView = false" (save)="confirmSaveView($event)" />
+}
+@if (toast) {
+  <div class="toast" role="status">{{ toast }}</div>
+}

@@ -1,0 +1,305 @@
+:host {
+  display: block;
+  font-family: 'Red Hat Display', sans-serif;
+  color: #0f172a;
+}
+
+/* ===== Cartesian ===== */
+.chart {
+  position: relative;
+}
+
+.chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.gridline {
+  stroke: #eef0f5;
+  stroke-width: 1;
+}
+
+.guide {
+  stroke: #94a3b8;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.axis {
+  fill: #64748b;
+  font-size: 10.5px;
+}
+
+.axis-title {
+  fill: #64748b;
+  font-size: 10.5px;
+}
+
+.value {
+  fill: #0f172a;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.hit {
+  fill: transparent;
+}
+
+.tip {
+  position: absolute;
+  top: 6px;
+  z-index: 5;
+  transform: translateX(10px);
+  min-width: 140px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #e6e8ef;
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+  font-size: 11.5px;
+  pointer-events: none;
+}
+
+.tip--left {
+  transform: translateX(calc(-100% - 10px));
+}
+
+.tip strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.tip span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.tip i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.tip b {
+  margin-left: auto;
+  padding-left: 10px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 16px;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: #334155;
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.legend i.line {
+  width: 16px;
+  height: 0;
+  border-radius: 0;
+  border-top: 2.5px solid;
+  background: none !important;
+}
+
+.legend i.line.dashed {
+  border-top-style: dashed;
+}
+
+/* ===== Donut ===== */
+.donut {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.donut--bottom {
+  flex-direction: column;
+}
+
+.donut__ring {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.donut__ring svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.donut__pct {
+  fill: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.donut__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+}
+
+.donut__center strong {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.donut__center span {
+  max-width: 90px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.donut__legend {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.donut__legend li {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.donut__legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.donut__name {
+  color: #334155;
+}
+
+.donut__legend b {
+  font-weight: 700;
+  text-align: right;
+}
+
+.donut__legend em {
+  font-style: normal;
+  color: #64748b;
+  text-align: right;
+  min-width: 34px;
+}
+
+/* ===== Gauge ===== */
+.gauge {
+  position: relative;
+  margin: 0 auto;
+  max-width: 100%;
+}
+
+.gauge svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.gauge__center {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.gauge__center strong {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.gauge__center span {
+  font-size: 12px;
+  color: #334155;
+}
+
+.gauge__center em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+/* ===== Horizontal bars ===== */
+.hbars {
+  display: grid;
+  gap: 10px;
+}
+
+.hbars__row {
+  display: grid;
+  grid-template-columns: var(--label-w, 110px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.hbars__label {
+  color: #334155;
+}
+
+.hbars__track {
+  position: relative;
+  height: 16px;
+}
+
+.hbars__target {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #eef0f5;
+  border-radius: 3px;
+}
+
+.hbars__bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px;
+}
+
+.hbars__value {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hbars__value em {
+  margin-left: 6px;
+  font-style: normal;
+  font-weight: 500;
+  color: #64748b;
+}

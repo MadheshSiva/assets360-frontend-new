@@ -1,0 +1,17 @@
+/* WIP / Production Analytics extras (tables) */
+.rap-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rap-wip,
+.rap-due {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.rap-more {
+  margin-top: 8px;
+  font-size: 12.5px;
+}

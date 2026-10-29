@@ -1,0 +1,130 @@
+/* Extras for the shared widget card, KPI card and dialogs (prefixed rak- to stay clear of Tailwind utilities). */
+.rak-fill {
+  height: 100%;
+}
+
+.rak-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.4);
+}
+
+/* Widget opened with "Expand": the same card floats as a wide dialog */
+.rak-expanded {
+  position: fixed;
+  z-index: 1001;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(1040px, calc(100vw - 32px));
+  height: auto;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+}
+
+.rak-head-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rak-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 12px;
+}
+
+.rak-demo {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.rak-detail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 12px 0 0;
+}
+
+.rak-detail div {
+  min-width: 0;
+}
+
+.rak-detail dt {
+  font-size: 11.5px;
+  color: var(--ra-muted);
+}
+
+.rak-detail dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.rak-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 12px;
+}
+
+.rak-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 999px;
+  background: var(--ra-purple-soft);
+  color: var(--ra-purple);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rak-chip button {
+  display: inline-grid;
+  place-items: center;
+  padding: 2px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.rak-link-row {
+  display: flex;
+  gap: 8px;
+}
+
+.rak-link-row input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--ra-border);
+  border-radius: 8px;
+  background: #f8f9fc;
+  font: inherit;
+  color: #334155;
+}
+
+.rak-list-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.rak-close {
+  margin-left: auto;
+}
+
+@media (max-width: 560px) {
+  .rak-form-grid,
+  .rak-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,0 +1,138 @@
+<ra-c-page-head
+  title="Financial Analytics"
+  subtitle="Analyze asset costs, budgets, depreciation, total cost of ownership and financial performance."
+  [basePath]="basePath"
+  [updatedText]="updatedText"
+  [refreshing]="refreshing"
+  [compare]="compare"
+  (refresh)="refresh()"
+  (compareChange)="setCompare($event)"
+  (exportCsv)="exportPage()"
+  (saveView)="openSaveView()" />
+
+<section class="filters" aria-label="Filters">
+  <label class="filter filter--period">
+    <span>Period</span>
+    <select [(ngModel)]="period" (ngModelChange)="apply()">
+      @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Organization</span>
+    <select [(ngModel)]="organization" (ngModelChange)="apply()">
+      @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Location</span>
+    <select [(ngModel)]="location" (ngModelChange)="apply()">
+      @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Asset Category</span>
+    <select [(ngModel)]="category" (ngModelChange)="apply()">
+      @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Cost Center</span>
+    <select [(ngModel)]="costCenter" (ngModelChange)="apply()">
+      @for (c of costCenterOptions; track c) { <option [value]="c">{{ c }}</option> }
+    </select>
+  </label>
+  <label class="filter">
+    <span>Currency</span>
+    <select [(ngModel)]="currency" (ngModelChange)="apply()">
+      @for (c of currencies; track c) { <option [value]="c">{{ c }}</option> }
+    </select>
+  </label>
+</section>
+
+<section class="kpis" aria-label="Key figures">
+  @for (k of kpis; track k.id) {
+    <ra-c-kpi [kpi]="k" [compare]="compare" (action)="kpiAction(k, $event)" />
+  }
+</section>
+
+<div class="ra-layout">
+  <div class="widgets">
+    <ra-c-widget class="span-2" title="Total Cost of Ownership Trend" info="Monthly cost of ownership by component; the line is the running total for the period" (exportCsv)="exportTco()">
+      <ra-cartesian-chart [labels]="view.window.labels" [series]="tcoSeries" kind="bar" [stacked]="true" [height]="240" [yTitle]="costAxisTitle" ariaLabel="Total cost of ownership trend" />
+    </ra-c-widget>
+
+    <ra-c-widget class="span-2" title="Budget vs Actual Spend" info="Budget phased to the period vs actual spend per cost center; the line is the variance in %" (exportCsv)="exportBudget()">
+      @if (budgetLabels.length) {
+        <ra-cartesian-chart [labels]="budgetLabels" [series]="budgetSeries" kind="bar" [height]="240" [yTitle]="costAxisTitle"
+          [rightMin]="-40" [rightMax]="20" [rightFormat]="pctFormat" ariaLabel="Budget vs actual spend" />
+      } @else {
+        <p class="empty">No cost centers for the current filters.</p>
+      }
+    </ra-c-widget>
+
+    <ra-c-widget class="span-2" title="Cost by Asset Category" info="Total cost of ownership in the period by asset category" (exportCsv)="exportCategories()">
+      @if (view.tcoTotal > 0) {
+        <ra-donut-chart [slices]="categorySlices" [centerValue]="tcoCenter" [centerLabel]="'Total Costs · ' + view.window.caption" legend="bottom"
+          [size]="160" [format]="sliceFormat" ariaLabel="Cost by asset category" />
+      } @else {
+        <p class="empty">No costs for the current filters.</p>
+      }
+    </ra-c-widget>
+
+    <ra-c-widget class="span-2" title="Depreciation Analysis" info="Monthly depreciation (bars) and accumulated depreciation (line, right axis)" (exportCsv)="exportDepreciation()">
+      <ra-cartesian-chart [labels]="view.window.labels" [series]="depreciationSeries" kind="bar" [height]="220" [yTitle]="valueAxisTitle" ariaLabel="Depreciation analysis" />
+    </ra-c-widget>
+
+    <ra-c-widget class="span-2" title="Budget Utilization" info="Actual spend as a share of budget for the selected cost centers" (exportCsv)="exportUtilization()">
+      <div class="raf-budget">
+        <ra-gauge-chart [value]="budgetUtilization" [display]="budgetUtilization + '%'" caption="Budget Utilization" [target]="budgetTarget"
+          [color]="gaugeColor" [size]="190" />
+        <div class="mini-stats raf-budget__stats">
+          <div class="mini-stat">
+            <span class="kpi__icon raf-mini-icon" data-tone="purple"><lucide-icon [img]="icons.CircleDollarSign" [size]="16"></lucide-icon></span>
+            <div><span>Current Spend</span><strong>{{ fmt(view.spend) }}</strong></div>
+          </div>
+          <div class="mini-stat">
+            <span class="kpi__icon raf-mini-icon" data-tone="blue"><lucide-icon [img]="icons.Target" [size]="16"></lucide-icon></span>
+            <div><span>Total Budget</span><strong>{{ fmt(view.budget) }}</strong></div>
+          </div>
+          <div class="mini-stat">
+            <span class="kpi__icon raf-mini-icon" data-tone="green"><lucide-icon [img]="icons.ChartColumn" [size]="16"></lucide-icon></span>
+            <div><span>Remaining Budget</span><strong>{{ fmt(view.budget - view.spend) }}</strong></div>
+          </div>
+        </div>
+      </div>
+    </ra-c-widget>
+
+    <ra-c-widget class="span-2" title="Maintenance Cost by Location" info="Maintenance spend in the period split into labor, parts and contractor cost" (exportCsv)="exportSites()">
+      @if (siteLabels.length) {
+        <ra-cartesian-chart [labels]="siteLabels" [series]="siteSeries" kind="bar" [stacked]="true" [showValues]="true" [height]="220" [yTitle]="costAxisTitle" ariaLabel="Maintenance cost by location" />
+      } @else {
+        <p class="empty">No locations for the current filters.</p>
+      }
+    </ra-c-widget>
+
+    <ra-c-widget class="span-3" title="Highest Cost Assets" info="Assets with the highest total cost of ownership (acquisition + maintenance + depreciation)" (exportCsv)="exportAssets()">
+      <app-ra-fin-asset-table [rows]="view.assets" [currency]="currency" (view)="viewAsset($event)" (plan)="planAsset($event)" />
+    </ra-c-widget>
+
+    <ra-c-widget class="span-3" title="Cost Center Performance" info="Budget vs actual per cost center for the period" (exportCsv)="exportCostCenters()">
+      <app-ra-fin-cost-center-table [rows]="view.costCenters" [currency]="currency" (view)="viewCostCenter($event)" />
+    </ra-c-widget>
+  </div>
+
+  <ra-c-insights title="Financial Insights" [insights]="insights" (action)="onInsight($event)" />
+</div>
+
+@if (listDialog) {
+  <ra-c-list-dialog [data]="listDialog" (closed)="listDialog = null" />
+}
+@if (detailsDialog) {
+  <ra-c-details-dialog [data]="detailsDialog" (closed)="detailsDialog = null" />
+}
+@if (formDialog) {
+  <ra-c-form-dialog [data]="formDialog" (closed)="closeForm()" (submitted)="formSubmitted($event)" />
+}
+@if (toast) {
+  <div class="toast" role="status">{{ toast }}</div>
+}
