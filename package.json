@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "concurrently -n shell,mdm -c blue,yellow \"ng serve frontend\" \"ng serve master-data-management\"",
+    "start": "concurrently -n shell,dashboard,locating,events,reports,process,admin,mdm -c blue,green,magenta,cyan,red,gray,white,yellow \"ng serve frontend\" \"ng serve dashboard\" \"ng serve locating\" \"ng serve events\" \"ng serve reports\" \"ng serve process-automation\" \"ng serve administration\" \"ng serve master-data-management\"",
     "start:shell": "ng serve",
     "build": "ng build frontend && cp public/federation.manifest.production.json dist/frontend/browser/federation.manifest.json",
     "watch": "ng build --watch --configuration development",
