@@ -2,7 +2,6 @@ import { Routes } from '@angular/router';
 import { Dashboard } from './dashboard/dashboard';
 import { IotTrackingOverview } from './iot-tracking-overview/iot-tracking-overview';
 import { AssetOverview } from './asset-overview/asset-overview';
-import { Report } from './report/report';
 
 // Mounted by the shell at /dashboard; paths match the Dashboard menu in the shell's sidebar
 export const routes: Routes = [
@@ -11,6 +10,5 @@ export const routes: Routes = [
   // previous widget dashboard, kept reachable
   { path: 'widgets', component: Dashboard },
   { path: 'iot-tracking-overview', component: IotTrackingOverview },
-  { path: 'asset-overview', component: AssetOverview },
-  { path: 'reports', component: Report }
+  { path: 'asset-overview', component: AssetOverview }
 ];

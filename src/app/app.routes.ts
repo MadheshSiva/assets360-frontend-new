@@ -51,10 +51,10 @@ export const routes: Routes = [
       { path: 'contracts-warranty', component: ModulePlaceholder, data: { title: 'Contracts & Warranty' } },
       { path: 'financial', component: ModulePlaceholder, data: { title: 'Financial' } },
       { path: 'locating', redirectTo: 'tracking-iot/real-time-location', pathMatch: 'full' },
-      // Reports moved into the Reports & Analytics remote; old links keep working
-      { path: 'report', redirectTo: 'reports-analytics/generated-reports', pathMatch: 'full' },
-      { path: 'report/create', redirectTo: 'reports-analytics/create', pathMatch: 'full' },
-      { path: 'report/view/:id', redirectTo: 'reports-analytics/view/:id', pathMatch: 'full' },
+      // Generated Reports was removed; old report links open the Reports & Analytics home
+      { path: 'report', redirectTo: 'reports-analytics', pathMatch: 'full' },
+      { path: 'report/create', redirectTo: 'reports-analytics', pathMatch: 'full' },
+      { path: 'report/view/:id', redirectTo: 'reports-analytics', pathMatch: 'full' },
       { path: 'events', component: Events },
       { path: 'process-automation', component: ProcessAutomation },
       { path: 'process-automation/add', component: ProcessAutomationAdd }

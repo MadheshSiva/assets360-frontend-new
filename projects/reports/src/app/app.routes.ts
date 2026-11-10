@@ -1,15 +1,9 @@
 import { Routes } from '@angular/router';
-import { Reports } from './reports/reports';
-import { CreateReport } from './create-report/create-report';
-import { ReportView } from './report-view/report-view';
-import { ReportsAnalytics } from './analytics/reports-analytics/reports-analytics';
 
 // Mounted by the shell at /reports-analytics (the old /report links redirect there)
 export const routes: Routes = [
-  { path: '', component: ReportsAnalytics },
-  { path: 'generated-reports', component: Reports },
-  { path: 'create', component: CreateReport },
-  { path: 'view/:id', component: ReportView },
+  // The sidebar menu only expands its submenu; a direct visit to /reports-analytics opens the first sub module
+  { path: '', redirectTo: 'standard-reports', pathMatch: 'full' },
   {
     path: 'standard-reports',
     loadComponent: () => import('./analytics/standard-reports/standard-reports').then((m) => m.StandardReportsPage)

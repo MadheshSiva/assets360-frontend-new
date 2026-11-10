@@ -99,5 +99,11 @@
     "postcss": "^8.5.15",
     "typescript": "~5.9.2",
     "wrangler": "^4.123.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true,
+    "workerd@1.20260811.1": true
   }
 }

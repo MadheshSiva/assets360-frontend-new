@@ -72,7 +72,6 @@ export class Sidebar {
       children: [
         { label: 'IoT & Tracking Overview', path: '/dashboard/iot-tracking-overview' },
         { label: 'Asset Overview', path: '/dashboard/asset-overview' },
-        { label: 'Reports', path: '/dashboard/reports' },
       ],
     },
     {
@@ -185,7 +184,7 @@ export class Sidebar {
       label: 'Reports & Analytics',
       path: REPORTS_ANALYTICS_BASE_PATH,
       icon: ChartColumn,
-      hasPage: true,
+      // Only expands its submenu; there is no Reports & Analytics overview page
       children: REPORTS_ANALYTICS_MENU.map((m) => ({ label: m.label, path: `${REPORTS_ANALYTICS_BASE_PATH}/${m.slug}` }))
     },
     // { label: 'Locating', path: '/locating', icon: this.assetUrl('trackingpurple.png') },

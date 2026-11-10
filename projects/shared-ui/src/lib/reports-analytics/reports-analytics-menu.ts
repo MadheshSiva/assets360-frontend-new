@@ -8,7 +8,6 @@ export const REPORTS_ANALYTICS_BASE_PATH = '/reports-analytics';
 
 // Sub modules of Reports & Analytics, in sidebar order. Each opens /reports-analytics/<slug>.
 export const REPORTS_ANALYTICS_MENU: ReportsModule[] = [
-  { label: 'Generated Reports', slug: 'generated-reports', description: 'Scheduled and generated reports, with create and download.' },
   { label: 'Standard Reports', slug: 'standard-reports', description: 'Ready-made reports for every module.' },
   { label: 'Custom Reports', slug: 'custom-reports', description: 'Build your own reports with fields, filters and grouping.' },
   { label: 'Interactive Dashboards', slug: 'interactive-dashboards', description: 'Drill-down dashboards with live filters.' },
