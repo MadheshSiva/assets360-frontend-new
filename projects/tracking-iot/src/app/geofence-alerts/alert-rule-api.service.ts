@@ -1,12 +1,12 @@
-import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, catchError, map } from 'rxjs';
+import { Observable } from 'rxjs';
 import { AuthService } from 'shared-ui';
-import { apiError, tenantBody, tenantParams, trackingUrl } from '../shared/tracking-api';
+import { DEMO_USER, demo, demoError } from '../shared/tracking-api';
 import { actorName } from './geofence-api.service';
 import { Rule, SEVERITIES, Severity, Trigger } from './geofence-data';
+import { ALERT_RULES, GEOFENCES, syncRuleCounts } from './geofences.data';
 
-/** GET /api/alert-rules row. */
+/** An alert rule record. */
 export interface AlertRuleDto {
   id: string;
   name: string;
@@ -104,41 +104,46 @@ export function toAlertRuleRequest(r: Omit<Rule, 'id'>, createdBy: string): Aler
     notificationChannels: [r.inApp ? 'In-app' : '', r.email ? 'Email' : '', r.push ? 'Push' : ''].filter(Boolean),
     status: r.enabled ? 'Active' : 'Disabled',
     createdBy,
-    ...tenantBody(),
+    clientId: 'demo-client',
+    tenantId: 'demo-tenant',
   };
 }
 
-/** Alert Rule Builder: /api/alert-rules. */
+/** Alert Rule Builder (static demo): the in-memory rules of geofences.data.ts. */
 @Injectable({ providedIn: 'root' })
 export class AlertRuleApiService {
-  private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
-  private readonly url = trackingUrl('alert-rules');
 
   list(geofenceId?: string): Observable<Rule[]> {
-    return this.http.get<AlertRuleDto[]>(this.url, { params: tenantParams({ geofenceId }) }).pipe(
-      map((rows) => rows.map(toRule)),
-      catchError((err) => apiError(err, 'Could not load alert rules.')),
-    );
+    return demo(ALERT_RULES.filter((r) => !geofenceId || r.geofenceId === geofenceId).map(toRule));
   }
 
   create(r: Omit<Rule, 'id'>): Observable<Rule> {
-    return this.http.post<AlertRuleDto>(this.url, toAlertRuleRequest(r, actorName(this.auth)), { params: tenantParams() }).pipe(
-      map(toRule),
-      catchError((err) => apiError(err, 'Could not save the alert rule.')),
-    );
+    if (!GEOFENCES.some((g) => g.id === r.zoneId)) return demoError('Could not save the alert rule: choose an existing geofence.');
+    const n = ALERT_RULES.reduce((m, x) => Math.max(m, Number(x.id.slice(3)) || 0), 0) + 1;
+    const dto = this.toDto(`AR-${String(n).padStart(4, '0')}`, r, null);
+    ALERT_RULES.push(dto);
+    syncRuleCounts();
+    return demo(toRule(dto));
   }
 
   update(r: Rule): Observable<Rule> {
-    return this.http.put<AlertRuleDto>(`${this.url}/${encodeURIComponent(r.id)}`, toAlertRuleRequest(r, actorName(this.auth)), { params: tenantParams() }).pipe(
-      map(toRule),
-      catchError((err) => apiError(err, 'Could not update the alert rule.')),
-    );
+    const i = ALERT_RULES.findIndex((x) => x.id === r.id);
+    if (i < 0) return demoError('Could not update the alert rule: it no longer exists.');
+    ALERT_RULES[i] = this.toDto(r.id, r, ALERT_RULES[i]);
+    syncRuleCounts();
+    return demo(toRule(ALERT_RULES[i]));
   }
 
   delete(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.url}/${encodeURIComponent(id)}`, { params: tenantParams() }).pipe(
-      catchError((err) => apiError(err, 'Could not delete the alert rule.')),
-    );
+    const i = ALERT_RULES.findIndex((x) => x.id === id);
+    if (i >= 0) ALERT_RULES.splice(i, 1);
+    syncRuleCounts();
+    return demo(undefined as void);
+  }
+
+  private toDto(id: string, r: Omit<Rule, 'id'>, old: AlertRuleDto | null): AlertRuleDto {
+    const req = toAlertRuleRequest(r, old?.createdBy ?? (actorName(this.auth) || DEMO_USER));
+    return { ...req, id, geofenceName: GEOFENCES.find((g) => g.id === r.zoneId)?.name ?? '', createdAt: old?.createdAt ?? new Date().toISOString() };
   }
 }

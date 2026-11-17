@@ -1,9 +1,10 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, Subject, catchError, forkJoin, map, of, switchMap, tap } from 'rxjs';
-import { AuthService, environment } from 'shared-ui';
-import { apiError, tenantBody, tenantParams, trackingUrl } from '../shared/tracking-api';
+import { Observable, Subject } from 'rxjs';
+import { AuthService } from 'shared-ui';
+import { DEMO_ASSETS, DEMO_SITES, assetByRef, siteById, siteByName } from '../shared/master-data.data';
+import { DEMO_USER, demo, demoError } from '../shared/tracking-api';
 import { LinkedAsset, PREFIX, TagId, TagStatus, TagType, Tech } from './tag-data';
+import { TAG_IDS, TAG_TECHNOLOGIES } from './tag-ids.data';
 
 /**
  * A tag as /api/tag-ids returns it (addressed by tagId). List rows carry registeredOn, value and validation;
@@ -37,19 +38,7 @@ export interface TagIdDto {
   tenantId?: string | null;
 }
 
-/** GET /api/tag-ids (paged). */
-export interface TagIdPageDto {
-  items: TagIdDto[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-}
-
-/** Page size used to read the whole list (the page filters and pages it itself). */
-const LIST_PAGE_SIZE = 100;
-
-/** Body of POST /api/tag-ids and PUT /api/tag-ids/{tagId} (same shape; tagId must match the URL on PUT). */
+/** Fields saved for a tag on create / update. */
 export interface TagIdRequest {
   tagId: string;
   /** The number part of the tag id (BLE-000123 → "000123"; a device id kept as entered). Required. */
@@ -78,14 +67,6 @@ export interface TagTechnologyOption {
   valueLabel: string;
   /** Tag types the technology comes in, as the API names them ("Barcode Label", "Hard Tag", ...). */
   tagTypes: string[];
-}
-
-/** One row of GET {assetApiUrl}api/asset-registrations (Asset service). */
-interface AssetListItemDto {
-  id: string;
-  assetRegistrationId: string | null;
-  assetName: string | null;
-  assetTag: string | null;
 }
 
 /** A master-data site, for the site pickers. */
@@ -202,139 +183,115 @@ export function tagNumberOf(t: { id: string; tech: Tech }): string {
   return t.id.toLowerCase().startsWith(prefix) ? t.id.slice(prefix.length) : t.id;
 }
 
-/** Tag Management → /api/tag-ids (Tracking service). */
+/** Tag Management (static demo, tag-ids.data.ts). */
 @Injectable({ providedIn: 'root' })
 export class TagIdApiService {
-  private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
-  private readonly url = trackingUrl('tag-ids');
   /** Emits after a tag is created, updated or deleted (the summary counts are then stale). */
   readonly changed$ = new Subject<void>();
 
   /** Name recorded on changes: the signed-in user, or the stored e-mail. */
   currentUser(): string {
-    return this.auth.getUser()?.userName || this.auth.getUserEmail() || 'Unknown user';
+    return this.auth.getUser()?.userName || this.auth.getUserEmail() || DEMO_USER;
   }
 
-  /** GET /api/tag-ids: every page (the list is paged; a plain array is accepted too). */
   getAll(): Observable<TagId[]> {
-    const page = (n: number) =>
-      this.http.get<TagIdPageDto | TagIdDto[]>(this.url, { params: tenantParams({ page: n, pageSize: LIST_PAGE_SIZE }) });
-    const rowsOf = (res: TagIdPageDto | TagIdDto[]) => (Array.isArray(res) ? res : res?.items ?? []);
-    return page(1).pipe(
-      switchMap((first) => {
-        const pages = Array.isArray(first) ? 1 : Math.max(1, first?.totalPages ?? 1);
-        if (pages <= 1) return of(rowsOf(first));
-        const rest = Array.from({ length: pages - 1 }, (_, i) => page(i + 2));
-        return forkJoin(rest).pipe(map((more) => [first, ...more].flatMap(rowsOf)));
-      }),
-      map((rows) => rows.map(tagFromDto)),
-      catchError((e) => apiError(e, 'Could not load tags.')),
-    );
+    return demo(TAG_IDS.map(tagFromDto));
   }
 
-  /** GET /api/tag-ids/summary: KPI counts; null when it fails or returns no counts (the page then counts the loaded list). */
+  /** KPI counts with the change vs last month. */
   summary(): Observable<TagSummary | null> {
-    return this.http.get<TagSummaryDto>(`${this.url}/summary`, { params: tenantParams() }).pipe(
-      map(summaryFromDto),
-      catchError(() => of(null)),
-    );
+    const monthAgo = Date.now() - 30 * 86_400_000;
+    const count = (pred: (t: TagIdDto) => boolean): TagSummaryCountDto => {
+      const now = TAG_IDS.filter(pred).length;
+      const last = TAG_IDS.filter((t) => pred(t) && Date.parse(t.registeredOn ?? '') < monthAgo).length;
+      return { count: now, lastMonthCount: last, changePercent: last ? Math.round(((now - last) / last) * 1000) / 10 : 0 };
+    };
+    const byTechnology: Record<string, number> = {};
+    for (const t of TAG_IDS) byTechnology[t.technology] = (byTechnology[t.technology] ?? 0) + 1;
+    return demo(summaryFromDto({
+      total: count(() => true),
+      assigned: count((t) => t.status === 'Assigned'),
+      available: count((t) => t.status === 'Available'),
+      inactive: count((t) => t.status === 'Inactive'),
+      failingValidation: TAG_IDS.filter((t) => t.validation === 'Invalid').length,
+      byTechnology,
+    }));
   }
 
-  /** GET /api/tag-ids/{tagId} */
   get(tagId: string): Observable<TagId> {
-    return this.http.get<TagIdDto>(`${this.url}/${encodeURIComponent(tagId)}`, { params: tenantParams() }).pipe(
-      map(tagFromDto),
-      catchError((e) => apiError(e, `Could not load ${tagId}.`)),
-    );
+    const t = TAG_IDS.find((x) => x.tagId === tagId);
+    return t ? demo(tagFromDto(t)) : demoError(`Tag ${tagId} was not found.`);
   }
 
-  /** GET /api/tag-ids/options (technologies, their id prefix and tag types) */
+  /** Technologies, their id prefix and tag types. */
   technologies(): Observable<TagTechnologyOption[]> {
-    // GET /api/tag-ids/options: the technologies as a list, or under `technologies` with the other dropdown options
-    return this.http.get<unknown>(`${this.url}/options`, { params: tenantParams() }).pipe(
-      map((res) => {
-        const list = Array.isArray(res) ? res : (res as { technologies?: unknown } | null)?.technologies;
-        return (Array.isArray(list) ? list : [])
-          .map((o): TagTechnologyOption | null => {
-            if (typeof o === 'string') return { technology: o, idPrefix: '', valueLabel: '', tagTypes: [] };
-            const r = o as Partial<TagTechnologyOption> & { name?: string; value?: string; prefix?: string };
-            const technology = r.technology ?? r.name ?? r.value;
-            return technology ? { technology, idPrefix: r.idPrefix ?? r.prefix ?? '', valueLabel: r.valueLabel ?? '', tagTypes: Array.isArray(r.tagTypes) ? r.tagTypes : [] } : null;
-          })
-          .filter((o): o is TagTechnologyOption => !!o);
-      }),
-      catchError((e) => apiError(e, 'Could not load technologies.')),
-    );
+    return demo(TAG_TECHNOLOGIES);
   }
 
-
-  /** Master-data sites for the site pickers; empty when the service cannot be reached. */
+  /** Sites for the site pickers. */
   sites(): Observable<SiteOption[]> {
-    type SiteRow = { id?: string; siteName?: string; name?: string; status?: string; isDeleted?: boolean };
-    // Master Data service (GET /api/master-data/sites); a list or a page of { items }
-    return this.http.get<SiteRow[] | { items?: SiteRow[] }>(`${environment.masterDataApiUrl}api/master-data/sites`, { params: tenantParams() }).pipe(
-      map((res) => (Array.isArray(res) ? res : res?.items ?? [])),
-      map((rows) =>
-        rows
-          .filter((r) => r.id && r.isDeleted !== true && !/^(inactive|disabled|deleted)$/i.test(r.status ?? ''))
-          .map((r) => ({ id: String(r.id), name: String(r.siteName ?? r.name ?? r.id) })),
-      ),
-      catchError(() => of([])),
-    );
+    return demo(DEMO_SITES.map((s) => ({ id: s.id, name: s.name })));
   }
 
-  /** Registered assets for the "Link to asset" pickers (Asset service, first 1000); empty when it cannot be reached. */
+  /** Registered assets for the "Link to asset" pickers. */
   assets(): Observable<LinkedAsset[]> {
-    const params = tenantParams({ page: 1, pageSize: 1000 });
-    return this.http.get<AssetListItemDto[] | { items?: AssetListItemDto[] }>(`${environment.assetApiUrl}api/asset-registrations`, { params }).pipe(
-      map((res) => (Array.isArray(res) ? res : res?.items ?? [])
-        .map((r) => ({ tag: (r.assetTag || r.assetRegistrationId || '').trim(), kind: r.assetName?.trim() || 'Asset', real: true }))
-        .filter((a) => !!a.tag)
-        .sort((a, b) => a.kind.localeCompare(b.kind) || a.tag.localeCompare(b.tag))),
-      catchError(() => of([])),
-    );
+    return demo(DEMO_ASSETS.map((a) => ({ tag: a.tag, kind: a.name, real: true })).sort((a, b) => a.kind.localeCompare(b.kind) || a.tag.localeCompare(b.tag)));
   }
 
-  /** POST /api/tag-ids */
   create(t: TagId): Observable<TagId> {
-    return this.http.post<TagIdDto>(this.url, this.request(t), { params: tenantParams() }).pipe(
-      map(tagFromDto),
-      tap(() => this.changed$.next()),
-      catchError((e) => apiError(e, `Could not register ${t.id}.`)),
-    );
+    if (TAG_IDS.some((x) => x.tagId.toLowerCase() === t.id.toLowerCase())) return demoError(`Tag ${t.id} is already registered.`);
+    const dto = this.toDto(t, null);
+    TAG_IDS.unshift(dto);
+    this.changed$.next();
+    return demo(tagFromDto(dto));
   }
 
-  /** PUT /api/tag-ids/{tagId}: full replace of the tag's fields (the tag id itself cannot change). */
+  /** Full replace of the tag fields (the tag id itself cannot change). */
   update(t: TagId): Observable<TagId> {
-    return this.http.put<TagIdDto>(`${this.url}/${encodeURIComponent(t.id)}`, this.request(t), { params: tenantParams() }).pipe(
-      map(tagFromDto),
-      tap(() => this.changed$.next()),
-      catchError((e) => apiError(e, `Could not save ${t.id}.`)),
-    );
+    const i = TAG_IDS.findIndex((x) => x.tagId === t.id);
+    if (i < 0) return demoError(`Could not save ${t.id}: it is no longer registered.`);
+    TAG_IDS[i] = this.toDto(t, TAG_IDS[i]);
+    this.changed$.next();
+    return demo(tagFromDto(TAG_IDS[i]));
   }
 
-  /** DELETE /api/tag-ids/{tagId} */
   delete(tagId: string): Observable<void> {
-    return this.http.delete<void>(`${this.url}/${encodeURIComponent(tagId)}`, { params: tenantParams() }).pipe(
-      tap(() => this.changed$.next()),
-      catchError((e) => apiError(e, `Could not delete ${tagId}.`)),
-    );
+    const i = TAG_IDS.findIndex((x) => x.tagId === tagId);
+    if (i >= 0) TAG_IDS.splice(i, 1);
+    this.changed$.next();
+    return demo(undefined as void);
+  }
+
+  private toDto(t: TagId, old: TagIdDto | null): TagIdDto {
+    const req = this.request(t);
+    const asset = assetByRef(req.assetRegistrationId);
+    const site = siteById(req.siteId) ?? siteByName(req.siteName);
+    const tech = TAG_TECHNOLOGIES.find((x) => x.technology === req.technology);
+    const now = new Date().toISOString();
+    const regId = asset?.regId ?? req.assetRegistrationId;
+    const assignedChanged = (old?.assetRegistrationId ?? null) !== regId;
+    return {
+      id: old?.id, tagId: req.tagId, tagType: req.tagType, technology: req.technology, valueLabel: tech?.valueLabel ?? null, value: req.value,
+      registeredOn: old?.registeredOn ?? now, validation: req.value ? 'Valid' : 'Invalid', validationMessage: req.value ? null : 'Encoded value is missing',
+      assetRegistrationId: regId, assetCode: asset?.tag ?? req.assetRegistrationId, assetName: asset?.name ?? req.assetName,
+      siteId: site?.id ?? req.siteId, siteName: site?.name ?? req.siteName, locationName: req.locationName, status: req.status,
+      assignedAt: regId ? (assignedChanged ? now : old?.assignedAt ?? now) : null, lastSeenAt: req.lastSeenAt,
+      createdBy: old?.createdBy ?? req.createdBy, createdAt: old?.createdAt ?? now, clientId: 'demo-client', tenantId: 'demo-tenant',
+    };
   }
 
   private request(t: TagId): TagIdRequest {
-    return { ...this.requestBody(t), tagNumber: tagNumberOf(t), value: t.code.trim() || null };
-  }
-
-  private requestBody(t: TagId): Omit<TagIdRequest, 'tagNumber' | 'value'> {
     const assigned = t.status === 'Assigned' && !!t.asset;
     const kind = t.asset?.kind;
     return {
       tagId: t.id,
-      // keep the API's own type text while the page type is unchanged
+      tagNumber: tagNumberOf(t),
+      value: t.code.trim() || null,
+      // keep the stored type text while the page type is unchanged
       tagType: t.apiTagType && pageType(t.apiTagType) === t.type ? t.apiTagType : apiType(t.tech, t.type),
       technology: t.tech,
-      // the API only accepts a linked asset on an Assigned tag
+      // a linked asset is only kept on an Assigned tag
       assetRegistrationId: assigned ? t.asset!.tag : null,
       assetName: assigned && kind && kind !== 'Asset' ? kind : null,
       siteId: t.site ? t.siteId ?? null : null,
@@ -343,7 +300,8 @@ export class TagIdApiService {
       status: t.status === 'Assigned' && !t.asset ? 'Available' : t.status,
       lastSeenAt: t.lastSeen !== null ? new Date(t.lastSeen).toISOString() : null,
       createdBy: this.currentUser(),
-      ...tenantBody(),
+      clientId: 'demo-client',
+      tenantId: 'demo-tenant',
     };
   }
 }

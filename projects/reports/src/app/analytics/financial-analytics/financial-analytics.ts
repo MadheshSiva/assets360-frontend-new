@@ -168,7 +168,7 @@ export class FinancialAnalyticsPage extends RaDashboardPage implements OnInit {
     };
   }
 
-  /** Reloads the page from GET /overview whenever a filter changes. */
+  /** Reloads the page whenever a filter changes. */
   apply(announce?: string): void {
     this.loadSub?.unsubscribe();
     this.refreshing = true;
@@ -373,7 +373,7 @@ export class FinancialAnalyticsPage extends RaDashboardPage implements OnInit {
     }
   }
 
-  /** CAPEX Approvals: the decision is recorded through POST /capex-requests/decisions, then the page reloads. */
+  /** CAPEX Approvals: the decision is recorded, then the page reloads. */
   private openApprovals(): void {
     const all = 'All pending requests';
     const reqs = this.view.capexRequests;
@@ -454,10 +454,10 @@ export class FinancialAnalyticsPage extends RaDashboardPage implements OnInit {
 
   // ===== Exports =====
 
-  /** Page export: the API's Excel workbook (every section, amounts in AED). */
+  /** Page export: the asset cost register as CSV (amounts in AED). */
   exportPage(): void {
     this.api.export(this.filters()).subscribe({
-      next: () => this.notify('Exported Financial Analytics workbook (Excel, amounts in AED).'),
+      next: () => this.notify('Exported Financial Analytics asset costs (CSV, amounts in AED).'),
       error: (err: Error) => this.notify(err.message)
     });
   }

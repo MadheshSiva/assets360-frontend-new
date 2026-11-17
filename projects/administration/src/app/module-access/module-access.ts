@@ -7,7 +7,7 @@ import {
   Pencil, Plus, Search, Server, Shield, Trash2, Upload, User, Users, Wrench, X
 } from 'lucide-angular';
 import { ASSET360_MODULES, AdminPage } from '../shared/admin-common';
-import { RoleAccessService, adminApiError } from '../role-access-control/role-access.service';
+import { adminApiError } from '../role-access-control/role-access.service';
 import { UsersDialog } from '../role-access-control/users-dialog/users-dialog';
 import { ExceptionList } from './exception-list/exception-list';
 import { FeatureList } from './feature-list/feature-list';
@@ -46,7 +46,6 @@ const POLICY_ICONS: Record<PolicyIcon, LucideIconData> = {
 })
 export class ModuleAccessPage extends AdminPage {
   private readonly service = inject(ModuleAccessService);
-  private readonly roles = inject(RoleAccessService);
 
   readonly icons = { Box, List, Lock, Users, Plus, Copy, Upload, Download, Search, Funnel, ChevronRight, Ellipsis, Pencil, Trash2, X };
   readonly modules = ASSET360_MODULES;
@@ -76,18 +75,7 @@ export class ModuleAccessPage extends AdminPage {
 
   constructor() {
     super();
-    this.service.load().subscribe({
-      next: (all) => {
-        this.load(all.find((p) => p.code === 'OPS-MGR-001') ?? all[0]);
-        this.notify(
-          all.length ? `Loaded ${all.length} access polic${all.length === 1 ? 'y' : 'ies'} from the server.` : 'No access policies yet. Create the first policy.',
-          'success'
-        );
-      },
-      error: (err) => this.notify(`Couldn't load access policies: ${adminApiError(err, 'access policy')}`, 'error')
-    });
-    // Role options for the policy drawer
-    this.roles.ensureLoaded().subscribe({ error: (err) => this.notify(`Couldn't load roles: ${adminApiError(err, 'roles')}`, 'error') });
+    this.service.load().subscribe((all) => this.load(all.find((p) => p.code === 'OPS-MGR-001') ?? all[0]));
   }
 
   get loading(): boolean {
@@ -383,7 +371,6 @@ export class ModuleAccessPage extends AdminPage {
   }
 
   allUsers(): string[] {
-    // Policy members come from the users API once wired
-    return [];
+    return this.service.members(this.draft);
   }
 }

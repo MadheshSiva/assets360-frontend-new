@@ -85,5 +85,12 @@ export interface NetworkProfile {
   active: boolean;
 }
 
-/** Network profiles have no API yet; they are kept for this session only. */
-export const PROFILES: NetworkProfile[] = [];
+/** Network profiles (static demo data; changes are kept for this session only). */
+export const PROFILES: NetworkProfile[] = [
+  { id: 'NP-01', name: 'LoRaWAN IN865 – Plants', type: 'LoRaWAN', detail: 'IN865 · OTAA · ADR on · Class A', security: 'AES-128 (AppKey / NwkKey)', sites: ['SITE-CHN-01', 'SITE-PUN-01', 'SITE-HYD-01', 'SITE-BLR-01'], devices: 17, active: true },
+  { id: 'NP-02', name: 'LoRaWAN EU868 – Jebel Ali', type: 'LoRaWAN', detail: 'EU868 · OTAA · ADR on · Class A', security: 'AES-128 (AppKey / NwkKey)', sites: ['SITE-DXB-01'], devices: 2, active: true },
+  { id: 'NP-03', name: 'BLE Indoor Positioning', type: 'BLE', detail: 'BLE 5.0 · 1 s advertising · Tx −8 dBm', security: 'Secure shuffling (rotating IDs)', sites: ['SITE-CHN-01', 'SITE-BLR-01', 'SITE-PUN-01', 'SITE-HYD-01'], devices: 11, active: true },
+  { id: 'NP-04', name: 'Fleet LTE APN', type: 'Cellular', detail: 'APN iot.fleet.in · LTE Cat-1 / Cat-M1', security: 'Private APN + TLS 1.2 (MQTT)', sites: ['SITE-BLR-01', 'SITE-HYD-01', 'SITE-PUN-01'], devices: 4, active: true },
+  { id: 'NP-05', name: 'OT Network (Readers)', type: 'Wi-Fi / Ethernet', detail: 'VLAN 140 · PoE+ · LLRP 5084', security: '802.1X (EAP-TLS)', sites: ['SITE-CHN-01', 'SITE-BLR-01'], devices: 2, active: true },
+  { id: 'NP-06', name: 'Legacy 3G Trackers', type: 'Cellular', detail: 'WCDMA · APN legacy.m2m', security: 'Public APN + TLS 1.0', sites: [], devices: 0, active: false },
+];

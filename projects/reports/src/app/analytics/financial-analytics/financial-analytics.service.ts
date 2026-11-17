@@ -1,174 +1,16 @@
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
-import { Observable, catchError, finalize, map, tap, throwError } from 'rxjs';
-import { environment } from 'shared-ui';
+import { Injectable, signal } from '@angular/core';
+import { Observable, of } from 'rxjs';
+import {
+  DEMO_ORGANIZATIONS, DEMO_SITES, dayFromToday, formatDate, monthAxisLabel, pctChange, periodMonths, periodRange, periodWeight, previousMonths, rnd, round1,
+  siteInScope, sum
+} from '../asset-performance/kit/demo-data';
+import { RA_CATEGORIES, downloadCsv } from '../shared/analytics-common';
 import { RA_COLORS } from '../shared/charts';
 import {
-  DashboardPeriodDto, FilterOptionsDto, KpiWidgetDto, PerformanceSeriesDto, alignTo, apiErrorMessage, monthLabel, num, optionLabels, saveBlob, seriesValues,
-  toParams
-} from '../asset-performance/kit/api-utils';
-import {
-  ALL_CATEGORIES, ALL_COST_CENTERS, ALL_LOCATIONS, ALL_ORGANIZATIONS, BUDGET_TARGET, CATEGORY_COLORS, CapexRequest, CategoryCost, CostAsset, FA_DEFAULT_PERIOD,
-  FA_FALLBACK_PERIODS, FinancialKpi, FinancialView, MAINTENANCE_RATIO_LIMIT, TCO_COMPONENTS, emptyFinancial
+  ALL_CATEGORIES, ALL_COST_CENTERS, ALL_LOCATIONS, ALL_ORGANIZATIONS, BUDGET_TARGET, CAPEX_REQUESTS, CATEGORY_COLORS, COST_CENTERS, CapexRequest, CategoryCost,
+  CostAsset, CostCenterRow, FA_DEFAULT_PERIOD, FA_FALLBACK_PERIODS, FINANCE_REGISTER, FinanceAsset, FinancialKpi, FinancialView, MAINTENANCE_RATIO_LIMIT,
+  emptyFinancial
 } from './financial-analytics.data';
-
-// ----- API shapes (/api/financial-analytics) -----
-
-interface AppliedFiltersDto {
-  viewId: string | null;
-  organization: string | null;
-  location: string | null;
-  category: string | null;
-  costCenter: string | null;
-  currency: string;
-  budgetTarget: number;
-  defaultUsefulLifeYears: number;
-  maintenanceRatioLimit: number;
-  utilizationThreshold: number;
-}
-
-interface SummaryDto {
-  totalAssetValue: KpiWidgetDto;
-  maintenanceSpend: KpiWidgetDto;
-  capex: KpiWidgetDto;
-  opex: KpiWidgetDto;
-  netBookValue: KpiWidgetDto;
-}
-
-interface TcoTrendDto {
-  trend: PerformanceSeriesDto;
-  previousTrend: PerformanceSeriesDto;
-  acquisition: number;
-  maintenance: number;
-  total: number;
-}
-
-interface CategoryCostsDto {
-  total: number;
-  items: { category: string; acquisition: number; maintenance: number; total: number; percentage: number }[];
-}
-
-interface DepreciationDto {
-  trend: PerformanceSeriesDto;
-  previousTrend: PerformanceSeriesDto;
-  periodDepreciation: number;
-  accumulated: number;
-}
-
-interface CostCenterRowDto {
-  code: string;
-  name: string;
-  budget: number;
-  budgetSource: string;
-  actual: number;
-  maintenance: number;
-  capex: number;
-  variance: number;
-  utilization: number | null;
-  status: string;
-}
-
-interface BudgetUtilizationDto {
-  spend: number;
-  budget: number;
-  remaining: number;
-  utilization: number | null;
-  target: number;
-  meetsTarget: boolean | null;
-}
-
-interface SiteMaintenanceDto {
-  site: string;
-  labour: number;
-  parts: number;
-  contractor: number;
-  total: number;
-}
-
-interface AssetRowDto {
-  key: string;
-  assetRecordId: string | null;
-  assetId: string | null;
-  assetName: string | null;
-  category: string | null;
-  location: string | null;
-  costCenter: string | null;
-  acquisition: number;
-  maintenance: number;
-  periodMaintenance: number;
-  depreciation: number;
-  netBookValue: number;
-  tco: number;
-  operatingHours: number | null;
-  costPerHour: number | null;
-  maintenanceRatio: number | null;
-  usefulLifeMonths: number | null;
-  usefulLifeSource: string;
-}
-
-interface CapexRequestDto {
-  requestId: string;
-  title: string;
-  assetId: string | null;
-  assetName: string | null;
-  location: string | null;
-  category: string | null;
-  costCenter: string | null;
-  amount: number;
-  currency: string | null;
-  justification: string | null;
-  requestedBy: string | null;
-  submittedAt: string;
-  status: string;
-}
-
-interface DisposalCandidateDto {
-  key: string;
-  assetRecordId: string | null;
-  assetId: string | null;
-  assetName: string | null;
-  category: string | null;
-  location: string | null;
-  utilization: number;
-  recoverableValue: number;
-}
-
-interface OverviewDto {
-  generatedAt: string;
-  filters: AppliedFiltersDto;
-  period: DashboardPeriodDto;
-  summary: SummaryDto;
-  tcoTrend: TcoTrendDto;
-  categoryCosts: CategoryCostsDto;
-  depreciation: DepreciationDto;
-  costCenters: CostCenterRowDto[];
-  budgetUtilization: BudgetUtilizationDto;
-  siteMaintenance: SiteMaintenanceDto[];
-  assets: AssetRowDto[];
-  assetTotal: number;
-  capexRequests: CapexRequestDto[];
-  disposalCandidates: DisposalCandidateDto[];
-}
-
-interface OptionsDto {
-  datePresets: string[];
-  defaultDatePreset: string;
-  baseCurrency: string;
-  defaultBudgetTarget: number;
-}
-
-interface CostCenterOptionDto {
-  value: string;
-  label: string;
-  annualBudget: number | null;
-}
-
-interface ViewDto {
-  viewId: string;
-  viewName: string;
-  isBuiltIn: boolean;
-  isDefault: boolean;
-}
 
 // ----- UI shapes -----
 
@@ -198,214 +40,268 @@ export interface FaCostCenterOption {
   label: string;
 }
 
-const TIME_ZONE = 'UTC';
-/** The overview returns this many asset rows, so the table can be sorted and the threshold insight listed in the browser. */
-const ASSET_ROWS = 500;
+export interface FaSavedView {
+  viewId: string;
+  viewName: string;
+  isBuiltIn: boolean;
+  isDefault: boolean;
+}
+
 /** The donut shows the biggest categories; the rest are grouped as "Other". */
 const TOP_CATEGORIES = 4;
+/** Assets used less than this (%) with book value left are disposal candidates. */
+const UTILIZATION_THRESHOLD = 35;
+/** Running costs besides maintenance (energy, insurance, licences) per month, as a share of acquisition cost. */
+const RUNNING_COST_RATE = 0.0012;
+/** Operating hours in a month at 100% utilization. */
+const MONTH_HOURS = 730;
 
-const kpi = (dto: KpiWidgetDto | null | undefined): FinancialKpi => ({
-  value: num(dto?.value),
-  previous: num(dto?.previousValue),
-  change: typeof dto?.change === 'number' ? dto.change : null
-});
-
-function categoryCosts(dto: CategoryCostsDto | null | undefined): CategoryCost[] {
-  const items = [...(dto?.items ?? [])].sort((a, b) => b.total - a.total);
-  const top = items.slice(0, TOP_CATEGORIES).map((c, i) => ({ name: c.category, value: num(c.total), color: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }));
-  const rest = items.slice(TOP_CATEGORIES).reduce((s, c) => s + num(c.total), 0);
-  return rest > 0 ? [...top, { name: 'Other', value: rest, color: RA_COLORS.pink }] : top;
+function inScope(x: FinanceAsset, f: FaFilters): boolean {
+  if (!siteInScope(x.asset.site.name, f.organization, f.location)) return false;
+  if (f.category && f.category !== ALL_CATEGORIES && x.asset.category !== f.category) return false;
+  if (f.costCenter && x.costCenter !== f.costCenter) return false;
+  return true;
 }
 
-function toAsset(dto: AssetRowDto): CostAsset {
-  return {
-    key: dto.key,
-    id: dto.assetId || dto.key,
-    name: dto.assetName || dto.assetId || '—',
-    category: dto.category ?? '—',
-    site: dto.location ?? '—',
-    acquisition: num(dto.acquisition),
-    maintenance: num(dto.maintenance),
-    depreciation: num(dto.depreciation),
-    netBookValue: num(dto.netBookValue),
-    tco: num(dto.tco),
-    hours: dto.operatingHours,
-    costPerHour: dto.costPerHour,
-    maintenanceRatio: dto.maintenanceRatio
+const owned = (x: FinanceAsset, month: number) => x.acquiredIndex <= month;
+const monthlyDepreciation = (x: FinanceAsset) => x.acquisition / x.usefulLifeMonths;
+
+/** Depreciation charged in a month (none before purchase or once fully depreciated). */
+function depreciationIn(x: FinanceAsset, month: number): number {
+  const age = month - x.acquiredIndex + 1;
+  return age >= 1 && age <= x.usefulLifeMonths ? monthlyDepreciation(x) : 0;
+}
+
+function accumulatedAt(x: FinanceAsset, month: number): number {
+  return owned(x, month) ? monthlyDepreciation(x) * Math.min(x.usefulLifeMonths, month - x.acquiredIndex + 1) : 0;
+}
+
+function maintenanceToDate(x: FinanceAsset, month: number): number {
+  return x.priorMaintenance + sum(x.monthlyMaintenance.slice(0, month + 1));
+}
+
+/** Spend of one asset over some months: maintenance, CAPEX (its purchase) and other running costs. */
+function spend(x: FinanceAsset, months: number[], weight: number) {
+  const maintenance = sum(months.map((m) => x.monthlyMaintenance[m] ?? 0)) * weight;
+  const capex = months.includes(x.acquiredIndex) ? x.acquisition * weight : 0;
+  const running = months.filter((m) => owned(x, m)).length * x.acquisition * RUNNING_COST_RATE * weight;
+  return { maintenance, capex, running };
+}
+
+const kpi = (value: number, previous: number): FinancialKpi => ({ value: Math.round(value), previous: Math.round(previous), change: previous ? pctChange(value, previous) : null });
+
+function caption(period: string): string {
+  const { from, to } = periodRange(period);
+  return from.getTime() === to.getTime() ? formatDate(from) : `${formatDate(from)} – ${formatDate(to)}`;
+}
+
+function buildView(f: FaFilters, decided: Set<string>): FinancialView {
+  const months = periodMonths(f.period);
+  const previous = previousMonths(f.period);
+  const weight = periodWeight(f.period);
+  const end = months[months.length - 1];
+  const prevEnd = previous.length ? previous[previous.length - 1] : -1;
+  const register = FINANCE_REGISTER.filter((x) => inScope(x, f));
+  const assets = register.filter((x) => owned(x, end));
+
+  const total = (list: FinanceAsset[], m: number[]) => {
+    const s = list.map((x) => spend(x, m, weight));
+    return { maintenance: sum(s.map((x) => x.maintenance)), capex: sum(s.map((x) => x.capex)), running: sum(s.map((x) => x.running)) };
   };
-}
+  const now = total(register, months);
+  const before = total(register, previous);
+  const value = (month: number) => sum(register.filter((x) => owned(x, month)).map((x) => x.acquisition));
+  const nbv = (month: number) => sum(register.filter((x) => owned(x, month)).map((x) => x.acquisition - accumulatedAt(x, month)));
 
-function toCapex(dto: CapexRequestDto): CapexRequest {
-  return {
-    ref: dto.requestId,
-    title: dto.title,
-    site: dto.location ?? '—',
-    category: dto.category ?? '—',
-    amount: num(dto.amount),
-    requestedBy: dto.requestedBy ?? '—',
-    submitted: (dto.submittedAt ?? '').slice(0, 10),
-    status: dto.status
+  // TCO trend: acquisitions and maintenance per month, and the running total
+  const acquisitionByMonth = months.map((m) => sum(register.filter((x) => x.acquiredIndex === m).map((x) => x.acquisition)) * weight);
+  const maintenanceByMonth = months.map((m) => sum(register.map((x) => x.monthlyMaintenance[m] ?? 0)) * weight);
+  const cumulative = (a: number[], b: number[]) => {
+    let running = 0;
+    return a.map((v, i) => (running += v + b[i]));
   };
-}
+  const prevAcquisition = previous.map((m) => sum(register.filter((x) => x.acquiredIndex === m).map((x) => x.acquisition)) * weight);
+  const prevMaintenance = previous.map((m) => sum(register.map((x) => x.monthlyMaintenance[m] ?? 0)) * weight);
+  const prevCumulative = cumulative(prevAcquisition, prevMaintenance);
 
-function caption(period: DashboardPeriodDto | null | undefined): string {
-  if (!period) return '';
-  const fmt = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
-  return period.from === period.to ? fmt(period.from) : `${fmt(period.from)} – ${fmt(period.to)}`;
-}
+  // Cost by category over the period
+  const byCategory = RA_CATEGORIES.map((c) => {
+    const s = total(register.filter((x) => x.asset.category === c), months);
+    return { name: c, value: s.capex + s.maintenance };
+  }).filter((c) => c.value > 0).sort((a, b) => b.value - a.value);
+  const rest = sum(byCategory.slice(TOP_CATEGORIES).map((c) => c.value));
+  const categoryCosts: CategoryCost[] = byCategory.slice(0, TOP_CATEGORIES).map((c, i) => ({ ...c, color: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }));
+  if (rest > 0) categoryCosts.push({ name: 'Other', value: rest, color: RA_COLORS.pink });
 
-function toView(dto: OverviewDto): FinancialView {
-  const trend = dto.tcoTrend?.trend;
-  const labels = (trend?.categories ?? []).map(monthLabel);
-  const budget = dto.budgetUtilization;
-  return {
-    generatedAt: dto.generatedAt,
-    labels,
-    caption: caption(dto.period),
-    totalAssetValue: kpi(dto.summary?.totalAssetValue),
-    maintenance: kpi(dto.summary?.maintenanceSpend),
-    capex: kpi(dto.summary?.capex),
-    opex: kpi(dto.summary?.opex),
-    netBookValue: kpi(dto.summary?.netBookValue),
-    tco: TCO_COMPONENTS.map((name) => seriesValues(trend, name)),
-    tcoCumulative: seriesValues(trend, 'Total TCO (cumulative)'),
-    tcoCumulativePrevious: alignTo(seriesValues(dto.tcoTrend?.previousTrend, 'Total TCO (cumulative)'), labels.length),
-    tcoTotal: num(dto.tcoTrend?.total),
-    categoryCosts: categoryCosts(dto.categoryCosts),
-    depreciation: seriesValues(dto.depreciation?.trend, 'Monthly Depreciation'),
-    accumulated: seriesValues(dto.depreciation?.trend, 'Accumulated Depreciation'),
-    depreciationPrevious: alignTo(seriesValues(dto.depreciation?.previousTrend, 'Monthly Depreciation'), labels.length),
-    costCenters: (dto.costCenters ?? []).map((c) => ({
-      code: c.code, name: c.name, budget: num(c.budget), actual: num(c.actual), variance: num(c.variance), utilization: c.utilization, status: c.status
-    })),
-    budget: num(budget?.budget),
-    spend: num(budget?.spend),
-    budgetUtilization: budget?.utilization ?? null,
-    budgetTarget: budget?.target ?? dto.filters?.budgetTarget ?? BUDGET_TARGET,
-    maintenanceRatioLimit: dto.filters?.maintenanceRatioLimit ?? MAINTENANCE_RATIO_LIMIT,
-    utilizationThreshold: dto.filters?.utilizationThreshold ?? 25,
-    siteMaintenance: (dto.siteMaintenance ?? []).map((s) => ({ site: s.site, labour: num(s.labour), parts: num(s.parts), contractor: num(s.contractor), total: num(s.total) })),
-    assets: (dto.assets ?? []).map(toAsset),
-    assetTotal: num(dto.assetTotal),
-    capexRequests: (dto.capexRequests ?? []).map(toCapex),
-    disposals: (dto.disposalCandidates ?? []).map((d) => ({
-      id: d.assetId || d.key, name: d.assetName || d.assetId || '—', category: d.category ?? '—', site: d.location ?? '—',
-      utilization: num(d.utilization), recoverable: num(d.recoverableValue)
+  // Depreciation
+  const depreciation = months.map((m) => sum(register.map((x) => depreciationIn(x, m))) * weight);
+  const accumulated = months.map((m) => sum(register.map((x) => accumulatedAt(x, m))));
+  const depreciationPrevious = months.map((_, i) => (previous[i] === undefined ? 0 : sum(register.map((x) => depreciationIn(x, previous[i]))) * weight));
+
+  // Cost centers: budget is the cost center's annual plan for the scope, pro-rated to the period
+  const last12 = Array.from({ length: 12 }, (_, i) => end - 11 + i).filter((m) => m >= 0);
+  const costCenters: CostCenterRow[] = COST_CENTERS.map((cc) => {
+    const list = register.filter((x) => x.costCenter === cc.code);
+    if (!list.length) return null;
+    const year = total(list, last12);
+    const budget = Math.round(((year.maintenance + year.capex) / (weight || 1)) * cc.budgetFactor * (months.length / 12) * weight);
+    const s = total(list, months);
+    const actual = Math.round(s.maintenance + s.capex);
+    const utilization = budget ? round1((actual / budget) * 100) : null;
+    return {
+      code: cc.code, name: cc.name, budget, actual, variance: actual - budget, utilization,
+      status: utilization === null ? 'No Budget' : utilization > 100 ? 'Over Budget' : utilization >= BUDGET_TARGET ? 'At Risk' : 'On Track'
+    };
+  }).filter((c): c is CostCenterRow => c !== null);
+  const budget = sum(costCenters.map((c) => c.budget));
+  const spent = sum(costCenters.map((c) => c.actual));
+
+  // Maintenance by location, split into labour, parts and contractor costs
+  const siteMaintenance = DEMO_SITES.filter((s) => register.some((x) => x.asset.site === s)).map((s, i) => {
+    const t = Math.round(total(register.filter((x) => x.asset.site === s), months).maintenance);
+    const labour = Math.round(t * (0.42 + rnd(i, 91) * 0.08));
+    const parts = Math.round(t * (0.3 + rnd(i, 92) * 0.08));
+    return { site: s.name, labour, parts, contractor: t - labour - parts, total: t };
+  }).filter((s) => s.total > 0);
+
+  const rows: CostAsset[] = assets.map((x) => {
+    const s = spend(x, months, weight);
+    const maintenance = Math.round(maintenanceToDate(x, end));
+    const depreciationToDate = Math.round(accumulatedAt(x, end));
+    const ownedMonths = months.filter((m) => owned(x, m)).length;
+    const hours = Math.round(x.asset.utilization / 100 * MONTH_HOURS * ownedMonths * weight);
+    const periodDepreciation = sum(months.map((m) => depreciationIn(x, m))) * weight;
+    return {
+      key: x.asset.key,
+      id: x.asset.id,
+      name: x.asset.name,
+      category: x.asset.category,
+      site: x.asset.site.name,
+      acquisition: x.acquisition,
+      maintenance,
+      depreciation: depreciationToDate,
+      netBookValue: Math.round(x.acquisition - depreciationToDate),
+      tco: x.acquisition + maintenance,
+      hours,
+      costPerHour: hours ? round1((s.maintenance + s.running + periodDepreciation) / hours) : null,
+      maintenanceRatio: x.acquisition ? round1((maintenance / x.acquisition) * 100) : null
+    };
+  });
+
+  const capexRequests: CapexRequest[] = CAPEX_REQUESTS
+    .filter((r) => !decided.has(r.ref) && siteInScope(r.site, f.organization, f.location)
+      && (!f.category || f.category === ALL_CATEGORIES || r.category === f.category) && (!f.costCenter || r.costCenter === f.costCenter))
+    .map((r) => ({
+      ref: r.ref, title: r.title, site: r.site, category: r.category, amount: r.amount, requestedBy: r.requestedBy,
+      submitted: dayFromToday(-r.daysAgo).slice(0, 10), status: 'Pending Approval'
+    }));
+
+  const disposals = rows
+    .filter((a) => {
+      const x = assets.find((y) => y.asset.key === a.key);
+      return x && x.asset.utilization < UTILIZATION_THRESHOLD && a.netBookValue > 0;
+    })
+    .map((a) => ({
+      id: a.id, name: a.name, category: a.category, site: a.site,
+      utilization: assets.find((y) => y.asset.key === a.key)?.asset.utilization ?? 0, recoverable: a.netBookValue
     }))
+    .sort((a, b) => b.recoverable - a.recoverable);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    labels: months.map(monthAxisLabel),
+    caption: caption(f.period),
+    totalAssetValue: kpi(value(end), prevEnd >= 0 ? value(prevEnd) : 0),
+    maintenance: kpi(now.maintenance, before.maintenance),
+    capex: kpi(now.capex, before.capex),
+    opex: kpi(now.maintenance + now.running, before.maintenance + before.running),
+    netBookValue: kpi(nbv(end), prevEnd >= 0 ? nbv(prevEnd) : 0),
+    tco: [acquisitionByMonth, maintenanceByMonth],
+    tcoCumulative: cumulative(acquisitionByMonth, maintenanceByMonth),
+    tcoCumulativePrevious: months.map((_, i) => prevCumulative[i] ?? 0),
+    tcoTotal: Math.round(now.capex + now.maintenance),
+    categoryCosts,
+    depreciation,
+    accumulated,
+    depreciationPrevious,
+    costCenters,
+    budget,
+    spend: spent,
+    budgetUtilization: budget ? round1((spent / budget) * 100) : null,
+    budgetTarget: BUDGET_TARGET,
+    maintenanceRatioLimit: MAINTENANCE_RATIO_LIMIT,
+    utilizationThreshold: UTILIZATION_THRESHOLD,
+    siteMaintenance,
+    assets: rows,
+    assetTotal: rows.length,
+    capexRequests,
+    disposals
   };
 }
 
-/** "All …" in the filter bar is no filter. */
-const pick = (value: string, all: string): string | null => (!value || value === all ? null : value);
+const DECISION_STATUS: Record<string, string> = { Approve: 'Approved', Reject: 'Rejected', 'Request more information': 'More Information Requested' };
 
-/** Financial Analytics figures, filters, saved views and CAPEX approvals from the Report Analytics API (/api/financial-analytics). */
+/** DEMO MODE: Financial Analytics figures, filters, saved views and CAPEX approvals built in the browser from the static cost register. */
 @Injectable()
 export class FinancialAnalyticsService {
-  private readonly http = inject(HttpClient);
-  private readonly apiUrl = `${environment.reportAnalyticsApiUrl}api/financial-analytics`;
-
   readonly view = signal<FinancialView>(emptyFinancial());
   readonly loading = signal(false);
   readonly loaded = signal(false);
 
-  private fail = (err: HttpErrorResponse) => throwError(() => new Error(apiErrorMessage(err, 'Financial Analytics')));
+  /** CAPEX requests approved or rejected in this session */
+  private readonly decided = new Set<string>();
+  private views: FaSavedView[] = [];
 
-  private scope(): Record<string, string | undefined> {
-    return { tenantId: environment.tenantId, clientId: environment.clientId };
-  }
-
-  private query(f: FaFilters): Record<string, string | null | undefined> {
-    return {
-      datePreset: f.period || FA_DEFAULT_PERIOD,
-      organization: pick(f.organization, ALL_ORGANIZATIONS),
-      location: pick(f.location, ALL_LOCATIONS),
-      category: pick(f.category, ALL_CATEGORIES),
-      costCenter: f.costCenter,
-      timeZone: TIME_ZONE,
-      ...this.scope()
-    };
-  }
-
-  /** GET /options: period presets (Custom left out) and the budget utilization target. */
+  /** Period presets and the budget utilization target. */
   loadOptions(): Observable<FaOptions> {
-    return this.http.get<OptionsDto>(`${this.apiUrl}/options`).pipe(
-      map((dto) => {
-        const periods = (dto.datePresets ?? []).filter((p) => p !== 'Custom');
-        const list = periods.length ? periods : FA_FALLBACK_PERIODS;
-        return {
-          periods: list,
-          defaultPeriod: list.includes(dto.defaultDatePreset) ? dto.defaultDatePreset : FA_DEFAULT_PERIOD,
-          budgetTarget: dto.defaultBudgetTarget ?? BUDGET_TARGET
-        };
-      }),
-      catchError(this.fail)
-    );
+    return of({ periods: FA_FALLBACK_PERIODS, defaultPeriod: FA_DEFAULT_PERIOD, budgetTarget: BUDGET_TARGET });
   }
 
-  /** GET /filters: Organization, Location and Asset Category values (labels; the API matches names). */
+  /** Organization, Location and Asset Category values. */
   loadFilters(): Observable<FaFilterLists> {
-    return this.http.get<FilterOptionsDto>(`${this.apiUrl}/filters`, { params: toParams(this.scope()) }).pipe(
-      map((dto) => ({
-        organizations: optionLabels(ALL_ORGANIZATIONS, dto.organizations),
-        locations: optionLabels(ALL_LOCATIONS, dto.locations),
-        categories: optionLabels(ALL_CATEGORIES, dto.assetCategories)
-      })),
-      catchError(this.fail)
-    );
+    return of({
+      organizations: [ALL_ORGANIZATIONS, ...DEMO_ORGANIZATIONS],
+      locations: [ALL_LOCATIONS, ...DEMO_SITES.map((s) => s.name)],
+      categories: [ALL_CATEGORIES, ...RA_CATEGORIES]
+    });
   }
 
-  /** GET /cost-centers: Master Data departments and the cost centers recorded on assets. */
+  /** Cost centers recorded on the assets. */
   loadCostCenters(): Observable<FaCostCenterOption[]> {
-    return this.http.get<CostCenterOptionDto[]>(`${this.apiUrl}/cost-centers`, { params: toParams(this.scope()) }).pipe(
-      map((rows) => [{ value: '', label: ALL_COST_CENTERS }, ...rows.map((r) => ({ value: r.value, label: r.label }))]),
-      catchError(this.fail)
-    );
+    return of([{ value: '', label: ALL_COST_CENTERS }, ...COST_CENTERS.map((c) => ({ value: c.code, label: `${c.code} ${c.name}` }))]);
   }
 
-  /** GET /overview: every section for the filter bar in one call. */
+  /** Every section for the filter bar. */
   loadOverview(f: FaFilters): Observable<FinancialView> {
-    this.loading.set(true);
-    return this.http.get<OverviewDto>(`${this.apiUrl}/overview`, { params: toParams({ ...this.query(f), assetLimit: ASSET_ROWS }) }).pipe(
-      map(toView),
-      tap((v) => {
-        this.view.set(v);
-        this.loaded.set(true);
-      }),
-      catchError(this.fail),
-      finalize(() => this.loading.set(false))
-    );
+    const v = buildView(f, this.decided);
+    this.view.set(v);
+    this.loaded.set(true);
+    this.loading.set(false);
+    return of(v);
   }
 
-  /** POST /capex-requests/decisions: Approve, Reject or Request more information for the given requests. */
-  decideCapex(requestIds: string[], decision: string, approver: string, comments: string): Observable<{ status: string; count: number }> {
-    return this.http.post<{ decision: string; status: string; requests: unknown[] }>(`${this.apiUrl}/capex-requests/decisions`, { requestIds, decision, approver, comments }).pipe(
-      map((dto) => ({ status: dto.status, count: dto.requests?.length ?? requestIds.length })),
-      catchError(this.fail)
-    );
+  /** Approve, Reject or Request more information for the given requests (approved and rejected ones leave the queue). */
+  decideCapex(requestIds: string[], decision: string, _approver: string, _comments: string): Observable<{ status: string; count: number }> {
+    const status = DECISION_STATUS[decision] ?? decision;
+    if (decision === 'Approve' || decision === 'Reject') requestIds.forEach((id) => this.decided.add(id));
+    return of({ status, count: requestIds.length });
   }
 
-  /** POST /views: Save View with the period, organization, location and category (cost center and currency are not stored). */
-  createView(name: string, f: FaFilters): Observable<ViewDto> {
-    const body = {
-      viewName: name.trim(),
-      isDefault: false,
-      filters: {
-        organization: pick(f.organization, ALL_ORGANIZATIONS),
-        location: pick(f.location, ALL_LOCATIONS),
-        category: pick(f.category, ALL_CATEGORIES),
-        datePreset: f.period || FA_DEFAULT_PERIOD,
-        timeZone: TIME_ZONE
-      },
-      ...this.scope()
-    };
-    return this.http.post<ViewDto>(`${this.apiUrl}/views`, body).pipe(catchError(this.fail));
+  /** Save View with the period, organization, location and category (kept in memory). */
+  createView(name: string, _f: FaFilters): Observable<FaSavedView> {
+    const saved: FaSavedView = { viewId: `view-${Date.now()}`, viewName: name.trim(), isBuiltIn: false, isDefault: false };
+    this.views = [...this.views, saved];
+    return of(saved);
   }
 
-  /** GET /export: the Excel workbook for the filter bar (amounts in the base currency). */
+  /** The assets for the filter bar as a CSV download (amounts in AED). */
   export(f: FaFilters): Observable<void> {
-    return this.http.get(`${this.apiUrl}/export`, { params: toParams({ ...this.query(f), format: 'xlsx' }), observe: 'response', responseType: 'blob' }).pipe(
-      map((res) => saveBlob(res, 'financial-analytics.xlsx')),
-      catchError(this.fail)
-    );
+    const v = buildView(f, this.decided);
+    downloadCsv('financial-analytics.csv',
+      ['Asset ID', 'Asset Name', 'Category', 'Location', 'Acquisition (AED)', 'Maintenance to Date (AED)', 'Accumulated Depreciation (AED)', 'Net Book Value (AED)',
+        'TCO (AED)', 'Operating Hours', 'Cost per Hour (AED)', 'Maintenance / Acquisition %'],
+      [...v.assets].sort((a, b) => b.tco - a.tco).map((a) => [a.id, a.name, a.category, a.site, a.acquisition, a.maintenance, a.depreciation, a.netBookValue, a.tco,
+        a.hours ?? '', a.costPerHour ?? '', a.maintenanceRatio ?? '']));
+    return of(undefined);
   }
 }

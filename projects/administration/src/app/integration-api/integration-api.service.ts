@@ -1,7 +1,5 @@
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, map, of, tap, throwError } from 'rxjs';
-import { AuthService, environment } from 'shared-ui';
+import { Injectable, computed, signal } from '@angular/core';
+import { Observable, of, throwError } from 'rxjs';
 import { CURRENT_USER } from '../shared/admin-common';
 import {
   ApiKey,
@@ -12,6 +10,7 @@ import {
   LogLevel,
   PROVIDERS,
   SyncRun,
+  buildIntegrations,
   inDays
 } from './integration-api.data';
 
@@ -30,116 +29,12 @@ export interface IntegrationForm {
   enabled: boolean;
 }
 
-/** Request body for POST {administrationApiUrl}api/administration/integrations */
-interface CreateIntegrationRequest {
-  integrationName: string;
-  integrationCode: string;
-  provider: string;
-  environment: Environment;
-  baseUrl: string;
-  authenticationMethod: string;
-  authClientId: string;
-  secretKey: string;
-  syncFrequency: string;
-  timeoutSeconds: number;
-  retryPolicy: string;
-  status: 'Active' | 'Inactive';
-  createdBy: string;
-  tenantId: string;
-  clientId: string;
-}
-
-/** Request body for PUT {administrationApiUrl}api/administration/integrations/{integrationId}. A blank secretKey keeps the stored secret. */
-interface UpdateIntegrationRequest {
-  integrationName: string;
-  integrationCode: string;
-  provider: string;
-  environment: Environment;
-  baseUrl: string;
-  authenticationMethod: string;
-  authClientId: string;
-  secretKey: string | null;
-  syncFrequency: string;
-  timeoutSeconds: number;
-  retryPolicy: string;
-  status: 'Active' | 'Inactive';
-  updatedBy: string;
-}
-
-/** Raw shape returned by the integrations API. The secret itself is never returned. */
-interface IntegrationDto {
-  integrationId: string;
-  integrationName: string;
-  integrationCode: string;
-  provider: string;
-  environment: Environment;
-  baseUrl: string;
-  authenticationMethod: string;
-  authClientId: string;
-  secretKeyConfigured: boolean;
-  syncFrequency: string;
-  timeoutSeconds: number;
-  retryPolicy: string;
-  status: string | null;
-  createdBy: string | null;
-  createdAt: string | null;
-  updatedBy: string | null;
-  updatedAt: string | null;
-  tenantId: string | null;
-  clientId: string | null;
-}
-
-/** Stands in for `secretLast4` when a secret is stored but its characters are unknown (the API never returns it). */
+/** Stands in for `secretLast4` when a secret is stored but its characters are unknown. */
 export const SECRET_MASK = '••••';
 
-/**
- * Maps the API response to the page model. Type, logo, direction and data objects come from the provider;
- * test / sync / key / webhook state has no API yet and starts empty. `secretLast4` is taken from the
- * value the user just typed, or masked when the secret was stored earlier (the API only says whether one is stored).
- */
-function toAppIntegration(dto: IntegrationDto, secret = ''): Integration {
-  const p = PROVIDERS[dto.provider] ?? PROVIDERS['Custom REST'];
-  const createdAt = dto.createdAt ?? new Date().toISOString();
-  return {
-    id: dto.integrationId,
-    code: dto.integrationCode,
-    name: dto.integrationName,
-    provider: dto.provider,
-    type: p.type,
-    version: 'v1.0',
-    logo: p.logo,
-    status: dto.status === 'Inactive' ? 'Disabled' : 'Active',
-    environment: dto.environment,
-    baseUrl: dto.baseUrl,
-    authMethod: dto.authenticationMethod,
-    clientId: dto.authClientId,
-    secretLast4: dto.secretKeyConfigured ? secret.slice(-4) || SECRET_MASK : '',
-    secretRotatedAt: dto.updatedAt ?? createdAt,
-    syncFrequency: dto.syncFrequency,
-    timeout: dto.timeoutSeconds,
-    retryPolicy: dto.retryPolicy,
-    ipAllowlist: true,
-    lastTestAt: createdAt,
-    lastTestPassed: false,
-    lastSync: null,
-    recordsSynced: 0,
-    syncDirection: p.direction,
-    dataObjects: [...p.objects],
-    mappings: [],
-    runs: [],
-    apiKeys: [],
-    webhooks: [],
-    logs: []
-  };
-}
-
-/** Readable message from an API error (validation problem, conflict or network failure). */
+/** Readable message for a failed action. */
 export function apiErrorMessage(err: unknown, fallback: string): string {
-  if (!(err instanceof HttpErrorResponse)) return fallback;
-  if (err.status === 0) return `${fallback} The Administration service is unreachable.`;
-  const body = err.error as { message?: string; title?: string; errors?: Record<string, string[]> } | null;
-  const first = body?.errors ? Object.values(body.errors).flat()[0] : undefined;
-  return first ?? body?.message ?? body?.title ?? fallback;
+  return err instanceof Error && err.message ? err.message : fallback;
 }
 
 const DAY = 86400000;
@@ -155,18 +50,13 @@ function randomSecret(length: number): string {
 }
 
 /**
- * Integration settings are saved through the Administration API (list, create, update, enable / disable, delete).
- * Imported integrations stay unsaved drafts until a secret key is entered.
- * DEMO MODE: connection tests, syncs, field mappings, API keys and webhooks are simulated in memory.
+ * DEMO MODE: integrations, credentials and sync activity live in memory (static demo data); connections are simulated.
+ * Imported integrations stay drafts until a secret key is entered.
  */
 @Injectable({ providedIn: 'root' })
 export class IntegrationApiService {
-  private readonly http = inject(HttpClient);
-  private readonly auth = inject(AuthService);
-  private readonly apiUrl = `${environment.administrationApiUrl}api/administration/integrations`;
-
-  readonly integrations = signal<Integration[]>([]);
-  readonly requestsToday = signal(0);
+  readonly integrations = signal<Integration[]>(buildIntegrations());
+  readonly requestsToday = signal(24680);
 
   readonly activeCount = computed(() => this.integrations().filter((i) => i.status === 'Connected' || i.status === 'Active').length);
   readonly activeWebhooks = computed(() => this.integrations().reduce((n, i) => n + i.webhooks.filter((w) => w.active).length, 0));
@@ -179,7 +69,7 @@ export class IntegrationApiService {
   });
 
   private seq = 5000;
-  /** Imported integrations not yet saved to the API (it requires a secret key, which imports never carry). */
+  /** Imported integrations not yet saved (saving requires a secret key, which imports never carry). */
   private readonly drafts = new Set<string>();
 
   private id(prefix: string): string {
@@ -203,85 +93,58 @@ export class IntegrationApiService {
     this.integrations.update((list) => list.map((i) => (i.id === id ? fn(i) : i)));
   }
 
-  private log(level: LogLevel, event: string, message: string, actor = this.auth.getUserEmail() || CURRENT_USER.name): LogEntry {
+  private log(level: LogLevel, event: string, message: string, actor = CURRENT_USER.name): LogEntry {
     return { id: this.id('LOG'), at: new Date().toISOString(), level, event, message, actor };
   }
 
   // ----- Load / create / update / delete -----
 
-  /**
-   * GET /api/administration/integrations. Simulated state (runs, mappings, keys, webhooks, logs) already held for
-   * an integration is kept, and unsaved imported drafts stay in the list.
-   */
+  /** The integrations are already in memory; kept as an Observable so the page can wait on it. */
   load(): Observable<Integration[]> {
-    const params = { tenantId: environment.tenantId, clientId: environment.clientId };
-    return this.http.get<IntegrationDto[]>(this.apiUrl, { params }).pipe(
-      map((dtos) => {
-        const current = new Map(this.integrations().map((i) => [i.id, i]));
-        const loaded = dtos.map((dto) => {
-          const fresh = toAppIntegration(dto);
-          const known = current.get(fresh.id);
-          return known ? this.merge(known, fresh) : fresh;
-        });
-        const drafts = this.integrations().filter((i) => this.drafts.has(i.id));
-        return [...loaded, ...drafts];
-      }),
-      tap((list) => this.integrations.set(list))
-    );
+    return of(this.integrations());
   }
 
-  /** Saved settings from the API over the simulated state already held for the integration. */
-  private merge(known: Integration, saved: Integration): Integration {
-    const status = saved.status === 'Disabled' ? 'Disabled' : known.status === 'Disabled' ? 'Active' : known.status;
-    return {
-      ...known,
-      code: saved.code,
-      name: saved.name,
-      provider: saved.provider,
-      type: saved.type,
-      logo: saved.logo,
-      status,
-      environment: saved.environment,
-      baseUrl: saved.baseUrl,
-      authMethod: saved.authMethod,
-      clientId: saved.clientId,
-      secretLast4: saved.secretLast4 && saved.secretLast4 !== SECRET_MASK ? saved.secretLast4 : known.secretLast4 || saved.secretLast4,
-      syncFrequency: saved.syncFrequency,
-      timeout: saved.timeout,
-      retryPolicy: saved.retryPolicy
-    };
-  }
-
-  /** POST /api/administration/integrations, then adds the saved integration to the list. */
+  /** Adds a new integration to the list. The secret is not kept, only its last 4 characters. */
   create(form: IntegrationForm, secret: string): Observable<Integration> {
-    return this.post(form, secret).pipe(tap((created) => this.integrations.update((list) => [...list, created])));
+    const created = this.build(form, secret);
+    this.integrations.update((list) => [...list, created]);
+    return of(created);
   }
 
-  /** The secret is sent once and only its last 4 characters are kept. */
-  private post(form: IntegrationForm, secret: string): Observable<Integration> {
-    const request: CreateIntegrationRequest = {
-      integrationName: form.name.trim(),
-      integrationCode: form.code.trim().toUpperCase(),
+  private build(form: IntegrationForm, secret: string): Integration {
+    const p = PROVIDERS[form.provider] ?? PROVIDERS['Custom REST'];
+    const now = new Date().toISOString();
+    return {
+      id: this.id('INT'),
+      code: form.code.trim().toUpperCase(),
+      name: form.name.trim(),
       provider: form.provider,
+      type: p.type,
+      version: 'v1.0',
+      logo: p.logo,
+      status: form.enabled ? 'Active' : 'Disabled',
       environment: form.environment,
       baseUrl: form.baseUrl.trim(),
-      authenticationMethod: form.authMethod,
-      authClientId: form.clientId.trim(),
-      secretKey: secret,
+      authMethod: form.authMethod,
+      clientId: form.clientId.trim(),
+      secretLast4: secret.slice(-4),
+      secretRotatedAt: now,
       syncFrequency: form.syncFrequency,
-      timeoutSeconds: form.timeout,
+      timeout: form.timeout,
       retryPolicy: form.retryPolicy,
-      status: form.enabled ? 'Active' : 'Inactive',
-      createdBy: this.auth.getUserEmail() || 'unknown',
-      tenantId: environment.tenantId,
-      clientId: environment.clientId
+      ipAllowlist: true,
+      lastTestAt: now,
+      lastTestPassed: false,
+      lastSync: null,
+      recordsSynced: 0,
+      syncDirection: p.direction,
+      dataObjects: [...p.objects],
+      mappings: [],
+      runs: [],
+      apiKeys: [],
+      webhooks: [],
+      logs: [this.log('Info', 'Integration created', `${form.name.trim()} added in ${form.environment}`)]
     };
-    return this.http.post<IntegrationDto>(this.apiUrl, request).pipe(
-      map((dto) => {
-        const created = toAppIntegration(dto, secret);
-        return { ...created, logs: [this.log('Info', 'Integration created', `${created.name} added in ${created.environment}`)] };
-      })
-    );
   }
 
   /**
@@ -327,99 +190,51 @@ export class IntegrationApiService {
     return draft;
   }
 
-  /**
-   * `secret` is only passed when the user typed a new secret key. Imported drafts are saved with POST and
-   * replaced by the saved record; saved integrations are updated with PUT (a blank secret keeps the stored one).
-   */
+  /** `secret` is only passed when the user typed a new secret key. Saving a draft with a secret makes it a saved integration. */
   update(id: string, form: IntegrationForm, secret: string): Observable<Integration> {
-    if (this.drafts.has(id)) {
-      return this.post(form, secret).pipe(
-        tap((saved) => {
-          this.drafts.delete(id);
-          this.integrations.update((list) => list.map((i) => (i.id === id ? saved : i)));
-        })
-      );
-    }
-    return this.put(id, form, secret).pipe(
-      map((saved) => {
-        const current = this.byId(id);
-        if (!current) return saved;
-        const logs = [this.log('Info', 'Configuration updated', 'Integration settings saved')];
-        if (secret) logs.unshift(this.log('Info', 'Secret rotated', 'Secret key replaced'));
-        return {
-          ...this.merge(current, saved),
-          secretLast4: secret ? secret.slice(-4) : current.secretLast4 || saved.secretLast4,
-          secretRotatedAt: secret ? new Date().toISOString() : current.secretRotatedAt,
-          logs: [...logs, ...current.logs]
-        };
-      }),
-      tap((updated) => this.patch(id, () => updated))
-    );
-  }
-
-  /** PUT /api/administration/integrations/{integrationId}. */
-  private put(id: string, form: IntegrationForm, secret: string): Observable<Integration> {
-    const request: UpdateIntegrationRequest = {
-      integrationName: form.name.trim(),
-      integrationCode: form.code.trim().toUpperCase(),
+    const current = this.byId(id);
+    if (!current) return throwError(() => new Error('Integration not found.'));
+    this.drafts.delete(id);
+    const p = PROVIDERS[form.provider] ?? PROVIDERS['Custom REST'];
+    const logs = [this.log('Info', 'Configuration updated', 'Integration settings saved')];
+    if (secret) logs.unshift(this.log('Info', 'Secret rotated', 'Secret key replaced'));
+    const updated: Integration = {
+      ...current,
+      name: form.name.trim(),
+      code: form.code.trim().toUpperCase(),
       provider: form.provider,
+      type: p.type,
+      logo: p.logo,
       environment: form.environment,
       baseUrl: form.baseUrl.trim(),
-      authenticationMethod: form.authMethod,
-      authClientId: form.clientId.trim(),
-      secretKey: secret || null,
+      authMethod: form.authMethod,
+      clientId: form.clientId.trim(),
+      secretLast4: secret ? secret.slice(-4) : current.secretLast4,
+      secretRotatedAt: secret ? new Date().toISOString() : current.secretRotatedAt,
       syncFrequency: form.syncFrequency,
-      timeoutSeconds: form.timeout,
+      timeout: form.timeout,
       retryPolicy: form.retryPolicy,
-      status: form.enabled ? 'Active' : 'Inactive',
-      updatedBy: this.auth.getUserEmail() || 'unknown'
+      status: form.enabled ? (current.status === 'Disabled' ? 'Active' : current.status) : 'Disabled',
+      logs: [...logs, ...current.logs]
     };
-    return this.http.put<IntegrationDto>(`${this.apiUrl}/${encodeURIComponent(id)}`, request).pipe(map((dto) => toAppIntegration(dto, secret)));
+    this.patch(id, () => updated);
+    return of(updated);
   }
 
-  /** DELETE /api/administration/integrations/{integrationId}; unsaved drafts are only dropped from the list. */
   remove(id: string): Observable<void> {
-    const drop = () => {
-      this.drafts.delete(id);
-      this.integrations.update((list) => list.filter((i) => i.id !== id));
-    };
-    if (this.drafts.has(id)) {
-      drop();
-      return of(undefined);
-    }
-    return this.http.delete<void>(`${this.apiUrl}/${encodeURIComponent(id)}`).pipe(tap(drop));
+    this.drafts.delete(id);
+    this.integrations.update((list) => list.filter((i) => i.id !== id));
+    return of(undefined);
   }
 
-  /** Saves the status through PUT, re-sending the stored settings (the secret is kept). Drafts change only locally. */
   setEnabled(id: string, enabled: boolean): Observable<Integration> {
-    const i = this.byId(id);
-    if (!i) return throwError(() => new Error('Integration not found.'));
-    const stamp = (x: Integration): Integration => ({
+    if (!this.byId(id)) return throwError(() => new Error('Integration not found.'));
+    this.patch(id, (x) => ({
       ...x,
       status: enabled ? (x.status === 'Disabled' ? 'Active' : x.status) : 'Disabled',
       logs: [this.log(enabled ? 'Info' : 'Warning', enabled ? 'Integration enabled' : 'Integration disabled', `${x.name} ${enabled ? 'enabled' : 'disabled'}`), ...x.logs]
-    });
-    if (this.drafts.has(id)) {
-      this.patch(id, stamp);
-      return of(this.byId(id)!);
-    }
-    const form: IntegrationForm = {
-      name: i.name,
-      code: i.code,
-      provider: i.provider,
-      environment: i.environment,
-      baseUrl: i.baseUrl,
-      authMethod: i.authMethod,
-      clientId: i.clientId,
-      syncFrequency: i.syncFrequency,
-      timeout: i.timeout,
-      retryPolicy: i.retryPolicy,
-      enabled
-    };
-    return this.put(id, form, '').pipe(
-      map((saved) => stamp(this.merge(this.byId(id) ?? i, saved))),
-      tap((updated) => this.patch(id, () => updated))
-    );
+    }));
+    return of(this.byId(id)!);
   }
 
   // ----- Simulated connection / sync -----

@@ -1,27 +1,19 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
-import { Observable, catchError, map, of } from 'rxjs';
-import { environment } from 'shared-ui';
-import { apiError, getAllPages, tenantParams, trackingUrl } from '../shared/tracking-api';
+import { Injectable } from '@angular/core';
+import { Observable } from 'rxjs';
+import { DEMO_BUILDINGS, DEMO_FLOORS, DEMO_SITES, buildingById, siteById } from '../shared/master-data.data';
+import { demo } from '../shared/tracking-api';
+import { liveDevices } from '../device-management/iot-devices.data';
+import { liveHealth } from '../device-health/device-health.data';
+import { IOT_ALERTS } from '../geofence-alerts/iot-alerts.data';
+import { filterAlerts } from '../geofence-alerts/iot-alert-api.service';
+import { LOCATION_EVENTS } from '../real-time-location/location-events.data';
+import { FLOOR_LAYOUTS } from '../real-time-location/floor-layouts.data';
+import { eventsTimeline, generateReadings } from './telemetry-readings.data';
 
 // ===== Master Data (sites and buildings for the site / building pickers and the map) =====
 
-interface MdmSiteDto {
-  id: string; siteName: string | null; code: string | null; country: string | null; address?: { country?: string | null } | null;
-  latitude: number | null; longitude: number | null; status?: string | null; isDeleted?: boolean;
-}
-interface MdmBuildingDto {
-  id: string; name: string | null; code: string | null; site: { id: string | null; name: string | null } | null;
-  latitude: number | null; longitude: number | null; status?: string | null; isDeleted?: boolean;
-}
-
 /** A Master Data site; lat / lng are null when the site has no coordinates. */
 export interface MdmSite { id: string; name: string; lat: number | null; lng: number | null; /** '' when not set */ country?: string }
-interface MdmFloorDto {
-  id: string; name: string | null; code: string | null; site: { id: string | null; name: string | null } | null; buildingId: string | null; buildingName: string | null;
-  area: number | null; imageUrl: string | null; images: string[] | null; latitude: number | null; longitude: number | null; status?: string | null; isDeleted?: boolean;
-}
-
 /** A Master Data floor with its uploaded floor plan image (null when none was uploaded). */
 export interface MdmFloor {
   id: string; name: string; siteId: string; siteName: string; buildingId: string; buildingName: string;
@@ -33,7 +25,7 @@ export interface MdmFloor {
 /** A Master Data building with the site it belongs to. */
 export interface MdmBuilding { id: string; name: string; siteId: string; siteName: string; lat: number | null; lng: number | null }
 
-// ===== DTOs (Tracking service responses; dates are ISO strings in UTC) =====
+// ===== DTOs (dates are ISO strings in UTC) =====
 
 /** GET /api/iot-devices */
 export interface IotDeviceDto {
@@ -178,99 +170,58 @@ export const MAX_READINGS = 5000;
 /** Longest `days` window the dashboard endpoints accept. */
 export const MAX_DAYS = 365;
 
-/** Read-only access to the Tracking service resources shown on Tracking & Telemetry (and reused by Analytics & Insights). */
+/** Read-only access to the demo records shown on Tracking & Telemetry (and reused by Analytics & Insights). */
 @Injectable({ providedIn: 'root' })
 export class TelemetryReadApi {
-  private readonly http = inject(HttpClient);
-
   devices(): Observable<IotDeviceDto[]> {
-    return getAllPages<IotDeviceDto>(this.http, trackingUrl('iot-devices')).pipe(catchError((err) => apiError(err, 'Could not load IoT devices.')));
+    return demo(liveDevices());
   }
 
   deviceHealth(): Observable<DeviceHealthDto[]> {
-    return this.get<DeviceHealthDto[]>('device-health', {}, 'Could not load device health.');
+    return demo(liveHealth());
   }
 
   readings(q: TelemetryQuery = {}): Observable<TelemetryReadingDto[]> {
-    return this.get<TelemetryReadingDto[]>('telemetry-readings', { ...q }, 'Could not load telemetry readings.');
+    return demo(generateReadings(q));
   }
 
   locationEvents(): Observable<LocationEventDto[]> {
-    return this.get<LocationEventDto[]>('location-events', {}, 'Could not load location events.');
+    return demo(LOCATION_EVENTS);
   }
 
   alerts(q: AlertQuery = {}): Observable<IotAlertDto[]> {
-    return this.get<IotAlertDto[]>('iot-alerts', { ...q }, 'Could not load IoT alerts.');
+    return demo(filterAlerts(IOT_ALERTS, q));
   }
 
   timeline(days: number): Observable<IotEventsTimelineDto> {
-    return this.get<IotEventsTimelineDto>('iot-events/timeline', { days }, 'Could not load the IoT events timeline.');
+    return demo(eventsTimeline(days));
   }
 
-  /** Sites from Master Data (GET /api/master-data/sites); an empty list when Master Data can't be reached. */
   sites(): Observable<MdmSite[]> {
-    return this.masterData<MdmSiteDto>('sites').pipe(
-      map((rows) =>
-        rows.map((s) => ({
-          id: s.id, name: s.siteName || s.code || s.id, lat: coord(s.latitude, 90), lng: coord(s.longitude, 180), country: (s.country || s.address?.country || '').trim(),
-        })),
-      ),
-    );
+    return demo(DEMO_SITES.map((s) => ({ id: s.id, name: s.name, lat: s.lat, lng: s.lng, country: s.country })));
   }
 
-  /**
-   * Countries in use by the Master Data sites (GET /api/master-data/sites/countries), sorted; each site takes its
-   * country from the address entered in Organization › Site. Empty when Master Data can't be reached.
-   */
+  /** Countries in use by the sites, sorted. */
   countries(): Observable<string[]> {
-    return this.http
-      .get<{ country: string; siteCount: number }[]>(`${environment.masterDataApiUrl}api/master-data/sites/countries`, { params: new HttpParams().set('clientId', environment.clientId) })
-      .pipe(
-        map((rows) => (Array.isArray(rows) ? rows : []).map((r) => (r.country ?? '').trim()).filter(Boolean)),
-        catchError(() => of([] as string[])),
-      );
+    return demo([...new Set(DEMO_SITES.map((s) => s.country))].sort());
   }
 
-  /** Buildings from Master Data (GET /api/master-data/buildings), each with its site; empty when unavailable. */
   buildings(): Observable<MdmBuilding[]> {
-    return this.masterData<MdmBuildingDto>('buildings').pipe(
-      map((rows) =>
-        rows.map((b) => ({ id: b.id, name: b.name || b.code || b.id, siteId: b.site?.id ?? '', siteName: b.site?.name ?? '', lat: coord(b.latitude, 90), lng: coord(b.longitude, 180) })),
-      ),
-    );
+    return demo(DEMO_BUILDINGS.map((b) => ({ id: b.id, name: b.name, siteId: b.siteId, siteName: siteById(b.siteId)?.name ?? '', lat: b.lat, lng: b.lng })));
   }
 
-  /** Floors from Master Data (GET /api/master-data/floors) with their floor plan image; empty when unavailable. */
+  /** Floors with their floor plan image. */
   floors(): Observable<MdmFloor[]> {
-    const abs = (u: string | null | undefined) => (!u ? null : /^(https?:|data:|blob:)/i.test(u) ? u : `${environment.mediaApiUrl}${u.replace(/^\/+/, '')}`);
-    return this.masterData<MdmFloorDto>('floors').pipe(
-      map((rows) =>
-        rows.map((f) => ({
-          id: f.id, name: f.name || f.code || f.id, siteId: f.site?.id ?? '', siteName: f.site?.name ?? '', buildingId: f.buildingId ?? '', buildingName: f.buildingName ?? '',
-          area: typeof f.area === 'number' && f.area > 0 ? f.area : null,
-          image: abs(f.imageUrl || f.images?.find((i) => !!i)), lat: coord(f.latitude, 90), lng: coord(f.longitude, 180),
-        })),
-      ),
+    return demo(
+      DEMO_FLOORS.map((f) => {
+        const b = buildingById(f.buildingId);
+        return {
+          id: f.id, name: f.name, siteId: b?.siteId ?? '', siteName: siteById(b?.siteId)?.name ?? '', buildingId: f.buildingId, buildingName: b?.name ?? '',
+          area: f.area, image: FLOOR_LAYOUTS.get(f.id)?.imageUrl ?? null, lat: b?.lat ?? null, lng: b?.lng ?? null,
+        };
+      }),
     );
   }
-
-  private masterData<T extends { status?: string | null; isDeleted?: boolean }>(resource: string): Observable<T[]> {
-    return this.http
-      .get<T[]>(`${environment.masterDataApiUrl}api/master-data/${resource}`, { params: new HttpParams().set('clientId', environment.clientId) })
-      .pipe(
-        map((rows) => (Array.isArray(rows) ? rows : []).filter((r) => !r.isDeleted && (r.status ?? 'Active').toLowerCase() !== 'inactive')),
-        catchError(() => of([] as T[])),
-      );
-  }
-
-  private get<T>(resource: string, query: Record<string, string | number | undefined>, fallback: string): Observable<T> {
-    return this.http.get<T>(trackingUrl(resource), { params: tenantParams(query) }).pipe(catchError((err) => apiError(err, fallback)));
-  }
-}
-
-/** Latitude / longitude when it is a real coordinate (0,0 and out-of-range values count as not set). */
-function coord(v: number | null | undefined, max: number): number | null {
-  return typeof v === 'number' && Number.isFinite(v) && v !== 0 && Math.abs(v) <= max ? v : null;
 }
 
 // ===== shared mapping helpers =====

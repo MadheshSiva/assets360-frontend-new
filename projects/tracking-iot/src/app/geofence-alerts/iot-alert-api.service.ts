@@ -1,12 +1,12 @@
-import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, catchError, map } from 'rxjs';
+import { Observable } from 'rxjs';
 import { AuthService } from 'shared-ui';
-import { apiError, tenantBody, tenantParams, trackingUrl } from '../shared/tracking-api';
+import { DEMO_USER, demo, demoError, newRecordId } from '../shared/tracking-api';
 import { actorName } from './geofence-api.service';
 import { AlertEvent, EventStatus } from './geofence-data';
+import { IOT_ALERTS } from './iot-alerts.data';
 
-/** GET /api/iot-alerts row. */
+/** An IoT alert record. */
 export interface IoTAlertDto {
   id: string;
   alertId: string;
@@ -112,54 +112,92 @@ export function toAlertEvent(d: IoTAlertDto, zoneOfRule: (ruleId: string) => { i
   };
 }
 
-/** Alerts raised on tracked assets: /api/iot-alerts. */
+/** Alerts raised on tracked assets (static demo, iot-alerts.data.ts). */
 @Injectable({ providedIn: 'root' })
 export class IoTAlertApiService {
-  private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
-  private readonly url = trackingUrl('iot-alerts');
 
   /** Most recently raised first. */
   list(query: IoTAlertQuery = {}): Observable<IoTAlertDto[]> {
-    return this.http.get<IoTAlertDto[]>(this.url, { params: tenantParams({ ...query }) }).pipe(
-      catchError((err) => apiError(err, 'Could not load alerts.')),
-    );
+    return demo(filterAlerts(IOT_ALERTS, query));
   }
 
   get(alertId: string): Observable<IoTAlertDto> {
-    return this.http.get<IoTAlertDto>(`${this.url}/${encodeURIComponent(alertId)}`, { params: tenantParams() }).pipe(
-      catchError((err) => apiError(err, 'Could not load the alert.')),
-    );
+    const a = IOT_ALERTS.find((x) => x.alertId === alertId);
+    return a ? demo(a) : demoError('The alert was not found.');
   }
 
   count(days?: number, siteName?: string): Observable<IoTAlertCountDto> {
-    return this.http.get<IoTAlertCountDto>(`${this.url}/count`, { params: tenantParams({ days, siteName }) }).pipe(
-      catchError((err) => apiError(err, 'Could not load the alert count.')),
-    );
+    const d = days ?? 30;
+    const now = Date.now();
+    const from = now - d * 86_400_000;
+    const inSite = IOT_ALERTS.filter((a) => !siteName || a.siteName === siteName);
+    const cur = inSite.filter((a) => Date.parse(a.raisedAt) >= from);
+    const prev = inSite.filter((a) => Date.parse(a.raisedAt) >= from - d * 86_400_000 && Date.parse(a.raisedAt) < from).length;
+    const tally = (k: 'status' | 'severity') => cur.reduce<Record<string, number>>((m, a) => ((m[a[k] ?? 'Open'] = (m[a[k] ?? 'Open'] ?? 0) + 1), m), {});
+    return demo({
+      days: d, from: new Date(from).toISOString(), to: new Date(now).toISOString(), total: cur.length, previousPeriodTotal: prev,
+      changePercent: prev ? Math.round(((cur.length - prev) / prev) * 1000) / 10 : null, byStatus: tally('status'), bySeverity: tally('severity'),
+    });
   }
 
   options(): Observable<IoTAlertOptionsDto> {
-    return this.http.get<IoTAlertOptionsDto>(`${this.url}/options`, { params: tenantParams() }).pipe(
-      catchError((err) => apiError(err, 'Could not load alert options.')),
-    );
+    return demo({
+      severities: ['Critical', 'Warning', 'Info'],
+      statuses: ['Open', 'Acknowledged', 'In Progress', 'Resolved'],
+      eventTypes: [...new Set(IOT_ALERTS.map((a) => a.eventType))].sort(),
+    });
   }
 
   create(body: Omit<IoTAlertRequest, 'createdBy' | 'clientId' | 'tenantId'>): Observable<IoTAlertDto> {
-    return this.http.post<IoTAlertDto>(this.url, { ...body, createdBy: actorName(this.auth), ...tenantBody() }, { params: tenantParams() }).pipe(
-      catchError((err) => apiError(err, 'Could not create the alert.')),
-    );
+    const n = IOT_ALERTS.reduce((m, a) => Math.max(m, Number(a.alertId.slice(4)) || 0), 0) + 1;
+    const now = new Date().toISOString();
+    const dto: IoTAlertDto = {
+      ...body, id: newRecordId(), alertId: `ALT-${String(n).padStart(6, '0')}`, raisedAt: body.raisedAt ?? now, status: body.status ?? 'Open',
+      acknowledgedBy: null, acknowledgedAt: null, resolvedBy: null, resolvedAt: null, createdBy: this.user(), createdAt: now, updatedBy: null, updatedAt: null,
+      clientId: 'demo-client', tenantId: 'demo-tenant',
+    };
+    IOT_ALERTS.unshift(dto);
+    return demo(dto);
   }
 
   /** Acknowledge, start (In Progress), resolve or reopen an alert. */
   setStatus(alertId: string, status: IoTAlertStatus): Observable<IoTAlertDto> {
-    return this.http.patch<IoTAlertDto>(`${this.url}/${encodeURIComponent(alertId)}/status`, { status }, { params: tenantParams() }).pipe(
-      catchError((err) => apiError(err, 'Could not update the alert status.')),
-    );
+    const a = IOT_ALERTS.find((x) => x.alertId === alertId);
+    if (!a) return demoError('Could not update the alert status: it no longer exists.');
+    const now = new Date().toISOString();
+    const user = this.user();
+    a.status = status;
+    if (status === 'Open') Object.assign(a, { acknowledgedBy: null, acknowledgedAt: null, resolvedBy: null, resolvedAt: null });
+    if (status !== 'Open' && !a.acknowledgedAt) Object.assign(a, { acknowledgedBy: user, acknowledgedAt: now });
+    if (status === 'Resolved') Object.assign(a, { resolvedBy: user, resolvedAt: now });
+    else Object.assign(a, { resolvedBy: null, resolvedAt: null });
+    Object.assign(a, { updatedBy: user, updatedAt: now });
+    return demo(a);
   }
 
   delete(alertId: string): Observable<void> {
-    return this.http.delete<void>(`${this.url}/${encodeURIComponent(alertId)}`, { params: tenantParams() }).pipe(
-      catchError((err) => apiError(err, 'Could not delete the alert.')),
-    );
+    const i = IOT_ALERTS.findIndex((x) => x.alertId === alertId);
+    if (i >= 0) IOT_ALERTS.splice(i, 1);
+    return demo(undefined as void);
   }
+
+  private user(): string {
+    return actorName(this.auth) || DEMO_USER;
+  }
+}
+
+/** Alerts matching a query (all filters optional), most recently raised first. */
+export function filterAlerts<T extends IoTAlertDto>(rows: T[], q: IoTAlertQuery): T[] {
+  const since = q.days ? Date.now() - q.days * 86_400_000 : -Infinity;
+  const text = (q.search ?? '').trim().toLowerCase();
+  const out = rows
+    .filter((a) => Date.parse(a.raisedAt) >= since)
+    .filter((a) => !q.status || (a.status ?? 'Open').toLowerCase() === q.status.toLowerCase())
+    .filter((a) => !q.severity || a.severity.toLowerCase() === q.severity.toLowerCase())
+    .filter((a) => !q.siteName || a.siteName === q.siteName)
+    .filter((a) => !q.assetRegistrationId || a.assetRegistrationId === q.assetRegistrationId)
+    .filter((a) => !text || [a.alertId, a.assetName, a.eventType, a.message ?? '', a.deviceId ?? ''].some((v) => v.toLowerCase().includes(text)))
+    .sort((a, b) => b.raisedAt.localeCompare(a.raisedAt));
+  return q.limit ? out.slice(0, q.limit) : out;
 }

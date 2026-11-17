@@ -1,12 +1,12 @@
-import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, catchError, forkJoin, of } from 'rxjs';
-import { apiError, tenantParams, trackingUrl } from '../shared/tracking-api';
+import { Observable, forkJoin, of } from 'rxjs';
+import { demo } from '../shared/tracking-api';
 import {
   DeviceHealthDto, IotAlertDto, IotDeviceDto, IotEventsTimelineDto, LocationEventDto, MAX_DAYS, MAX_READINGS, TelemetryReadApi, TelemetryReadingDto,
 } from '../tracking-telemetry/telemetry-api';
+import { utilizationByType, utilizationRows } from './asset-utilization.data';
 
-/** GET /api/asset-utilization: one asset's running / idle time on one day. */
+/** One asset's running / idle time on one day. */
 export interface AssetUtilizationDto {
   id: string;
   utilizationId: string;
@@ -34,7 +34,7 @@ export interface AssetTypeUtilizationDto {
   idlePercent: number;
 }
 
-/** GET /api/asset-utilization/by-asset-type */
+/** Utilization by asset type. */
 export interface UtilizationByAssetTypeDto {
   days: number;
   from: string;
@@ -59,19 +59,14 @@ export interface AnalyticsSource {
 
 @Injectable({ providedIn: 'root' })
 export class AnalyticsApi {
-  private readonly http = inject(HttpClient);
   private readonly reads = inject(TelemetryReadApi);
 
   utilization(days: number, assetType?: string): Observable<AssetUtilizationDto[]> {
-    return this.http
-      .get<AssetUtilizationDto[]>(trackingUrl('asset-utilization'), { params: tenantParams({ days, assetType }) })
-      .pipe(catchError((err) => apiError(err, 'Could not load asset utilization.')));
+    return demo(utilizationRows(Math.min(MAX_DAYS, Math.max(1, days)), assetType));
   }
 
   utilizationByAssetType(days: number): Observable<UtilizationByAssetTypeDto> {
-    return this.http
-      .get<UtilizationByAssetTypeDto>(trackingUrl('asset-utilization/by-asset-type'), { params: tenantParams({ days }) })
-      .pipe(catchError((err) => apiError(err, 'Could not load utilization by asset type.')));
+    return demo(utilizationByType(Math.min(MAX_DAYS, Math.max(1, days))));
   }
 
   /**

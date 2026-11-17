@@ -1,17 +1,22 @@
 import { Directive, OnDestroy } from '@angular/core';
 
-// Tenant lookups (organizations, people, locations, departments) come from the APIs; empty until loaded
-export const ORGANIZATIONS: string[] = [];
+// Static demo data: tenant lookups shared by every Administration page
 
-/** The signed-in administrator shown as owner / "updated by" on new records (filled from the session once wired). */
-export const CURRENT_USER = { id: '', name: '', role: '', email: '' };
+export const ORGANIZATIONS = ['Purple IQ Group', 'Purple IQ UAE', 'Purple IQ KSA', 'Purple IQ Qatar'];
 
-/** Shared people pool for owners, approvers and audit actors across the Administration pages. */
-export const ADMIN_PEOPLE: string[] = [];
+/** The signed-in administrator shown as owner / "updated by" on new records. */
+export const CURRENT_USER = { id: 'USR-000121', name: 'Sarah Ahmed', role: 'System Administrator', email: 'sarah.ahmed@purpleiq.com' };
 
-export const ADMIN_LOCATIONS: string[] = [];
+/** Shared people pool so owners, approvers and audit actors line up across the Administration pages. */
+export const ADMIN_PEOPLE = [
+  'Sarah Ahmed', 'Omar Hassan', 'Aisha Rahman', 'James Tan', 'Priya Sharma', 'Fatima Noor', 'Mohammed Ali',
+  'Daniel Kim', 'Rahul Mehta', 'Ahmed Khan', 'Lisa Wong', 'John Mathew', 'Fatima Ali', 'Omar Khalid',
+  'Michael Chen', 'Sarah Khan', 'Ahmed Al Marri', 'Priya Nair', 'Daniel Tan', 'Fatima Al Mansoori', 'James Wilson'
+];
 
-export const ADMIN_DEPARTMENTS: string[] = [];
+export const ADMIN_LOCATIONS = ['Dubai HQ', 'Abu Dhabi Office', 'Sharjah Facility', 'Riyadh Office', 'London Office', 'Singapore Office'];
+
+export const ADMIN_DEPARTMENTS = ['Administration', 'Operations', 'Maintenance', 'Finance', 'IT', 'Compliance', 'Inventory', 'HR', 'Procurement'];
 
 /** The Asset360 modules, used by access policies, roles and numbering. */
 export const ASSET360_MODULES = [

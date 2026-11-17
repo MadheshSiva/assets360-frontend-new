@@ -109,7 +109,7 @@ export class ReportScheduleDialog implements OnChanges {
   private readonly service = inject(StandardReportsService);
 
   readonly icons = { X };
-  // Recipients and format are kept client-side (the API stores only frequency and next run)
+  // Recipients and format are kept with the schedule in memory
   readonly frequencies = this.service.scheduleFrequencies();
   readonly formats = SR_FORMATS;
   readonly weekdays = WEEKDAYS;

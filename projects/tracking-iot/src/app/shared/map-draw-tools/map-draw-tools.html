@@ -47,7 +47,7 @@
     <div><dt>Accuracy</dt><dd>±{{ r.accuracy }} m</dd></div>
     <div><dt>Last fix</dt><dd>{{ r.at | date: 'HH:mm:ss' }}</dd></div>
     <div *ngIf="r.battery !== null"><dt>Battery</dt><dd>{{ r.battery }}%</dd></div>
-    <div><dt>Source</dt><dd>{{ r.live ? 'Location feed' : 'Simulated (no feed yet)' }}</dd></div>
+    <div><dt>Source</dt><dd>{{ r.live ? 'Location feed' : 'Simulated' }}</dd></div>
   </dl>
 </div>
 

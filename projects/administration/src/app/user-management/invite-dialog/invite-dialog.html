@@ -8,7 +8,7 @@
 
     <div class="field" [class.invalid]="errors['emails']">
       <label for="inv-emails">Email Addresses <span class="req">*</span></label>
-      <textarea id="inv-emails" name="emails" rows="4" [(ngModel)]="emails" placeholder="name@company.com, another@company.com"></textarea>
+      <textarea id="inv-emails" name="emails" rows="4" [(ngModel)]="emails" placeholder="name@purpleiq.com, another@purpleiq.com"></textarea>
       <small>{{ errors['emails'] || 'Separate addresses with commas or new lines. ' + count + ' address' + (count === 1 ? '' : 'es') + '.' }}</small>
     </div>
     <div class="grid2">

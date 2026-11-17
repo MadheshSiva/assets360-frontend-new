@@ -1,7 +1,5 @@
-import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, catchError, finalize, map, of, shareReplay, tap } from 'rxjs';
-import { environment } from '../environment/environment';
+import { Observable, of } from 'rxjs';
 import { AuthService } from './auth.service';
 
 /** A module the signed-in user may open, with the actions their roles allow (view, create, edit, delete, approve, export). */
@@ -10,7 +8,7 @@ export interface ModuleAccess {
   actions: string[];
 }
 
-/** GET {administrationApiUrl}api/users/me: who is signed in and what they may see. */
+/** Who is signed in and what they may see. */
 export interface MyAccess {
   displayName: string;
   email: string;
@@ -23,7 +21,7 @@ export interface MyAccess {
 
 /**
  * Sidebar / route sections whose permission-matrix module has another name. Every other section uses its own name
- * (Dashboard, Assets, Tracking & IoT, ... as in Administration › Role & Access Control).
+ * (Dashboard, Assets, Tracking & IoT, ... as in Administration â€º Role & Access Control).
  */
 const MATRIX_MODULE: Record<string, string> = { 'Audit & Compliance': 'Compliance' };
 
@@ -58,58 +56,43 @@ export function isCreatePath(url: string): boolean {
     .some((segment) => CREATE_SEGMENT.test(segment));
 }
 
-/** Access when /me can't be read: the dashboard only, never more than the server would give. */
-function fallback(email: string): MyAccess {
-  return { displayName: email.split('@')[0], email, roleName: 'User', roles: [], fullAccess: false, modules: [{ module: 'Dashboard', actions: ['view'] }] };
+/** DEMO MODE: every signed-in user gets the Administrator profile with access to every module. */
+function demoAccess(email: string): MyAccess {
+  const user = email.split('@')[0] || 'Demo User';
+  return { displayName: user, email, roleName: 'Administrator', roles: ['Administrator'], fullAccess: true, modules: [] };
 }
 
 /**
- * The signed-in user's profile and module access (role-based access). Loaded once per sign-in from the Administration
- * API and kept in sessionStorage so a page reload shows the right menu straight away.
+ * The signed-in user's profile and module access. In this static demo it is built locally (no Administration API)
+ * and kept in sessionStorage so a page reload shows the menu straight away.
  */
 @Injectable({ providedIn: 'root' })
 export class AccessService {
-  private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
-  private readonly url = `${environment.administrationApiUrl}api/users/me`;
 
   private readonly state = signal<MyAccess | null>(this.readCache());
-  private request: Observable<MyAccess> | null = null;
 
   /** The loaded access, or null before the first load for this sign-in. */
   readonly access = this.state.asReadonly();
   readonly loaded = computed(() => this.state() !== null);
 
-  /** Loads /me unless it is already loaded for the signed-in user. */
+  /** Loads the access unless it is already loaded for the signed-in user. */
   ensureLoaded(): Observable<MyAccess> {
     const current = this.state();
     if (current && (current.email ?? '').toLowerCase() === (this.auth.getUserEmail() ?? '').toLowerCase()) return of(current);
     return this.load();
   }
 
-  /** Fetches /me again (after sign-in, or when roles change). Failures fall back to dashboard-only access. */
+  /** Builds the demo access for the signed-in user. */
   load(): Observable<MyAccess> {
-    if (this.request) return this.request;
-    const email = this.auth.getUserEmail() ?? '';
-    this.request = this.http.get<MyAccess>(this.url).pipe(
-      // Anything that isn't a /me body counts as a failure (falls back below)
-      map((a) => {
-        if (!a || typeof a !== 'object' || Array.isArray(a)) throw new Error('Unexpected /me response');
-        return { ...a, email: a.email ?? email, roles: a.roles ?? [], modules: a.modules ?? [] };
-      }),
-      catchError(() => of(this.state() ?? fallback(email))),
-      tap((a) => {
-        this.state.set(a);
-        try {
-          sessionStorage.setItem(CACHE_KEY, JSON.stringify(a));
-        } catch {
-          // storage unavailable: keep it in memory only
-        }
-      }),
-      finalize(() => (this.request = null)),
-      shareReplay(1)
-    );
-    return this.request;
+    const a = demoAccess(this.auth.getUserEmail() ?? '');
+    this.state.set(a);
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify(a));
+    } catch {
+      // storage unavailable: keep it in memory only
+    }
+    return of(a);
   }
 
   /** Forgets the access (sign-out). */

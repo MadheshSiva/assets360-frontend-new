@@ -1,9 +1,10 @@
-import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, catchError, map, of } from 'rxjs';
-import { AuthService, environment } from 'shared-ui';
-import { apiError, tenantBody, tenantParams, trackingUrl } from '../shared/tracking-api';
+import { Observable } from 'rxjs';
+import { AuthService } from 'shared-ui';
+import { DEMO_SITES } from '../shared/master-data.data';
+import { DEMO_USER, demo, demoError } from '../shared/tracking-api';
 import { ASSET_GROUPS, SCHEDULES, ZONE_COLORS, ZONE_SHAPES, ZONE_TYPES, Zone, ZoneShape, ZoneStatus, ZoneType } from './geofence-data';
+import { ALERT_RULES, GEOFENCES, syncRuleCounts } from './geofences.data';
 
 /** Name recorded as createdBy: the signed-in user, else the stored login email. */
 export function actorName(auth: AuthService): string {
@@ -161,93 +162,91 @@ export function toGeofenceRequest(z: Zone, createdBy: string): GeofenceRequest {
     coordinates,
     radiusMeters: circle && z.center ? z.radiusM ?? null : null,
     createdBy,
-    ...tenantBody(),
+    clientId: 'demo-client',
+    tenantId: 'demo-tenant',
   };
 }
 
-/** Geofence List: /api/geofences and its option lists. */
+/** Geofence List (static demo): the in-memory geofences of geofences.data.ts and their option lists. */
 @Injectable({ providedIn: 'root' })
 export class GeofenceApiService {
-  private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
-  private readonly url = trackingUrl('geofences');
 
   list(): Observable<Zone[]> {
-    return this.http.get<GeofenceDto[]>(this.url, { params: tenantParams() }).pipe(
-      map((rows) => rows.map(toZone)),
-      catchError((err) => apiError(err, 'Could not load geofences.')),
-    );
+    syncRuleCounts();
+    return demo(GEOFENCES.map(toZone));
   }
 
   get(id: string): Observable<Zone> {
-    return this.http.get<GeofenceDto>(`${this.url}/${encodeURIComponent(id)}`, { params: tenantParams() }).pipe(
-      map(toZone),
-      catchError((err) => apiError(err, 'Could not load the geofence.')),
-    );
+    const g = GEOFENCES.find((x) => x.id === id);
+    return g ? demo(toZone(g)) : demoError('The geofence was not found.');
   }
 
   create(z: Zone): Observable<Zone> {
-    return this.http.post<GeofenceDto>(this.url, toGeofenceRequest(z, actorName(this.auth)), { params: tenantParams() }).pipe(
-      map(toZone),
-      catchError((err) => apiError(err, 'Could not create the geofence.')),
-    );
+    const n = GEOFENCES.reduce((m, g) => Math.max(m, Number(g.id.slice(3)) || 0), 0) + 1;
+    const dto = this.toDto(`GF-${String(n).padStart(4, '0')}`, z, null);
+    GEOFENCES.push(dto);
+    return demo(toZone(dto));
   }
 
   update(z: Zone): Observable<Zone> {
-    return this.http.put<GeofenceDto>(`${this.url}/${encodeURIComponent(z.id)}`, toGeofenceRequest(z, actorName(this.auth)), { params: tenantParams() }).pipe(
-      map(toZone),
-      catchError((err) => apiError(err, 'Could not update the geofence.')),
-    );
+    const i = GEOFENCES.findIndex((g) => g.id === z.id);
+    if (i < 0) return demoError('Could not update the geofence: it no longer exists.');
+    GEOFENCES[i] = this.toDto(z.id, z, GEOFENCES[i]);
+    return demo(toZone(GEOFENCES[i]));
   }
 
   delete(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.url}/${encodeURIComponent(id)}`, { params: tenantParams() }).pipe(
-      catchError((err) => apiError(err, 'Could not delete the geofence.')),
-    );
+    const i = GEOFENCES.findIndex((g) => g.id === id);
+    if (i < 0) return demoError('Could not delete the geofence.');
+    GEOFENCES.splice(i, 1);
+    for (let r = ALERT_RULES.length - 1; r >= 0; r--) if (ALERT_RULES[r].geofenceId === id) ALERT_RULES.splice(r, 1);
+    return demo(undefined as void);
   }
 
-  /** Every Create Geofence dropdown in one call (zone types, colours, asset groups, schedules, shapes, statuses). */
+  /** Every Create Geofence dropdown in one call. */
   options(): Observable<GeofenceOptionsDto> {
-    return this.http.get<GeofenceOptionsDto>(`${this.url}/options`, { params: tenantParams() }).pipe(
-      catchError((err) => apiError(err, 'Could not load geofence options.')),
-    );
+    return demo(DEFAULT_GEOFENCE_OPTIONS);
   }
 
   zoneTypes(): Observable<string[]> {
-    return this.http.get<string[]>(`${this.url}/zone-types`, { params: tenantParams() });
+    return demo(DEFAULT_GEOFENCE_OPTIONS.zoneTypes);
   }
 
   mapColours(): Observable<string[]> {
-    return this.http.get<string[]>(`${this.url}/map-colours`, { params: tenantParams() });
+    return demo(DEFAULT_GEOFENCE_OPTIONS.mapColours);
   }
 
   assetGroups(): Observable<string[]> {
-    return this.http.get<string[]>(`${this.url}/asset-groups`, { params: tenantParams() });
+    return demo(DEFAULT_GEOFENCE_OPTIONS.assetGroups);
   }
 
   schedules(): Observable<string[]> {
-    return this.http.get<string[]>(`${this.url}/schedules`, { params: tenantParams() });
+    return demo(DEFAULT_GEOFENCE_OPTIONS.schedules);
   }
 
   shapes(): Observable<string[]> {
-    return this.http.get<string[]>(`${this.url}/shapes`, { params: tenantParams() });
+    return demo(DEFAULT_GEOFENCE_OPTIONS.shapes);
   }
 
   statuses(): Observable<string[]> {
-    return this.http.get<string[]>(`${this.url}/statuses`, { params: tenantParams() });
+    return demo(DEFAULT_GEOFENCE_OPTIONS.statuses);
   }
 
-  /** Site dropdown (the API docs point to master-data sites). Falls back to an empty list when unavailable. */
+  /** Site dropdown (demo master-data sites). */
   sites(): Observable<SiteOption[]> {
-    type SiteRow = { id?: string; siteName?: string; name?: string; status?: string; isDeleted?: boolean };
-    return this.http.get<SiteRow[] | { items?: SiteRow[] }>(`${environment.masterDataApiUrl}api/master-data/sites`, { params: tenantParams() }).pipe(
-      map((res) => (Array.isArray(res) ? res : res?.items ?? [])),
-      map((rows) =>
-        rows
-          .filter((r) => r.id && r.isDeleted !== true && !/^(inactive|disabled|deleted)$/i.test(r.status ?? ''))
-          .map((r) => ({ id: String(r.id), name: String(r.siteName ?? r.name ?? r.id) })),
-      ),
-      catchError(() => of([])),
-    );
+    return demo(DEMO_SITES.map((s) => ({ id: s.id, name: s.name })));
+  }
+
+  private toDto(id: string, z: Zone, old: GeofenceDto | null): GeofenceDto {
+    const req = toGeofenceRequest(z, old?.createdBy ?? (actorName(this.auth) || DEMO_USER));
+    return {
+      ...req,
+      id,
+      siteId: req.siteId ?? DEMO_SITES.find((s) => s.name === req.siteName)?.id ?? null,
+      monitoredAssetCount: req.monitoredAssetCount ?? 0,
+      ruleCount: ALERT_RULES.filter((r) => r.geofenceId === id).length,
+      createdAt: old?.createdAt ?? new Date().toISOString(),
+    };
   }
 }

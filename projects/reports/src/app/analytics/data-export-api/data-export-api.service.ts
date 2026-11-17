@@ -1,15 +1,16 @@
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
-import { Observable, catchError, finalize, map, tap, throwError } from 'rxjs';
-import { environment } from 'shared-ui';
-import { apiErrorMessage, saveBlob, toParams } from '../asset-performance/kit/api-utils';
-import { emptyRunStats, emptySummary } from './data-export-api.data';
+import { Injectable, signal } from '@angular/core';
+import { Observable, delay, of, tap, throwError } from 'rxjs';
+import { CURRENT_USER, downloadCsv } from '../shared/analytics-common';
 import {
-  AccessLog, ApiConnection, ConnectionType, Dataset, DatasetField, DatasetSample, ExportDraft, ExportFormat, ExportJob, ExportRun, ExportStatus,
-  ExportSummary, LogResult, RunStats
+  DELIVERY_NOTE, DESTINATION_LABEL, OLDER_LOG_ENTRIES, fileBytes, localStamp, sampleRows, seedConnections, seedDatasets, seedJobsAndRuns,
+  seedLogs, seedStats, seedSummary, seeded
+} from './data-export-api.data';
+import {
+  AccessLog, ApiConnection, ConnectionType, Dataset, DatasetField, DatasetSample, ExportDraft, ExportFormat, ExportJob, ExportRun,
+  ExportSummary, Frequency, LogResult, RunStats
 } from './data-export-api.model';
 
-/** New-connection form. The secret is sent once to the API, which keeps only a masked form of it. */
+/** New-connection form. The secret is never kept: only a masked form of it is stored. */
 export interface ConnectionForm {
   name: string;
   type: ConnectionType;
@@ -19,96 +20,36 @@ export interface ConnectionForm {
   secret: string;
 }
 
-export const DESTINATION_LABEL: Record<string, string> = { S3: 'S3', 'Secure FTP': 'SFTP', Email: 'Email', API: 'API' };
+export { DESTINATION_LABEL };
 
-// ----- API shapes (/api/data-export) -----
-
-interface OptionsDto {
-  formats: string[];
-  authMethods: string[];
-  defaultTimeZone: string;
-  deliveryNote: string;
-}
-
-interface JobDto extends Omit<ExportJob, 'lastError'> {
-  lastError: string | null;
-}
-
-type RunDto = ExportRun;
-type ConnectionDto = ApiConnection;
-type StatsDto = RunStats;
-
-interface OverviewDto {
-  generatedAt: string;
-  timeZone: string;
-  summary: ExportSummary;
-  jobs: JobDto[];
-  connections: ConnectionDto[];
-  datasets: Dataset[];
-  stats7: StatsDto;
-  stats30: StatsDto;
-  logs: AccessLog[];
-  logsTotal: number;
-}
-
-interface PreviewDto {
-  datasetId: string;
-  header: string[];
-  rows: (string | number | null)[][];
-  totalRows: number;
-  truncated: boolean;
-}
-
-interface RunResultDto {
-  job: JobDto;
-  run: RunDto;
-}
-
-/** Filters of the Access Logs tab, for the server-side CSV export. */
+/** Filters of the Access Logs tab, for the CSV export. */
 export interface LogExportFilters {
   search: string;
   result: '' | LogResult;
   resource: string;
 }
 
-const TIME_ZONE = 'Asia/Dubai';
-
-const toJob = (dto: JobDto): ExportJob => ({ ...dto, lastError: dto.lastError ?? undefined, fields: dto.fields ?? [], filters: dto.filters ?? [] });
-
-const toStats = (dto: StatsDto | null | undefined, days: number): RunStats =>
-  dto && dto.labels?.length
-    ? {
-        labels: dto.labels,
-        success: dto.success ?? [],
-        failed: dto.failed ?? [],
-        generatedBytes: dto.generatedBytes ?? [],
-        accessOk: dto.accessOk ?? [],
-        accessFailed: dto.accessFailed ?? [],
-        successRate: dto.successRate ?? null
-      }
-    : emptyRunStats(days);
+const DAY = 86_400_000;
+/** Short pause so "Running" / "Testing" states are visible in the demo. */
+const WORK_MS = 900;
 
 /**
- * Data Export / API from the Report Analytics API (/api/data-export): export jobs, run-now (the file is generated from the live
- * dataset and kept with the run; delivery is not configured), API connections, datasets and access logs.
- * The page holds the latest overview here; every change goes to the API and then reloads the overview.
+ * Data Export / API (static demo): export jobs, run-now (generates a file of demo rows), API connections, datasets and
+ * access logs held in memory. Every change updates this in-memory copy and is recorded in the access logs.
  */
 @Injectable()
 export class DataExportService {
-  private readonly http = inject(HttpClient);
-  private readonly apiUrl = `${environment.reportAnalyticsApiUrl}api/data-export`;
-
   datasets: Dataset[] = [];
   jobs: ExportJob[] = [];
   connections: ApiConnection[] = [];
   logs: AccessLog[] = [];
   logsTotal = 0;
-  stats7: RunStats = emptyRunStats(7);
-  stats30: RunStats = emptyRunStats(30);
-  summary: ExportSummary = emptySummary();
+  stats7: RunStats = seedStats(7);
+  stats30: RunStats = seedStats(30);
+  summary: ExportSummary = seedSummary(this.stats30, [], 0);
   formats: ExportFormat[] = ['CSV', 'XLSX', 'JSON'];
-  authMethods: string[] = [];
-  deliveryNote = 'not delivered: no transport configured';
+  authMethods: string[] = ['OAuth 2.0 (client credentials)', 'API key', 'Basic', 'Key pair', 'Service principal', 'Personal access token'];
+  deliveryNote = DELIVERY_NOTE;
 
   readonly loading = signal(false);
   readonly loaded = signal(false);
@@ -116,63 +57,39 @@ export class DataExportService {
   /** Bumped whenever new figures arrive, so charts rebuild */
   readonly version = signal(0);
 
-  private fail = (err: HttpErrorResponse) => throwError(() => new Error(apiErrorMessage(err, 'Data Export')));
+  private runs: ExportRun[] = [];
+  private jobSeq = 11;
+  private runSeq = 4_300;
+  private conSeq = 7;
+  private logSeq = 9_500;
 
-  private scope(extra: Record<string, string | number | boolean | null | undefined> = {}) {
-    return toParams({ tenantId: environment.tenantId, clientId: environment.clientId, timeZone: TIME_ZONE, ...extra });
-  }
-
-  private get body() {
-    return { tenantId: environment.tenantId, clientId: environment.clientId, timeZone: TIME_ZONE };
+  constructor() {
+    this.datasets = seedDatasets();
+    const { jobs, runs } = seedJobsAndRuns(this.datasets);
+    this.jobs = jobs;
+    this.runs = runs;
+    this.connections = seedConnections();
+    this.logs = seedLogs();
+    this.logsTotal = this.logs.length + OLDER_LOG_ENTRIES;
+    this.summary = seedSummary(this.stats30, this.jobs, this.connections.length);
+    this.countExports();
   }
 
   // ----- Loading -----
 
-  /** GET /options: file formats, authentication methods and the delivery note. */
+  /** File formats, authentication methods and the delivery note (static). */
   loadOptions(): Observable<void> {
-    return this.http.get<OptionsDto>(`${this.apiUrl}/options`).pipe(
-      map((dto) => {
-        const formats = (dto.formats ?? []).filter((f): f is ExportFormat => f === 'CSV' || f === 'XLSX' || f === 'JSON');
-        if (formats.length) this.formats = formats;
-        if (dto.authMethods?.length) this.authMethods = dto.authMethods;
-        if (dto.deliveryNote) this.deliveryNote = dto.deliveryNote;
-      }),
-      catchError(this.fail)
-    );
+    return of(undefined);
   }
 
-  /** GET /overview: jobs, connections, datasets, run stats (7 / 30 days), headline figures and the latest access logs. */
+  /** The current in-memory overview. */
   loadOverview(): Observable<void> {
-    this.loading.set(true);
-    return this.http.get<OverviewDto>(`${this.apiUrl}/overview`, { params: this.scope() }).pipe(
-      map((dto) => {
-        // Keep the "Testing" / "Running" state of anything still waiting for the API
-        const running = new Set(this.jobs.filter((j) => j.status === 'Running').map((j) => j.id));
-        const testing = new Set(this.connections.filter((c) => c.status === 'Testing').map((c) => c.id));
-        this.jobs = (dto.jobs ?? []).map(toJob).map((j) => (running.has(j.id) ? { ...j, status: 'Running' as ExportStatus } : j));
-        this.connections = (dto.connections ?? []).map((c) => (testing.has(c.id) ? { ...c, status: 'Testing' as const } : c));
-        this.datasets = dto.datasets ?? [];
-        this.logs = dto.logs ?? [];
-        this.logsTotal = dto.logsTotal ?? this.logs.length;
-        this.stats7 = toStats(dto.stats7, 7);
-        this.stats30 = toStats(dto.stats30, 30);
-        this.summary = dto.summary ?? emptySummary();
-        if (dto.summary?.deliveryNote) this.deliveryNote = dto.summary.deliveryNote;
-        this.loaded.set(true);
-        this.error.set(null);
-        this.version.update((v) => v + 1);
-      }),
-      catchError((err: HttpErrorResponse) => {
-        this.error.set(apiErrorMessage(err, 'Data Export'));
-        return this.fail(err);
-      }),
-      finalize(() => this.loading.set(false))
-    );
-  }
-
-  /** Reloads the overview after a change (new access logs, stats, dataset export counts). Errors are left to the next refresh. */
-  private reload(): void {
-    this.loadOverview().subscribe({ error: () => undefined });
+    this.countExports();
+    this.loaded.set(true);
+    this.loading.set(false);
+    this.error.set(null);
+    this.version.update((v) => v + 1);
+    return of(undefined);
   }
 
   // ----- Lookups -----
@@ -185,7 +102,6 @@ export class DataExportService {
     return this.dataset(datasetId)?.fields ?? [];
   }
 
-  /** Quick check for the builder; the API checks again when saving. */
   nameTaken(name: string, exceptId: string | null): boolean {
     const n = name.trim().toLowerCase();
     return this.jobs.some((j) => j.id !== exceptId && j.name.toLowerCase() === n);
@@ -198,96 +114,125 @@ export class DataExportService {
 
   // ----- Export jobs -----
 
-  /** POST /jobs or PUT /jobs/{id} from the Export Builder. */
+  /** Creates or updates a job from the Export Builder. */
   saveJob(draft: ExportDraft, status: 'Draft' | 'Scheduled'): Observable<ExportJob> {
-    const payload = {
-      name: draft.name.trim(),
-      datasetId: draft.datasetId,
+    const name = draft.name.trim();
+    if (this.nameTaken(name, draft.id)) return throwError(() => new Error('An export with this name already exists.'));
+    const d = this.dataset(draft.datasetId) ?? this.datasets[0];
+    const existing = draft.id ? this.jobs.find((j) => j.id === draft.id) : undefined;
+    const target = draft.target.trim();
+    const job: ExportJob = {
+      id: existing?.id ?? `EXP-${String(this.jobSeq++).padStart(4, '0')}`,
+      name,
+      module: d.modules[d.modules.length - 1],
+      datasetId: d.id,
       format: draft.format,
-      fields: draft.fields.slice(),
-      filters: draft.filters.map((x) => ({ field: x.field, operator: x.operator, value: x.value.trim() })),
       delivery: draft.delivery,
-      target: draft.target.trim(),
+      target,
+      destination: draft.delivery === 'API' ? target : DESTINATION_LABEL[draft.delivery],
       frequency: draft.frequency,
       time: draft.time,
-      encrypted: draft.encrypted,
+      lastRun: existing?.lastRun ?? null,
+      nextRun: status === 'Draft' ? null : nextRun(draft.frequency, draft.time),
       status,
-      ...this.body
+      owner: existing?.owner ?? CURRENT_USER.name,
+      fields: draft.fields.slice(),
+      filters: draft.filters.map((x) => ({ field: x.field, operator: x.operator, value: x.value.trim() })),
+      encrypted: draft.encrypted,
+      lastRunId: existing?.lastRunId ?? null,
+      lastRowCount: existing?.lastRowCount ?? null,
+      lastSizeBytes: existing?.lastSizeBytes ?? null
     };
-    const request = draft.id
-      ? this.http.put<JobDto>(`${this.apiUrl}/jobs/${encodeURIComponent(draft.id)}`, payload)
-      : this.http.post<JobDto>(`${this.apiUrl}/jobs`, payload);
-    return request.pipe(
-      map(toJob),
-      tap((job) => {
-        this.upsertJob(job);
-        this.reload();
-      }),
-      catchError(this.fail)
-    );
+    this.upsertJob(job);
+    this.log(existing ? 'Edited export' : 'Created export', job.name);
+    this.changed();
+    return of(job);
   }
 
-  /** POST /jobs/{id}/run: generates the file from the live dataset and records the run. */
+  /** Run now: generates the file from the dataset's demo rows and records the run. */
   runJob(job: ExportJob): Observable<{ job: ExportJob; run: ExportRun }> {
     const before = job.status;
     this.patchJob(job.id, { status: 'Running', lastError: undefined });
-    return this.http.post<RunResultDto>(`${this.apiUrl}/jobs/${encodeURIComponent(job.id)}/run`, null, { params: this.scope() }).pipe(
-      map((dto) => ({ job: toJob(dto.job), run: dto.run })),
-      tap(({ job: updated }) => {
+    const con = job.delivery === 'API' ? this.connections.find((c) => c.name === job.target) : undefined;
+    const failed = con?.status === 'Disconnected';
+    const rows = failed ? 0 : this.rowCount(job);
+    const startedAt = localStamp(new Date());
+    const size = failed ? 0 : fileBytes(rows, job.fields.length || this.fields(job.datasetId).length, job.format);
+    const error = failed ? `${con!.name} is disconnected: ${con!.lastTestMessage ?? 'last test failed'}` : null;
+    const run: ExportRun = {
+      id: `RUN-${String(this.runSeq++).padStart(6, '0')}`, jobId: job.id, jobName: job.name, status: failed ? 'Failed' : 'Success', startedAt,
+      rowCount: rows, sizeBytes: size, fileName: failed ? null : `${job.id}.${job.format.toLowerCase()}`, hasFile: !failed,
+      deliveryStatus: failed ? 'Failed' : 'Not delivered', deliveryMessage: failed ? null : this.deliveryNote, error
+    };
+    const updated: ExportJob = {
+      ...(this.jobs.find((j) => j.id === job.id) ?? job),
+      status: failed ? 'Failed' : before === 'Paused' ? 'Paused' : 'Success',
+      lastRun: startedAt,
+      lastError: error ?? undefined,
+      lastRunId: run.id,
+      lastRowCount: rows,
+      lastSizeBytes: failed ? null : size,
+      nextRun: before === 'Draft' || before === 'Paused' ? null : nextRun(job.frequency, job.time)
+    };
+    return of({ job: updated, run }).pipe(
+      delay(WORK_MS),
+      tap(() => {
+        this.runs.unshift(run);
         this.upsertJob(updated);
-        this.reload();
-      }),
-      catchError((err: HttpErrorResponse) => {
-        this.patchJob(job.id, { status: before });
-        return this.fail(err);
+        this.recordRun(run);
+        this.log('Ran export', job.name, failed ? 'Failed' : 'Success');
+        this.changed();
       })
     );
   }
 
   pause(job: ExportJob): Observable<ExportJob> {
-    return this.jobAction(job, 'pause');
+    return this.jobAction(job, { status: 'Paused', nextRun: null }, 'Paused export');
   }
 
   resume(job: ExportJob): Observable<ExportJob> {
-    return this.jobAction(job, 'resume');
+    return this.jobAction(job, { status: 'Scheduled', nextRun: nextRun(job.frequency, job.time) }, 'Resumed export');
   }
 
   deleteJob(job: ExportJob): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}/jobs/${encodeURIComponent(job.id)}`, { params: this.scope() }).pipe(
-      tap(() => {
-        this.jobs = this.jobs.filter((j) => j.id !== job.id);
-        this.reload();
-      }),
-      catchError(this.fail)
-    );
+    this.jobs = this.jobs.filter((j) => j.id !== job.id);
+    this.log('Deleted export', job.name);
+    this.changed();
+    return of(undefined);
   }
 
   /** The file of the job's latest successful run, or (before any) a 25-row CSV sample. Says which one was downloaded. */
   downloadJob(job: ExportJob): Observable<'file' | 'sample'> {
     const hasFile = !!job.lastRunId && !!job.lastSizeBytes && job.status !== 'Failed';
-    const url = hasFile
-      ? `${this.apiUrl}/runs/${encodeURIComponent(job.lastRunId!)}/file`
-      : `${this.apiUrl}/jobs/${encodeURIComponent(job.id)}/sample`;
-    const params = hasFile ? this.scope() : this.scope({ rows: 25 });
-    return this.http.get(url, { params, observe: 'response', responseType: 'blob' }).pipe(
-      tap((res) => {
-        saveBlob(res, hasFile ? `${job.id}.${job.format.toLowerCase()}` : `${job.id}-sample.csv`);
-        this.reload();
-      }),
-      map(() => (hasFile ? 'file' : 'sample') as 'file' | 'sample'),
-      catchError(this.fail)
-    );
+    const fields = this.jobFields(job);
+    // The demo file holds at most 500 rows of the run
+    const count = hasFile ? Math.min(job.lastRowCount ?? 25, 500) : 25;
+    downloadCsv(hasFile ? `${job.id}.csv` : `${job.id}-sample.csv`, fields.map((x) => x.name), sampleRows(fields, count));
+    this.log(hasFile ? 'Downloaded file' : 'Downloaded sample', job.name);
+    this.changed();
+    return of(hasFile ? 'file' : 'sample');
   }
 
-  private jobAction(job: ExportJob, action: 'pause' | 'resume'): Observable<ExportJob> {
-    return this.http.post<JobDto>(`${this.apiUrl}/jobs/${encodeURIComponent(job.id)}/${action}`, null, { params: this.scope() }).pipe(
-      map(toJob),
-      tap((updated) => {
-        this.upsertJob(updated);
-        this.reload();
-      }),
-      catchError(this.fail)
-    );
+  private jobAction(job: ExportJob, patch: Partial<ExportJob>, action: string): Observable<ExportJob> {
+    const current = this.jobs.find((j) => j.id === job.id) ?? job;
+    const updated = { ...current, ...patch };
+    this.upsertJob(updated);
+    this.log(action, job.name);
+    this.changed();
+    return of(updated);
+  }
+
+  private jobFields(job: ExportJob): DatasetField[] {
+    const all = this.fields(job.datasetId);
+    const picked = all.filter((x) => job.fields.includes(x.name));
+    return picked.length ? picked : all;
+  }
+
+  /** Rows a run generates: the dataset narrowed by each filter, plus a little growth since the last run. */
+  private rowCount(job: ExportJob): number {
+    if (job.lastRowCount) return job.lastRowCount + Math.round(seeded(Date.now() % 9_973)() * 40);
+    const total = this.dataset(job.datasetId)?.rows ?? 1_000;
+    return Math.max(1, Math.round(total * Math.pow(0.42, job.filters.length)));
   }
 
   private upsertJob(job: ExportJob): void {
@@ -299,76 +244,93 @@ export class DataExportService {
     this.jobs = this.jobs.map((j) => (j.id === id ? { ...j, ...patch } : j));
   }
 
-  // ----- Datasets -----
-
-  /** GET /datasets/{id}/preview: the newest rows of the live collection. */
-  preview(datasetId: string, rows = 10): Observable<DatasetSample> {
-    return this.http.get<PreviewDto>(`${this.apiUrl}/datasets/${encodeURIComponent(datasetId)}/preview`, { params: this.scope({ rows }) }).pipe(
-      map((dto) => ({ header: dto.header ?? [], rows: dto.rows ?? [], totalRows: dto.totalRows ?? 0 })),
-      catchError(this.fail)
-    );
+  /** Adds the run to today's bucket of both stat ranges. */
+  private recordRun(run: ExportRun): void {
+    for (const s of [this.stats7, this.stats30]) {
+      const last = s.labels.length - 1;
+      if (run.status === 'Success') s.success[last]++;
+      else s.failed[last]++;
+      s.generatedBytes[last] += run.sizeBytes;
+      s.accessOk[last]++;
+      const ok = s.success.reduce((a, b) => a + b, 0);
+      const bad = s.failed.reduce((a, b) => a + b, 0);
+      s.successRate = Number(((ok / (ok + bad)) * 100).toFixed(1));
+    }
+    this.summary = { ...this.summary, successRate30: this.stats30.successRate, generatedBytes30: this.summary.generatedBytes30 + run.sizeBytes };
   }
 
-  /** GET /datasets/{id}/sample: a CSV of the newest rows (recorded in the access logs). */
+  // ----- Datasets -----
+
+  /** The newest rows of a dataset (demo rows). */
+  preview(datasetId: string, rows = 10): Observable<DatasetSample> {
+    const d = this.dataset(datasetId);
+    if (!d) return throwError(() => new Error('Dataset not found.'));
+    this.log('Previewed dataset', d.name);
+    return of({ header: d.fields.map((x) => x.name), rows: sampleRows(d.fields, Math.min(rows, d.rows)), totalRows: d.rows });
+  }
+
+  /** A CSV of the newest rows (recorded in the access logs). */
   downloadDatasetSample(d: Dataset, rows = 25): Observable<void> {
-    return this.http
-      .get(`${this.apiUrl}/datasets/${encodeURIComponent(d.id)}/sample`, { params: this.scope({ rows }), observe: 'response', responseType: 'blob' })
-      .pipe(
-        tap((res) => {
-          saveBlob(res, `${d.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-sample.csv`);
-          this.reload();
-        }),
-        map(() => undefined),
-        catchError(this.fail)
-      );
+    downloadCsv(`${d.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-sample.csv`, d.fields.map((x) => x.name), sampleRows(d.fields, rows));
+    this.log('Downloaded sample', d.name);
+    this.changed();
+    return of(undefined);
   }
 
   // ----- Connections -----
 
-  /** POST /connections: saved and tested right away. The secret is sent once and only its mask is stored. */
+  /** Saved and tested right away. Only a mask of the secret is kept. */
   addConnection(form: ConnectionForm): Observable<ApiConnection> {
-    const payload = {
-      name: form.name.trim(),
+    const name = form.name.trim();
+    if (this.connectionNameTaken(name)) return throwError(() => new Error('A connection with this name already exists.'));
+    const tested = testResult(form.baseUrl);
+    const con: ApiConnection = {
+      id: `CON-${String(this.conSeq++).padStart(3, '0')}`,
+      name,
       type: form.type,
       baseUrl: form.baseUrl.trim().replace(/\/+$/, ''),
       auth: form.auth,
       authClientId: form.clientId.trim() || null,
-      secret: form.secret,
-      testNow: true,
-      tenantId: environment.tenantId,
-      clientId: environment.clientId
+      ...tested,
+      uptime: tested.status === 'Disconnected' ? 0 : 100,
+      lastTested: localStamp(new Date()),
+      secretStored: !!form.secret,
+      secretMask: form.secret ? `••••••••${form.secret.slice(-4)}` : null,
+      owner: CURRENT_USER.name
     };
-    return this.http.post<ConnectionDto>(`${this.apiUrl}/connections`, payload, { params: toParams({ timeZone: TIME_ZONE }) }).pipe(
-      tap((con) => {
-        this.connections = [...this.connections, con];
-        this.reload();
-      }),
-      catchError(this.fail)
-    );
+    this.connections = [...this.connections, con];
+    this.log('Added connection', con.name);
+    this.changed();
+    return of(con);
   }
 
   deleteConnection(con: ApiConnection): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}/connections/${encodeURIComponent(con.id)}`, { params: this.scope() }).pipe(
-      tap(() => {
-        this.connections = this.connections.filter((c) => c.id !== con.id);
-        this.reload();
-      }),
-      catchError(this.fail)
-    );
+    this.connections = this.connections.filter((c) => c.id !== con.id);
+    this.log('Removed connection', con.name);
+    this.changed();
+    return of(undefined);
   }
 
-  /** POST /connections/{id}/test: calls the base URL over HTTPS and reads its certificate. */
+  /** Simulated HTTPS test of the base URL and its certificate. */
   testConnection(con: ApiConnection): Observable<ApiConnection> {
-    const before = con.status;
     this.patchConnection(con.id, { status: 'Testing' });
-    return this.http.post<ConnectionDto>(`${this.apiUrl}/connections/${encodeURIComponent(con.id)}/test`, null, { params: this.scope() }).pipe(
-      tap((updated) => {
-        this.connections = this.connections.map((c) => (c.id === updated.id ? updated : c));
-        this.reload();
-      }),
-      catchError((err: HttpErrorResponse) => {
-        this.patchConnection(con.id, { status: before });
-        return this.fail(err);
+    // Re-testing a connection with a known issue gives the same answer; others report healthy
+    const result =
+      con.status === 'Disconnected' || con.status === 'Warning'
+        ? { status: con.status, lastTestMessage: con.lastTestMessage, certExpiresInDays: con.certExpiresInDays }
+        : testResult(con.baseUrl);
+    const updated: ApiConnection = {
+      ...con,
+      ...result,
+      lastTested: localStamp(new Date()),
+      uptime: con.uptime === null ? (result.status === 'Disconnected' ? 0 : 100) : con.uptime
+    };
+    return of(updated).pipe(
+      delay(WORK_MS),
+      tap((v) => {
+        this.connections = this.connections.map((c) => (c.id === v.id ? v : c));
+        this.log('Tested connection', v.name, v.status === 'Disconnected' ? 'Failed' : 'Success');
+        this.changed();
       })
     );
   }
@@ -379,14 +341,28 @@ export class DataExportService {
 
   // ----- Access logs -----
 
-  /** GET /export?section=access-logs: CSV of the access logs matching the tab's filters. */
+  /** CSV of the access logs matching the tab's filters. */
   exportLogs(f: LogExportFilters): Observable<void> {
-    const params = this.scope({ section: 'access-logs', format: 'csv', search: f.search.trim(), result: f.result, resource: f.resource });
-    return this.http.get(`${this.apiUrl}/export`, { params, observe: 'response', responseType: 'blob' }).pipe(
-      tap((res) => saveBlob(res, 'reporting-access-logs.csv')),
-      map(() => undefined),
-      catchError(this.fail)
-    );
+    const q = f.search.trim().toLowerCase();
+    const rows = this.logs
+      .filter(
+        (l) =>
+          (!f.result || l.result === f.result) &&
+          (!f.resource || l.resource === f.resource) &&
+          (!q || `${l.actor} ${l.action} ${l.resource} ${l.client} ${l.ip}`.toLowerCase().includes(q))
+      )
+      .map((l) => [l.id, l.at.replace('T', ' '), l.actor, l.action, l.resource, l.client, l.ip, l.result]);
+    downloadCsv('reporting-access-logs.csv', ['Log ID', 'Time (GST)', 'Actor', 'Action', 'Resource', 'Client', 'IP Address', 'Result'], rows);
+    this.log('Exported access logs', 'Access Logs');
+    return of(undefined);
+  }
+
+  private log(action: string, resource: string, result: LogResult = 'Success'): void {
+    this.logs = [
+      { id: `LOG-${String(this.logSeq++).padStart(6, '0')}`, at: localStamp(new Date()), actor: CURRENT_USER.name, action, resource, client: 'Asset360 Web', ip: '10.20.14.18', result },
+      ...this.logs
+    ];
+    this.logsTotal++;
   }
 
   // ----- Headline figures -----
@@ -403,4 +379,48 @@ export class DataExportService {
   get successRate(): number | null {
     return this.stats30.successRate ?? this.summary.successRate30;
   }
+
+  private countExports(): void {
+    this.datasets = this.datasets.map((d) => ({ ...d, exports: this.jobs.filter((j) => j.datasetId === d.id).length }));
+  }
+
+  private changed(): void {
+    this.countExports();
+    this.version.update((v) => v + 1);
+  }
+}
+
+/** Next scheduled run for a frequency and its time ("02:00", "Mon 07:00", "15" for hourly). */
+function nextRun(frequency: Frequency, time: string): string | null {
+  if (frequency === 'Real-time' || frequency === 'On demand') return null;
+  const now = new Date();
+  const clock = time.split(' ').pop() ?? '00:00';
+  const next = new Date(now);
+  if (frequency === 'Hourly') {
+    next.setMinutes(Number(clock) || 0, 0, 0);
+    if (next <= now) next.setTime(next.getTime() + 3_600_000);
+    return localStamp(next);
+  }
+  const [h, m] = clock.split(':').map(Number);
+  next.setHours(h || 0, m || 0, 0, 0);
+  if (next <= now) next.setTime(next.getTime() + DAY);
+  if (frequency === 'Weekly') {
+    const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(time.split(' ')[0]);
+    if (day >= 0) while (next.getDay() !== day) next.setTime(next.getTime() + DAY);
+  }
+  if (frequency === 'Monthly') {
+    next.setDate(1);
+    next.setMonth(now.getMonth() + 1);
+  }
+  return localStamp(next);
+}
+
+/** Demo connection test: plain-http or "localhost" URLs fail, everything else connects with a valid certificate. */
+function testResult(baseUrl: string): Pick<ApiConnection, 'status' | 'lastTestMessage' | 'certExpiresInDays'> {
+  const url = baseUrl.trim().toLowerCase();
+  if (!url.startsWith('https://') || url.includes('localhost')) {
+    return { status: 'Disconnected', lastTestMessage: 'Could not open an HTTPS connection to the base URL', certExpiresInDays: null };
+  }
+  const days = 60 + Math.round(seeded(url.length * 97)() * 300);
+  return { status: 'Connected', lastTestMessage: `HTTPS 200 in ${120 + (url.length % 9) * 23} ms; certificate valid`, certExpiresInDays: days };
 }

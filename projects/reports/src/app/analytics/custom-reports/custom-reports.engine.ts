@@ -1,14 +1,13 @@
 import { FILTER_OPERATOR_LABELS } from './custom-reports.data';
 import {
-  Aggregate, CalcField, DataSource, FieldDef, FieldGroup, FieldKind, FilterOperator, PreviewColumn, ReportCatalog, ReportCell,
-  ReportDefinition, ReportFilter
+  Aggregate, CalcField, CalcOperator, DataSource, FieldDef, FieldGroup, FieldKind, FilterOperator, PreviewColumn, PreviewResult,
+  ReportCatalog, ReportCell, ReportDefinition, ReportFilter, ReportRow
 } from './custom-reports.model';
 
-// Builder helpers over the field catalog loaded from the API. Report rows are produced by the API
-// (POST /api/custom-reports/preview); this file only handles what the builder needs while editing:
-// field lookups, step validation for instant feedback, output column names and cell formatting.
+// Report engine over the static demo catalog: field lookups, step validation, output columns,
+// cell formatting and runReport, which filters, groups, sorts and limits the demo rows in the browser.
 
-/** UI key of the record count column of a grouped report (the API calls it "count"). */
+/** UI key of the record count column of a grouped report. */
 export const COUNT_KEY = '__count';
 export const CALC_GROUP = 'calculated';
 
@@ -16,20 +15,10 @@ const NUMERIC_OPERATORS: FilterOperator[] = [
   'equals', 'notEquals', 'greaterThan', 'greaterOrEqual', 'lessThan', 'lessOrEqual', 'between', 'in', 'notIn', 'isEmpty', 'isNotEmpty'
 ];
 
-export const AGGREGATE_FUNCTIONS: Record<Aggregate, string> = { Sum: 'sum', Average: 'avg', Min: 'min', Max: 'max' };
-
 export const EMPTY_CATALOG: ReportCatalog = { sources: [], groups: [], fields: [] };
 
 export function isNumeric(kind: FieldKind): boolean {
   return kind === 'number' || kind === 'money' || kind === 'percent';
-}
-
-/** API dataType (string, number, currency, date) → UI kind. */
-export function kindOf(dataType: string | null | undefined): FieldKind {
-  if (dataType === 'number') return 'number';
-  if (dataType === 'currency') return 'money';
-  if (dataType === 'date') return 'date';
-  return 'text';
 }
 
 /** Source card for a key; a placeholder while the catalog is loading or for an unknown combination. */
@@ -48,7 +37,7 @@ export function sourceOf(catalog: ReportCatalog, key: string): DataSource {
   };
 }
 
-/** Source card key for a list of API data sources (assets is always part of it). */
+/** Source card key for a list of data sources (assets is always part of it). */
 export function sourceKeyFor(catalog: ReportCatalog, sources: string[]): string {
   const wanted = new Set(['assets', ...sources.map((s) => s.toLowerCase())]);
   const match = catalog.sources.find((s) => s.sources.length === wanted.size && s.sources.every((k) => wanted.has(k)));
@@ -102,7 +91,7 @@ function validFor(kind: FieldKind, value: string): boolean {
   return value !== '';
 }
 
-/** Validation message for a filter row, or '' when it is usable (mirrors the API's checks). */
+/** Validation message for a filter row, or '' when it is usable. */
 export function filterError(catalog: ReportCatalog, def: ReportDefinition, f: ReportFilter): string {
   const field = availableFields(catalog, def).find((x) => x.key === f.field);
   if (!field) return 'Choose a field.';
@@ -154,23 +143,6 @@ export function aggregateLabel(label: string, aggregate: Aggregate): string {
   return `${label} (${aggregate.toLowerCase()})`;
 }
 
-/** UI column key → the API's column key (e.g. maintenance_cost → sum_maintenance_cost when grouped). */
-export function apiColumnKey(def: ReportDefinition, key: string): string {
-  if (!def.groupBy) return key === COUNT_KEY ? '' : key;
-  if (key === COUNT_KEY) return 'count';
-  if (key === def.groupBy) return key;
-  return `${AGGREGATE_FUNCTIONS[def.aggregate]}_${key}`;
-}
-
-/** API column key → UI key. */
-export function uiColumnKey(grouped: boolean, key: string | null | undefined): string {
-  if (!key) return '';
-  if (!grouped) return key;
-  if (key === 'count') return COUNT_KEY;
-  const m = /^(sum|avg|min|max)_(.+)$/.exec(key);
-  return m ? m[2] : key;
-}
-
 /** Switches the data source and drops fields, filters and grouping the new source does not have. Returns the number of fields removed. */
 export function applySource(catalog: ReportCatalog, def: ReportDefinition, sourceKey: string): number {
   def.sourceKey = sourceKey;
@@ -216,4 +188,159 @@ export function chartAxes(catalog: ReportCatalog, def: ReportDefinition): { x: s
   const numeric = cols.filter((c) => isNumeric(c.kind) && c.key !== x?.key);
   const y = numeric.find((c) => c.key === def.chartValue) ?? numeric[0];
   return x && y ? { x: x.key, y: y.key } : null;
+}
+
+// ----- Running a report -----
+
+function round2(v: number): number {
+  return Math.round(v * 100) / 100;
+}
+
+export function calcValue(c: CalcField, row: ReportRow): number | null {
+  const a = Number(row[c.left]);
+  const b = Number(row[c.right]);
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  const ops: Record<CalcOperator, () => number | null> = {
+    '+': () => a + b, '-': () => a - b, '×': () => a * b, '÷': () => (b === 0 ? null : a / b)
+  };
+  const v = ops[c.op]();
+  return v === null ? null : round2(v);
+}
+
+function isEmptyCell(v: ReportCell | undefined): boolean {
+  return v === null || v === undefined || v === '';
+}
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function minusDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Comparable value of a cell / filter value for the field kind. */
+function comparable(kind: FieldKind, v: ReportCell | undefined): number | string {
+  if (isNumeric(kind)) return Number(v);
+  if (kind === 'date') return String(v ?? '').slice(0, 10);
+  return String(v ?? '').trim().toLowerCase();
+}
+
+function matches(field: FieldDef, f: ReportFilter, raw: ReportCell | undefined): boolean {
+  if (f.op === 'isEmpty') return isEmptyCell(raw);
+  if (f.op === 'isNotEmpty') return !isEmptyCell(raw);
+  if (isEmptyCell(raw)) return f.op === 'notEquals' || f.op === 'notIn' || f.op === 'notContains';
+  const kind = field.kind;
+  const a = comparable(kind, raw);
+  const b = comparable(kind, f.value.trim());
+  switch (f.op) {
+    case 'equals': return a === b;
+    case 'notEquals': return a !== b;
+    case 'contains': return String(a).includes(String(b));
+    case 'notContains': return !String(a).includes(String(b));
+    case 'startsWith': return String(a).startsWith(String(b));
+    case 'in': return listValues(f.value).some((v) => comparable(kind, v) === a);
+    case 'notIn': return !listValues(f.value).some((v) => comparable(kind, v) === a);
+    case 'greaterThan': return a > b;
+    case 'greaterOrEqual': return a >= b;
+    case 'lessThan': return a < b;
+    case 'lessOrEqual': return a <= b;
+    case 'between': return a >= b && a <= comparable(kind, (f.valueTo ?? '').trim());
+    case 'inLastDays': {
+      const today = todayIso();
+      return String(a) <= today && String(a) >= minusDays(today, Number(f.value));
+    }
+    default: return true;
+  }
+}
+
+function aggregate(values: number[], how: Aggregate): number {
+  if (!values.length) return 0;
+  const total = values.reduce((x, y) => x + y, 0);
+  if (how === 'Average') return round2(total / values.length);
+  if (how === 'Min') return Math.min(...values);
+  if (how === 'Max') return Math.max(...values);
+  return round2(total);
+}
+
+function compareCells(x: ReportCell | undefined, y: ReportCell | undefined): number {
+  if (isEmptyCell(x)) return isEmptyCell(y) ? 0 : 1;
+  if (isEmptyCell(y)) return -1;
+  return typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y));
+}
+
+/** Runs a definition against source rows: calculated fields, filters, grouping, sort and the row limit. */
+export function runReport(catalog: ReportCatalog, def: ReportDefinition, source: ReportRow[], limit = def.rowLimit): PreviewResult {
+  const columns = outputColumns(catalog, def);
+  let rows: ReportRow[] = source.map((r) => {
+    const row = { ...r };
+    for (const c of def.calcFields) row[c.key] = calcValue(c, row);
+    return row;
+  });
+
+  // Incomplete filters are skipped, as in the builder's summary
+  const filters = def.filters
+    .filter((f) => !filterError(catalog, def, f))
+    .map((f) => ({ f, field: fieldOf(catalog, def, f.field) as FieldDef }));
+  if (filters.length) {
+    rows = rows.filter((r) =>
+      def.filterLogic === 'Or'
+        ? filters.some(({ f, field }) => matches(field, f, r[f.field]))
+        : filters.every(({ f, field }) => matches(field, f, r[f.field]))
+    );
+  }
+
+  const group = def.groupBy ? fieldOf(catalog, def, def.groupBy) : undefined;
+  if (group) {
+    const buckets = new Map<string, ReportRow[]>();
+    for (const r of rows) {
+      const k = isEmptyCell(r[group.key]) ? '—' : String(r[group.key]);
+      const list = buckets.get(k);
+      if (list) list.push(r);
+      else buckets.set(k, [r]);
+    }
+    rows = [...buckets.entries()].map(([k, list]) => {
+      const out: ReportRow = { [group.key]: k, [COUNT_KEY]: list.length };
+      for (const c of columns.slice(2)) {
+        const values = list.map((r) => r[c.key]).filter((v) => !isEmptyCell(v)).map(Number);
+        out[c.key] = aggregate(values, def.aggregate);
+      }
+      return out;
+    });
+  }
+
+  // Grouped reports without a sort show the largest groups first
+  const sortKey = def.sortBy && columns.some((c) => c.key === def.sortBy) ? def.sortBy : group ? COUNT_KEY : '';
+  if (sortKey) {
+    const dir = sortKey === def.sortBy && def.sortDir === 'asc' ? 1 : -1;
+    rows = [...rows].sort((a, b) => {
+      const x = a[sortKey];
+      const y = b[sortKey];
+      // Empty values last in either direction
+      if (isEmptyCell(x) || isEmptyCell(y)) return compareCells(x, y);
+      return compareCells(x, y) * dir;
+    });
+  }
+
+  const axes = chartAxes(catalog, def);
+  const labelKey = axes?.x ?? '';
+  const valueKey = axes?.y ?? '';
+  const labelCol = columns.find((c) => c.key === labelKey);
+  const valueCol = columns.find((c) => c.key === valueKey);
+  const title = labelCol && valueCol ? `${valueCol.label.replace(/ \((sum|average|min|max)\)$/, '')} by ${labelCol.label}` : 'Report preview';
+  const points = def.viz !== 'Table' && axes
+    ? rows.map((r) => ({ label: String(r[labelKey] ?? '—'), value: Number(r[valueKey]) || 0 }))
+    : null;
+
+  return {
+    columns,
+    rows: rows.slice(0, Math.max(1, limit)).map((r) => Object.fromEntries(columns.map((c) => [c.key, r[c.key] ?? null])) as ReportRow),
+    matched: rows.length,
+    labelKey,
+    valueKey,
+    title,
+    points
+  };
 }

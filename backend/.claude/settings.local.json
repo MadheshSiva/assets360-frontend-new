@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(set -x)",
-      "Bash(curl -s -X POST http://localhost:5299/api/visitorentryexits -H 'Content-Type: application/json' -d '{ *)"
-    ]
-  }
-}

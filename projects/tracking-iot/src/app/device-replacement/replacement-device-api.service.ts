@@ -1,11 +1,12 @@
-import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, catchError } from 'rxjs';
+import { Observable } from 'rxjs';
 import { AuthService } from 'shared-ui';
-import { apiError, getAllPages, tenantBody, tenantParams, trackingUrl } from '../shared/tracking-api';
+import { DEMO_USER, demo, demoError, newRecordId } from '../shared/tracking-api';
+import { liveDevices } from '../device-management/iot-devices.data';
 import { Candidate, Compat, ExistingDevice, HistoryEvent, kindOf } from './replacement-data';
+import { REPLACEMENT_STOCK } from './replacement-stock.data';
 
-/** A spare device as /api/replacement-devices returns it (addressed by deviceId). */
+/** A spare device in replacement stock (addressed by deviceId). */
 export interface ReplacementDeviceDto {
   id: string;
   deviceId: string;
@@ -32,7 +33,7 @@ export interface ReplacementDeviceRequest {
   locationName: string;
 }
 
-/** The fields of an IoT device (GET /api/iot-devices) the replacement page shows. */
+/** The fields of an IoT device the replacement page shows. */
 export interface IoTDeviceDto {
   deviceId: string;
   deviceName: string;
@@ -51,49 +52,52 @@ export interface IoTDeviceDto {
   createdAt: string | null;
 }
 
-/** Device Replacement → Tracking service /api/replacement-devices (stock) and /api/iot-devices (devices to replace). */
+/** Device Replacement (static demo): spare stock (replacement-stock.data.ts) and the demo device registry. */
 @Injectable({ providedIn: 'root' })
 export class ReplacementDeviceApiService {
-  private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
 
   list(): Observable<ReplacementDeviceDto[]> {
-    return this.http.get<ReplacementDeviceDto[]>(trackingUrl('replacement-devices'), { params: tenantParams() }).pipe(catchError((e) => apiError(e, 'Could not load replacement stock.')));
+    return demo(REPLACEMENT_STOCK);
   }
 
   get(deviceId: string): Observable<ReplacementDeviceDto> {
-    return this.http.get<ReplacementDeviceDto>(trackingUrl(`replacement-devices/${encodeURIComponent(deviceId)}`), { params: tenantParams() }).pipe(catchError((e) => apiError(e, `Could not load ${deviceId}.`)));
+    const d = REPLACEMENT_STOCK.find((x) => x.deviceId === deviceId);
+    return d ? demo(d) : demoError(`Spare ${deviceId} was not found.`);
   }
 
   create(body: ReplacementDeviceRequest): Observable<ReplacementDeviceDto> {
-    return this.http
-      .post<ReplacementDeviceDto>(trackingUrl('replacement-devices'), { ...body, createdBy: this.userName(), ...tenantBody() }, { params: tenantParams() })
-      .pipe(catchError((e) => apiError(e, 'Could not add the replacement device.')));
+    if (REPLACEMENT_STOCK.some((x) => x.deviceId.toLowerCase() === body.deviceId.toLowerCase())) return demoError(`${body.deviceId} is already in stock.`);
+    const dto: ReplacementDeviceDto = { ...body, id: newRecordId(), createdBy: this.userName(), createdAt: new Date().toISOString(), updatedBy: null, updatedAt: null };
+    REPLACEMENT_STOCK.unshift(dto);
+    return demo(dto);
   }
 
   update(deviceId: string, body: ReplacementDeviceRequest): Observable<ReplacementDeviceDto> {
-    return this.http
-      .put<ReplacementDeviceDto>(trackingUrl(`replacement-devices/${encodeURIComponent(deviceId)}`), { ...body, createdBy: null, ...tenantBody() }, { params: tenantParams() })
-      .pipe(catchError((e) => apiError(e, `Could not update ${deviceId}.`)));
+    const i = REPLACEMENT_STOCK.findIndex((x) => x.deviceId === deviceId);
+    if (i < 0) return demoError(`Could not update ${deviceId}: it is no longer in stock.`);
+    REPLACEMENT_STOCK[i] = { ...REPLACEMENT_STOCK[i], ...body, updatedBy: this.userName(), updatedAt: new Date().toISOString() };
+    return demo(REPLACEMENT_STOCK[i]);
   }
 
   remove(deviceId: string): Observable<void> {
-    return this.http.delete<void>(trackingUrl(`replacement-devices/${encodeURIComponent(deviceId)}`), { params: tenantParams() }).pipe(catchError((e) => apiError(e, `Could not delete ${deviceId}.`)));
+    const i = REPLACEMENT_STOCK.findIndex((x) => x.deviceId === deviceId);
+    if (i >= 0) REPLACEMENT_STOCK.splice(i, 1);
+    return demo(undefined as void);
   }
 
   /** Every IoT device (read only here; the queue is built from their health). */
   iotDevices(): Observable<IoTDeviceDto[]> {
-    return getAllPages<IoTDeviceDto>(this.http, trackingUrl('iot-devices')).pipe(catchError((e) => apiError(e, 'Could not load IoT devices.')));
+    return demo(liveDevices());
   }
 
   iotDevice(deviceId: string): Observable<IoTDeviceDto> {
-    return this.http.get<IoTDeviceDto>(trackingUrl(`iot-devices/${encodeURIComponent(deviceId)}`), { params: tenantParams() }).pipe(catchError((e) => apiError(e, `Device ${deviceId} was not found.`)));
+    const d = liveDevices().find((x) => x.deviceId === deviceId);
+    return d ? demo(d) : demoError(`Device ${deviceId} was not found.`);
   }
 
   userName(): string | null {
-    let stored: string | null = null;
-    try { stored = localStorage.getItem('userEmail'); } catch { /* storage blocked */ }
-    return this.auth.getUser()?.userName || this.auth.getUserEmail() || stored || null;
+    return this.auth.getUser()?.userName || this.auth.getUserEmail() || DEMO_USER;
   }
 }
 

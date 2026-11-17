@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, catchError } from 'rxjs';
+import { Observable } from 'rxjs';
 import { AuthService } from 'shared-ui';
-import { apiError, tenantBody, tenantParams, trackingUrl } from '../shared/tracking-api';
+import { DEMO_USER, demo, demoError, newRecordId } from '../shared/tracking-api';
+import { DEVICE_HEALTH, liveHealth, signalQualityOf } from './device-health.data';
 
 export type ApiConnectivity = 'Online' | 'Offline' | 'Warning';
 export type ApiPowerSource = 'Battery' | 'External power' | 'PoE';
@@ -53,37 +53,50 @@ export interface DeviceHealthFields {
   health: ApiHealth;
 }
 
-/** /api/device-health: connectivity, signal, power and health per device. */
+/** Device health (static demo): connectivity, signal, power and health per device, from device-health.data.ts. */
 @Injectable({ providedIn: 'root' })
 export class DeviceHealthApiService {
-  private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
-  private readonly url = trackingUrl('device-health');
 
   list(): Observable<DeviceHealthDto[]> {
-    return this.http.get<DeviceHealthDto[]>(this.url, { params: tenantParams() }).pipe(catchError((e) => apiError(e, 'Could not load device health.')));
+    return demo(liveHealth());
   }
 
   get(id: string): Observable<DeviceHealthDto> {
-    return this.http.get<DeviceHealthDto>(`${this.url}/${encodeURIComponent(id)}`, { params: tenantParams() }).pipe(catchError((e) => apiError(e, 'Could not load the health record.')));
+    const h = liveHealth().find((x) => x.id === id);
+    return h ? demo(h) : demoError('The health record was not found.');
   }
 
   create(f: DeviceHealthFields): Observable<DeviceHealthDto> {
-    return this.http.post<DeviceHealthDto>(this.url, this.body(f), { params: tenantParams() }).pipe(catchError((e) => apiError(e, `Could not add health for ${f.deviceId}.`)));
+    if (DEVICE_HEALTH.some((x) => x.deviceId.toLowerCase() === f.deviceId.trim().toLowerCase())) return demoError(`${f.deviceId} already has a health record.`);
+    const dto = this.toDto(f, { id: newRecordId(), createdBy: this.user(), createdAt: new Date().toISOString() });
+    DEVICE_HEALTH.unshift(dto);
+    return demo(dto);
   }
 
-  /** Full replace; same body as create. */
   update(id: string, f: DeviceHealthFields): Observable<DeviceHealthDto> {
-    return this.http.put<DeviceHealthDto>(`${this.url}/${encodeURIComponent(id)}`, this.body(f), { params: tenantParams() }).pipe(catchError((e) => apiError(e, `Could not update ${f.deviceId}.`)));
+    const i = DEVICE_HEALTH.findIndex((x) => x.id === id);
+    if (i < 0) return demoError(`Could not update ${f.deviceId}: the record no longer exists.`);
+    const old = DEVICE_HEALTH[i];
+    DEVICE_HEALTH[i] = this.toDto(f, { id, createdBy: old.createdBy, createdAt: old.createdAt });
+    return demo(DEVICE_HEALTH[i]);
   }
 
   delete(id: string, deviceId: string): Observable<void> {
-    return this.http.delete<void>(`${this.url}/${encodeURIComponent(id)}`, { params: tenantParams() }).pipe(catchError((e) => apiError(e, `Could not delete the health record of ${deviceId}.`)));
+    const i = DEVICE_HEALTH.findIndex((x) => x.id === id);
+    if (i < 0) return demoError(`Could not delete the health record of ${deviceId}.`);
+    DEVICE_HEALTH.splice(i, 1);
+    return demo(undefined as void);
   }
 
-  private body(f: DeviceHealthFields) {
+  private user(): string {
+    return this.auth.getUser()?.userName || this.auth.getUserEmail() || DEMO_USER;
+  }
+
+  private toDto(f: DeviceHealthFields, keep: Pick<DeviceHealthDto, 'id' | 'createdBy' | 'createdAt'>): DeviceHealthDto {
     const text = (v: string | null) => (v && v.trim() ? v.trim() : null);
     return {
+      ...keep,
       deviceId: f.deviceId.trim(),
       deviceModel: f.deviceModel.trim(),
       assetRegistrationId: text(f.assetRegistrationId),
@@ -94,15 +107,11 @@ export class DeviceHealthApiService {
       connectivity: f.connectivity,
       signalStrengthDbm: f.signalStrengthDbm,
       snrDb: f.snrDb,
-      // worked out by the API from the dBm reading
-      signalQuality: null,
+      signalQuality: signalQualityOf(f.signalStrengthDbm),
       powerSource: f.powerSource,
-      // the API keeps a level only for battery-powered devices
       batteryLevel: f.powerSource === 'Battery' ? f.batteryLevel : null,
       lastSeenAt: f.lastSeenAt,
       health: f.health,
-      createdBy: this.auth.getUser()?.userName || this.auth.getUserEmail() || '',
-      ...tenantBody(),
     };
   }
 }

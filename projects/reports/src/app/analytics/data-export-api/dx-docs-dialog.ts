@@ -1,6 +1,5 @@
 import { Component, EventEmitter, Output } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { environment } from 'shared-ui';
 
 interface Endpoint {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -54,7 +53,7 @@ interface Endpoint {
 export class DocsDialog {
   @Output() closed = new EventEmitter<void>();
 
-  readonly baseUrl = `${environment.reportAnalyticsApiUrl}api/data-export`;
+  readonly baseUrl = 'https://api.asset360.example/api/data-export';
 
   readonly endpoints: Endpoint[] = [
     { method: 'GET', path: '/datasets', text: 'Datasets with their fields, row count, size and newest record.' },
@@ -74,7 +73,7 @@ export class DocsDialog {
 
   readonly example = [
     'curl -X POST -H "Authorization: Bearer $ASSET360_TOKEN" \\',
-    `  "${this.baseUrl}/jobs/EXP-0001/run?tenantId=${environment.tenantId}&clientId=${environment.clientId}"`,
+    `  "${this.baseUrl}/jobs/EXP-0001/run?tenantId=TENANT-0001&clientId=CLIENT-0001"`,
     '',
     '# 200 OK  { "job": { … "status": "Success" }, "run": { "id": "RUN-000001", "rowCount": 244,',
     '#   "hasFile": true, "deliveryMessage": "not delivered: no transport configured" } }'

@@ -331,8 +331,7 @@ export class OrganizationPage extends AdminPage {
   duplicate(l: OrgLocation): void {
     this.menuFor = null;
     this.formMode = 'add';
-    const { id, ...copy } = l;
-    this.formRecord = { ...copy, code: this.service.nextCode(), name: `${l.name} (Copy)` };
+    this.formRecord = { ...l, code: this.service.nextCode(), name: `${l.name} (Copy)` };
   }
 
   closeForm(): void {

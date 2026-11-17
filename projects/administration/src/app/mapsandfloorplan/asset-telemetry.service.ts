@@ -1,7 +1,6 @@
-import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { AuthService, environment } from 'shared-ui';
+import { Injectable } from '@angular/core';
+import { Observable, defer, of } from 'rxjs';
+import { SEED_ASSETS, SEED_TAG_LINKS, SEED_UNLINKED_TAGS } from './maps.seed';
 
 /** Connection of a tag: Online (newest reading online, within 10 min), Offline, Idle (no reading for 10 min) or No data. */
 export type TagConnection = 'Online' | 'Offline' | 'Idle' | 'No data';
@@ -63,86 +62,103 @@ export interface GatewayAssets {
   unlinkedTagIds: string[];
 }
 
+
 /**
- * Live sensor readings of an asset's tags from the Dashboard service, which reads NetworkTimeSeries (written by
- * NetworkerService) and pushes a new message over the WebSocket whenever a reading changes.
+ * DEMO MODE: live sensor readings of asset tags, simulated from static data (maps.seed.ts). A "connection" opens
+ * after a short delay, then a new message is pushed every few seconds with fresh timestamps and slightly moving
+ * RSSI / battery values, as the real WebSocket feed would. Unsubscribing stops the timers.
  */
 @Injectable({ providedIn: 'root' })
 export class AssetTelemetryService {
-  private readonly http = inject(HttpClient);
-  private readonly auth = inject(AuthService);
-  private readonly base = `${environment.dashboardApiUrl}api/dashboards/network-status/assets`;
+  /** Current battery / RSSI per tag, nudged on every tick so the popup shows changes. */
+  private readonly readings = new Map<string, { battery: number; rssi: number }>();
 
   /** One-off read of the asset's tags and their latest readings. */
   get(assetId: string): Observable<AssetTelemetry> {
-    return this.http.get<AssetTelemetry>(`${this.base}/${encodeURIComponent(assetId)}`);
+    return defer(() => of(this.snapshot(assetId)));
   }
 
-  /**
-   * Live readings over a WebSocket: the server sends the current readings on connect and again on every change.
-   * A dropped connection is retried with back-off (1 s, 2 s, 4 s … up to 30 s). Unsubscribing closes the socket.
-   * Browsers cannot send headers on a WebSocket, so the sign-in token goes in ?access_token= (the API accepts it there).
-   */
+  /** Live readings: the current values on connect, then again every 4 s. */
   live(assetId: string): Observable<LiveEvent> {
-    return this.socket<AssetTelemetry>(`${this.base}/${encodeURIComponent(assetId)}/live`);
+    return this.simulate(4000, () => this.snapshot(assetId));
   }
 
-  /** Assets per gateway, live: re-sent whenever an asset's tag is heard by another gateway. */
+  /** Assets per gateway, live: re-sent every 6 s. */
   gatewaysLive(): Observable<LiveMessage<GatewayAssets[]>> {
-    return this.socket<GatewayAssets[]>(`${environment.dashboardApiUrl}api/dashboards/network-status/gateways/live`);
+    return this.simulate(6000, () => this.gateways());
   }
 
-  /** Opens a WebSocket that reconnects with back-off; each JSON message is emitted as `data`. */
-  private socket<T>(httpUrl: string): Observable<LiveMessage<T>> {
+  /** Emits 'connecting', then 'live' with data after a short delay and on every tick. */
+  private simulate<T>(everyMs: number, read: () => T): Observable<LiveMessage<T>> {
     return new Observable<LiveMessage<T>>((subscriber) => {
-      if (typeof WebSocket === 'undefined') {
-        subscriber.complete();
-        return undefined;
-      }
-
-      let socket: WebSocket | null = null;
-      let retries = 0;
-      let stopped = false;
-      let retryTimer: ReturnType<typeof setTimeout> | undefined;
-
-      const connect = () => {
-        subscriber.next({ state: retries ? 'reconnecting' : 'connecting' });
-        socket = new WebSocket(this.socketUrl(httpUrl));
-        socket.onopen = () => {
-          retries = 0;
-          subscriber.next({ state: 'live' });
-        };
-        socket.onmessage = (event) => {
-          try {
-            subscriber.next({ state: 'live', data: JSON.parse(event.data as string) as T });
-          } catch {
-            // ignore a message that is not JSON
-          }
-        };
-        socket.onerror = () => socket?.close();
-        socket.onclose = () => {
-          if (stopped) return;
-          retries++;
-          subscriber.next({ state: 'reconnecting' });
-          retryTimer = setTimeout(connect, Math.min(30_000, 1000 * 2 ** Math.min(retries - 1, 5)));
-        };
-      };
-
-      connect();
-
+      subscriber.next({ state: 'connecting' });
+      let tick: ReturnType<typeof setInterval> | undefined;
+      const open = setTimeout(() => {
+        subscriber.next({ state: 'live', data: read() });
+        tick = setInterval(() => subscriber.next({ state: 'live', data: read() }), everyMs);
+      }, 600);
       return () => {
-        stopped = true;
-        clearTimeout(retryTimer);
-        if (socket && socket.readyState <= WebSocket.OPEN) socket.close(1000);
+        clearTimeout(open);
+        clearInterval(tick);
       };
     });
   }
 
-  private socketUrl(httpUrl: string): string {
-    const url = new URL(httpUrl, typeof window !== 'undefined' ? window.location.href : undefined);
-    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    const token = this.auth.getToken();
-    if (token) url.searchParams.set('access_token', token);
-    return url.toString();
+  private reading(tagId: string, base: { battery: number; rssi: number }): { battery: number; rssi: number } {
+    const prev = this.readings.get(tagId) ?? { battery: base.battery, rssi: base.rssi };
+    // RSSI drifts a few dBm around its base value; the battery very slowly drains
+    const rssi = Math.max(base.rssi - 6, Math.min(base.rssi + 6, prev.rssi + Math.round(Math.random() * 4 - 2)));
+    const battery = Math.max(1, prev.battery - (Math.random() < 0.05 ? 1 : 0));
+    const next = { battery, rssi };
+    this.readings.set(tagId, next);
+    return next;
+  }
+
+  private snapshot(assetId: string): AssetTelemetry {
+    const key = assetId.toLowerCase();
+    const asset = SEED_ASSETS.find((a) => a.assetRegistrationId?.toLowerCase() === key || a.assetTag?.toLowerCase() === key || a.id === assetId);
+    const link = SEED_TAG_LINKS.find((l) => l.assetTag.toLowerCase() === (asset?.assetTag ?? assetId).toLowerCase());
+    const now = new Date().toISOString();
+    const tags: TagTelemetry[] = link
+      ? link.tagIds.map((tagId, i) => {
+          const r = this.reading(tagId, { battery: link.battery - i * 7, rssi: link.rssi - i * 4 });
+          return { tagId, isAssigned: true, gatewayId: link.gatewayId, timestamp: now, status: 'online', connection: 'Online', battery: r.battery, rssi: r.rssi };
+        })
+      : [
+          // the asset's own RFID tag, which no gateway hears
+          {
+            tagId: `RFID-${(asset?.assetTag ?? assetId).replace(/[^\w]/g, '')}`,
+            isAssigned: false,
+            gatewayId: null,
+            timestamp: null,
+            status: null,
+            connection: 'No data',
+            battery: null,
+            rssi: null
+          }
+        ];
+    return {
+      assetRegistrationId: asset?.assetRegistrationId ?? assetId,
+      assetTag: asset?.assetTag ?? null,
+      assetName: asset?.assetName ?? null,
+      tags
+    };
+  }
+
+  private gateways(): GatewayAssets[] {
+    const now = new Date().toISOString();
+    const ids = [...new Set([...SEED_TAG_LINKS.map((l) => l.gatewayId), ...Object.keys(SEED_UNLINKED_TAGS)])];
+    return ids.map((gatewayId) => {
+      const links = SEED_TAG_LINKS.filter((l) => l.gatewayId === gatewayId);
+      const unlinked = SEED_UNLINKED_TAGS[gatewayId] ?? [];
+      return {
+        gatewayId,
+        assetCount: links.length,
+        tagCount: links.reduce((n, l) => n + l.tagIds.length, 0) + unlinked.length,
+        lastSeenAt: now,
+        assets: links.map((l) => ({ assetId: l.assetTag, assetName: l.assetName, tagIds: [...l.tagIds], lastSeenAt: now })),
+        unlinkedTagIds: [...unlinked]
+      };
+    });
   }
 }

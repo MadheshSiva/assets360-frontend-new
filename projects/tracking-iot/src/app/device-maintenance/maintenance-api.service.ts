@@ -1,10 +1,11 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, catchError } from 'rxjs';
-import { AuthService, environment } from 'shared-ui';
-import { apiError, tenantBody, tenantParams, trackingUrl } from '../shared/tracking-api';
+import { Observable } from 'rxjs';
+import { AuthService } from 'shared-ui';
+import { DEMO_USER, demo, demoError, newRecordId, nextSequenceId } from '../shared/tracking-api';
+import { IOT_DEVICES } from '../device-management/iot-devices.data';
+import { AMC_VENDORS, MAINTENANCE_JOBS, MAINTENANCE_OPTIONS, TECHNICIANS } from './maintenance-jobs.data';
 
-/** A maintenance job as /api/device-maintenance returns it (addressed by maintenanceId, e.g. DM000001). */
+/** A maintenance job (addressed by maintenanceId, e.g. DM000001). */
 export interface MaintenanceJobDto {
   id: string;
   maintenanceId: string;
@@ -84,62 +85,87 @@ export interface Assignee {
   email: string;
 }
 
-interface TechnicianDto { technicianId: string; technicianName: string; primarySkill: string | null; email: string | null; phoneNumber: string | null; isDeleted?: boolean }
-interface AmcVendorDto { code: string; amcVendorName: string; primaryContact: string | null; email: string | null; phone: string | null; assetType: { name?: string } | null; isDeleted?: boolean }
+export interface TechnicianDto { technicianId: string; technicianName: string; primarySkill: string | null; email: string | null; phoneNumber: string | null; isDeleted?: boolean }
+export interface AmcVendorDto { code: string; amcVendorName: string; primaryContact: string | null; email: string | null; phone: string | null; assetType: { name?: string } | null; isDeleted?: boolean }
 
-/** Device Maintenance → Tracking service /api/device-maintenance. */
+/** Device Maintenance (static demo, maintenance-jobs.data.ts). */
 @Injectable({ providedIn: 'root' })
 export class MaintenanceApiService {
-  private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
 
   list(): Observable<MaintenanceJobDto[]> {
-    return this.http.get<MaintenanceJobDto[]>(trackingUrl('device-maintenance'), { params: tenantParams() }).pipe(catchError((e) => apiError(e, 'Could not load maintenance jobs.')));
+    return demo(MAINTENANCE_JOBS);
   }
 
   get(maintenanceId: string): Observable<MaintenanceJobDto> {
-    return this.http.get<MaintenanceJobDto>(trackingUrl(`device-maintenance/${encodeURIComponent(maintenanceId)}`), { params: tenantParams() }).pipe(catchError((e) => apiError(e, `Could not load ${maintenanceId}.`)));
+    const j = MAINTENANCE_JOBS.find((x) => x.maintenanceId === maintenanceId);
+    return j ? demo(j) : demoError(`Job ${maintenanceId} was not found.`);
   }
 
   create(body: MaintenanceJobRequest): Observable<MaintenanceJobDto> {
-    return this.http
-      .post<MaintenanceJobDto>(trackingUrl('device-maintenance'), { ...body, createdBy: this.userName(), ...tenantBody() }, { params: tenantParams() })
-      .pipe(catchError((e) => apiError(e, 'Could not create the service request.')));
+    const now = new Date().toISOString();
+    const dto: MaintenanceJobDto = {
+      ...this.fields(body),
+      id: newRecordId(),
+      maintenanceId: nextSequenceId('DM', MAINTENANCE_JOBS.map((j) => j.maintenanceId)),
+      createdBy: this.userName(), createdAt: now, updatedBy: null, updatedAt: null,
+    };
+    MAINTENANCE_JOBS.unshift(dto);
+    return demo(dto);
   }
 
   update(maintenanceId: string, body: MaintenanceJobRequest): Observable<MaintenanceJobDto> {
-    return this.http
-      .put<MaintenanceJobDto>(trackingUrl(`device-maintenance/${encodeURIComponent(maintenanceId)}`), { ...body, createdBy: null, ...tenantBody() }, { params: tenantParams() })
-      .pipe(catchError((e) => apiError(e, `Could not update ${maintenanceId}.`)));
+    const i = MAINTENANCE_JOBS.findIndex((x) => x.maintenanceId === maintenanceId);
+    if (i < 0) return demoError(`Could not update ${maintenanceId}: it no longer exists.`);
+    const old = MAINTENANCE_JOBS[i];
+    MAINTENANCE_JOBS[i] = { ...old, ...this.fields(body), updatedBy: this.userName(), updatedAt: new Date().toISOString() };
+    return demo(MAINTENANCE_JOBS[i]);
   }
 
   remove(maintenanceId: string): Observable<void> {
-    return this.http.delete<void>(trackingUrl(`device-maintenance/${encodeURIComponent(maintenanceId)}`), { params: tenantParams() }).pipe(catchError((e) => apiError(e, `Could not delete ${maintenanceId}.`)));
+    const i = MAINTENANCE_JOBS.findIndex((x) => x.maintenanceId === maintenanceId);
+    if (i >= 0) MAINTENANCE_JOBS.splice(i, 1);
+    return demo(undefined as void);
   }
 
   options(): Observable<MaintenanceOptionsDto> {
-    return this.http.get<MaintenanceOptionsDto>(trackingUrl('device-maintenance/options'), { params: tenantParams() }).pipe(catchError((e) => apiError(e, 'Could not load the maintenance options.')));
+    return demo(MAINTENANCE_OPTIONS);
   }
 
   devices(search = '', limit = 100): Observable<MaintenanceDeviceDto[]> {
-    return this.http.get<MaintenanceDeviceDto[]>(trackingUrl('device-maintenance/devices'), { params: tenantParams({ search, limit }) }).pipe(catchError((e) => apiError(e, 'Could not load devices.')));
+    const q = search.trim().toLowerCase();
+    return demo(
+      IOT_DEVICES.filter((d) => !q || [d.deviceId, d.deviceName, d.model, d.assetName ?? ''].some((v) => v.toLowerCase().includes(q)))
+        .slice(0, limit)
+        .map((d) => ({
+          deviceId: d.deviceId, deviceName: d.deviceName, deviceType: d.deviceType, model: d.model, assetRegistrationId: d.assetRegistrationId,
+          assetName: d.assetName, siteId: d.siteId, siteName: d.siteName, label: `${d.deviceId} · ${d.deviceName}`,
+        })),
+    );
   }
 
-  /** Technicians from Master Data (GET /api/master-data/technicians). */
   technicians(): Observable<TechnicianDto[]> {
-    return this.http.get<TechnicianDto[]>(`${environment.masterDataApiUrl}api/master-data/technicians`, { params: new HttpParams().set('clientId', environment.clientId) });
+    return demo(TECHNICIANS);
   }
 
-  /** AMC vendors from Master Data (GET /api/master-data/amc-vendors). */
   vendors(): Observable<AmcVendorDto[]> {
-    return this.http.get<AmcVendorDto[]>(`${environment.masterDataApiUrl}api/master-data/amc-vendors`, { params: new HttpParams().set('clientId', environment.clientId) });
+    return demo(AMC_VENDORS);
   }
 
   /** Signed-in user (createdBy, history entries). */
   userName(): string | null {
-    let stored: string | null = null;
-    try { stored = localStorage.getItem('userEmail'); } catch { /* storage blocked */ }
-    return this.auth.getUser()?.userName || this.auth.getUserEmail() || stored || null;
+    return this.auth.getUser()?.userName || this.auth.getUserEmail() || DEMO_USER;
+  }
+
+  private fields(b: MaintenanceJobRequest): Omit<MaintenanceJobDto, 'id' | 'maintenanceId' | 'createdBy' | 'createdAt' | 'updatedBy' | 'updatedAt'> {
+    const d = IOT_DEVICES.find((x) => x.deviceId === b.deviceId);
+    return {
+      deviceId: b.deviceId, deviceName: b.deviceName ?? d?.deviceName ?? null, model: b.model ?? d?.model ?? '',
+      assetRegistrationId: b.assetRegistrationId ?? d?.assetRegistrationId ?? null, assetName: b.assetName ?? d?.assetName ?? null,
+      siteId: b.siteId ?? d?.siteId ?? null, siteName: b.siteName ?? d?.siteName ?? '', maintenanceType: b.maintenanceType,
+      dueDate: `${b.dueDate.slice(0, 10)}T00:00:00Z`, assignedTo: b.assignedTo, assignedToId: b.assignedToId, assignedToType: b.assignedToType,
+      priority: b.priority ?? MAINTENANCE_OPTIONS.defaultPriority, description: b.description, status: b.status ?? 'Scheduled',
+    };
   }
 }
 

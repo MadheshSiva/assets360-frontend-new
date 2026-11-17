@@ -7,7 +7,7 @@ import { StandardReportsService } from './standard-reports.service';
 
 const PRESETS = ['Today', 'This week', 'This month', 'This quarter', 'This year'];
 
-/** Reporting period editor: date range, quick ranges (resolved by GET /api/standard-reports/period), time zone and "include time". */
+/** Reporting period editor: date range, quick ranges (resolved by the service), time zone and "include time". */
 @Component({
   selector: 'app-sr-period-panel',
   standalone: true,
@@ -77,7 +77,7 @@ export class ReportingPeriodPanel implements OnChanges {
   timeZone = 'Asia/Dubai';
   preset = '';
   error = '';
-  /** Quick ranges resolved by the API for the selected time zone */
+  /** Quick ranges resolved for the selected time zone */
   private ranges: Record<string, { start: string; end: string }> = {};
   private rangesZone = '';
 

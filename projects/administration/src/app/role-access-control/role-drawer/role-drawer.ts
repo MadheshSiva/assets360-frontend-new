@@ -56,7 +56,7 @@ export class RoleDrawer implements OnChanges {
   avatars: string[] = [];
 
   ngOnChanges(): void {
-    this.avatars = []; // member names come from the users API once wired
+    this.avatars = this.service.members(this.role.name).slice(0, 4);
   }
 
   get errors(): RoleErrors {

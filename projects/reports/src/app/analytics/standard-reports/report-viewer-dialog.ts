@@ -7,7 +7,7 @@ import { ReportOutput, StandardReport, SR_TIME_ZONES } from './standard-reports.
 import { PreviewRow, StandardReportsService } from './standard-reports.service';
 import { formatPeriod, formatStamp } from './standard-reports.util';
 
-/** Read-only viewer: headline figure, a small chart and the breakdown table, read live from GET /api/standard-reports/{id}/output. */
+/** Read-only viewer: headline figure, a small chart and the breakdown table (generated in the browser from the demo data). */
 @Component({
   selector: 'app-sr-report-viewer',
   standalone: true,

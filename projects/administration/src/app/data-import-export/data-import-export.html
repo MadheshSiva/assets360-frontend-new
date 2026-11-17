@@ -25,7 +25,7 @@
     <span class="stat__icon"><lucide-icon [img]="icons.Upload" [size]="24"></lucide-icon></span>
     <div class="stat__body">
       <span class="stat__label">Import Jobs</span>
-      <span class="stat__value">{{ service.importCount() }} <span class="stat__trend">↑ 0%</span></span>
+      <span class="stat__value">{{ service.importCount() }} <span class="stat__trend">↑ 12%</span></span>
       <span class="stat__hint">vs. last 30 days</span>
     </div>
   </div>
@@ -33,7 +33,7 @@
     <span class="stat__icon" data-tone="blue"><lucide-icon [img]="icons.Download" [size]="24"></lucide-icon></span>
     <div class="stat__body">
       <span class="stat__label">Export Jobs</span>
-      <span class="stat__value">{{ service.exportCount() }} <span class="stat__trend">↑ 0%</span></span>
+      <span class="stat__value">{{ service.exportCount() }} <span class="stat__trend">↑ 8%</span></span>
       <span class="stat__hint">vs. last 30 days</span>
     </div>
   </div>
@@ -41,7 +41,7 @@
     <span class="stat__icon" data-tone="green"><lucide-icon [img]="icons.Database" [size]="24"></lucide-icon></span>
     <div class="stat__body">
       <span class="stat__label">Records Processed</span>
-      <span class="stat__value" [title]="service.recordsProcessed().toLocaleString('en-US')">{{ compactNumber(service.recordsProcessed()) }} <span class="stat__trend">↑ 0%</span></span>
+      <span class="stat__value" [title]="service.recordsProcessed().toLocaleString('en-US')">{{ compactNumber(service.recordsProcessed()) }} <span class="stat__trend">↑ 24%</span></span>
       <span class="stat__hint">vs. last 30 days</span>
     </div>
   </div>
@@ -49,7 +49,7 @@
     <span class="stat__icon" data-tone="red"><lucide-icon [img]="icons.TriangleAlert" [size]="24"></lucide-icon></span>
     <div class="stat__body">
       <span class="stat__label">Failed Records</span>
-      <span class="stat__value">{{ service.failedRecords() }} <span class="stat__trend stat__trend--down">↓ 0%</span></span>
+      <span class="stat__value">{{ service.failedRecords() }} <span class="stat__trend stat__trend--down">↓ 62%</span></span>
       <span class="stat__hint">vs. last 30 days</span>
     </div>
   </div>

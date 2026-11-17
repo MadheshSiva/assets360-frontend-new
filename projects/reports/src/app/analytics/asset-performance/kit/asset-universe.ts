@@ -1,7 +1,7 @@
 import { RA_CATEGORIES } from '../../shared/analytics-common';
 
 // Filter options shared by Asset Performance, Maintenance Analytics and Predictive Analytics. The figures come from the
-// Report Analytics API; this file only holds the "All …" choices and the filter scope shape.
+// static demo register (asset-performance.data.ts); this file only holds the "All …" choices and the filter scope shape.
 
 export const ALL_CATEGORIES = 'All categories';
 export const ALL_TYPES = 'All asset types';

@@ -87,9 +87,6 @@ export class MapDrawTools implements OnChanges, OnDestroy {
   @Input() top = 12;
   /** Distance of the toolbar from the map's left (or right) edge, px. */
   @Input() inset = 12;
-  /** Backend endpoint returning the latest device fixes (polled). Leave empty to push fixes via DevicePositionFeed. */
-  @Input() feedUrl = '';
-  @Input() feedEveryMs = 2000;
 
   readonly icons = { Check, Maximize, Pentagon, Search, Smartphone, SquarePen, Trash2, Undo2, X };
   readonly colors = COLORS;
@@ -120,7 +117,6 @@ export class MapDrawTools implements OnChanges, OnDestroy {
 
   private readonly feed = inject(DevicePositionFeed);
   private feedSub?: Subscription;
-  private stopPoll?: () => void;
   private tracks = new Map<string, Track>();
   private markers = new Map<string, Leaflet.Marker>();
   private trails = new Map<string, Leaflet.Polyline>();
@@ -553,7 +549,6 @@ export class MapDrawTools implements OnChanges, OnDestroy {
   private startTracking(): void {
     this.stopTracking();
     this.feedSub = this.feed.fixes$.subscribe((f) => this.onFix(f, true));
-    if (this.feedUrl) this.stopPoll = this.feed.poll(this.feedUrl, this.feedEveryMs);
     const tick = () => {
       this.animate();
       this.frame = requestAnimationFrame(tick);
@@ -563,7 +558,6 @@ export class MapDrawTools implements OnChanges, OnDestroy {
 
   private stopTracking(): void {
     this.feedSub?.unsubscribe();
-    this.stopPoll?.();
     cancelAnimationFrame(this.frame);
   }
 

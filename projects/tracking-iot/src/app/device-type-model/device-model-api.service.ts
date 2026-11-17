@@ -1,11 +1,12 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, catchError, map, of, retry, switchMap, timer } from 'rxjs';
+import { Observable } from 'rxjs';
 import { AuthService } from 'shared-ui';
-import { apiError, getAllPages, savedRecord, tenantBody, tenantParams, trackingUrl } from '../shared/tracking-api';
-import { CONNECTIVITY, Connectivity, DeviceModel, ModelStatus } from './model-data';
+import { DEMO_USER, demo, demoError, newRecordId } from '../shared/tracking-api';
+import { IOT_DEVICES } from '../device-management/iot-devices.data';
+import { CONNECTIVITY, DeviceModel, ModelStatus } from './model-data';
+import { DEVICE_MODELS, DEVICE_MODEL_FORM_OPTIONS } from './device-models.data';
 
-/** A model as GET/POST/PUT /api/device-models returns it (addressed by modelNumber). */
+/** A device model record (addressed by modelNumber). */
 export interface DeviceModelDto {
   id: string;
   modelNumber: string;
@@ -29,28 +30,6 @@ export interface DeviceModelDto {
   updatedAt: string | null;
   clientId: string | null;
   tenantId: string | null;
-}
-
-/** Body of POST /api/device-models and PUT /api/device-models/{modelNumber}. */
-export interface DeviceModelRequest {
-  modelNumber: string;
-  manufacturer: string;
-  deviceType: string;
-  connectivity: string;
-  supportedMeasurements: string[];
-  powerSource: string;
-  protocol: string | null;
-  frequencyBands: string[];
-  ipRating: string | null;
-  batteryLife: string | null;
-  operatingTemperature: string | null;
-  firmwareFrom: string | null;
-  firmwareTo: string | null;
-  configurableAttributes: string[];
-  status: string;
-  createdBy: string;
-  clientId: string;
-  tenantId: string;
 }
 
 /** GET /api/device-models/form-options: every dropdown of the model form in one call. */
@@ -103,101 +82,87 @@ export function modelFromDto(dto: DeviceModelDto, typeId: string): DeviceModel {
   };
 }
 
-/** Device Type & Model → /api/device-models (Tracking service). */
+/** Device Type & Model (static demo): the in-memory catalogue of device-models.data.ts. */
 @Injectable({ providedIn: 'root' })
 export class DeviceModelApiService {
-  private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
-  private readonly url = trackingUrl('device-models');
 
   currentUser(): string {
-    return this.auth.getUser()?.userName || this.auth.getUserEmail() || 'Unknown user';
+    return this.auth.getUser()?.userName || this.auth.getUserEmail() || DEMO_USER;
   }
 
-  /** GET /api/device-models: every page. */
   getAll(): Observable<DeviceModelDto[]> {
-    return getAllPages<DeviceModelDto>(this.http, this.url).pipe(
-      catchError((e) => apiError(e, 'Could not load device models.')),
-    );
+    return demo(DEVICE_MODELS);
   }
 
-  /** GET /api/device-models/{modelNumber} */
   get(modelNumber: string): Observable<DeviceModelDto> {
-    return this.http.get<DeviceModelDto>(`${this.url}/${encodeURIComponent(modelNumber)}`, { params: tenantParams() }).pipe(
-      catchError((e) => apiError(e, `Could not load ${modelNumber}.`)),
-    );
+    const m = DEVICE_MODELS.find((x) => x.modelNumber.toLowerCase() === modelNumber.toLowerCase());
+    return m ? demo(m) : demoError(`Model ${modelNumber} was not found.`);
   }
 
-  /** GET /api/device-models/form-options */
   formOptions(): Observable<DeviceModelFormOptions> {
-    return this.http.get<DeviceModelFormOptions>(`${this.url}/form-options`, { params: tenantParams() }).pipe(
-      // a slow / cold service sometimes fails the first call: try again twice before giving up
-      retry({ count: 2, delay: (_e, n) => timer(800 * n) }),
-      catchError((e) => apiError(e, 'Could not load the model form options.')),
-    );
+    const counts = new Map<string, number>();
+    for (const m of DEVICE_MODELS) counts.set(m.deviceType, (counts.get(m.deviceType) ?? 0) + 1);
+    return demo({ ...DEVICE_MODEL_FORM_OPTIONS, deviceTypes: [...counts].map(([deviceType, modelCount]) => ({ deviceType, modelCount })) });
   }
 
-  /** Devices registered per model number (GET /api/iot-devices), for the "deployed" counts. */
+  /** Devices registered per model number (lower-cased), for the "deployed" counts. */
   deployedCounts(): Observable<Record<string, number>> {
-    return getAllPages<{ model: string }>(this.http, trackingUrl('iot-devices')).pipe(
-      map((rows) => {
-        const counts: Record<string, number> = {};
-        for (const r of rows) if (r.model) counts[r.model.toLowerCase()] = (counts[r.model.toLowerCase()] ?? 0) + 1;
-        return counts;
-      }),
-      catchError(() => of({})),
-    );
+    const counts: Record<string, number> = {};
+    for (const d of IOT_DEVICES) if (d.model) counts[d.model.toLowerCase()] = (counts[d.model.toLowerCase()] ?? 0) + 1;
+    return demo(counts);
   }
 
-  /** POST /api/device-models */
   create(m: DeviceModel, deviceType: string): Observable<DeviceModelDto> {
-    return this.http.post(this.url, this.request(m, deviceType), { params: tenantParams(), responseType: 'text' }).pipe(
-      switchMap((body) => this.saved(body, m.name)),
-      catchError((e) => apiError(e, `Could not add ${m.name}.`)),
-    );
+    if (DEVICE_MODELS.some((x) => x.modelNumber.toLowerCase() === m.name.toLowerCase())) return demoError(`Model ${m.name} already exists.`);
+    const dto = this.toDto(m, deviceType, null);
+    DEVICE_MODELS.unshift(dto);
+    return demo(dto);
   }
 
-  /** PUT /api/device-models/{modelNumber}: full replace (the model number cannot change). */
+  /** Full replace (the model number cannot change). */
   update(m: DeviceModel, deviceType: string): Observable<DeviceModelDto> {
-    return this.http.put(`${this.url}/${encodeURIComponent(m.id)}`, this.request(m, deviceType), { params: tenantParams(), responseType: 'text' }).pipe(
-      switchMap((body) => this.saved(body, m.id)),
-      catchError((e) => apiError(e, `Could not save ${m.name}.`)),
-    );
+    const i = DEVICE_MODELS.findIndex((x) => x.modelNumber === m.id);
+    if (i < 0) return demoError(`Could not save ${m.name}: it no longer exists.`);
+    const dto = this.toDto(m, deviceType, DEVICE_MODELS[i]);
+    DEVICE_MODELS[i] = dto;
+    return demo(dto);
   }
 
-  /** The model a successful POST / PUT returned; reloaded by model number when the body is not the model. */
-  private saved(body: string, modelNumber: string): Observable<DeviceModelDto> {
-    const dto = savedRecord<DeviceModelDto>(body, 'modelNumber');
-    return dto ? of(dto) : this.get(modelNumber);
-  }
-
-  /** DELETE /api/device-models/{modelNumber} */
   delete(modelNumber: string): Observable<void> {
-    return this.http.delete<void>(`${this.url}/${encodeURIComponent(modelNumber)}`, { params: tenantParams() }).pipe(
-      catchError((e) => apiError(e, `Could not delete ${modelNumber}.`)),
-    );
+    const i = DEVICE_MODELS.findIndex((x) => x.modelNumber === modelNumber);
+    if (i < 0) return demoError(`Could not delete ${modelNumber}: it no longer exists.`);
+    if (IOT_DEVICES.some((d) => d.model === modelNumber)) return demoError(`${modelNumber} cannot be deleted while devices are registered against it.`);
+    DEVICE_MODELS.splice(i, 1);
+    return demo(undefined as void);
   }
 
-  private request(m: DeviceModel, deviceType: string): DeviceModelRequest {
-    const conn: Connectivity | undefined = m.connectivity[0];
+  private toDto(m: DeviceModel, deviceType: string, old: DeviceModelDto | null): DeviceModelDto {
+    const now = new Date().toISOString();
+    const user = this.currentUser();
     return {
-      modelNumber: m.name,
+      id: old?.id ?? newRecordId(),
+      modelNumber: old?.modelNumber ?? m.name,
       manufacturer: m.manufacturer,
       deviceType,
-      connectivity: conn ?? '',
-      supportedMeasurements: m.measurements,
+      connectivity: m.connectivity[0] ?? '',
+      supportedMeasurements: [...m.measurements],
       powerSource: m.power,
       protocol: m.protocol || null,
-      frequencyBands: m.bands,
+      frequencyBands: [...m.bands],
       ipRating: m.ipRating || null,
       batteryLife: m.batteryLife || null,
       operatingTemperature: m.opTemp || null,
       firmwareFrom: m.fwMin || null,
       firmwareTo: m.fwMax || null,
-      configurableAttributes: m.attributes,
+      configurableAttributes: [...m.attributes],
       status: apiStatus(m),
-      createdBy: this.currentUser(),
-      ...tenantBody(),
+      createdBy: old?.createdBy ?? user,
+      createdAt: old?.createdAt ?? now,
+      updatedBy: old ? user : null,
+      updatedAt: old ? now : null,
+      clientId: 'demo-client',
+      tenantId: 'demo-tenant',
     };
   }
 }

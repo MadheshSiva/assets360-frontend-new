@@ -1,30 +1,22 @@
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, tap } from 'rxjs';
-import { AuthService, environment } from 'shared-ui';
+import { Observable, of } from 'rxjs';
+import { AuthService } from 'shared-ui';
 import { MaintenanceAudit, PredictiveMaintenance, PreventiveMaintenance, ServiceRequest, WorkOrder } from './maintenance.models';
+import { PREDICTIVE_SEED, PREVENTIVE_SEED, SERVICE_REQUEST_SEED, WORK_ORDER_SEED, withWorkOrderTotals } from './maintenance-seed.data';
 
-/** Maintenance service routes, reached through the API gateway. */
-export const MAINTENANCE_API = `${environment.maintenanceApiUrl}api/`;
-
-/** Readable message for a failed call: first validation error, the server's `message`, or the status. */
+/** Readable message for a failed call. */
 export function apiErrorMessage(err: unknown): string {
-  if (!(err instanceof HttpErrorResponse)) return 'Something went wrong.';
-  if (err.status === 0) return 'Maintenance service is unreachable.';
-  const body = err.error;
-  if (body?.errors && typeof body.errors === 'object') {
-    const first = Object.values(body.errors as Record<string, string[]>).flat()[0];
-    if (first) return first;
-  }
-  if (typeof body?.message === 'string') return body.message;
-  if (typeof body?.title === 'string') return body.title;
-  if (err.status === 404) return 'Record not found.';
-  return `Request failed (${err.status}).`;
+  return err instanceof Error && err.message ? err.message : 'Something went wrong.';
 }
 
+const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+let idSeq = 0;
+const newId = (resource: string) => `${resource}-${Date.now().toString(36)}-${(++idSeq).toString(36)}`;
+
 /**
- * In-memory copy of one API resource. Pages read `items()` and call `load()` on init; `save()` creates
- * when the record has no id, otherwise updates, and keeps `items()` in step with the server.
+ * In-memory copy of one Maintenance resource (static demo: seeded data, no backend). Pages read `items()` and
+ * call `load()` on init; `save()` creates when the record has no id, otherwise updates, and `remove()` deletes.
+ * Changes last for the browser session.
  */
 export class ResourceStore<T extends MaintenanceAudit> {
   readonly items = signal<T[]>([]);
@@ -34,27 +26,18 @@ export class ResourceStore<T extends MaintenanceAudit> {
   readonly count = computed(() => this.items().length);
 
   constructor(
-    private readonly http: HttpClient,
     private readonly auth: AuthService,
-    readonly resource: string
+    readonly resource: string,
+    private readonly seed: T[],
+    /** Server-side rules applied on every save (e.g. work order totals and history). */
+    private readonly prepare: (row: T, previous: T | undefined, actor: string) => T = (row) => row
   ) {}
 
-  /** Fetches the list once; pass `force` to refetch. */
-  load(force = false): void {
-    if ((this.loaded() || this.loading()) && !force) return;
-    this.loading.set(true);
-    this.error.set(null);
-    this.http.get<T[]>(this.url()).subscribe({
-      next: (rows) => {
-        this.items.set(rows.filter((r) => !r.isDeleted));
-        this.loaded.set(true);
-        this.loading.set(false);
-      },
-      error: (err) => {
-        this.error.set(apiErrorMessage(err));
-        this.loading.set(false);
-      }
-    });
+  /** Fills the list from the seed once; later calls keep the in-memory changes. */
+  load(_force = false): void {
+    if (this.loaded()) return;
+    this.items.set(clone(this.seed).filter((r) => !r.isDeleted));
+    this.loaded.set(true);
   }
 
   byId(id: string | null | undefined): T | undefined {
@@ -62,23 +45,65 @@ export class ResourceStore<T extends MaintenanceAudit> {
   }
 
   save(record: Partial<T>): Observable<T> {
+    this.load();
     const actor = currentUserName(this.auth);
-    if (record.id) {
-      return this.http
-        .put<T>(this.url(record.id), { ...record, updatedBy: actor })
-        .pipe(tap((saved) => this.items.update((rows) => rows.map((r) => (r.id === saved.id ? saved : r)))));
+    const now = new Date().toISOString();
+    const previous = record.id ? this.byId(record.id) : undefined;
+    if (previous) {
+      const saved = this.prepare({ ...previous, ...clone(record), updatedBy: actor, updatedAt: now } as T, previous, actor);
+      this.items.update((rows) => rows.map((r) => (r.id === saved.id ? saved : r)));
+      return of(clone(saved));
     }
-    const body = { ...record, createdBy: actor, clientId: environment.clientId, tenantId: environment.tenantId };
-    return this.http.post<T>(this.url(), body).pipe(tap((saved) => this.items.update((rows) => [saved, ...rows])));
+    const user = this.auth.getUser();
+    const created = this.prepare(
+      {
+        ...clone(record),
+        id: newId(this.resource),
+        createdBy: actor,
+        createdAt: now,
+        updatedBy: actor,
+        updatedAt: now,
+        clientId: user?.clientId ?? null,
+        tenantId: user?.tenantId ?? null,
+        isDeleted: false
+      } as T,
+      undefined,
+      actor
+    );
+    this.items.update((rows) => [created, ...rows]);
+    return of(clone(created));
   }
 
   remove(id: string): Observable<unknown> {
-    return this.http.delete(this.url(id)).pipe(tap(() => this.items.update((rows) => rows.filter((r) => r.id !== id))));
+    this.items.update((rows) => rows.filter((r) => r.id !== id));
+    return of(null);
   }
+}
 
-  private url(id?: string): string {
-    return `${MAINTENANCE_API}${this.resource}${id ? `/${id}` : ''}`;
-  }
+/** Work order rules the Maintenance service applies: defaults, start / end stamps, costs and history. */
+function prepareWorkOrder(w: WorkOrder, previous: WorkOrder | undefined, actor: string): WorkOrder {
+  const now = new Date().toISOString();
+  const status = w.status || 'Open';
+  const next: WorkOrder = {
+    ...w,
+    status,
+    tasks: w.tasks ?? [],
+    parts: w.parts ?? [],
+    labour: w.labour ?? [],
+    documents: w.documents ?? [],
+    history: w.history ?? [],
+    additionalCost: Number(w.additionalCost) || 0,
+    progress: status === 'Completed' ? 100 : Number(w.progress) || 0,
+    actualStartDate: w.actualStartDate ?? (['In Progress', 'Completed'].includes(status) ? now : null),
+    actualEndDate: status === 'Completed' ? w.actualEndDate ?? now : w.actualEndDate ?? null
+  };
+  const entry = !previous
+    ? { at: now, by: actor, action: 'Created', details: next.source && next.source !== 'Manual' ? `Raised from ${next.source}${next.sourceReference ? ` ${next.sourceReference}` : ''}` : null }
+    : previous.status !== status
+      ? { at: now, by: actor, action: 'Status changed', details: `${previous.status ?? 'Open'} → ${status}` }
+      : { at: now, by: actor, action: 'Updated', details: null };
+  next.history = [entry, ...next.history];
+  return withWorkOrderTotals(next);
 }
 
 /** Display name of the signed-in user (user name, else email). */
@@ -89,13 +114,12 @@ export function currentUserName(auth: AuthService): string {
 /** One store per Maintenance resource, shared by every page so data loads once per session. */
 @Injectable({ providedIn: 'root' })
 export class MaintenanceApi {
-  private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
 
-  readonly preventive = this.store<PreventiveMaintenance>('preventive-maintenance');
-  readonly predictive = this.store<PredictiveMaintenance>('predictive-maintenance');
-  readonly serviceRequests = this.store<ServiceRequest>('issue-reports');
-  readonly workOrders = this.store<WorkOrder>('work-orders');
+  readonly preventive = new ResourceStore<PreventiveMaintenance>(this.auth, 'preventive-maintenance', PREVENTIVE_SEED);
+  readonly predictive = new ResourceStore<PredictiveMaintenance>(this.auth, 'predictive-maintenance', PREDICTIVE_SEED);
+  readonly serviceRequests = new ResourceStore<ServiceRequest>(this.auth, 'issue-reports', SERVICE_REQUEST_SEED);
+  readonly workOrders = new ResourceStore<WorkOrder>(this.auth, 'work-orders', WORK_ORDER_SEED, prepareWorkOrder);
 
   /** True when `name` is the signed-in user (matches user name or email, case-insensitive). */
   isMe(name: string | null | undefined): boolean {
@@ -103,10 +127,6 @@ export class MaintenanceApi {
     if (!n) return false;
     const user = this.auth.getUser();
     return [user?.userName, user?.email, this.auth.getUserEmail()].some((v) => !!v && v.toLowerCase() === n);
-  }
-
-  private store<T extends MaintenanceAudit>(resource: string): ResourceStore<T> {
-    return new ResourceStore<T>(this.http, this.auth, resource);
   }
 }
 

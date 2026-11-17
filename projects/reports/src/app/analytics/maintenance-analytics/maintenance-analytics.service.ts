@@ -1,212 +1,14 @@
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
-import { Observable, catchError, finalize, forkJoin, map, tap, throwError } from 'rxjs';
-import { environment } from 'shared-ui';
+import { Injectable, signal } from '@angular/core';
+import { Observable, of } from 'rxjs';
+import { downloadCsv } from '../shared/analytics-common';
 import { ChartSeries, ChartSlice, RA_COLORS } from '../shared/charts';
 import { ALL_CATEGORIES } from '../asset-performance/kit/asset-universe';
+import { monthLabel } from '../asset-performance/kit/api-utils';
 import {
-  DashboardPeriodDto, FilterOptionsDto, KpiWidgetDto, PerformanceSeriesDto, apiErrorMessage, monthLabel, num, optionLabels, parseQuery, saveBlob,
-  seriesValues, toParams
-} from '../asset-performance/kit/api-utils';
-import {
-  ALL_LOCATIONS, ALL_MAINTENANCE_TYPES, ALL_MAINTENANCE_VIEW, ALL_ORGANIZATIONS, MA_DEFAULT_PERIOD, MA_FALLBACK_PERIODS, MA_FALLBACK_TYPES, MaInsight,
-  MaKpiValue, MaWorkOrder, MaintenanceView, PM_TARGET, TechnicianRow, emptyMaintenance
+  ALL_LOCATIONS, ALL_MAINTENANCE_TYPES, ALL_MAINTENANCE_VIEW, ALL_ORGANIZATIONS, DAY_MS, MA_CATEGORIES, MA_DEFAULT_PERIOD, MA_DEMO,
+  MA_DOWNTIME_CAUSES, MA_FALLBACK_PERIODS, MA_FALLBACK_TYPES, MA_GROUP, MA_ORGANIZATIONS, MA_SITES, MA_TODAY, MaDemoAsset, MaDemoOrder, MaInsight,
+  MaKpiValue, MaWorkOrder, MaintenanceView, PM_TARGET, PRIORITY_RANK, TechnicianRow, emptyMaintenance, monthCategory, monthCoverage, monthStart, periodOffsets
 } from './maintenance-analytics.data';
-
-// ----- API shapes (/api/maintenance-analytics) -----
-
-interface AppliedFiltersDto {
-  viewId: string | null;
-  organization: string | null;
-  location: string | null;
-  category: string | null;
-  assetType: string | null;
-  maintenanceType: string | null;
-  complianceTarget: number;
-  emergencyCostTarget: number | null;
-  failureHealthThreshold: number;
-}
-
-interface SummaryDto {
-  maintenanceCost: KpiWidgetDto;
-  openWorkOrders: KpiWidgetDto;
-  preventiveCompliance: KpiWidgetDto;
-  mttr: KpiWidgetDto;
-  mtbf: KpiWidgetDto;
-}
-
-interface CostTrendDto {
-  trend: PerformanceSeriesDto;
-  totals: {
-    planned: number;
-    corrective: number;
-    emergency: number;
-    unassigned: number;
-    total: number;
-    laborCost: number;
-    sparePartsCost: number;
-    budget: number | null;
-  };
-}
-
-interface CountBreakdownDto {
-  total: number;
-  items: { label: string; count: number; percentage: number }[];
-}
-
-interface PreventiveComplianceDto {
-  value: number | null;
-  target: number;
-  meetsTarget: boolean | null;
-  previousValue: number | null;
-  change: number | null;
-  completed: number;
-  due: number;
-  trend: PerformanceSeriesDto;
-}
-
-interface ReliabilityDto {
-  mtbf: KpiWidgetDto;
-  mttr: KpiWidgetDto;
-  trend: PerformanceSeriesDto;
-}
-
-interface DowntimeByCauseDto {
-  totalHours: number;
-  causes: { cause: string; hours: number; percentage: number }[];
-  trend: PerformanceSeriesDto;
-}
-
-interface InsightDto {
-  key: string;
-  severity: string;
-  title: string;
-  message: string;
-  count: number;
-  workOrders: { id: string; workOrderId: string | null; assetId: string | null; assetName: string | null; priority: string | null; status: string; reasons: string[] }[];
-  assets: { id: string; assetId: string | null; assetName: string | null; location: string | null; healthScore: number | null; reasons: string[] }[];
-  parts: string[];
-  actions: string[];
-  query: string;
-}
-
-interface BacklogRowDto {
-  id: string;
-  workOrderId: string | null;
-  workType: string;
-  priority: string;
-  assetRecordId: string | null;
-  assetId: string | null;
-  assetName: string | null;
-  location: string | null;
-  ageDays: number | null;
-  assignedTo: string | null;
-  status: string;
-  dueDate: string | null;
-  isOverdue: boolean;
-  partsShortage: boolean;
-}
-
-interface TechnicianRowDto {
-  technician: string;
-  technicianId: string | null;
-  assigned: number;
-  completed: number;
-  firstTimeFixRate: number | null;
-  avgResponseHours: number | null;
-  slaCompliance: number | null;
-}
-
-interface OverviewDto {
-  generatedAt: string;
-  filters: AppliedFiltersDto;
-  period: DashboardPeriodDto;
-  summary: SummaryDto;
-  costTrend: CostTrendDto;
-  workOrdersByType: CountBreakdownDto;
-  workOrderStatus: CountBreakdownDto;
-  insights: InsightDto[];
-  preventiveCompliance: PreventiveComplianceDto;
-  reliability: ReliabilityDto;
-  downtimeByCause: DowntimeByCauseDto;
-  backlog: BacklogRowDto[];
-  backlogTotal: number;
-  technicians: TechnicianRowDto[];
-}
-
-interface SectionDto<T> {
-  generatedAt: string;
-  filters: AppliedFiltersDto;
-  period: DashboardPeriodDto;
-  data: T;
-}
-
-interface BacklogDto {
-  items: BacklogRowDto[];
-  totalCount: number;
-  page: number;
-  pageSize: number;
-}
-
-interface ComparisonDto {
-  generatedAt: string;
-  period: DashboardPeriodDto;
-  comparePeriod: DashboardPeriodDto;
-  metrics: { metric: string; format: string; value: number | null; compareValue: number | null; change: number | null; changeUnit: string; trend: string }[];
-  costTrend: PerformanceSeriesDto;
-  compareCostTrend: PerformanceSeriesDto;
-}
-
-interface OptionsDto {
-  datePresets: string[];
-  defaultDatePreset: string;
-  maintenanceTypes: string[];
-  statuses: string[];
-  priorities: string[];
-  downtimeCauses: string[];
-  backlogSortFields: string[];
-  exportFormats: string[];
-  defaultComplianceTarget: number;
-  defaultFailureHealthThreshold: number;
-}
-
-interface ViewFiltersDto {
-  organization: string | null;
-  location: string | null;
-  category: string | null;
-  assetType: string | null;
-  maintenanceType: string | null;
-  datePreset: string;
-  dateFrom: string | null;
-  dateTo: string | null;
-  timeZone: string;
-}
-
-interface ViewDto {
-  viewId: string;
-  viewName: string;
-  isBuiltIn: boolean;
-  isDefault: boolean;
-  filters: ViewFiltersDto;
-  updatedAt: string | null;
-}
-
-/** Body of POST /views and PUT /views/{viewId}. The owner is the signed-in user (from the access token). */
-interface SaveViewRequest {
-  viewName: string;
-  isDefault: boolean;
-  filters: {
-    organization: string | null;
-    location: string | null;
-    category: string | null;
-    assetType: string | null;
-    maintenanceType: string | null;
-    datePreset: string;
-    timeZone: string;
-  };
-  tenantId?: string;
-  clientId?: string;
-}
 
 // ----- UI shapes -----
 
@@ -247,335 +49,429 @@ export interface MaPreviousTrends {
   pm: number[];
 }
 
-const TIME_ZONE = 'UTC';
-/** The overview returns this many backlog rows and technicians, so the tables can be sorted in the browser. */
+/** The overview shows this many backlog rows (the tables sort them in the browser). */
 const BACKLOG_ROWS = 200;
-const TECHNICIAN_ROWS = 100;
+/** Assets below this health score count as approaching failure. */
+const FAILURE_HEALTH = 45;
+const HOURS_PER_MONTH = 720;
 
-const COST_COLORS: Record<string, string> = {
-  Planned: RA_COLORS.blue, Corrective: RA_COLORS.orange, Emergency: RA_COLORS.red, Unassigned: RA_COLORS.grey, 'Total Cost': RA_COLORS.purple
-};
-const TYPE_COLORS: Record<string, string> = {
-  Preventive: RA_COLORS.blue, Corrective: RA_COLORS.orange, Emergency: RA_COLORS.red, Inspection: RA_COLORS.violet, Other: RA_COLORS.grey
-};
-const STATUS_COLORS: Record<string, string> = {
-  Open: RA_COLORS.blue, 'In Progress': RA_COLORS.orange, 'On Hold': RA_COLORS.pink, Completed: RA_COLORS.green, Overdue: RA_COLORS.red, Cancelled: RA_COLORS.grey
-};
-const CAUSE_COLORS = [RA_COLORS.red, RA_COLORS.orange, RA_COLORS.blue, RA_COLORS.violet, RA_COLORS.teal, RA_COLORS.grey, RA_COLORS.pink];
+const COST_COLORS: Record<string, string> = { Planned: RA_COLORS.blue, Corrective: RA_COLORS.orange, Emergency: RA_COLORS.red, 'Total Cost': RA_COLORS.purple };
+const TYPE_COLORS: Record<string, string> = { Preventive: RA_COLORS.blue, Corrective: RA_COLORS.orange, Emergency: RA_COLORS.red, Inspection: RA_COLORS.violet };
+const STATUS_COLORS: Record<string, string> = { Open: RA_COLORS.blue, 'In Progress': RA_COLORS.orange, 'On Hold': RA_COLORS.pink, Completed: RA_COLORS.green, Overdue: RA_COLORS.red };
+const CAUSE_COLORS = [RA_COLORS.red, RA_COLORS.orange, RA_COLORS.blue, RA_COLORS.violet, RA_COLORS.teal];
+const STATUSES = ['Open', 'In Progress', 'On Hold', 'Overdue', 'Completed'];
 
-const kpi = (dto: KpiWidgetDto | null | undefined, unit = 'percent'): MaKpiValue => ({
-  value: dto?.value ?? null,
-  change: num(dto?.change),
-  unit: dto?.changeUnit || unit
-});
-
-function toWorkOrder(dto: BacklogRowDto): MaWorkOrder {
-  return {
-    key: dto.id,
-    id: dto.workOrderId || dto.id,
-    type: dto.workType,
-    priority: dto.priority,
-    assetId: dto.assetId ?? '—',
-    asset: dto.assetName || dto.assetId || '—',
-    location: dto.location ?? '—',
-    ageDays: dto.ageDays,
-    technician: dto.assignedTo ?? 'Unassigned',
-    status: dto.status,
-    dueDate: dto.dueDate ? dto.dueDate.slice(0, 10) : null,
-    overdue: dto.isOverdue,
-    partsShortage: dto.partsShortage
-  };
-}
-
-function toTechnician(dto: TechnicianRowDto): TechnicianRow {
-  return {
-    name: dto.technician,
-    assigned: num(dto.assigned),
-    completed: num(dto.completed),
-    firstTimeFix: dto.firstTimeFixRate,
-    response: dto.avgResponseHours,
-    sla: dto.slaCompliance
-  };
-}
-
-function toInsight(dto: InsightDto): MaInsight {
-  return {
-    key: dto.key,
-    severity: dto.severity,
-    title: dto.title,
-    message: dto.message,
-    count: dto.count,
-    workOrders: (dto.workOrders ?? []).map((w) => ({
-      key: w.id,
-      id: w.workOrderId || w.id,
-      assetId: w.assetId ?? '—',
-      asset: w.assetName || w.assetId || '—',
-      priority: w.priority ?? 'Unspecified',
-      status: w.status,
-      reasons: w.reasons ?? []
-    })),
-    assets: (dto.assets ?? []).map((a) => ({
-      key: a.id,
-      id: a.assetId || a.id,
-      name: a.assetName || a.assetId || a.id,
-      location: a.location ?? '—',
-      health: a.healthScore,
-      reasons: a.reasons ?? []
-    })),
-    parts: dto.parts ?? [],
-    actions: dto.actions ?? [],
-    query: dto.query ?? ''
-  };
-}
-
-/** Planned / Corrective / Emergency bars (Unassigned when the API sends it) and the Total Cost line. */
-function costSeries(dto: PerformanceSeriesDto | null | undefined): ChartSeries[] {
-  return (dto?.series ?? []).map((s) => ({
-    name: s.name,
-    values: s.values.map(num),
-    color: COST_COLORS[s.name] ?? RA_COLORS.teal,
-    type: s.name === 'Total Cost' ? 'line' : 'bar'
-  }));
-}
-
-function pmValues(dto: PerformanceSeriesDto | null | undefined): number[] {
-  return seriesValues(dto, 'Compliance (%)');
-}
-
-function toView(dto: OverviewDto, maintenanceType: string): MaintenanceView {
-  const summary = dto.summary;
-  const pm = dto.preventiveCompliance;
-  const target = pm?.target ?? dto.filters?.complianceTarget ?? PM_TARGET;
-  const labels = (dto.costTrend?.trend?.categories ?? []).map(monthLabel);
-
-  // One coloured column per type: each series only fills its own column (just the selected type when filtered)
-  const types = (dto.workOrdersByType?.items ?? []).filter((i) => maintenanceType === ALL_MAINTENANCE_TYPES || i.label === maintenanceType);
-  const typeSeries: ChartSeries[] = types.map((t, i) => ({
-    name: t.label,
-    values: types.map((_, j) => (i === j ? t.count : 0)),
-    color: TYPE_COLORS[t.label] ?? RA_COLORS.teal
-  }));
-  const statusSlices: ChartSlice[] = (dto.workOrderStatus?.items ?? []).map((s) => ({ name: s.label, value: s.count, color: STATUS_COLORS[s.label] ?? RA_COLORS.grey }));
-
-  const downtime = dto.downtimeByCause?.trend;
-  return {
-    generatedAt: dto.generatedAt,
-    previousFromUtc: dto.period?.previousFromUtc ?? null,
-    previousToUtc: dto.period?.previousToUtc ?? null,
-    complianceTarget: target,
-    cost: kpi(summary?.maintenanceCost),
-    open: kpi(summary?.openWorkOrders),
-    pmCompliance: kpi(summary?.preventiveCompliance, 'points'),
-    mttr: kpi(dto.reliability?.mttr ?? summary?.mttr),
-    mtbf: kpi(dto.reliability?.mtbf ?? summary?.mtbf),
-    labels,
-    costTrend: costSeries(dto.costTrend?.trend),
-    monthlyEmergency: seriesValues(dto.costTrend?.trend, 'Emergency'),
-    monthlyTotal: seriesValues(dto.costTrend?.trend, 'Total Cost'),
-    emergencyCost: num(dto.costTrend?.totals?.emergency),
-    totalCost: num(dto.costTrend?.totals?.total),
-    workOrders: num(dto.workOrderStatus?.total),
-    typeSeries,
-    statusSlices,
-    pmCompleted: num(pm?.completed),
-    pmDue: num(pm?.due),
-    pmTrend: [
-      { name: 'PM Compliance', values: pmValues(pm?.trend), color: RA_COLORS.green, area: true },
-      { name: `Target ${target}%`, values: labels.map(() => target), color: RA_COLORS.grey, dashed: true }
-    ],
-    reliability: [
-      { name: 'MTTR (hrs)', values: seriesValues(dto.reliability?.trend, 'MTTR (hrs)'), color: RA_COLORS.purple },
-      { name: 'MTBF (hrs)', values: seriesValues(dto.reliability?.trend, 'MTBF (hrs)'), color: RA_COLORS.blue, axis: 'right' }
-    ],
-    downtimeByCause: (downtime?.series ?? []).map((s, i) => ({ name: s.name, values: s.values.map(num), color: CAUSE_COLORS[i % CAUSE_COLORS.length] })),
-    downtimeHours: num(dto.downtimeByCause?.totalHours),
-    backlog: (dto.backlog ?? []).map(toWorkOrder),
-    backlogTotal: num(dto.backlogTotal),
-    technicians: (dto.technicians ?? []).map(toTechnician),
-    insights: (dto.insights ?? []).map(toInsight)
-  };
-}
+const round1 = (v: number) => Math.round(v * 10) / 10;
+const sum = (list: number[]) => list.reduce((s, v) => s + v, 0);
+const mean = (list: number[]) => (list.length ? sum(list) / list.length : null);
+const iso = (ms: number) => new Date(ms).toISOString();
+const day = (ms: number) => iso(ms).slice(0, 10);
+const isRepair = (o: MaDemoOrder) => o.type === 'Corrective' || o.type === 'Emergency';
+const unfinished = (o: MaDemoOrder) => o.status !== 'Completed';
+/** Relative change in %, one decimal. */
+const change = (now: number | null, before: number | null) => (now === null || !before ? 0 : round1(((now - before) / before) * 100));
 
 /** "All …" in the filter bar is no filter. */
-const pick = (value: string, all: string): string | null => (!value || value === all ? null : value);
+const all = (value: string, everything: string) => !value || value === everything;
 
-function viewFilters(dto: ViewFiltersDto, periods: string[]): Record<string, string> {
+function inScope(a: MaDemoAsset, f: MaFilters): boolean {
+  return (all(f.organization, ALL_ORGANIZATIONS) || f.organization === MA_GROUP || a.organization === f.organization)
+    && (all(f.location, ALL_LOCATIONS) || a.location === f.location)
+    && (all(f.category, ALL_CATEGORIES) || a.category === f.category);
+}
+
+function toWorkOrder(o: MaDemoOrder): MaWorkOrder {
   return {
-    // Custom ranges can't be shown in the period dropdown; such views open on the default period
-    period: dto.datePreset && periods.includes(dto.datePreset) ? dto.datePreset : MA_DEFAULT_PERIOD,
-    organization: dto.organization ?? ALL_ORGANIZATIONS,
-    location: dto.location ?? ALL_LOCATIONS,
-    category: dto.category ?? ALL_CATEGORIES,
-    maintenanceType: dto.maintenanceType ?? ALL_MAINTENANCE_TYPES
+    key: o.key,
+    id: o.id,
+    type: o.type,
+    priority: o.priority,
+    assetId: o.asset.id,
+    asset: o.asset.name,
+    location: o.asset.location,
+    ageDays: Math.round((MA_TODAY - o.raised) / DAY_MS),
+    technician: o.technician ?? 'Unassigned',
+    status: o.status,
+    dueDate: day(o.due),
+    overdue: o.status === 'Overdue',
+    partsShortage: o.partsShortage
   };
 }
 
-/** Maintenance Analytics figures, filters and saved views from the Report Analytics API (/api/maintenance-analytics). */
+const byUrgency = (a: MaDemoOrder, b: MaDemoOrder) => (PRIORITY_RANK[b.priority] ?? 0) - (PRIORITY_RANK[a.priority] ?? 0) || a.raised - b.raised;
+
+/** PM compliance (%) of preventive orders already due. */
+function pmRate(list: MaDemoOrder[]): { value: number | null; completed: number; due: number } {
+  const due = list.filter((o) => o.type === 'Preventive' && o.due <= MA_TODAY);
+  const completed = due.filter((o) => o.onTime).length;
+  return { value: due.length ? round1((completed / due.length) * 100) : null, completed, due: due.length };
+}
+
+/** MTBF (hrs): operating hours of the assets in scope over the breakdowns. */
+const mtbf = (assets: number, months: number[], failures: number) =>
+  (assets ? Math.round((assets * HOURS_PER_MONTH * sum(months.map(monthCoverage))) / Math.max(1, failures)) : null);
+
+/** Maintenance Analytics figures, filters and saved views, computed in the browser from the static demo dataset. */
 @Injectable()
 export class MaintenanceAnalyticsService {
-  private readonly http = inject(HttpClient);
-  private readonly apiUrl = `${environment.reportAnalyticsApiUrl}api/maintenance-analytics`;
-
   readonly view = signal<MaintenanceView>(emptyMaintenance());
   readonly loading = signal(false);
   readonly loaded = signal(false);
   readonly periods = signal<string[]>(MA_FALLBACK_PERIODS);
   readonly views = signal<MaSavedView[]>([]);
 
-  private fail = (err: HttpErrorResponse) => throwError(() => new Error(apiErrorMessage(err, 'Maintenance Analytics')));
+  private savedViews: MaSavedView[] = [
+    {
+      viewId: 'view-uae-emergency', name: 'UAE Emergency Work', builtIn: false, isDefault: false,
+      filters: { period: 'This quarter', organization: 'Purple IQ UAE', location: ALL_LOCATIONS, category: ALL_CATEGORIES, maintenanceType: 'Emergency' }
+    },
+    {
+      viewId: 'view-dubai-hvac', name: 'Dubai HQ – HVAC', builtIn: false, isDefault: false,
+      filters: { period: MA_DEFAULT_PERIOD, organization: ALL_ORGANIZATIONS, location: 'Dubai HQ', category: 'HVAC', maintenanceType: ALL_MAINTENANCE_TYPES }
+    }
+  ];
+  private nextViewId = 1;
 
-  private query(f: MaFilters): Record<string, string | null> {
+  /** Period presets, maintenance types and the compliance target. */
+  loadOptions(): Observable<MaOptions> {
+    this.periods.set(MA_FALLBACK_PERIODS);
+    return of({
+      periods: MA_FALLBACK_PERIODS,
+      defaultPeriod: MA_DEFAULT_PERIOD,
+      maintenanceTypes: [ALL_MAINTENANCE_TYPES, ...MA_FALLBACK_TYPES],
+      complianceTarget: PM_TARGET
+    });
+  }
+
+  /** Organization, Location and Asset Category values. */
+  loadFilters(): Observable<MaFilterLists> {
+    return of({
+      organizations: [ALL_ORGANIZATIONS, ...MA_ORGANIZATIONS],
+      locations: [ALL_LOCATIONS, ...MA_SITES.map((s) => s.location)],
+      categories: [ALL_CATEGORIES, ...MA_CATEGORIES]
+    });
+  }
+
+  private assets(f: MaFilters): MaDemoAsset[] {
+    return MA_DEMO.assets.filter((a) => inScope(a, f));
+  }
+
+  /** Work orders for the filter bar (any month); the maintenance type filter applies too. */
+  private orders(f: MaFilters): MaDemoOrder[] {
+    return MA_DEMO.orders.filter((o) => inScope(o.asset, f) && (all(f.maintenanceType, ALL_MAINTENANCE_TYPES) || o.type === f.maintenanceType));
+  }
+
+  /** Every section for the filter bar in one call. */
+  loadOverview(f: MaFilters): Observable<MaintenanceView> {
+    this.loading.set(true);
+    const v = this.build(f);
+    this.view.set(v);
+    this.loaded.set(true);
+    this.loading.set(false);
+    return of(v);
+  }
+
+  private build(f: MaFilters): MaintenanceView {
+    const { current, previous } = periodOffsets(f.period || MA_DEFAULT_PERIOD);
+    const assets = this.assets(f);
+    const scoped = this.orders(f);
+    const inMonths = (months: number[]) => scoped.filter((o) => months.includes(o.month));
+    const orders = inMonths(current);
+    const before = inMonths(previous);
+    const byMonth = current.map((m) => orders.filter((o) => o.month === m));
+    const labels = current.map((m) => monthLabel(monthCategory(m)));
+    const previousEnd = monthStart(previous[previous.length - 1] - 1);
+    // Scales previous-period totals to the current period's length so the change % compares like with like
+    const prorate = previous.length ? current.length / previous.length : 1;
+
+    // Cost
+    const costOf = (list: MaDemoOrder[]) => sum(list.map((o) => o.cost));
+    const planned = byMonth.map((l) => costOf(l.filter((o) => o.type === 'Preventive' || o.type === 'Inspection')));
+    const corrective = byMonth.map((l) => costOf(l.filter((o) => o.type === 'Corrective')));
+    const emergency = byMonth.map((l) => costOf(l.filter((o) => o.type === 'Emergency')));
+    const totals = byMonth.map(costOf);
+    const costTrend: ChartSeries[] = [
+      { name: 'Planned', values: planned, color: COST_COLORS['Planned'], type: 'bar' },
+      { name: 'Corrective', values: corrective, color: COST_COLORS['Corrective'], type: 'bar' },
+      { name: 'Emergency', values: emergency, color: COST_COLORS['Emergency'], type: 'bar' },
+      { name: 'Total Cost', values: totals, color: COST_COLORS['Total Cost'], type: 'line' }
+    ];
+    const totalCost = sum(totals);
+
+    // Work orders by type: one coloured column per type (each series only fills its own column)
+    const types = all(f.maintenanceType, ALL_MAINTENANCE_TYPES) ? MA_FALLBACK_TYPES : MA_FALLBACK_TYPES.filter((t) => t === f.maintenanceType);
+    const typeSeries: ChartSeries[] = types.map((t, i) => ({
+      name: t,
+      values: types.map((_, j) => (i === j ? orders.filter((o) => o.type === t).length : 0)),
+      color: TYPE_COLORS[t] ?? RA_COLORS.teal
+    }));
+    const statusSlices: ChartSlice[] = STATUSES.map((s) => ({ name: s, value: orders.filter((o) => o.status === s).length, color: STATUS_COLORS[s] }))
+      .filter((s) => s.value > 0);
+
+    // Open work orders now, against those still open at the end of the previous period
+    const open = orders.filter(unfinished).length;
+    const openBefore = before.filter((o) => o.completedAt === null || o.completedAt > previousEnd).length;
+
+    // Preventive compliance
+    const pm = pmRate(orders);
+    const pmBefore = pmRate(before);
+    const pmValues = byMonth.map((l) => pmRate(l).value ?? 0);
+
+    // Reliability
+    const repairs = orders.filter(isRepair);
+    const repairsBefore = before.filter(isRepair);
+    const mttr = mean(repairs.map((o) => o.repairHours));
+    const mttrBefore = mean(repairsBefore.map((o) => o.repairHours));
+    const mtbfNow = mtbf(assets.length, current, repairs.length);
+    const mtbfBefore = mtbf(assets.length, previous, repairsBefore.length);
+
+    // Downtime by cause
+    const downtimeByCause: ChartSeries[] = MA_DOWNTIME_CAUSES.map((c, i) => ({
+      name: c,
+      values: byMonth.map((l) => round1(sum(l.filter((o) => o.cause === c).map((o) => o.downtimeHours)))),
+      color: CAUSE_COLORS[i % CAUSE_COLORS.length]
+    }));
+
+    const backlog = scoped.filter(unfinished).sort(byUrgency);
+    const emergencyCost = sum(emergency);
+    const target = PM_TARGET;
+
     return {
-      datePreset: f.period || MA_DEFAULT_PERIOD,
-      organization: pick(f.organization, ALL_ORGANIZATIONS),
-      location: pick(f.location, ALL_LOCATIONS),
-      category: pick(f.category, ALL_CATEGORIES),
-      maintenanceType: pick(f.maintenanceType, ALL_MAINTENANCE_TYPES),
-      timeZone: TIME_ZONE,
-      tenantId: environment.tenantId,
-      clientId: environment.clientId
+      generatedAt: new Date().toISOString(),
+      previousFromUtc: iso(monthStart(previous[0])),
+      previousToUtc: iso(previousEnd),
+      complianceTarget: target,
+      cost: { value: totalCost, change: change(totalCost, costOf(before) * prorate), unit: 'percent' },
+      open: { value: open, change: change(open, openBefore), unit: 'percent' },
+      pmCompliance: { value: pm.value, change: pm.value !== null && pmBefore.value !== null ? round1(pm.value - pmBefore.value) : 0, unit: 'points' },
+      mttr: { value: mttr === null ? null : round1(mttr), change: change(mttr, mttrBefore), unit: 'percent' },
+      mtbf: { value: mtbfNow, change: change(mtbfNow, mtbfBefore), unit: 'percent' },
+      labels,
+      costTrend,
+      monthlyEmergency: emergency,
+      monthlyTotal: totals,
+      emergencyCost,
+      totalCost,
+      workOrders: orders.length,
+      typeSeries,
+      statusSlices,
+      pmCompleted: pm.completed,
+      pmDue: pm.due,
+      pmTrend: [
+        { name: 'PM Compliance', values: pmValues, color: RA_COLORS.green, area: true },
+        { name: `Target ${target}%`, values: labels.map(() => target), color: RA_COLORS.grey, dashed: true }
+      ],
+      reliability: [
+        { name: 'MTTR (hrs)', values: byMonth.map((l) => round1(mean(l.filter(isRepair).map((o) => o.repairHours)) ?? 0)), color: RA_COLORS.purple },
+        { name: 'MTBF (hrs)', values: byMonth.map((l, i) => mtbf(assets.length, [current[i]], l.filter(isRepair).length) ?? 0), color: RA_COLORS.blue, axis: 'right' }
+      ],
+      downtimeByCause,
+      downtimeHours: round1(sum(orders.map((o) => o.downtimeHours))),
+      backlog: backlog.slice(0, BACKLOG_ROWS).map(toWorkOrder),
+      backlogTotal: backlog.length,
+      technicians: this.technicians(orders),
+      insights: this.insights(assets, scoped, orders, backlog, emergencyCost, Math.round(sum(before.filter((o) => o.type === 'Emergency').map((o) => o.cost)) * prorate), totalCost)
     };
   }
 
-  /** GET /options: period presets (Custom left out), maintenance types and the default compliance target. */
-  loadOptions(): Observable<MaOptions> {
-    return this.http.get<OptionsDto>(`${this.apiUrl}/options`).pipe(
-      map((dto) => {
-        const periods = (dto.datePresets ?? []).filter((p) => p !== 'Custom');
-        const list = periods.length ? periods : MA_FALLBACK_PERIODS;
-        this.periods.set(list);
-        const types = dto.maintenanceTypes?.length ? dto.maintenanceTypes : MA_FALLBACK_TYPES;
-        return {
-          periods: list,
-          defaultPeriod: list.includes(dto.defaultDatePreset) ? dto.defaultDatePreset : MA_DEFAULT_PERIOD,
-          maintenanceTypes: [ALL_MAINTENANCE_TYPES, ...types],
-          complianceTarget: dto.defaultComplianceTarget ?? PM_TARGET
-        };
-      }),
-      catchError(this.fail)
-    );
+  private technicians(orders: MaDemoOrder[]): TechnicianRow[] {
+    const names = [...new Set(orders.map((o) => o.technician).filter((t): t is string => !!t))];
+    return names.map((name) => {
+      const mine = orders.filter((o) => o.technician === name);
+      const done = mine.filter((o) => o.status === 'Completed');
+      const rate = (ok: number) => (done.length ? Math.round((ok / done.length) * 100) : null);
+      const response = mean(mine.map((o) => o.responseHours));
+      return {
+        name,
+        assigned: mine.length,
+        completed: done.length,
+        firstTimeFix: rate(done.filter((o) => o.firstTimeFix).length),
+        response: response === null ? null : round1(response),
+        sla: rate(done.filter((o) => o.slaMet).length)
+      };
+    });
   }
 
-  /** GET /filters: Organization, Location and Asset Category values (labels; the API matches names). */
-  loadFilters(): Observable<MaFilterLists> {
-    const params = toParams({ tenantId: environment.tenantId, clientId: environment.clientId });
-    return this.http.get<FilterOptionsDto>(`${this.apiUrl}/filters`, { params }).pipe(
-      map((dto) => ({
-        organizations: optionLabels(ALL_ORGANIZATIONS, dto.organizations),
-        locations: optionLabels(ALL_LOCATIONS, dto.locations),
-        categories: optionLabels(ALL_CATEGORIES, dto.assetCategories)
-      })),
-      catchError(this.fail)
-    );
+  private insights(
+    assets: MaDemoAsset[], scoped: MaDemoOrder[], orders: MaDemoOrder[], backlog: MaDemoOrder[], emergencyCost: number, emergencyBefore: number,
+    totalCost: number
+  ): MaInsight[] {
+    const aed = (v: number) => `AED ${Math.round(v).toLocaleString('en-US')}`;
+    const overdue = backlog.filter((o) => o.status === 'Overdue').sort((a, b) => a.due - b.due);
+    const critical = overdue.filter((o) => o.priority === 'Critical' || o.priority === 'High').length;
+    const pastDue = (o: MaDemoOrder) => Math.max(1, Math.round((MA_TODAY - o.due) / DAY_MS));
+    const emergencyChange = change(emergencyCost, emergencyBefore);
+    const emergencyCount = orders.filter((o) => o.type === 'Emergency').length;
+
+    // Low health, or repeated breakdowns in the last 90 days
+    const breakdowns = (a: MaDemoAsset) => scoped.filter((o) => o.asset === a && isRepair(o) && o.raised >= MA_TODAY - 90 * DAY_MS).length;
+    const atRisk = assets
+      .map((a) => ({ a, failures: breakdowns(a) }))
+      .filter(({ a, failures }) => a.health < FAILURE_HEALTH || failures >= 4)
+      .sort((x, y) => x.a.health - y.a.health);
+    const shortage = backlog.filter((o) => o.partsShortage);
+    const parts = [...new Set(shortage.flatMap((o) => o.parts))];
+    const orderRef = (o: MaDemoOrder, reasons: string[]) => ({
+      key: o.key, id: o.id, assetId: o.asset.id, asset: o.asset.name, priority: o.priority, status: o.status, reasons
+    });
+
+    return [
+      {
+        key: 'overdue_work_orders',
+        severity: overdue.length ? 'critical' : 'success',
+        title: overdue.length ? `${overdue.length} work orders are overdue` : 'No overdue work orders',
+        message: overdue.length
+          ? `${critical} of them are critical or high priority. The oldest, ${overdue[0].id} (${overdue[0].asset.name}), is ${pastDue(overdue[0])} days past due.`
+          : 'Every open work order is within its due date.',
+        count: overdue.length,
+        workOrders: overdue.map((o) => orderRef(o, [`${pastDue(o)} days past due`])),
+        assets: [],
+        parts: [],
+        actions: overdue.length ? ['view_work_orders', 'create_action_plan'] : ['view_work_orders'],
+        query: 'status=Overdue'
+      },
+      {
+        key: 'emergency_cost',
+        severity: emergencyChange > 0 ? 'warning' : 'success',
+        title: emergencyChange > 0 ? `Emergency maintenance cost up ${emergencyChange}%` : `Emergency maintenance cost down ${Math.abs(emergencyChange)}%`,
+        message: `${emergencyCount} emergency work orders cost ${aed(emergencyCost)} this period (${totalCost ? round1((emergencyCost / totalCost) * 100) : 0}% of `
+          + `maintenance spend), against ${aed(emergencyBefore)} in the previous period.`,
+        count: emergencyCount,
+        workOrders: [],
+        assets: [],
+        parts: [],
+        actions: ['view_details', 'create_action_plan'],
+        query: 'type=Emergency'
+      },
+      {
+        key: 'assets_approaching_failure',
+        severity: atRisk.length ? 'warning' : 'success',
+        title: atRisk.length ? `${atRisk.length} assets approaching failure threshold` : 'No assets near the failure threshold',
+        message: atRisk.length
+          ? `Health below ${FAILURE_HEALTH} or repeated breakdowns in the last 90 days. Lowest: ${atRisk[0].a.name} at ${atRisk[0].a.location} (health ${atRisk[0].a.health}).`
+          : `Every asset in view has a health score of ${FAILURE_HEALTH} or more.`,
+        count: atRisk.length,
+        workOrders: [],
+        assets: atRisk.map(({ a, failures }) => ({
+          key: a.key, id: a.id, name: a.name, location: a.location, health: a.health,
+          reasons: [
+            ...(a.health < FAILURE_HEALTH ? [`Health score ${a.health}`] : []),
+            ...(failures ? [`${failures} breakdown${failures === 1 ? '' : 's'} in the last 90 days`] : [])
+          ]
+        })),
+        parts: [],
+        actions: atRisk.length ? ['view_assets', 'create_action_plan'] : ['view_assets'],
+        query: ''
+      },
+      {
+        key: 'spare_parts_shortage',
+        severity: shortage.length ? 'info' : 'success',
+        title: shortage.length ? `${shortage.length} work orders waiting for spare parts` : 'No work orders waiting for parts',
+        message: shortage.length
+          ? `${parts.length} parts are out of stock or below minimum, including ${parts.slice(0, 3).join(', ')}.`
+          : 'Spare parts are available for every open work order.',
+        count: shortage.length,
+        workOrders: shortage.map((o) => orderRef(o, o.parts.map((p) => `Waiting for ${p}`))),
+        assets: [],
+        parts,
+        actions: ['view_work_orders', 'open_inventory'],
+        query: 'partsShortage=true'
+      }
+    ];
   }
 
-  /** GET /overview: every section for the filter bar in one call. */
-  loadOverview(f: MaFilters): Observable<MaintenanceView> {
-    this.loading.set(true);
-    const params = toParams({ ...this.query(f), backlogSize: BACKLOG_ROWS, technicianLimit: TECHNICIAN_ROWS });
-    return this.http.get<OverviewDto>(`${this.apiUrl}/overview`, { params }).pipe(
-      map((dto) => toView(dto, f.maintenanceType)),
-      tap((v) => {
-        this.view.set(v);
-        this.loaded.set(true);
-      }),
-      catchError(this.fail),
-      finalize(() => this.loading.set(false))
-    );
+  /** Compare Periods: the previous period's cost lines and PM compliance, month by month. */
+  loadPrevious(f: MaFilters, _range?: { from: string; to: string }): Observable<MaPreviousTrends> {
+    const { previous } = periodOffsets(f.period || MA_DEFAULT_PERIOD);
+    const scoped = this.orders(f);
+    const months = previous.map((m) => scoped.filter((o) => o.month === m));
+    return of({
+      totalCost: months.map((l) => sum(l.map((o) => o.cost))),
+      emergency: months.map((l) => sum(l.filter((o) => o.type === 'Emergency').map((o) => o.cost))),
+      pm: months.map((l) => pmRate(l).value ?? 0)
+    });
   }
 
-  /**
-   * Compare Periods: the cost lines of the previous period of the same length (GET /compare-periods) and its PM compliance
-   * (GET /preventive-compliance over a custom range), plotted against the current months.
-   */
-  loadPrevious(f: MaFilters, range: { from: string; to: string }): Observable<MaPreviousTrends> {
-    const params = toParams(this.query(f));
-    const pmParams = toParams({ ...this.query(f), datePreset: 'Custom', from: range.from, to: range.to });
-    return forkJoin({
-      compare: this.http.get<ComparisonDto>(`${this.apiUrl}/compare-periods`, { params }),
-      pm: this.http.get<SectionDto<PreventiveComplianceDto>>(`${this.apiUrl}/preventive-compliance`, { params: pmParams })
-    }).pipe(
-      map(({ compare, pm }) => ({
-        totalCost: seriesValues(compare.compareCostTrend, 'Total Cost'),
-        emergency: seriesValues(compare.compareCostTrend, 'Emergency'),
-        pm: pmValues(pm.data?.trend)
-      })),
-      catchError(this.fail)
-    );
-  }
-
-  /** GET /compare-periods: the previous period's monthly emergency cost (Emergency insight → View details). */
+  /** The previous period's monthly emergency cost (Emergency insight → View details). */
   loadPreviousEmergency(f: MaFilters): Observable<{ labels: string[]; values: number[] }> {
-    return this.http.get<ComparisonDto>(`${this.apiUrl}/compare-periods`, { params: toParams(this.query(f)) }).pipe(
-      map((dto) => ({ labels: dto.compareCostTrend?.categories ?? [], values: seriesValues(dto.compareCostTrend, 'Emergency') })),
-      catchError(this.fail)
-    );
+    const { previous } = periodOffsets(f.period || MA_DEFAULT_PERIOD);
+    const scoped = this.orders(f).filter((o) => o.type === 'Emergency');
+    return of({
+      labels: previous.map(monthCategory),
+      values: previous.map((m) => sum(scoped.filter((o) => o.month === m).map((o) => o.cost)))
+    });
   }
 
-  /** GET /backlog with extra filters (an insight's query, assignedTo, …), most urgent first. */
+  /** Unfinished work orders with extra filters (status, partsShortage, assignedTo, type), most urgent first. */
   loadBacklog(f: MaFilters, extra: Record<string, string> = {}): Observable<{ items: MaWorkOrder[]; total: number }> {
-    const params = toParams({ ...this.query(f), ...extra, page: 1, pageSize: BACKLOG_ROWS });
-    return this.http.get<BacklogDto>(`${this.apiUrl}/backlog`, { params }).pipe(
-      map((dto) => ({ items: (dto.items ?? []).map(toWorkOrder), total: dto.totalCount ?? 0 })),
-      catchError(this.fail)
-    );
+    const statuses = extra['status'] ? extra['status'].split(',') : null;
+    const rows = this.orders(f)
+      .filter(unfinished)
+      .filter((o) => (!statuses || statuses.includes(o.status))
+        && (extra['partsShortage'] !== 'true' || o.partsShortage)
+        && (!extra['assignedTo'] || (o.technician ?? 'Unassigned') === extra['assignedTo'])
+        && (!extra['type'] || o.type === extra['type']))
+      .sort(byUrgency);
+    return of({ items: rows.slice(0, BACKLOG_ROWS).map(toWorkOrder), total: rows.length });
   }
 
-  /** GET /backlog with an insight's query string (status=Overdue or partsShortage=true). */
+  /** The work orders behind an insight's "View work orders" (status=Overdue or partsShortage=true). */
   loadInsightOrders(f: MaFilters, insight: MaInsight): Observable<{ items: MaWorkOrder[]; total: number }> {
-    return this.loadBacklog(f, parseQuery(insight.query));
+    const extra: Record<string, string> = {};
+    for (const part of insight.query.split('&')) {
+      const [key, value] = part.split('=');
+      if (key) extra[key] = value ?? '';
+    }
+    return this.loadBacklog(f, extra);
   }
 
-  /** GET /export: the Excel workbook for the filter bar. */
+  /** Monthly summary and the backlog for the filter bar, as a CSV download. */
   export(f: MaFilters): Observable<void> {
-    const params = toParams({ ...this.query(f), format: 'xlsx' });
-    return this.http.get(`${this.apiUrl}/export`, { params, observe: 'response', responseType: 'blob' }).pipe(
-      map((res) => saveBlob(res, 'maintenance-analytics.xlsx')),
-      catchError(this.fail)
-    );
+    const v = this.view().labels.length ? this.view() : this.build(f);
+    const series = (name: string, list: ChartSeries[]) => list.find((s) => s.name === name)?.values ?? [];
+    const rows: (string | number)[][] = v.labels.map((l, i) => [
+      l.replace('\n', ' '),
+      series('Planned', v.costTrend)[i] ?? 0,
+      series('Corrective', v.costTrend)[i] ?? 0,
+      series('Emergency', v.costTrend)[i] ?? 0,
+      v.monthlyTotal[i] ?? 0,
+      series('PM Compliance', v.pmTrend)[i] ?? 0,
+      series('MTTR (hrs)', v.reliability)[i] ?? 0,
+      series('MTBF (hrs)', v.reliability)[i] ?? 0,
+      round1(sum(v.downtimeByCause.map((s) => s.values[i] ?? 0)))
+    ]);
+    downloadCsv('maintenance-analytics.csv',
+      ['Month', 'Planned (AED)', 'Corrective (AED)', 'Emergency (AED)', 'Total Cost (AED)', 'PM Compliance %', 'MTTR (hrs)', 'MTBF (hrs)', 'Downtime (hrs)'], rows);
+    return of(undefined);
   }
 
-  // ----- Saved views -----
+  // ----- Saved views (kept in memory for the session) -----
 
-  /** GET /views: the built-in All Maintenance view, then the user's own. */
+  /** The built-in All Maintenance view, then the user's own. */
   loadViews(): Observable<MaSavedView[]> {
-    const params = toParams({ tenantId: environment.tenantId, clientId: environment.clientId });
-    return this.http.get<ViewDto[]>(`${this.apiUrl}/views`, { params }).pipe(
-      map((rows) => {
-        const list = rows.map((v) => this.toSavedView(v));
-        if (!list.some((v) => v.builtIn)) list.unshift(this.allMaintenanceView());
-        this.views.set(list);
-        return list;
-      }),
-      catchError(this.fail)
-    );
+    const list = [this.allMaintenanceView(), ...this.savedViews];
+    this.views.set(list);
+    return of(list);
   }
 
-  /** POST /views. */
   createView(name: string, f: MaFilters, isDefault = false): Observable<MaSavedView> {
-    const body: SaveViewRequest = { ...this.toRequest(name, f, isDefault), tenantId: environment.tenantId, clientId: environment.clientId };
-    return this.http.post<ViewDto>(`${this.apiUrl}/views`, body).pipe(
-      map((dto) => this.toSavedView(dto)),
-      tap((saved) => this.views.update((list) => [...list, saved])),
-      catchError(this.fail)
-    );
+    const saved: MaSavedView = { viewId: `view-${Date.now()}-${this.nextViewId++}`, name: name.trim(), builtIn: false, isDefault, filters: this.toFilters(f) };
+    this.savedViews = [...this.savedViews, saved];
+    this.views.update((list) => [...list, saved]);
+    return of(saved);
   }
 
-  /** PUT /views/{viewId}. */
   updateView(viewId: string, name: string, f: MaFilters, isDefault = false): Observable<MaSavedView> {
-    return this.http.put<ViewDto>(`${this.apiUrl}/views/${encodeURIComponent(viewId)}`, this.toRequest(name, f, isDefault)).pipe(
-      map((dto) => this.toSavedView(dto)),
-      tap((saved) => this.views.update((list) => list.map((v) => (v.viewId === saved.viewId ? saved : v)))),
-      catchError(this.fail)
-    );
+    const saved: MaSavedView = { viewId, name: name.trim(), builtIn: false, isDefault, filters: this.toFilters(f) };
+    this.savedViews = this.savedViews.map((v) => (v.viewId === viewId ? saved : v));
+    this.views.update((list) => list.map((v) => (v.viewId === viewId ? saved : v)));
+    return of(saved);
   }
 
-  /** DELETE /views/{viewId}. */
   deleteView(viewId: string): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}/views/${encodeURIComponent(viewId)}`).pipe(
-      tap(() => this.views.update((list) => list.filter((v) => v.viewId !== viewId))),
-      catchError(this.fail)
-    );
+    this.savedViews = this.savedViews.filter((v) => v.viewId !== viewId);
+    this.views.update((list) => list.filter((v) => v.viewId !== viewId));
+    return of(undefined);
   }
 
   allMaintenanceView(): MaSavedView {
@@ -587,24 +483,13 @@ export class MaintenanceAnalyticsService {
     };
   }
 
-  private toSavedView(dto: ViewDto): MaSavedView {
-    return { viewId: dto.viewId, name: dto.viewName, builtIn: dto.isBuiltIn, isDefault: dto.isDefault, filters: viewFilters(dto.filters, this.periods()) };
-  }
-
-  private toRequest(name: string, f: MaFilters, isDefault: boolean): SaveViewRequest {
+  private toFilters(f: MaFilters): Record<string, string> {
     return {
-      viewName: name.trim(),
-      isDefault,
-      filters: {
-        organization: pick(f.organization, ALL_ORGANIZATIONS),
-        location: pick(f.location, ALL_LOCATIONS),
-        category: pick(f.category, ALL_CATEGORIES),
-        // The page has no Asset Type filter
-        assetType: null,
-        maintenanceType: pick(f.maintenanceType, ALL_MAINTENANCE_TYPES),
-        datePreset: f.period || MA_DEFAULT_PERIOD,
-        timeZone: TIME_ZONE
-      }
+      period: f.period && this.periods().includes(f.period) ? f.period : MA_DEFAULT_PERIOD,
+      organization: f.organization || ALL_ORGANIZATIONS,
+      location: f.location || ALL_LOCATIONS,
+      category: f.category || ALL_CATEGORIES,
+      maintenanceType: f.maintenanceType || ALL_MAINTENANCE_TYPES
     };
   }
 }

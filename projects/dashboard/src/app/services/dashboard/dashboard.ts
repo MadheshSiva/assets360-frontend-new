@@ -1,8 +1,21 @@
-import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { environment } from '../../../../../../src/environments/environment';
+import { Injectable } from '@angular/core';
+import { Observable, of, throwError } from 'rxjs';
 import type { AssetRegistrationDetail, AssetRegistrationList } from '../../shared/asset-quick-view/quick-view';
+import {
+  demoAssetTypes,
+  demoCategories,
+  demoDeviceConnectivity,
+  demoInsightAssets,
+  demoKpis,
+  demoLocationUpdates,
+  demoLocations,
+  demoPerformanceSummary,
+  demoRegistration,
+  demoRegistrations,
+  demoSiteDetail,
+  demoSites,
+  demoStatusCounts,
+} from './dashboard.data';
 
 /** One tag in GET api/asset-dashboard/location-updates: how often it moved between gateways in the window. */
 export interface LocationUpdateTag {
@@ -231,98 +244,87 @@ export interface AssetStatusCounts {
 /** Quick Insights endpoints under api/asset-dashboard. */
 export type InsightEndpoint = 'critical-assets' | 'assets-without-custodian' | 'assets-without-documents';
 
+/**
+ * STATIC DEMO: every method answers from the in-memory demo register (dashboard.data.ts) instead of the
+ * Asset / Asset Dashboard / Master Data / Report Analytics services. Signatures match the former API calls.
+ */
 @Injectable({
   providedIn: 'root',
 })
 export class Dashboard {
-  private readonly http = inject(HttpClient);
-  private readonly baseUrl = `${environment.assetDashboardApiUrl}api/asset-dashboard`;
-
-  /** GET api/asset-dashboard/kpis?days=7|30|90 */
+  /** KPI cards for the last `days` days (7 | 30 | 90). */
   getKpis(days: number): Observable<AssetDashboardKpis> {
-    const params = new HttpParams().set('days', days);
-    return this.http.get<AssetDashboardKpis>(`${this.baseUrl}/kpis`, { params });
+    return of(demoKpis(days));
   }
 
-  /** GET {reports}api/asset-performance/summary?datePreset= : total assets and average health score vs. the previous period. */
+  /** Total assets and average health score vs. the previous period. */
   getAssetPerformanceSummary(datePreset = 'Last 30 days'): Observable<AssetPerformanceSummary> {
-    const params = new HttpParams().set('datePreset', datePreset);
-    return this.http.get<AssetPerformanceSummary>(`${environment.reportsApiUrl}api/asset-performance/summary`, { params });
+    return of(demoPerformanceSummary(datePreset));
   }
 
-  /** GET api/asset-dashboard/statuses?status=&includeAssets= : assets per status (one status when given). */
+  /** Assets per status (one status when given); assets listed unless includeAssets is false. */
   getStatusCounts(status?: string, includeAssets = true): Observable<AssetStatusCounts> {
-    let params = new HttpParams().set('includeAssets', includeAssets);
-    if (status) params = params.set('status', status);
-    return this.http.get<AssetStatusCounts>(`${this.baseUrl}/statuses`, { params });
+    return of(demoStatusCounts(status, includeAssets));
   }
 
-  /** GET api/master-data/asset-types */
+  /** Asset types of the register. */
   getAssetTypes(): Observable<AssetTypeOption[]> {
-    return this.http.get<AssetTypeOption[]>(`${environment.masterDataApiUrl}api/master-data/asset-types`);
+    return of(demoAssetTypes());
   }
 
-  /** GET api/master-data/sites?clientId= (defaults to the environment's client) */
-  getSites(clientId: string = environment.clientId): Observable<SiteOption[]> {
-    const params = new HttpParams().set('clientId', clientId);
-    return this.http.get<SiteOption[]>(`${environment.masterDataApiUrl}api/master-data/sites`, { params });
+  /** The client's sites (one demo client, so `clientId` does not narrow the list). */
+  getSites(clientId?: string): Observable<SiteOption[]> {
+    void clientId;
+    return of(demoSites());
   }
 
-  /** GET api/asset-dashboard/locations?top=n (top omitted: every site) */
+  /** Sites ranked by asset count (top omitted: every site). */
   getLocations(top?: number): Observable<AssetDashboardLocations> {
-    let params = new HttpParams();
-    if (top) params = params.set('top', top);
-    return this.http.get<AssetDashboardLocations>(`${this.baseUrl}/locations`, { params });
+    return of(demoLocations(top));
   }
 
   /**
-   * GET api/asset-dashboard/location-updates?days=&siteId=&assetType=&status=
-   * Returns totals per tag for the last `days` days (no per-day split); the IoT Events Timeline derives daily
+   * Location updates per tag for the last `days` days (no per-day split); the IoT Events Timeline derives daily
    * counts from several windows, see dailyLocationUpdates() in iot-overview-data.ts.
    */
   getLocationUpdates(days: number, filters: { siteId?: string; assetType?: string; status?: string } = {}): Observable<LocationUpdates> {
-    let params = new HttpParams().set('days', days);
-    if (filters.siteId) params = params.set('siteId', filters.siteId);
-    if (filters.assetType) params = params.set('assetType', filters.assetType);
-    if (filters.status) params = params.set('status', filters.status);
-    return this.http.get<LocationUpdates>(`${this.baseUrl}/location-updates`, { params });
+    return of(demoLocationUpdates(days, filters));
   }
 
-  /** GET api/asset-dashboard/sites/{siteId} */
+  /** One site with its assets grouped by network status. */
   getSite(siteId: string): Observable<SiteDetail> {
-    return this.http.get<SiteDetail>(`${this.baseUrl}/sites/${encodeURIComponent(siteId)}`);
+    const site = demoSiteDetail(siteId);
+    return site ? of(site) : throwError(() => new Error(`Site ${siteId} not found.`));
   }
 
-  /** GET api/asset-dashboard/critical-assets | assets-without-custodian | assets-without-documents */
+  /** Quick Insights lists: critical-assets | assets-without-custodian | assets-without-documents. */
   getInsightAssets(endpoint: InsightEndpoint): Observable<InsightAssetList> {
-    return this.http.get<InsightAssetList>(`${this.baseUrl}/${endpoint}`);
+    return of(demoInsightAssets(endpoint));
   }
 
-  /** GET api/asset-dashboard/critical-assets (Asset service, 5401); feeds the "Critical" health band and Quick Insights. */
+  /** Assets with criticality Critical; feeds the "Critical" health band and Quick Insights. */
   getCriticalAssets(): Observable<InsightAssetList> {
     return this.getInsightAssets('critical-assets');
   }
 
-  /** GET api/asset-dashboard/categories */
+  /** Asset counts per category and sub-category. */
   getCategories(): Observable<AssetDashboardCategories> {
-    return this.http.get<AssetDashboardCategories>(`${this.baseUrl}/categories`);
+    return of(demoCategories());
   }
 
-  /** GET api/asset-dashboard/device-connectivity?days=7|30|90 */
+  /** Device connectivity donut for the last `days` days. */
   getDeviceConnectivity(days: number): Observable<DeviceConnectivity> {
-    const params = new HttpParams().set('days', days);
-    return this.http.get<DeviceConnectivity>(`${this.baseUrl}/device-connectivity`, { params });
+    return of(demoDeviceConnectivity(days));
   }
 
-  /** GET api/asset-registrations: registered assets, newest first (pageSize 1-200). */
+  /** Registered assets, newest first (pageSize 1-200). */
   getAssetRegistrations(pageSize = 200, search?: string): Observable<AssetRegistrationList> {
-    let params = new HttpParams().set('page', 1).set('pageSize', pageSize);
-    if (search) params = params.set('search', search);
-    return this.http.get<AssetRegistrationList>(`${environment.assetRegistrationApiUrl}api/asset-registrations`, { params });
+    return of(demoRegistrations(pageSize, search));
   }
 
-  /** GET api/asset-registrations/{assetRegistrationId}: the full registration. */
+  /** The full registration of one asset. */
   getAssetRegistration(assetRegistrationId: string): Observable<AssetRegistrationDetail> {
-    return this.http.get<AssetRegistrationDetail>(`${environment.assetRegistrationApiUrl}api/asset-registrations/${encodeURIComponent(assetRegistrationId)}`);
+    const dto = demoRegistration(assetRegistrationId);
+    return dto ? of(dto) : throwError(() => new Error(`Asset ${assetRegistrationId} not found.`));
   }
 }

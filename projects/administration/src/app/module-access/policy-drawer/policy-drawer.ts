@@ -53,7 +53,7 @@ export class PolicyDrawer implements OnChanges {
   avatars: string[] = [];
 
   ngOnChanges(): void {
-    this.avatars = []; // member names come from the users API once wired
+    this.avatars = this.service.members(this.policy).slice(0, 3);
   }
 
   get roleOptions(): string[] {

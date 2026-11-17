@@ -11,7 +11,7 @@ export type FilterOperator =
   | 'greaterThan' | 'greaterOrEqual' | 'lessThan' | 'lessOrEqual' | 'between' | 'inLastDays'
   | 'isEmpty' | 'isNotEmpty';
 
-/** A reportable field from GET /api/custom-reports/fields (or a calculated field). */
+/** A reportable field of the catalog (or a calculated field). */
 export interface FieldDef {
   key: string;
   label: string;
@@ -20,7 +20,7 @@ export interface FieldDef {
   group: string;
   /** API data source the field needs (assets, maintenance, inspection); '' for calculated fields */
   dataSource: string;
-  /** Filter operators the API accepts for this field */
+  /** Filter operators offered for this field */
   operators: FilterOperator[];
   /** Optional value suggestions for filters */
   values?: string[];
@@ -33,7 +33,7 @@ export interface FieldGroup {
 }
 
 /**
- * A data source card in the builder. The API joins Assets (always included) with optional sources,
+ * A data source card in the builder. Reports join Assets (always included) with optional sources,
  * so each card is one combination, e.g. key "assets+maintenance".
  */
 export interface DataSource {
@@ -55,7 +55,7 @@ export interface ReportCatalog {
   fields: FieldDef[];
 }
 
-/** Calculated field: left <op> right, both numeric fields. Keys look like "calc_<name>" (the API's format). */
+/** Calculated field: left <op> right, both numeric fields. Keys look like "calc_<name>". */
 export interface CalcField {
   key: string;
   label: string;
@@ -91,7 +91,7 @@ export interface ReportDefinition {
   chartValue: string;
 }
 
-/** Schedule as stored by the API; kept so recipients / time zone survive a save. */
+/** Stored schedule; kept so recipients / time zone survive a save. */
 export interface ReportScheduleDto {
   frequency: string;
   dayOfWeek: string | null;
@@ -115,7 +115,7 @@ export interface CustomReport extends ReportDefinition {
   updatedAt: string;
   visibility: ReportVisibility;
   schedule: string;
-  /** The API schedule behind `schedule` (null when not scheduled or not loaded) */
+  /** The stored schedule behind `schedule` (null when not scheduled or not loaded) */
   scheduleDetail: ReportScheduleDto | null;
   /** False when the report belongs to someone else */
   canEdit: boolean;
@@ -142,7 +142,7 @@ export interface PreviewResult {
   labelKey: string;
   valueKey: string;
   title: string;
-  /** Chart points over every matching row, when the API built a chart */
+  /** Chart points over every matching row, when the report is charted */
   points: { label: string; value: number }[] | null;
 }
 

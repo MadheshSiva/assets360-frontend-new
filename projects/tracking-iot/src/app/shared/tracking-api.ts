@@ -1,82 +1,77 @@
-import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
-import { EMPTY, Observable, expand, map, reduce, throwError } from 'rxjs';
-import { environment } from 'shared-ui';
-
-/** Full URL of a Tracking service resource, e.g. trackingUrl('tag-ids') → {gateway}api/tag-ids. */
-export function trackingUrl(resource: string): string {
-  return `${environment.trackingApiUrl}api/${resource}`;
-}
-
-/** clientId / tenantId every Tracking call is scoped to, plus any extra query values (empty ones are skipped). */
-export function tenantParams(extra: Record<string, string | number | boolean | null | undefined> = {}): HttpParams {
-  let params = new HttpParams().set('clientId', environment.clientId).set('tenantId', environment.tenantId);
-  for (const [key, value] of Object.entries(extra)) {
-    if (value !== null && value !== undefined && value !== '') params = params.set(key, String(value));
-  }
-  return params;
-}
-
-/** One page of a Tracking list endpoint. */
-export interface PagedResult<T> {
-  items: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-}
+import { Observable, delay, of, throwError } from 'rxjs';
 
 /**
- * Every row of a list endpoint that returns pages ({ items, page, totalPages }), fetched page by page and joined.
- * A plain array response is still accepted.
+ * Helpers for the static demo services. Nothing in Tracking & IoT calls a backend: every service answers from the
+ * in-memory demo records (the `*.data.ts` files next to it). Changes live until the page is reloaded.
  */
-export function getAllPages<T>(
-  http: HttpClient,
-  url: string,
-  extra: Record<string, string | number | boolean | null | undefined> = {},
-  pageSize = 100,
-): Observable<T[]> {
-  const page = (n: number) => http.get<PagedResult<T> | T[]>(url, { params: tenantParams({ ...extra, page: n, pageSize }) });
-  return page(1).pipe(
-    expand((res) => (!Array.isArray(res) && res && res.page < res.totalPages ? page(res.page + 1) : EMPTY)),
-    map((res) => (Array.isArray(res) ? res : res?.items ?? [])),
-    reduce((all, rows) => all.concat(rows), [] as T[]),
-  );
+
+/** Simulated network latency of the demo services, ms. */
+export const DEMO_LATENCY_MS = 150;
+
+/** Deep copy, so callers never mutate the in-memory demo records by accident. */
+export function clone<T>(value: T): T {
+  return value === undefined || value === null ? value : (JSON.parse(JSON.stringify(value)) as T);
 }
 
-/**
- * The record in a successful POST / PUT body read as text: the record itself, or a { data } / { item } wrapper.
- * Null when the body is empty, plain text or has no `key` field (callers then reload the record).
- */
-export function savedRecord<T>(body: string, key: keyof T & string): T | null {
-  let parsed: unknown = null;
-  try {
-    parsed = body ? JSON.parse(body) : null;
-  } catch {
-    return null;
-  }
-  const obj = parsed as Record<string, unknown> | null;
-  const rec = (obj?.[key] ? obj : obj?.['data'] ?? obj?.['item'] ?? null) as Record<string, unknown> | null;
-  return rec?.[key] ? (rec as T) : null;
+/** A copy of `value`, delivered after the demo latency. */
+export function demo<T>(value: T, ms = DEMO_LATENCY_MS): Observable<T> {
+  return of(clone(value)).pipe(delay(ms));
 }
 
-/** Fields every create / update request carries. */
-export function tenantBody(): { clientId: string; tenantId: string } {
-  return { clientId: environment.clientId, tenantId: environment.tenantId };
+/** A failed demo call with a readable message. */
+export function demoError(message: string): Observable<never> {
+  return throwError(() => new Error(message));
 }
 
-/** Readable message for an API failure: { message }, ASP.NET validation { errors }, or a network failure. */
+/** ISO timestamp `minutes` before now. */
+export function isoMinutesAgo(minutes: number, now = Date.now()): string {
+  return new Date(now - minutes * 60_000).toISOString();
+}
+
+/** ISO timestamp `days` before now (fractions allowed). */
+export function isoDaysAgo(days: number, now = Date.now()): string {
+  return new Date(now - days * 86_400_000).toISOString();
+}
+
+/** UTC midnight `days` from today (negative = in the past), as ISO. */
+export function isoUtcDay(days: number): string {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString();
+}
+
+/** Next id in a sequence like DM000012: `prefix` + the highest existing number + 1, zero padded. */
+export function nextSequenceId(prefix: string, ids: string[], width = 6): string {
+  const max = ids.reduce((m, id) => {
+    const n = id.startsWith(prefix) ? Number(id.slice(prefix.length)) : NaN;
+    return Number.isFinite(n) && n > m ? n : m;
+  }, 0);
+  return prefix + String(max + 1).padStart(width, '0');
+}
+
+/** A random-looking unique record id (24 hex chars, like a Mongo ObjectId). */
+export function newRecordId(): string {
+  const hex = (n: number) => Math.floor(Math.random() * 16 ** n).toString(16).padStart(n, '0');
+  return Date.now().toString(16).slice(-8).padStart(8, '0') + hex(8) + hex(8);
+}
+
+/** Deterministic hash of a string (FNV-1a), for stable pseudo-random demo values. */
+export function hashOf(text: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+/** Deterministic value in [0, 1) for a seed. */
+export function seeded(seed: string): number {
+  return (hashOf(seed) % 100_000) / 100_000;
+}
+
+/** Name shown as the author of demo changes when nobody is signed in. */
+export const DEMO_USER = 'demo.user';
+
+/** Readable message for a failed call. */
 export function apiErrorMessage(err: unknown, fallback: string): string {
-  if (!(err instanceof HttpErrorResponse)) return err instanceof Error && err.message ? err.message : fallback;
-  if (err.status === 0) return 'Cannot reach the server. Check that the backend is running.';
-  const body = err.error;
-  const firstError = body?.errors && typeof body.errors === 'object' ? Object.values(body.errors).flat()[0] : undefined;
-  if (typeof firstError === 'string') return firstError;
-  if (typeof body?.message === 'string') return body.message;
-  if (typeof body?.title === 'string') return body.title;
-  return fallback;
-}
-
-/** catchError handler that rethrows the failure as an Error with a readable message. */
-export function apiError(err: unknown, fallback: string): Observable<never> {
-  return throwError(() => new Error(apiErrorMessage(err, fallback)));
+  return err instanceof Error && err.message ? err.message : fallback;
 }

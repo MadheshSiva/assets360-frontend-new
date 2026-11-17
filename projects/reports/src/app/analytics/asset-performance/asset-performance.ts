@@ -37,7 +37,7 @@ function sortNullable<T>(rows: T[], key: keyof T, dir: SortDir): T[] {
 
 const dash = (v: number | null | undefined, suffix = ''): string => (v === null || v === undefined ? '—' : `${v.toLocaleString('en-US')}${suffix}`);
 
-/** Insight cards by API key: action button ids, icon and tone. */
+/** Insight cards by key: action button ids, icon and tone. */
 const INSIGHT_STYLE: Record<string, { id: string; icon: LucideIconData; tone: RaTone }> = {
   below_health_threshold: { id: 'critical', icon: TriangleAlert, tone: 'red' },
   maintenance_intervention: { id: 'intervention', icon: Wrench, tone: 'orange' },
@@ -163,7 +163,7 @@ export class AssetPerformancePage extends ScopedAnalyticsPage {
     return { period: this.period, organization: this.organization, location: this.location, category: this.category, assetType: this.assetType };
   }
 
-  /** Reloads the page from GET /overview (and the previous period's trends when comparing). */
+  /** Reloads the page from the service (and the previous period's trends when comparing). */
   recompute(announce?: string): void {
     this.loadSub?.unsubscribe();
     this.refreshing = true;
@@ -237,7 +237,7 @@ export class AssetPerformancePage extends ScopedAnalyticsPage {
     return this.view.insights.find((i) => i.key === key);
   }
 
-  // ----- Filters and saved views (GET/POST /views) -----
+  // ----- Filters and saved views -----
   protected override restoreFilters(f: Record<string, string>): void {
     const period = f['period'];
     this.period = period && this.periods.includes(period) ? period : AP_DEFAULT_PERIOD;
@@ -385,7 +385,7 @@ export class AssetPerformancePage extends ScopedAnalyticsPage {
       );
       return;
     }
-    // "View assets": GET /assets with the insight's query (healthBelow=… or interventionOnly=true)
+    // "View assets": the assets matching the insight's filter (healthBelow=… or interventionOnly=true)
     this.api.loadAssets(this.filters(), insight.query).subscribe({
       next: ({ items }) => {
         const reasons = new Map(insight.assets.map((a) => [a.key, a.reasons.join('; ')]));
@@ -446,15 +446,15 @@ export class AssetPerformancePage extends ScopedAnalyticsPage {
     return targets[id] ?? 'ap-trend';
   }
 
-  /** GET /export: the API's Excel workbook (summary, assets, locations, categories, trends and insights). */
+  /** Page export: every asset in scope as CSV. */
   exportPage(): void {
     this.api.export(this.filters()).subscribe({
-      next: () => this.notify('Asset performance workbook exported.'),
+      next: () => this.notify('Asset performance data exported.'),
       error: (err: Error) => this.notify(err.message)
     });
   }
 
-  /** One widget's figures as CSV, built in the browser from the data already loaded (the API exports whole pages only). */
+  /** One widget's figures as CSV, built in the browser from the data already loaded . */
   exportWidget(id: string): void {
     const v = this.view;
     const months = v.labels.map((l) => l.replace('\n', ' '));

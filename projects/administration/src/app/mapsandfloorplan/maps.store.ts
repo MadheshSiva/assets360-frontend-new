@@ -1,6 +1,5 @@
 import { Injectable, OnDestroy, inject } from '@angular/core';
 import { EMPTY, Observable, Subscription, catchError, defer, finalize, forkJoin, map, of, switchMap, tap } from 'rxjs';
-import { adminApiError } from '../role-access-control/role-access.service';
 import { ToastTone } from '../shared/admin-common';
 import { LocationSources, MapsApiService, PlotDto, toPlotItem } from './maps-api.service';
 import {
@@ -126,7 +125,7 @@ export class MapsStore implements OnDestroy {
 
   /** Readable reason for a failed call. */
   errorText(err: unknown): string {
-    return adminApiError(err, 'maps');
+    return err instanceof Error && err.message ? err.message : 'Something went wrong.';
   }
 
   /**
@@ -296,8 +295,8 @@ export class MapsStore implements OnDestroy {
 
   /**
    * Runs `next` once the selected location has a floor plan. A floor without one but with an image in Master Data
-   * gets a draft floor plan made from that image first (uploaded to Media like any floor plan), so the drawing and
-   * plotting tools work on the picture shown on the map.
+   * gets a draft floor plan made from that image first, so the drawing and plotting tools work on the picture shown
+   * on the map.
    */
   ensurePlan(next: () => void): void {
     if (this.currentPlan) {
@@ -313,26 +312,21 @@ export class MapsStore implements OnDestroy {
     if (this.creatingPlan) return;
     this.creatingPlan = true;
     const label = this.locationNode(locationId)?.label ?? 'Floor';
-    fetch(image)
-      .then((res) => res.blob())
-      .then((blob) => {
-        const format: FloorPlan['format'] = /png/i.test(blob.type) ? 'PNG' : /svg/i.test(blob.type) ? 'SVG' : 'JPG';
-        const file = new File([blob], `${label.replace(/[^\w.-]+/g, '-')}-layout.${format.toLowerCase()}`, { type: blob.type || 'image/png' });
-        this.addPlan(
-          file,
-          { name: `${label} layout`, description: 'Floor image from Master Data Management', type: 'Floor Plan', format },
-          () => this.whenPlanLoaded(() => {
-            this.creatingPlan = false;
-            next();
-          })
-        );
-        // addPlan reports its own errors; let the buttons work again after a failure
-        setTimeout(() => !this.currentPlan && (this.creatingPlan = false), 15_000);
-      })
-      .catch(() => {
-        this.creatingPlan = false;
-        this.notify('Could not read the floor image from Master Data', 'error');
-      });
+    // the floor image is used as the plan's file as it is (no upload)
+    const head = image.slice(0, 40);
+    const format: FloorPlan['format'] = /svg/i.test(head) || /\.svg(\?|$)/i.test(image) ? 'SVG' : /png/i.test(head) || /\.png(\?|$)/i.test(image) ? 'PNG' : 'JPG';
+    const fileName = `${label.replace(/[^\w.-]+/g, '-')}-layout.${format.toLowerCase()}`;
+    this.createPlan(
+      of(image),
+      { fileName, sizeBytes: image.length },
+      { name: `${label} layout`, description: 'Floor image from Master Data Management', type: 'Floor Plan', format },
+      () =>
+        this.whenPlanLoaded(() => {
+          this.creatingPlan = false;
+          next();
+        }),
+      () => (this.creatingPlan = false)
+    );
   }
 
   /** Calls `next` once the selected plan's zones and items have loaded (so they don't replace what `next` adds). */
@@ -645,18 +639,30 @@ export class MapsStore implements OnDestroy {
     this.floorPlans = exists ? this.floorPlans.map((p) => (p.id === plan.id ? plan : p)) : [plan, ...this.floorPlans];
   }
 
-  /** Upload the file, then POST the floor plan on the selected location. */
+  /** Upload the file, then create the floor plan on the selected location. */
   addPlan(
     file: File,
     form: { name: string; description: string; type: FloorPlan['type']; format: FloorPlan['format'] },
     done: (plan: FloorPlan) => void
   ): void {
+    this.createPlan(this.api.uploadFile(file), { fileName: file.name, sizeBytes: file.size }, form, done);
+  }
+
+  /** Creates a draft floor plan on the selected location once `fileUrl$` gives the stored file's URL. */
+  private createPlan(
+    fileUrl$: Observable<string>,
+    file: { fileName: string; sizeBytes: number },
+    form: { name: string; description: string; type: FloorPlan['type']; format: FloorPlan['format'] },
+    done: (plan: FloorPlan) => void,
+    failed?: () => void
+  ): void {
     const locationId = this.selectedFloorId;
     if (!locationId) {
       this.notify('Select a site, building or floor first', 'error');
+      failed?.();
       return;
     }
-    const create = this.api.uploadFile(file).pipe(
+    const create = fileUrl$.pipe(
       tap(() => this.notify('Saving floor plan…', 'info')),
       switchMap((fileUrl) =>
         this.api.createFloorPlan({
@@ -667,9 +673,9 @@ export class MapsStore implements OnDestroy {
           description: form.description,
           type: form.type,
           fileUrl,
-          fileName: file.name,
+          fileName: file.fileName,
           format: form.format,
-          sizeBytes: file.size,
+          sizeBytes: file.sizeBytes,
           widthMeters: null,
           heightMeters: null,
           scale: '',
@@ -678,7 +684,7 @@ export class MapsStore implements OnDestroy {
         })
       )
     );
-    this.run(create, { pending: `Uploading ${file.name}…`, success: (p) => `${p.name} uploaded as a draft`, error: 'Could not upload the floor plan' }, (plan) => {
+    this.run(create, { pending: `Uploading ${file.fileName}…`, success: (p) => `${p.name} uploaded as a draft`, error: 'Could not upload the floor plan', onError: failed }, (plan) => {
       this.upsertPlan(plan);
       this.selectPlan(plan.id);
       this.loadSummary();

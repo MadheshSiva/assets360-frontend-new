@@ -1,13 +1,13 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, catchError } from 'rxjs';
+import { Observable } from 'rxjs';
 import { AuthService } from 'shared-ui';
-import { apiError, tenantBody, tenantParams, trackingUrl } from '../shared/tracking-api';
+import { DEMO_USER, demo, demoError } from '../shared/tracking-api';
 import { DeviceModel, ModelKind } from './firmware-data';
+import { FIRMWARE_VERSIONS } from './firmware-versions.data';
 
 export type FirmwareUpdateStatus = 'Up to date' | 'Update available';
 
-/** A row of Firmware Versions by Device Model (GET /api/firmware-versions). */
+/** A row of Firmware Versions by Device Model. */
 export interface FirmwareVersionDto {
   id: string;
   deviceModel: string;
@@ -31,20 +31,6 @@ export interface FirmwareVersionFields {
   /** yyyy-MM-dd or ''. */
   releaseDate: string;
   releaseNotes: string[];
-}
-
-/** POST / PUT body (same shape for both). */
-interface FirmwareVersionRequest {
-  deviceModel: string;
-  currentVersion: string;
-  latestVersion: string;
-  deviceCount: number | null;
-  status: FirmwareUpdateStatus;
-  releaseDate: string | null;
-  releaseNotes: string[];
-  createdBy: string;
-  clientId: string;
-  tenantId: string;
 }
 
 /** Icon kind for a model name (the API has no device kind; this only picks the row icon). */
@@ -74,48 +60,56 @@ export function modelFromDto(dto: FirmwareVersionDto): DeviceModel {
   };
 }
 
-/** /api/firmware-versions: firmware inventory by device model. */
+/** Firmware inventory by device model (static demo, firmware-versions.data.ts). */
 @Injectable({ providedIn: 'root' })
 export class FirmwareVersionApiService {
-  private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
-  private readonly url = trackingUrl('firmware-versions');
 
   list(): Observable<FirmwareVersionDto[]> {
-    return this.http.get<FirmwareVersionDto[]>(this.url, { params: tenantParams() }).pipe(catchError((e) => apiError(e, 'Could not load firmware versions.')));
+    return demo(FIRMWARE_VERSIONS);
   }
 
   get(id: string): Observable<FirmwareVersionDto> {
-    return this.http.get<FirmwareVersionDto>(`${this.url}/${encodeURIComponent(id)}`, { params: tenantParams() }).pipe(catchError((e) => apiError(e, 'Could not load the firmware version.')));
+    const row = FIRMWARE_VERSIONS.find((f) => f.id === id);
+    return row ? demo(row) : demoError('The firmware version was not found.');
   }
 
   create(f: FirmwareVersionFields): Observable<FirmwareVersionDto> {
-    return this.http.post<FirmwareVersionDto>(this.url, this.body(f), { params: tenantParams() }).pipe(catchError((e) => apiError(e, `Could not add ${f.deviceModel}.`)));
+    const n = FIRMWARE_VERSIONS.reduce((m, x) => Math.max(m, Number(x.id.slice(3)) || 0), 0) + 1;
+    const dto = this.toDto(f, `FW-${String(n).padStart(4, '0')}`, null);
+    FIRMWARE_VERSIONS.unshift(dto);
+    return demo(dto);
   }
 
-  /** Full replace; takes the same body as create. */
+  /** Full replace; takes the same fields as create. */
   update(id: string, f: FirmwareVersionFields): Observable<FirmwareVersionDto> {
-    return this.http.put<FirmwareVersionDto>(`${this.url}/${encodeURIComponent(id)}`, this.body(f), { params: tenantParams() }).pipe(catchError((e) => apiError(e, `Could not save ${f.deviceModel}.`)));
+    const i = FIRMWARE_VERSIONS.findIndex((x) => x.id === id);
+    if (i < 0) return demoError(`Could not save ${f.deviceModel}: it no longer exists.`);
+    FIRMWARE_VERSIONS[i] = this.toDto(f, id, FIRMWARE_VERSIONS[i]);
+    return demo(FIRMWARE_VERSIONS[i]);
   }
 
   delete(id: string, name: string): Observable<void> {
-    return this.http.delete<void>(`${this.url}/${encodeURIComponent(id)}`, { params: tenantParams() }).pipe(catchError((e) => apiError(e, `Could not delete ${name}.`)));
+    const i = FIRMWARE_VERSIONS.findIndex((x) => x.id === id);
+    if (i < 0) return demoError(`Could not delete ${name}.`);
+    FIRMWARE_VERSIONS.splice(i, 1);
+    return demo(undefined as void);
   }
 
-  private body(f: FirmwareVersionFields): FirmwareVersionRequest {
+  private toDto(f: FirmwareVersionFields, id: string, old: FirmwareVersionDto | null): FirmwareVersionDto {
     const current = f.currentVersion.trim();
     const latest = f.latestVersion.trim();
     return {
+      id,
       deviceModel: f.deviceModel.trim(),
       currentVersion: current,
       latestVersion: latest,
-      deviceCount: f.deviceCount,
+      deviceCount: f.deviceCount ?? 0,
       status: current.toLowerCase() === latest.toLowerCase() ? 'Up to date' : 'Update available',
-      // the API keeps the date only, as UTC midnight
       releaseDate: f.releaseDate ? `${f.releaseDate}T00:00:00Z` : null,
       releaseNotes: f.releaseNotes.map((n) => n.trim()).filter((n) => n),
-      createdBy: this.auth.getUser()?.userName || this.auth.getUserEmail() || '',
-      ...tenantBody(),
+      createdBy: old?.createdBy ?? (this.auth.getUser()?.userName || this.auth.getUserEmail() || DEMO_USER),
+      createdAt: old?.createdAt ?? new Date().toISOString(),
     };
   }
 }

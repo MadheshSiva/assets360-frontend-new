@@ -75,13 +75,7 @@ export class RoleAccessControlPage extends AdminPage {
 
   constructor() {
     super();
-    this.service.load().subscribe({
-      next: (roles) => {
-        this.load(roles.find((r) => r.code === 'OPS_MANAGER') ?? roles[0]);
-        this.notify(roles.length ? `Loaded ${roles.length} role${roles.length === 1 ? '' : 's'} from the server.` : 'No roles yet. Create the first role.', 'success');
-      },
-      error: (err) => this.notify(`Couldn't load roles: ${adminApiError(err, 'roles')}`, 'error')
-    });
+    this.service.load().subscribe((roles) => this.load(roles.find((r) => r.code === 'OPS_MANAGER') ?? roles[0]));
   }
 
   get loading(): boolean {
@@ -376,7 +370,6 @@ export class RoleAccessControlPage extends AdminPage {
   }
 
   allUsers(): string[] {
-    // Role members come from the users API once wired
-    return [];
+    return this.service.members(this.draft.name);
   }
 }

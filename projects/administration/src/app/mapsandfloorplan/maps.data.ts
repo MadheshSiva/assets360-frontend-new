@@ -23,7 +23,7 @@ import {
 } from 'lucide-angular';
 
 // Types, option lists and display lookups for Maps & Floor Plans.
-// Records come from the maps API (maps-api.service.ts) and Master Data Management (location tree).
+// Records are static demo data (maps.seed.ts) served in memory by maps-api.service.ts.
 
 export type Tone = 'purple' | 'blue' | 'pink' | 'green' | 'orange' | 'red' | 'grey';
 export type MapStatus = 'Published' | 'Draft' | 'Archived';

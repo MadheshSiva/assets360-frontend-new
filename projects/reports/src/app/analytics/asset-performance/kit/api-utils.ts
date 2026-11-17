@@ -1,6 +1,4 @@
-import { HttpErrorResponse, HttpParams, HttpResponse } from '@angular/common/http';
-
-// Small helpers shared by the Reports & Analytics API services (Asset Performance, Maintenance Analytics).
+// Small helpers shared by the Reports & Analytics demo data services (Asset Performance, Maintenance Analytics).
 
 /** KpiWidgetData: a figure, the previous period's figure and the change between them. */
 export interface KpiWidgetDto {
@@ -40,27 +38,6 @@ export interface FilterOptionsDto {
   assetTypes: { value: string; label: string }[];
 }
 
-/** Readable message from an API error (validation problem, 401/404 or network failure). */
-export function apiErrorMessage(err: HttpErrorResponse, service: string): string {
-  const errors = err.error?.errors as Record<string, string[]> | undefined;
-  const first = errors ? Object.values(errors)[0]?.[0] : null;
-  if (first) return first;
-  if (err.status === 0) return `The ${service} service could not be reached.`;
-  if (err.status === 401) return 'Your session has expired. Sign in again to continue.';
-  if (err.status === 403) return 'You do not have permission to do this.';
-  if (err.status === 404) return 'This item no longer exists.';
-  return err.error?.message || err.error?.detail || err.error?.title || `The ${service} service returned an error (${err.status}).`;
-}
-
-/** Query parameters without the empty ones. */
-export function toParams(values: Record<string, string | number | boolean | null | undefined>): HttpParams {
-  let params = new HttpParams();
-  for (const [key, value] of Object.entries(values)) {
-    if (value !== null && value !== undefined && value !== '') params = params.set(key, String(value));
-  }
-  return params;
-}
-
 /** Parses "a=1&b=two" (an insight's query) into parameters. */
 export function parseQuery(query: string | null | undefined): Record<string, string> {
   const result: Record<string, string> = {};
@@ -69,19 +46,6 @@ export function parseQuery(query: string | null | undefined): Record<string, str
     if (key) result[decodeURIComponent(key)] = decodeURIComponent(value ?? '');
   }
   return result;
-}
-
-/** Saves a file response, named after its Content-Disposition when the gateway exposes it. */
-export function saveBlob(response: HttpResponse<Blob>, fallbackName: string): void {
-  const disposition = response.headers.get('Content-Disposition') ?? '';
-  const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
-  const name = match ? decodeURIComponent(match[1]) : fallbackName;
-  const url = URL.createObjectURL(response.body ?? new Blob());
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 /** "Jan 2026" → "Jan\n2026" (two-line axis label). */

@@ -8,7 +8,7 @@ import { FieldKind, PreviewColumn, PreviewResult, ReportDefinition, ReportRow, V
 import { CustomReportsService } from '../custom-reports.service';
 
 /**
- * Renders a report definition as a table or chart from live data (POST /api/custom-reports/preview).
+ * Renders a report definition as a table or chart from the demo data (run in the browser).
  * Re-runs only when the definition changes (checked by signature), debounced while the user edits.
  */
 @Component({
@@ -58,7 +58,7 @@ import { CustomReportsService } from '../custom-reports.service';
         <ra-cartesian-chart [labels]="labels" [series]="series" [kind]="mode === 'Line' ? 'line' : 'bar'" [height]="compact ? 200 : 300"
           [showValues]="mode === 'Bar'" [legend]="false" [format]="valueFormat" [ariaLabel]="result.title" />
       }
-      <p class="muted cr-preview__foot">{{ loading ? 'Refreshing… · ' : '' }}Live data · showing {{ result.rows.length }} of {{ result.matched }} {{ grouped ? 'groups' : 'records' }}</p>
+      <p class="muted cr-preview__foot">{{ loading ? 'Refreshing… · ' : '' }}Demo data · showing {{ result.rows.length }} of {{ result.matched }} {{ grouped ? 'groups' : 'records' }}</p>
     }
   `,
   styleUrls: ['../../shared/analytics-page.css', '../custom-reports.css']
@@ -152,7 +152,7 @@ export class ReportPreview implements DoCheck {
     const kind: FieldKind = valueCol?.kind ?? 'number';
     this.valueLabel = valueCol?.label ?? '';
     this.valueFormat = kind === 'money' ? moneyShort : kind === 'percent' ? pct : compactNumber;
-    // Chart points from the API cover every matching row; otherwise plot the preview rows
+    // Chart points cover every matching row; otherwise plot the preview rows
     const points = r.points ?? r.rows.map((row) => ({ label: String(row[r.labelKey] ?? ''), value: Number(row[r.valueKey]) || 0 }));
     // Charts read best with a handful of categories
     const top = points.slice(0, 10);

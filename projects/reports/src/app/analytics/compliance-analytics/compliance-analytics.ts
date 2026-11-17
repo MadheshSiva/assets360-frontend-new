@@ -80,7 +80,7 @@ function deltaText(k: CaKpiValue): string {
   return `${v > 0 ? '+' : ''}${v}${k.unit === 'points' ? ' pts' : '%'}`;
 }
 
-/** Reports & Analytics > Compliance Analytics: figures from GET /api/compliance-analytics/overview. */
+/** Reports & Analytics > Compliance Analytics: figures built from the static demo records (compliance-analytics.service.ts). */
 @Component({
   selector: 'app-ra-compliance-analytics',
   imports: [
@@ -219,7 +219,7 @@ export class ComplianceAnalyticsPage extends AnalyticsPage {
     this.risk = keep('riskLevels', f.risk);
   }
 
-  /** Reloads every widget from GET /overview for the filters. */
+  /** Reloads every widget for the filters. */
   apply(announce?: string): void {
     this.loadSub?.unsubscribe();
     this.refreshing = true;
@@ -254,7 +254,7 @@ export class ComplianceAnalyticsPage extends AnalyticsPage {
     super.ngOnDestroy();
   }
 
-  /** Rebuilds the KPI tiles, charts and insights from the API's figures. */
+  /** Rebuilds the KPI tiles, charts and insights from the loaded figures. */
   private build(v: ComplianceView): void {
     const tile = (key: KpiTile['key'], label: string, value: string, k: CaKpiValue, lowerIsBetter: boolean, icon: LucideIconData, tone: string): KpiTile => {
       const up = (k.change ?? 0) > 0;
@@ -374,7 +374,7 @@ export class ComplianceAnalyticsPage extends AnalyticsPage {
 
   // ===== Header actions =====
 
-  /** GET /export: the Excel workbook for the filter bar. */
+  /** Page export: the open findings for the filter bar as CSV. */
   exportAll(): void {
     this.api.export(this.filters()).subscribe({
       next: () => this.notify('Compliance Analytics exported.'),
@@ -382,7 +382,7 @@ export class ComplianceAnalyticsPage extends AnalyticsPage {
     });
   }
 
-  /** POST /views. */
+  /** Saves the current filters as a named view. */
   saveNamedView(name: string): void {
     this.saveOpen = false;
     this.api.createView(name, this.filters()).subscribe({
@@ -601,7 +601,7 @@ export class ComplianceAnalyticsPage extends AnalyticsPage {
     return rows.map((e) => [e.id, e.name, e.type, e.source, e.site, e.expires, e.daysLeft]);
   }
 
-  /** POST /action-plans: stores the plan in the compliance action plan register. */
+  /** Stores the plan in the compliance action plan register. */
   planSaved(form: ActionPlan): void {
     const spec = this.plan;
     this.plan = null;

@@ -1,7 +1,6 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
-import { Observable, catchError, forkJoin, map, of } from 'rxjs';
-import { AuthService, environment } from 'shared-ui';
+import { Injectable } from '@angular/core';
+import { Observable, defer, of, throwError } from 'rxjs';
+import { CURRENT_USER } from '../shared/admin-common';
 import {
   FILE_FORMATS,
   FileFormat,
@@ -21,15 +20,25 @@ import {
   ZoneOptions,
   ZoneShape,
   ZoneType,
+  DEFAULT_ZONE_OPTIONS,
   plotKey,
   plotLook,
   zoneTone
 } from './maps.data';
+import {
+  SEED_ASSETS,
+  SEED_DEVICES,
+  SEED_FLOOR_PLANS,
+  SEED_LAYER_SETS,
+  SEED_LOCATIONS,
+  SEED_PLOTS,
+  SEED_VERSIONS,
+  SEED_ZONES
+} from './maps.seed';
 
 /*
- * Maps & Floor Plans API (Administration service, base api/administration/maps) plus the read-only sources the
- * page needs: Master Data Management (location tree), Asset registrations and IoT devices (plot candidates),
- * and the Media service (file upload). DTOs follow the maps API contract (camelCase JSON).
+ * DEMO MODE: Maps & Floor Plans works on static demo data (maps.seed.ts) kept in memory. The record shapes follow
+ * the maps API contract (DTOs below); changes last until the page is reloaded. Uploaded files become object URLs.
  */
 
 /* ===== DTOs: maps API ===== */
@@ -232,17 +241,6 @@ export type SettingsDto = Record<string, unknown> & { extra?: Record<string, unk
 
 /* ===== DTOs: other services (read only) ===== */
 
-interface MediaUploadDto {
-  url: string;
-}
-
-/** GET api/master-data/organizations (only the name is used). */
-interface MdmOrganizationDto {
-  id: string;
-  organizationName?: string | null;
-  name?: string | null;
-}
-
 /** GET api/master-data/sites */
 export interface MdmSiteDto {
   id: string;
@@ -287,7 +285,7 @@ export interface MdmFloorDto {
 }
 
 /** One row of GET api/asset-registrations (AssetListItemResponse). */
-interface AssetListItemDto {
+export interface AssetListItemDto {
   id: string;
   assetRegistrationId: string | null;
   assetName: string | null;
@@ -299,7 +297,7 @@ interface AssetListItemDto {
 }
 
 /** One row of GET api/iot-devices (Tracking). */
-interface IoTDeviceDto {
+export interface IoTDeviceDto {
   id: string;
   deviceId: string;
   deviceName: string | null;
@@ -517,112 +515,312 @@ export function toLayer(d: LayerDto): MapLayer {
 export function toLayerSet(d: LayerSetDto): LayerSet {
   return { id: d.layerSetId, name: d.name, layers: d.layers ?? {}, createdBy: d.createdBy ?? '', createdAt: d.createdAt ?? '' };
 }
+/* ===== In-memory store ===== */
 
-/** Rows of a list response that is either a plain array or `{ items }`. */
-function rows<T>(res: T[] | { items?: T[] | null } | null | undefined): T[] {
-  return Array.isArray(res) ? res : (res?.items ?? []);
+const TENANT = { clientId: 'demo-client', tenantId: 'demo-tenant' };
+
+function clone<T>(v: T): T {
+  return JSON.parse(JSON.stringify(v)) as T;
 }
 
-function live<T extends { isDeleted?: boolean; status?: string | null }>(list: T[]): T[] {
-  return list.filter((r) => r.isDeleted !== true && !/^(deleted)$/i.test(r.status ?? ''));
+function notFound(what: string): Observable<never> {
+  return throwError(() => new Error(`${what} no longer exists.`));
+}
+
+/** "v2.1" -> [2, 1] */
+function parseVersion(v: string): [number, number] {
+  const m = /v?(\d+)(?:\.(\d+))?/i.exec(v ?? '');
+  return m ? [Number(m[1]), Number(m[2] ?? 0)] : [1, 0];
+}
+
+function nextVersion(list: VersionDto[], bump: 'minor' | 'major'): string {
+  let [maj, min] = [0, 0];
+  for (const v of list) {
+    const [a, b] = parseVersion(v.version);
+    if (a > maj || (a === maj && b > min)) [maj, min] = [a, b];
+  }
+  return bump === 'major' ? `v${maj + 1}.0` : `v${maj}.${min + 1}`;
 }
 
 @Injectable({ providedIn: 'root' })
 export class MapsApiService {
-  private readonly http = inject(HttpClient);
-  private readonly auth = inject(AuthService);
-  private readonly base = `${environment.administrationApiUrl}api/administration/maps`;
-  private readonly mdm = `${environment.masterDataApiUrl}api/master-data`;
+  private plans: FloorPlanDto[] = clone(SEED_FLOOR_PLANS);
+  private versions = new Map<string, VersionDto[]>(Object.entries(clone(SEED_VERSIONS)));
+  private zones: ZoneDto[] = clone(SEED_ZONES);
+  private plots: PlotDto[] = clone(SEED_PLOTS);
+  private layers = new Map<string, LayerDto[]>();
+  private layerSets: LayerSetDto[] = clone(SEED_LAYER_SETS);
+  private settings: SettingsDto = {};
+  private seq = 100;
 
   /** Signed-in user for createdBy / updatedBy. */
   get user(): string {
-    return this.auth.getUserEmail() ?? '';
+    return CURRENT_USER.name;
   }
 
-  private tenant(extra: Record<string, string | null | undefined> = {}): HttpParams {
-    let params = new HttpParams().set('clientId', environment.clientId).set('tenantId', environment.tenantId);
-    for (const [k, v] of Object.entries(extra)) if (v) params = params.set(k, v);
-    return params;
+  private id(prefix: string): string {
+    return `${prefix}-${String(++this.seq).padStart(4, '0')}`;
   }
 
-  private planUrl(floorPlanId: string): string {
-    return `${this.base}/floor-plans/${encodeURIComponent(floorPlanId)}`;
+  private now(): string {
+    return new Date().toISOString();
+  }
+
+  /** The plan with live zone / plot counts. */
+  private planOut(p: FloorPlanDto): FloorPlan {
+    return toFloorPlan({
+      ...p,
+      zoneCount: this.zones.filter((z) => z.floorPlanId === p.floorPlanId).length,
+      plotCount: this.plots.filter((x) => x.floorPlanId === p.floorPlanId).length
+    });
+  }
+
+  private plan(id: string): FloorPlanDto | undefined {
+    return this.plans.find((p) => p.floorPlanId === id);
+  }
+
+  private touch(p: FloorPlanDto): void {
+    p.updatedAt = this.now();
+    p.updatedBy = this.user;
+  }
+
+  /** The location and every location under it (site → buildings → floors). */
+  private subtree(locationId: string): Set<string> {
+    const ids = new Set([locationId]);
+    for (const b of SEED_LOCATIONS.buildings) if (ids.has(b.site?.id ?? '')) ids.add(b.id);
+    for (const f of SEED_LOCATIONS.floors) {
+      const site = typeof f.site === 'string' ? f.site : (f.site?.id ?? '');
+      if (ids.has(f.buildingId ?? '') || ids.has(site)) ids.add(f.id);
+    }
+    return ids;
   }
 
   /* ===== Summary ===== */
 
   summary(locationId: string): Observable<MapsSummary> {
-    return this.http.get<MapsSummaryDto>(`${this.base}/summary`, { params: this.tenant({ locationId }) }).pipe(
-      map((d) => ({ floorPlans: d?.floorPlans ?? 0, zones: d?.zones ?? 0, devicesPlotted: d?.devicesPlotted ?? 0, assetsPlotted: d?.assetsPlotted ?? 0 }))
-    );
+    return defer(() => {
+      const ids = locationId ? this.subtree(locationId) : null;
+      const plans = this.plans.filter((p) => !ids || ids.has(p.locationId)).map((p) => p.floorPlanId);
+      const plots = this.plots.filter((p) => plans.includes(p.floorPlanId));
+      return of({
+        floorPlans: plans.length,
+        zones: this.zones.filter((z) => plans.includes(z.floorPlanId)).length,
+        devicesPlotted: plots.filter((p) => p.kind === 'device').length,
+        assetsPlotted: plots.filter((p) => p.kind === 'asset').length
+      });
+    });
   }
 
   /* ===== Floor plans ===== */
 
   listFloorPlans(filters: { locationId?: string; status?: string; type?: string; search?: string } = {}): Observable<FloorPlan[]> {
-    return this.http.get<FloorPlanDto[]>(`${this.base}/floor-plans`, { params: this.tenant(filters) }).pipe(map((list) => rows(list).map(toFloorPlan)));
+    return defer(() => {
+      const q = filters.search?.trim().toLowerCase();
+      const list = this.plans.filter(
+        (p) =>
+          (!filters.locationId || p.locationId === filters.locationId) &&
+          (!filters.status || p.status === filters.status) &&
+          (!filters.type || p.type === filters.type) &&
+          (!q || `${p.name} ${p.description ?? ''} ${p.locationPath ?? ''}`.toLowerCase().includes(q))
+      );
+      return of(list.map((p) => this.planOut(p)));
+    });
   }
 
   getFloorPlan(id: string): Observable<FloorPlan> {
-    return this.http.get<FloorPlanDto>(this.planUrl(id)).pipe(map(toFloorPlan));
+    return defer(() => {
+      const p = this.plan(id);
+      return p ? of(this.planOut(p)) : notFound('The floor plan');
+    });
   }
 
   createFloorPlan(body: Omit<CreateFloorPlanRequest, 'createdBy' | 'clientId' | 'tenantId'>): Observable<FloorPlan> {
-    const req: CreateFloorPlanRequest = { ...body, createdBy: this.user, clientId: environment.clientId, tenantId: environment.tenantId };
-    return this.http.post<FloorPlanDto>(`${this.base}/floor-plans`, req).pipe(map(toFloorPlan));
+    return defer(() => {
+      const now = this.now();
+      const published = body.status === 'Published';
+      const dto: FloorPlanDto = {
+        floorPlanId: this.id('FP'),
+        locationId: body.locationId,
+        locationType: body.locationType,
+        locationPath: body.locationPath,
+        name: body.name,
+        description: body.description,
+        type: body.type,
+        format: body.format,
+        fileUrl: body.fileUrl,
+        fileName: body.fileName,
+        sizeBytes: body.sizeBytes,
+        widthMeters: body.widthMeters,
+        heightMeters: body.heightMeters,
+        scale: body.scale,
+        currentVersion: 'v1.0',
+        status: body.status,
+        publishedAt: published ? now : null,
+        publishedBy: published ? this.user : null,
+        zoneCount: 0,
+        plotCount: 0,
+        createdBy: this.user,
+        createdAt: now,
+        updatedBy: this.user,
+        updatedAt: now,
+        ...TENANT
+      };
+      this.plans = [dto, ...this.plans];
+      const note = body.versionNote || 'Initial upload';
+      this.versions.set(dto.floorPlanId, [
+        {
+          version: 'v1.0',
+          current: true,
+          status: body.status,
+          fileUrl: body.fileUrl,
+          fileName: body.fileName,
+          format: body.format,
+          sizeBytes: body.sizeBytes,
+          description: note,
+          changes: [note],
+          uploadedBy: this.user,
+          uploadedAt: now
+        }
+      ]);
+      return of(this.planOut(dto));
+    });
   }
 
   updateFloorPlan(id: string, body: Omit<UpdateFloorPlanRequest, 'updatedBy'>): Observable<FloorPlan> {
-    return this.http.put<FloorPlanDto>(this.planUrl(id), { ...body, updatedBy: this.user }).pipe(map(toFloorPlan));
+    return defer(() => {
+      const p = this.plan(id);
+      if (!p) return notFound('The floor plan');
+      Object.assign(p, body);
+      this.touch(p);
+      return of(this.planOut(p));
+    });
   }
 
   deleteFloorPlan(id: string): Observable<void> {
-    return this.http.delete<void>(this.planUrl(id));
+    return defer(() => {
+      this.plans = this.plans.filter((p) => p.floorPlanId !== id);
+      this.zones = this.zones.filter((z) => z.floorPlanId !== id);
+      this.plots = this.plots.filter((p) => p.floorPlanId !== id);
+      this.versions.delete(id);
+      this.layers.delete(id);
+      return of(undefined);
+    });
   }
 
   publishFloorPlan(id: string): Observable<FloorPlan> {
-    return this.http.post<FloorPlanDto>(`${this.planUrl(id)}/publish`, { updatedBy: this.user }).pipe(map(toFloorPlan));
+    return defer(() => {
+      const p = this.plan(id);
+      if (!p) return notFound('The floor plan');
+      p.status = 'Published';
+      p.publishedAt = this.now();
+      p.publishedBy = this.user;
+      this.touch(p);
+      const current = this.versions.get(id)?.find((v) => v.current);
+      if (current) current.status = 'Published';
+      return of(this.planOut(p));
+    });
   }
 
   archiveFloorPlan(id: string): Observable<FloorPlan> {
-    return this.http.post<FloorPlanDto>(`${this.planUrl(id)}/archive`, { updatedBy: this.user }).pipe(map(toFloorPlan));
+    return defer(() => {
+      const p = this.plan(id);
+      if (!p) return notFound('The floor plan');
+      p.status = 'Archived';
+      this.touch(p);
+      return of(this.planOut(p));
+    });
   }
 
   /* ===== Versions ===== */
 
   listVersions(floorPlanId: string): Observable<MapVersion[]> {
-    return this.http.get<VersionDto[]>(`${this.planUrl(floorPlanId)}/versions`).pipe(map((list) => rows(list).map(toVersion)));
+    return defer(() => {
+      const list = [...(this.versions.get(floorPlanId) ?? [])].sort((a, b) => (b.uploadedAt ?? '').localeCompare(a.uploadedAt ?? ''));
+      return of(list.map((v) => toVersion(clone(v))));
+    });
   }
 
   createVersion(floorPlanId: string, body: Omit<CreateVersionRequest, 'createdBy'>): Observable<MapVersion> {
-    return this.http.post<VersionDto>(`${this.planUrl(floorPlanId)}/versions`, { ...body, createdBy: this.user }).pipe(map(toVersion));
+    return defer(() => {
+      const p = this.plan(floorPlanId);
+      if (!p) return notFound('The floor plan');
+      const list = this.versions.get(floorPlanId) ?? [];
+      const v: VersionDto = {
+        version: nextVersion(list, body.bump),
+        current: false,
+        status: 'Draft',
+        fileUrl: body.fileUrl,
+        fileName: body.fileName,
+        format: body.format,
+        sizeBytes: body.sizeBytes,
+        description: body.description,
+        changes: body.changes,
+        uploadedBy: this.user,
+        uploadedAt: this.now()
+      };
+      this.versions.set(floorPlanId, [v, ...list]);
+      this.touch(p);
+      return of(toVersion(clone(v)));
+    });
   }
 
+  /** Makes the version the plan's current, published one; the previous current version is archived. */
   publishVersion(floorPlanId: string, version: string): Observable<FloorPlan> {
-    return this.http
-      .post<FloorPlanDto>(`${this.planUrl(floorPlanId)}/versions/${encodeURIComponent(version)}/publish`, { updatedBy: this.user })
-      .pipe(map(toFloorPlan));
+    return defer(() => {
+      const p = this.plan(floorPlanId);
+      const list = this.versions.get(floorPlanId) ?? [];
+      const v = list.find((x) => x.version === version);
+      if (!p || !v) return notFound(`Version ${version}`);
+      for (const x of list) {
+        if (x.current && x !== v) x.status = 'Archived';
+        x.current = x === v;
+      }
+      v.status = 'Published';
+      p.currentVersion = v.version;
+      p.status = 'Published';
+      p.fileUrl = v.fileUrl ?? p.fileUrl;
+      p.fileName = v.fileName ?? p.fileName;
+      p.format = v.format ?? p.format;
+      p.sizeBytes = v.sizeBytes ?? p.sizeBytes;
+      p.publishedAt = this.now();
+      p.publishedBy = this.user;
+      this.touch(p);
+      return of(this.planOut(p));
+    });
   }
 
+  /** Copies an older version as a new draft. */
   restoreVersion(floorPlanId: string, version: string): Observable<MapVersion> {
-    return this.http
-      .post<VersionDto>(`${this.planUrl(floorPlanId)}/versions/${encodeURIComponent(version)}/restore`, { updatedBy: this.user })
-      .pipe(map(toVersion));
+    return defer(() => {
+      const list = this.versions.get(floorPlanId) ?? [];
+      const src = list.find((x) => x.version === version);
+      if (!src) return notFound(`Version ${version}`);
+      const v: VersionDto = {
+        ...clone(src),
+        version: nextVersion(list, 'minor'),
+        current: false,
+        status: 'Draft',
+        description: `Restored from ${version}`,
+        changes: [`Restored from ${version}`],
+        uploadedBy: this.user,
+        uploadedAt: this.now()
+      };
+      this.versions.set(floorPlanId, [v, ...list]);
+      return of(toVersion(clone(v)));
+    });
   }
 
   /* ===== Zones ===== */
 
   zoneOptions(): Observable<ZoneOptions> {
-    return this.http.get<ZoneOptionsDto>(`${this.base}/zones/options`).pipe(
-      map((d) => ({ zoneTypes: d?.zoneTypes ?? [], shapes: d?.shapes ?? [], accessRules: d?.accessRules ?? [], colors: d?.colors ?? [] }))
-    );
+    return of(clone(DEFAULT_ZONE_OPTIONS));
   }
 
   listZones(floorPlanId: string): Observable<MapZone[]> {
-    return this.http.get<ZoneDto[]>(`${this.planUrl(floorPlanId)}/zones`, { params: this.tenant() }).pipe(map((list) => rows(list).map(toZone)));
+    return defer(() => of(this.zones.filter((z) => z.floorPlanId === floorPlanId).map((z) => toZone(clone(z)))));
   }
 
-  private zoneBody(z: MapZone): SaveZoneRequest {
+  private zoneBody(z: MapZone): Omit<ZoneDto, 'zoneId' | 'floorPlanId'> {
     const polygon = z.shape === 'Polygon' || z.shape === 'Custom';
     return {
       code: z.code,
@@ -636,7 +834,7 @@ export class MapsApiService {
       h: z.h,
       points: polygon
         ? z.points.length
-          ? z.points
+          ? z.points.map((p) => ({ ...p }))
           : [{ x: z.x, y: z.y }, { x: z.x + z.w, y: z.y }, { x: z.x + z.w, y: z.y + z.h }, { x: z.x, y: z.y + z.h }]
         : [],
       radius: z.shape === 'Circle' ? (z.radius ?? z.w / 2) : null,
@@ -648,146 +846,193 @@ export class MapsApiService {
       entryAlert: z.entryAlert,
       exitAlert: z.exitAlert,
       dwellAlert: z.dwellAlert,
-      dwellMinutes: z.dwellMinutes,
-      clientId: environment.clientId,
-      tenantId: environment.tenantId
+      dwellMinutes: z.dwellMinutes
     };
   }
 
   createZone(floorPlanId: string, z: MapZone): Observable<MapZone> {
-    return this.http.post<ZoneDto>(`${this.planUrl(floorPlanId)}/zones`, { ...this.zoneBody(z), createdBy: this.user }).pipe(map(toZone));
+    return defer(() => {
+      if (!this.plan(floorPlanId)) return notFound('The floor plan');
+      if (this.zones.some((x) => x.floorPlanId === floorPlanId && x.code.toUpperCase() === z.code.toUpperCase())) {
+        return throwError(() => new Error(`Zone code ${z.code} is already used on this floor plan.`));
+      }
+      const now = this.now();
+      const dto: ZoneDto = { ...this.zoneBody(z), zoneId: this.id('ZN'), floorPlanId, createdBy: this.user, createdAt: now, updatedBy: this.user, updatedAt: now };
+      this.zones = [...this.zones, dto];
+      return of(toZone(clone(dto)));
+    });
   }
 
   updateZone(z: MapZone): Observable<MapZone> {
-    return this.http
-      .put<ZoneDto>(`${this.base}/zones/${encodeURIComponent(z.id)}`, { ...this.zoneBody(z), updatedBy: this.user })
-      .pipe(map(toZone));
+    return defer(() => {
+      const current = this.zones.find((x) => x.zoneId === z.id);
+      if (!current) return notFound(`Zone ${z.code}`);
+      const dto: ZoneDto = { ...current, ...this.zoneBody(z), updatedBy: this.user, updatedAt: this.now() };
+      this.zones = this.zones.map((x) => (x === current ? dto : x));
+      return of(toZone(clone(dto)));
+    });
   }
 
   deleteZone(zoneId: string): Observable<void> {
-    return this.http.delete<void>(`${this.base}/zones/${encodeURIComponent(zoneId)}`);
+    return defer(() => {
+      this.zones = this.zones.filter((z) => z.zoneId !== zoneId);
+      this.plots.forEach((p) => p.zoneId === zoneId && (p.zoneId = null));
+      return of(undefined);
+    });
   }
 
   /* ===== Plots ===== */
 
   listPlots(floorPlanId: string, kind?: PlotKind): Observable<PlotDto[]> {
-    return this.http.get<PlotDto[]>(`${this.planUrl(floorPlanId)}/plots`, { params: this.tenant({ kind }) }).pipe(map((list) => rows(list)));
+    return defer(() => of(clone(this.plots.filter((p) => p.floorPlanId === floorPlanId && (!kind || p.kind === kind)))));
   }
 
-  /** Place or move an item (upsert); sends a snapshot of the asset / device with the position. */
+  /** Place or move an item (upsert), with a snapshot of the asset / device. */
   savePlot(floorPlanId: string, item: PlotItem): Observable<PlotDto> {
-    const body: SavePlotRequest = {
-      code: item.code,
-      name: item.name,
-      type: item.type,
-      assetType: item.assetType ?? null,
-      model: item.model ?? null,
-      serial: item.serial ?? null,
-      status: item.status,
-      x: item.x ?? 0,
-      y: item.y ?? 0,
-      orientation: item.orientation,
-      zoneId: item.zoneId ?? null,
-      updatedBy: this.user,
-      clientId: environment.clientId,
-      tenantId: environment.tenantId
-    };
-    return this.http.put<PlotDto>(`${this.planUrl(floorPlanId)}/plots/${item.kind}/${encodeURIComponent(item.itemId)}`, body);
+    return defer(() => {
+      const dto: PlotDto = {
+        floorPlanId,
+        kind: item.kind,
+        itemId: item.itemId,
+        code: item.code,
+        name: item.name,
+        type: item.type,
+        assetType: item.assetType ?? null,
+        model: item.model ?? null,
+        serial: item.serial ?? null,
+        status: item.status,
+        x: item.x ?? 0,
+        y: item.y ?? 0,
+        orientation: item.orientation,
+        zoneId: item.zoneId ?? null,
+        updatedAt: this.now()
+      };
+      const same = (p: PlotDto) => p.floorPlanId === floorPlanId && p.kind === item.kind && p.itemId === item.itemId;
+      this.plots = this.plots.some(same) ? this.plots.map((p) => (same(p) ? dto : p)) : [...this.plots, dto];
+      return of(clone(dto));
+    });
   }
 
   deletePlot(floorPlanId: string, kind: PlotKind, itemId: string): Observable<void> {
-    return this.http.delete<void>(`${this.planUrl(floorPlanId)}/plots/${kind}/${encodeURIComponent(itemId)}`);
+    return defer(() => {
+      this.plots = this.plots.filter((p) => !(p.floorPlanId === floorPlanId && p.kind === kind && p.itemId === itemId));
+      return of(undefined);
+    });
   }
 
   /* ===== Layers ===== */
 
+  /** The plan's layers (the default set until one is changed). */
+  private planLayers(floorPlanId: string): LayerDto[] {
+    let list = this.layers.get(floorPlanId);
+    if (!list) {
+      list = LAYERS.map((l) => ({
+        key: l.id,
+        name: l.name,
+        type: l.type,
+        description: l.description,
+        enabled: l.enabled,
+        visible: l.visible,
+        locked: l.locked,
+        showLabel: l.showLabel,
+        showId: l.showId,
+        showStatusIcon: l.showStatusIcon,
+        useCategoryColor: l.useCategoryColor,
+        labelPosition: l.labelPosition,
+        categories: [...l.categories],
+        statusFilter: l.statusFilter,
+        opacity: l.opacity,
+        color: l.color
+      }));
+      this.layers.set(floorPlanId, list);
+    }
+    return list;
+  }
+
   listLayers(floorPlanId: string): Observable<MapLayer[]> {
-    return this.http.get<LayerDto[]>(`${this.planUrl(floorPlanId)}/layers`).pipe(map((list) => rows(list).map(toLayer)));
+    return defer(() => of(this.planLayers(floorPlanId).map((l) => toLayer(clone(l)))));
   }
 
   saveLayer(floorPlanId: string, l: MapLayer): Observable<MapLayer> {
-    const body: SaveLayerRequest = {
-      enabled: l.enabled,
-      visible: l.visible,
-      locked: l.locked,
-      showLabel: l.showLabel,
-      showId: l.showId,
-      showStatusIcon: l.showStatusIcon,
-      useCategoryColor: l.useCategoryColor,
-      labelPosition: l.labelPosition,
-      categories: l.categories,
-      statusFilter: l.statusFilter,
-      opacity: l.opacity,
-      color: l.color,
-      updatedBy: this.user
-    };
-    return this.http.put<LayerDto>(`${this.planUrl(floorPlanId)}/layers/${encodeURIComponent(l.id)}`, body).pipe(map(toLayer));
+    return defer(() => {
+      const list = this.planLayers(floorPlanId);
+      const i = list.findIndex((x) => x.key === l.id);
+      if (i < 0) return notFound(`Layer ${l.name}`);
+      list[i] = {
+        ...list[i],
+        enabled: l.enabled,
+        visible: l.visible,
+        locked: l.locked,
+        showLabel: l.showLabel,
+        showId: l.showId,
+        showStatusIcon: l.showStatusIcon,
+        useCategoryColor: l.useCategoryColor,
+        labelPosition: l.labelPosition,
+        categories: [...l.categories],
+        statusFilter: l.statusFilter,
+        opacity: l.opacity,
+        color: l.color
+      };
+      return of(toLayer(clone(list[i])));
+    });
   }
 
   listLayerSets(): Observable<LayerSet[]> {
-    return this.http.get<LayerSetDto[]>(`${this.base}/layer-sets`, { params: this.tenant() }).pipe(map((list) => rows(list).map(toLayerSet)));
+    return defer(() => of(this.layerSets.map((s) => toLayerSet(clone(s)))));
   }
 
   createLayerSet(name: string, layers: Record<string, boolean>): Observable<LayerSet> {
-    const body = { name, layers, createdBy: this.user, clientId: environment.clientId, tenantId: environment.tenantId };
-    return this.http.post<LayerSetDto>(`${this.base}/layer-sets`, body).pipe(map(toLayerSet));
+    return defer(() => {
+      const dto: LayerSetDto = { layerSetId: this.id('LS'), name, layers: { ...layers }, createdBy: this.user, createdAt: this.now() };
+      this.layerSets = [...this.layerSets, dto];
+      return of(toLayerSet(clone(dto)));
+    });
   }
 
   deleteLayerSet(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.base}/layer-sets/${encodeURIComponent(id)}`);
+    return defer(() => {
+      this.layerSets = this.layerSets.filter((s) => s.layerSetId !== id);
+      return of(undefined);
+    });
   }
 
   /* ===== Settings ===== */
 
+  /** Saved settings ({} until saved: the Settings tab fills in its defaults). */
   getSettings(): Observable<SettingsDto> {
-    return this.http.get<SettingsDto>(`${this.base}/settings`, { params: this.tenant() });
+    return defer(() => of(clone(this.settings)));
   }
 
   saveSettings(settings: object): Observable<SettingsDto> {
-    const body = { ...settings, updatedBy: this.user, clientId: environment.clientId, tenantId: environment.tenantId };
-    return this.http.put<SettingsDto>(`${this.base}/settings`, body);
+    return defer(() => {
+      this.settings = clone({ ...this.settings, ...settings }) as SettingsDto;
+      return of(clone(this.settings));
+    });
   }
 
-  /* ===== Files (Media service) ===== */
+  /* ===== Files ===== */
 
-  /** POST api/media/upload (multipart: `file` + `category`, both required) → the stored file's URL. */
+  /** Keeps the file in this browser session and returns an object URL for it. */
   uploadFile(file: File): Observable<string> {
-    const form = new FormData();
-    form.append('file', file, file.name);
-    // Media stores files under uploads/<category>/
-    form.append('category', 'floor-plans');
-    return this.http.post<MediaUploadDto>(`${environment.mediaApiUrl}api/media/upload`, form).pipe(map((r) => r?.url ?? ''));
+    return defer(() => of(URL.createObjectURL(file)));
   }
 
-  /* ===== Location tree sources (Master Data Management) ===== */
+  /* ===== Location tree sources ===== */
 
-  /** Organization name + sites, buildings and floors. Sites / buildings / floors errors propagate; the name falls back. */
+  /** Organization name + sites, buildings and floors. */
   locations(): Observable<LocationSources> {
-    const orgs = this.http.get<MdmOrganizationDto[] | { items?: MdmOrganizationDto[] }>(`${this.mdm}/organizations`).pipe(
-      map((res) => rows(res)[0]),
-      map((o) => o?.organizationName || o?.name || 'Organization'),
-      catchError(() => of('Organization'))
-    );
-    const sites = this.http.get<MdmSiteDto[] | { items?: MdmSiteDto[] }>(`${this.mdm}/sites`).pipe(map((r) => live(rows(r))));
-    const buildings = this.http.get<MdmBuildingDto[] | { items?: MdmBuildingDto[] }>(`${this.mdm}/buildings`).pipe(map((r) => live(rows(r))));
-    const floors = this.http.get<MdmFloorDto[] | { items?: MdmFloorDto[] }>(`${this.mdm}/floors`).pipe(map((r) => live(rows(r))));
-    return forkJoin({ organizationName: orgs, sites, buildings, floors });
+    return defer(() => of(clone(SEED_LOCATIONS)));
   }
 
   /* ===== Plot candidates ===== */
 
-  /** GET api/asset-registrations (first 200). */
+  /** Registered assets that can be plotted. */
   assets(): Observable<PlotItem[]> {
-    const params = this.tenant().set('page', 1).set('pageSize', 200);
-    return this.http
-      .get<{ items?: AssetListItemDto[] } | AssetListItemDto[]>(`${environment.assetApiUrl}api/asset-registrations`, { params })
-      .pipe(map((res) => rows(res).map(assetCandidate)));
+    return defer(() => of(SEED_ASSETS.map(assetCandidate)));
   }
 
-  /** GET api/iot-devices (Tracking). */
+  /** IoT devices (Tracking) that can be plotted. */
   devices(): Observable<PlotItem[]> {
-    return this.http
-      .get<IoTDeviceDto[] | { items?: IoTDeviceDto[] }>(`${environment.trackingApiUrl}api/iot-devices`, { params: this.tenant() })
-      .pipe(map((res) => rows(res).filter((d) => !!d.deviceId).map(deviceCandidate)));
+    return defer(() => of(SEED_DEVICES.filter((d) => !!d.deviceId).map(deviceCandidate)));
   }
 }

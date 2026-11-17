@@ -1,113 +1,13 @@
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
-import { Observable, catchError, finalize, map, tap, throwError } from 'rxjs';
-import { environment } from 'shared-ui';
-import { DashboardPeriodDto, FilterOptionsDto, apiErrorMessage, monthLabel, num, optionLabels, saveBlob, toParams } from '../asset-performance/kit/api-utils';
+import { Injectable, signal } from '@angular/core';
+import { Observable, of, throwError } from 'rxjs';
+import { RA_CATEGORIES, RA_LOCATIONS, RA_ORGANIZATIONS, RA_PEOPLE, downloadCsv } from '../shared/analytics-common';
 import {
-  ALL_CATEGORIES, ALL_LOCATIONS, ALL_ORGANIZATIONS, KD_DEFAULT_PERIOD, KD_FALLBACK_PERIODS, KPI_MODULES, KpiDashboardVm, KpiDef, KpiDirection,
-  KpiInsightVm, KpiMetric, KpiModule, KpiState, KpiStatus, KpiTrendVm, KpiUnit, KpiViewDef, emptyKpiDashboard, formatKpi, signedText, targetLabel
+  ALL_CATEGORIES, ALL_LOCATIONS, ALL_ORGANIZATIONS, KD_DEFAULT_PERIOD, KD_FALLBACK_PERIODS, KPI_MODULES, KPI_SEEDS, KPI_VIEW_SEEDS,
+  KpiDashboardVm, KpiDef, KpiDirection, KpiInsightVm, KpiMetric, KpiModule, KpiSeed, KpiState, KpiStatus, KpiTrendVm, KpiUnit, KpiViewDef,
+  emptyKpiDashboard, formatKpi, signedText, targetLabel
 } from './kpi-dashboard.data';
 
-// ----- API shapes (/api/kpi-dashboard) -----
-
-interface KpiDefinitionDto {
-  id: string;
-  name: string;
-  module: string;
-  unit: string;
-  direction: string;
-  target: number;
-  targetSet: boolean;
-  owner: string | null;
-  info: string;
-  metric: string | null;
-  manualValue: number | null;
-  flow: boolean;
-  history: boolean;
-  source: string;
-  reviewDueDate: string | null;
-  isBuiltIn: boolean;
-  isModified: boolean;
-  updatedAt: string | null;
-}
-
-interface KpiStateDto {
-  kpi: KpiDefinitionDto;
-  value: number | null;
-  previousValue: number | null;
-  change: number | null;
-  /** "points" (percent KPIs) or "percent" */
-  changeUnit: string;
-  target: number;
-  /** "target" or "budget" */
-  targetBasis: string;
-  status: string;
-  attainment: number | null;
-  variance: number | null;
-  /** "points", "count", "x" or "percent" */
-  varianceUnit: string;
-  spark: (number | null)[];
-}
-
-interface ViewDto {
-  key: string;
-  label: string;
-  dashboard: string;
-  isCustom: boolean;
-  isModified: boolean;
-  items: { kpiId: string; visible: boolean }[];
-  defaultKpiIds: string[];
-  updatedAt: string | null;
-}
-
-interface TrendDto {
-  granularity: string;
-  categories: string[];
-  overall: (number | null)[];
-  target: (number | null)[];
-  prior: (number | null)[];
-}
-
-interface InsightDto {
-  key: string;
-  tone: string;
-  title: string;
-  text: string;
-  actionLabel: string;
-  action: string;
-  kpiId: string | null;
-  kpiIds: string[];
-}
-
-interface OverviewDto {
-  generatedAt: string;
-  period: DashboardPeriodDto;
-  view: ViewDto;
-  views: ViewDto[];
-  monthLabels: string[];
-  tiles: KpiStateDto[];
-  kpis: KpiStateDto[];
-  trend: TrendDto;
-  targets: { module: string; kpis: number; attainment: number; target: number }[];
-  exceptions: KpiStateDto[];
-  insights: InsightDto[];
-  library: { module: string; count: number }[];
-}
-
-interface SectionDto<T> {
-  generatedAt: string;
-  data: T;
-}
-
-interface OptionsDto {
-  datePresets: string[];
-  defaultDatePreset: string;
-  metrics: { id: string; name: string; module: string; unit: string; direction: string; flow: boolean; history: boolean; source: string; info: string }[];
-  owners: string[];
-  defaultViewKey: string;
-}
-
-/** Body of POST /kpis and PUT /kpis/{kpiId}. */
+/** What Create / Edit KPI saves. */
 export interface SaveKpiBody {
   name: string;
   module: KpiModule;
@@ -148,35 +48,210 @@ export interface KdFilterLists {
   categories: string[];
 }
 
-const TIME_ZONE = 'UTC';
 const DAY_MS = 86_400_000;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** Months of history generated per metric (index 0 = current month) */
+const HISTORY = 26;
 
-const pick = (value: string, all: string): string | null => (!value || value === all ? null : value);
+// ----- In-memory store (kept for the browser session, so created KPIs and views survive navigation) -----
 
-const asModule = (value: string): KpiModule => ((KPI_MODULES as readonly string[]).includes(value) ? (value as KpiModule) : 'Asset');
-const asUnit = (value: string): KpiUnit => (['%', 'count', 'AED', 'x', 'hrs'].includes(value) ? (value as KpiUnit) : 'count');
-const asDirection = (value: string): KpiDirection => (value === 'lower' ? 'lower' : 'higher');
-const asStatus = (value: string): KpiStatus =>
-  (['On Track', 'Watch', 'At Risk', 'Over Budget', 'No Data'].includes(value) ? value : 'No Data') as KpiStatus;
+interface Store {
+  defs: KpiDef[];
+  views: KpiViewDef[];
+  seq: number;
+}
 
-function toDef(dto: KpiDefinitionDto): KpiDef {
+let store: Store | null = null;
+
+function isoDay(offsetDays: number): string {
+  const d = new Date(Date.now() + offsetDays * DAY_MS);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function seedDef(s: KpiSeed): KpiDef {
   return {
-    id: dto.id,
-    name: dto.name,
-    module: asModule(dto.module),
-    unit: asUnit(dto.unit),
-    target: num(dto.target),
-    direction: asDirection(dto.direction),
-    owner: dto.owner ?? '',
-    info: dto.info ?? '',
-    metric: dto.metric,
-    manualValue: dto.manualValue,
-    flow: !!dto.flow,
-    history: !!dto.history,
-    source: dto.source ?? '',
-    reviewDue: dto.reviewDueDate ? dto.reviewDueDate.slice(0, 10) : null,
-    custom: !dto.isBuiltIn
+    id: s.id, name: s.name, module: s.module, unit: s.unit, target: s.target, direction: s.direction, owner: s.owner, info: s.info, metric: s.id,
+    manualValue: null, flow: !!s.flow, history: s.history !== false, source: s.source, reviewDue: isoDay(s.reviewIn), custom: false
   };
+}
+
+function getStore(): Store {
+  if (!store) {
+    store = {
+      defs: KPI_SEEDS.map(seedDef),
+      views: KPI_VIEW_SEEDS.map((v) => ({
+        key: v.key, label: v.label, dashboard: v.dashboard, custom: v.custom, items: v.ids.map((id) => ({ id, visible: true })), defaultIds: v.ids.slice()
+      })),
+      seq: 1
+    };
+  }
+  return store;
+}
+
+// ----- Figures -----
+
+/** Deterministic 0..1 from a string. */
+function hash(text: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return ((h >>> 0) % 10_000) / 10_000;
+}
+
+/** Monthly values of a metric, index 0 = current month. Flow metrics give the monthly spend. */
+function history(seed: KpiSeed): number[] {
+  const out: number[] = [];
+  for (let m = 0; m < HISTORY; m++) {
+    const wave = Math.sin((m + seed.id.length) * 1.3) * 0.5 + (hash(`${seed.id}:${m}`) - 0.5);
+    let v: number;
+    if (seed.flow) v = (seed.target / 12) * seed.value * (1 + wave * 0.08);
+    else if (seed.unit === '%') v = Math.min(99.9, seed.value - (seed.direction === 'higher' ? 0.12 : -0.12) * m + wave * 0.9);
+    else {
+      const drift = seed.direction === 'higher' ? -0.006 : 0.008;
+      v = seed.value * (1 + drift * m + wave * 0.05);
+    }
+    out.push(m === 0 ? (seed.flow ? (seed.target / 12) * seed.value : seed.value) : v);
+  }
+  return out;
+}
+
+const SEED_HISTORY = new Map(KPI_SEEDS.map((s) => [s.id, history(s)]));
+
+/** Months covered by a period: [monthsBack, weight] pairs, oldest first. */
+function periodWeights(period: string, shift = 0): [number, number][] {
+  const now = new Date();
+  const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const part = now.getDate() / dim;
+  let w: [number, number][];
+  switch (period) {
+    case 'Today':
+      w = [[0, 1 / dim]];
+      break;
+    case 'Last 7 days':
+      w = [[0, Math.min(1, 7 / dim)]];
+      break;
+    case 'Last 30 days':
+      w = now.getDate() >= 30 ? [[0, 1]] : [[1, (30 - now.getDate()) / 30], [0, part]];
+      break;
+    case 'This month':
+      w = [[0, part]];
+      break;
+    case 'Last month':
+      w = [[1, 1]];
+      break;
+    case 'This quarter': {
+      const q = now.getMonth() % 3;
+      w = Array.from({ length: q }, (_, i): [number, number] => [q - i, 1]);
+      w.push([0, part]);
+      break;
+    }
+    default: {
+      // This year
+      const m = now.getMonth();
+      w = Array.from({ length: m }, (_, i): [number, number] => [m - i, 1]);
+      w.push([0, part]);
+    }
+  }
+  return w.map(([back, weight]) => [back + shift, weight]);
+}
+
+/** Months between two periods of the same preset (for "change vs previous period"). */
+function periodShift(period: string): number {
+  if (period === 'This year') return 12;
+  if (period === 'This quarter') return 3;
+  return 1;
+}
+
+/** Month label "Nov\n2026" for a number of months back. */
+function monthLabelOf(back: number): string {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
+  return `${MONTHS[d.getMonth()]}\n${d.getFullYear()}`;
+}
+
+interface Scope {
+  /** Share of counts / amounts in scope */
+  share: number;
+  /** Points added to percentages */
+  offset: number;
+}
+
+function scopeOf(f: KdFilters): Scope {
+  let share = 1;
+  let offset = 0;
+  const apply = (value: string, all: string, min: number, span: number) => {
+    if (!value || value === all) return;
+    const h = hash(value);
+    share *= min + h * span;
+    offset += (h - 0.55) * 4;
+  };
+  apply(f.organization, ALL_ORGANIZATIONS, 0.3, 0.4);
+  apply(f.location, ALL_LOCATIONS, 0.08, 0.2);
+  apply(f.category, ALL_CATEGORIES, 0.1, 0.2);
+  return { share, offset };
+}
+
+interface Figures {
+  value: number;
+  target: number;
+}
+
+/** Value and target of a KPI for weighted months, in scope. */
+function figures(def: KpiDef, weights: [number, number][], scope: Scope): Figures | null {
+  const series = def.metric ? SEED_HISTORY.get(def.metric) : null;
+  if (!series) {
+    if (def.manualValue === null) return null;
+    return { value: def.manualValue, target: def.target };
+  }
+  const amount = def.unit === 'count' || def.unit === 'AED';
+  const at = (back: number) => series[Math.min(back, series.length - 1)];
+  const totalWeight = weights.reduce((a, [, w]) => a + w, 0) || 1;
+  let value: number;
+  let target = def.target;
+  if (def.flow) {
+    value = weights.reduce((a, [b, w]) => a + at(b) * w, 0);
+    target = (def.target / 12) * totalWeight;
+  } else if (!def.history || def.unit === 'count' || def.unit === 'AED') {
+    // Point-in-time figures: the value at the end of the period
+    value = at(Math.min(...weights.map(([b]) => b)));
+  } else {
+    value = weights.reduce((a, [b, w]) => a + at(b) * w, 0) / totalWeight;
+  }
+  if (amount) {
+    value *= scope.share;
+    target *= scope.share;
+    if (def.unit === 'count') value = Math.round(value);
+  } else if (def.unit === '%') {
+    value = Math.max(0, Math.min(99.9, value + scope.offset));
+  } else {
+    value *= 1 + (scope.offset / 100) * (def.direction === 'higher' ? 1 : -1);
+  }
+  return { value, target };
+}
+
+function kpiStatus(value: number, target: number, direction: KpiDirection, unit: KpiUnit): KpiStatus {
+  if (direction === 'higher') return value >= target ? 'On Track' : value >= target * 0.97 ? 'Watch' : 'At Risk';
+  if (value <= target) return 'On Track';
+  if (unit === 'AED') return 'Over Budget';
+  return value <= target * 1.05 ? 'Watch' : 'At Risk';
+}
+
+/** Attainment vs target in % (100 = on target), for both directions */
+function attainment(value: number, target: number, direction: KpiDirection): number {
+  if (direction === 'higher') return target ? Math.min(130, (value / target) * 100) : 0;
+  return value ? Math.min(130, (target / value) * 100) : 130;
+}
+
+function varianceText(def: KpiDef, value: number, target: number): string {
+  switch (def.unit) {
+    case '%':
+      return signedText(value - target, 1, '%');
+    case 'count':
+      return signedText(Math.round(value) - Math.round(target), 0, '');
+    case 'x':
+      return signedText(value - target, 1, 'x');
+    default:
+      return signedText(((value - target) / (target || 1)) * 100, 0, '%');
+  }
 }
 
 /** Days from today (local) to a yyyy-MM-dd date. */
@@ -193,218 +268,294 @@ function formatDay(date: string | null): string {
   return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function varianceText(dto: KpiStateDto): string {
-  const v = dto.variance;
-  if (v === null || v === undefined || dto.value === null) return '—';
-  switch (dto.varianceUnit) {
-    case 'points':
-      return signedText(v, 1, '%');
-    case 'count':
-      return signedText(v, 0, '');
-    case 'x':
-      return signedText(v, 1, 'x');
-    default:
-      return signedText(v, 0, '%');
+function evaluate(def: KpiDef, f: KdFilters, scope: Scope): KpiState {
+  const weights = periodWeights(f.period || KD_DEFAULT_PERIOD);
+  const now = figures(def, weights, scope);
+  const before = figures(def, periodWeights(f.period || KD_DEFAULT_PERIOD, periodShift(f.period)), scope);
+  const due = { due: formatDay(def.reviewDue), dueInDays: daysUntil(def.reviewDue) };
+  if (!now) {
+    return {
+      def, value: null, target: def.target, status: 'No Data', valueText: '—', targetText: targetLabel(def, def.target, def.flow ? 'budget' : 'target'),
+      varianceText: '—', changeText: '—', changeUp: true, changeGood: true, spark: [], monthly: [], attainment: 0, ...due
+    };
   }
-}
-
-/** Months with nothing to measure are left out; a single value is drawn as a flat line. */
-function sparkOf(values: (number | null)[] | null | undefined): number[] {
-  const known = (values ?? []).filter((v): v is number => typeof v === 'number');
-  return known.length === 1 ? [known[0], known[0]] : known;
-}
-
-function toState(dto: KpiStateDto): KpiState {
-  const def = toDef(dto.kpi);
-  const change = dto.change;
-  const noData = dto.value === null || dto.value === undefined;
+  const { value, target } = now;
+  let change: number | null = null;
+  if (before && def.metric) change = def.unit === '%' ? value - before.value : before.value ? ((value - before.value) / before.value) * 100 : null;
+  const series = def.metric ? SEED_HISTORY.get(def.metric) : null;
+  const scaled = (v: number) => (def.unit === 'count' || def.unit === 'AED' ? v * scope.share : def.unit === '%' ? Math.min(99.9, v + scope.offset) : v);
+  const spark = series && def.history ? series.slice(0, 12).reverse().map((v) => Number(scaled(v).toFixed(2))) : [before?.value ?? value, value];
   return {
     def,
-    value: noData ? null : dto.value,
-    target: num(dto.target),
-    status: asStatus(dto.status),
-    valueText: noData ? '—' : formatKpi(dto.value as number, def.unit),
-    targetText: targetLabel(def, num(dto.target), dto.targetBasis),
-    varianceText: varianceText(dto),
-    changeText: change === null || change === undefined ? '—' : signedText(change, 1, dto.changeUnit === 'points' ? ' pts' : '%'),
+    value,
+    target,
+    status: kpiStatus(value, target, def.direction, def.unit),
+    valueText: formatKpi(value, def.unit),
+    targetText: targetLabel(def, target, def.flow ? 'budget' : 'target'),
+    varianceText: varianceText(def, value, target),
+    changeText: change === null ? '—' : signedText(change, 1, def.unit === '%' ? ' pts' : '%'),
     changeUp: (change ?? 0) >= 0,
-    changeGood: change === null || change === undefined ? true : def.direction === 'higher' ? change >= 0 : change <= 0,
-    spark: sparkOf(dto.spark),
-    monthly: def.history ? dto.spark ?? [] : [],
-    attainment: num(dto.attainment),
-    due: formatDay(def.reviewDue),
-    dueInDays: daysUntil(def.reviewDue)
+    changeGood: change === null ? true : def.direction === 'higher' ? change >= 0 : change <= 0,
+    spark,
+    monthly: series && def.history ? weights.map(([b, w]) => Number(scaled(series[b] * (def.flow ? w : 1)).toFixed(2))) : [],
+    attainment: Math.round(attainment(value, target, def.direction) * 10) / 10,
+    ...due
   };
 }
 
-function toView(dto: ViewDto): KpiViewDef {
+/** Overall score per month = average attainment of the view's KPIs with history (100 = on target). */
+function trendOf(defs: KpiDef[], f: KdFilters, scope: Scope): KpiTrendVm {
+  const end = f.period === 'Last month' ? 1 : 0;
+  const withHistory = defs.filter((d) => d.history && d.metric && SEED_HISTORY.has(d.metric));
+  const score = (back: number): number => {
+    const list = withHistory.map((d) => {
+      const fig = figures(d, [[back, 1]], scope)!;
+      return attainment(fig.value, fig.target, d.direction);
+    });
+    return list.length ? Number((list.reduce((a, b) => a + b, 0) / list.length).toFixed(1)) : 0;
+  };
+  const months = Array.from({ length: 12 }, (_, i) => end + 11 - i);
+  if (f.granularity === 'Quarterly') {
+    const groups = new Map<string, number[]>();
+    for (const back of months) {
+      const d = new Date(new Date().getFullYear(), new Date().getMonth() - back, 1);
+      const key = `Q${Math.floor(d.getMonth() / 3) + 1}\n${d.getFullYear()}`;
+      groups.set(key, [...(groups.get(key) ?? []), back]);
+    }
+    const avg = (backs: number[], shift: number) => Number((backs.reduce((a, b) => a + score(b + shift), 0) / backs.length).toFixed(1));
+    const keys = [...groups.keys()];
+    return {
+      labels: keys,
+      overall: keys.map((k) => avg(groups.get(k)!, 0)),
+      target: keys.map(() => 100),
+      prior: keys.map((k) => avg(groups.get(k)!, 12))
+    };
+  }
   return {
-    key: dto.key,
-    label: dto.label,
-    dashboard: dto.dashboard,
-    custom: dto.isCustom,
-    items: (dto.items ?? []).map((i) => ({ id: i.kpiId, visible: i.visible })),
-    defaultIds: dto.defaultKpiIds ?? []
+    labels: months.map(monthLabelOf),
+    overall: months.map((b) => score(b)),
+    target: months.map(() => 100),
+    prior: months.map((b) => score(b + 12))
   };
 }
 
-function toTrend(dto: TrendDto | null | undefined): KpiTrendVm {
-  return {
-    labels: (dto?.categories ?? []).map(monthLabel),
-    overall: (dto?.overall ?? []).map(num),
-    target: (dto?.target ?? []).map(num),
-    prior: (dto?.prior ?? []).map(num)
-  };
+function insightsOf(states: KpiState[]): KpiInsightVm[] {
+  const out: KpiInsightVm[] = [];
+  const atRisk = states.filter((s) => s.status === 'At Risk');
+  if (atRisk.length) {
+    out.push({
+      key: 'at-risk', tone: 'red', title: `${atRisk.length} KPI${atRisk.length > 1 ? 's are' : ' is'} at risk`,
+      text: atRisk.map((s) => `${s.def.name} (${s.valueText} vs ${s.targetText.replace(/^(Target|Budget) /, '')})`).join(' · '),
+      actionLabel: 'View exceptions', action: 'exceptions', kpiId: atRisk[0].def.id, kpiIds: atRisk.map((s) => s.def.id)
+    });
+  }
+  const over = states.filter((s) => s.status === 'Over Budget').sort((a, b) => a.attainment - b.attainment)[0];
+  if (over) {
+    out.push({
+      key: 'over-budget', tone: 'orange', title: `${over.def.name} is over budget`,
+      text: `${over.valueText} against ${over.targetText.replace(/^Budget /, '')} (${over.varianceText}). Owner: ${over.def.owner || 'unassigned'}.`,
+      actionLabel: 'Create action plan', action: 'plan', kpiId: over.def.id, kpiIds: [over.def.id]
+    });
+  }
+  const dueWeek = states.filter((s) => s.dueInDays !== null && s.dueInDays <= 7 && s.status !== 'On Track');
+  if (dueWeek.length) {
+    out.push({
+      key: 'due-week', tone: 'orange', title: `${dueWeek.length} KPI review${dueWeek.length > 1 ? 's' : ''} due this week`,
+      text: dueWeek.map((s) => `${s.def.name} (${s.due})`).join(' · '),
+      actionLabel: 'View actions', action: 'due-week', kpiId: null, kpiIds: dueWeek.map((s) => s.def.id)
+    });
+  }
+  const unowned = states.find((s) => !s.def.owner);
+  if (unowned) {
+    out.push({
+      key: 'owner', tone: 'blue', title: `${unowned.def.name} has no owner`, text: 'Assign an owner so reviews and actions are followed up.',
+      actionLabel: 'Assign owner', action: 'settings', kpiId: unowned.def.id, kpiIds: [unowned.def.id]
+    });
+  }
+  const onTrack = states.filter((s) => s.status === 'On Track');
+  out.push({
+    key: 'on-track', tone: 'green', title: `${onTrack.length} of ${states.length} KPIs on track`,
+    text: onTrack.length ? `Best: ${[...onTrack].sort((a, b) => b.attainment - a.attainment).slice(0, 3).map((s) => s.def.name).join(', ')}` : 'No KPI meets its target yet.',
+    actionLabel: 'View exceptions', action: 'exceptions', kpiId: null, kpiIds: []
+  });
+  return out;
 }
 
-function toInsight(dto: InsightDto): KpiInsightVm {
-  const action = (['exceptions', 'plan', 'settings', 'due-week'].includes(dto.action) ? dto.action : 'exceptions') as KpiInsightVm['action'];
-  return { key: dto.key, tone: dto.tone, title: dto.title, text: dto.text, actionLabel: dto.actionLabel, action, kpiId: dto.kpiId, kpiIds: dto.kpiIds ?? [] };
-}
-
-function toDashboard(dto: OverviewDto): KpiDashboardVm {
-  return {
-    generatedAt: dto.generatedAt,
-    monthLabels: dto.monthLabels ?? [],
-    views: (dto.views ?? []).map(toView),
-    viewKey: dto.view?.key ?? '',
-    tiles: (dto.tiles ?? []).map(toState),
-    kpis: (dto.kpis ?? []).map(toState),
-    trend: toTrend(dto.trend),
-    targets: (dto.targets ?? []).map((t) => ({ module: t.module, value: num(t.attainment) })),
-    exceptions: (dto.exceptions ?? []).map(toState),
-    insights: (dto.insights ?? []).map(toInsight),
-    library: KPI_MODULES.map((module) => ({ module, count: dto.library?.find((l) => l.module === module)?.count ?? 0 }))
-  };
-}
-
-/** KPI Dashboard figures, KPI library and views from the Report Analytics API (/api/kpi-dashboard). */
+/** KPI Dashboard figures, KPI library and views (static demo data, worked out in the browser). */
 @Injectable()
 export class KpiDashboardService {
-  private readonly http = inject(HttpClient);
-  private readonly apiUrl = `${environment.reportAnalyticsApiUrl}api/kpi-dashboard`;
-
   readonly dashboard = signal<KpiDashboardVm>(emptyKpiDashboard());
   readonly loading = signal(false);
   readonly loaded = signal(false);
 
-  private fail = (err: HttpErrorResponse) => throwError(() => new Error(apiErrorMessage(err, 'KPI Dashboard')));
-
-  private tenant(): Record<string, string | undefined> {
-    return { tenantId: environment.tenantId, clientId: environment.clientId };
-  }
-
-  private query(f: KdFilters): Record<string, string | null | undefined> {
-    return {
-      viewKey: f.viewKey,
-      datePreset: f.period || KD_DEFAULT_PERIOD,
-      organization: pick(f.organization, ALL_ORGANIZATIONS),
-      location: pick(f.location, ALL_LOCATIONS),
-      category: pick(f.category, ALL_CATEGORIES),
-      granularity: f.granularity,
-      timeZone: TIME_ZONE,
-      ...this.tenant()
-    };
-  }
-
-  /** GET /options: period presets (Custom left out), the metric catalogue and KPI owners. */
+  /** Period presets, the metric catalogue and KPI owners. */
   loadOptions(): Observable<KdOptions> {
-    return this.http.get<OptionsDto>(`${this.apiUrl}/options`, { params: toParams(this.tenant()) }).pipe(
-      map((dto) => {
-        const periods = (dto.datePresets ?? []).filter((p) => p !== 'Custom');
-        const list = periods.length ? periods : KD_FALLBACK_PERIODS;
-        return {
-          periods: list,
-          defaultPeriod: list.includes(dto.defaultDatePreset) ? dto.defaultDatePreset : KD_DEFAULT_PERIOD,
-          metrics: (dto.metrics ?? []).map((m) => ({
-            id: m.id, name: m.name, module: m.module, unit: asUnit(m.unit), direction: asDirection(m.direction), history: m.history, source: m.source, info: m.info
-          })),
-          owners: dto.owners ?? []
-        };
-      }),
-      catchError(this.fail)
-    );
-  }
-
-  /** GET /filters: Organization, Location and Asset Category values (labels; the API matches names). */
-  loadFilters(): Observable<KdFilterLists> {
-    return this.http.get<FilterOptionsDto>(`${this.apiUrl}/filters`, { params: toParams(this.tenant()) }).pipe(
-      map((dto) => ({
-        organizations: optionLabels(ALL_ORGANIZATIONS, dto.organizations),
-        locations: optionLabels(ALL_LOCATIONS, dto.locations),
-        categories: optionLabels(ALL_CATEGORIES, dto.assetCategories)
+    return of({
+      periods: KD_FALLBACK_PERIODS,
+      defaultPeriod: KD_DEFAULT_PERIOD,
+      metrics: KPI_SEEDS.map((s) => ({
+        id: s.id, name: s.name, module: s.module, unit: s.unit, direction: s.direction, history: s.history !== false, source: s.source, info: s.info
       })),
-      catchError(this.fail)
-    );
+      owners: [...RA_PEOPLE].sort()
+    });
   }
 
-  /** GET /overview: tiles, trend, targets, exceptions, insights, library and views in one call. */
+  /** Organization, Location and Asset Category values. */
+  loadFilters(): Observable<KdFilterLists> {
+    return of({
+      organizations: RA_ORGANIZATIONS.slice(),
+      locations: RA_LOCATIONS.slice(),
+      categories: [ALL_CATEGORIES, ...RA_CATEGORIES]
+    });
+  }
+
+  /** Tiles, trend, targets, exceptions, insights, library and views for the filter bar. */
   loadOverview(f: KdFilters): Observable<KpiDashboardVm> {
+    const s = getStore();
+    const view = s.views.find((v) => v.key === f.viewKey);
+    if (!view) return throwError(() => new Error(`View '${f.viewKey}' was not found.`));
     this.loading.set(true);
-    return this.http.get<OverviewDto>(`${this.apiUrl}/overview`, { params: toParams(this.query(f)) }).pipe(
-      map(toDashboard),
-      tap((d) => {
-        this.dashboard.set(d);
-        this.loaded.set(true);
+    const scope = scopeOf(f);
+    const kpis = s.defs.map((d) => evaluate(d, f, scope));
+    const byId = new Map(kpis.map((k) => [k.def.id, k]));
+    const tiles = view.items.filter((i) => i.visible).map((i) => byId.get(i.id)).filter((k): k is KpiState => !!k);
+    const modules = KPI_MODULES.filter((m) => tiles.some((t) => t.def.module === m && t.status !== 'No Data'));
+    const d: KpiDashboardVm = {
+      generatedAt: new Date().toISOString(),
+      monthLabels: periodWeights(f.period || KD_DEFAULT_PERIOD).map(([b]) => monthLabelOf(b).replace('\n', ' ')),
+      views: s.views.map((v) => ({ ...v, items: v.items.map((i) => ({ ...i })), defaultIds: v.defaultIds.slice() })),
+      viewKey: view.key,
+      tiles,
+      kpis,
+      trend: trendOf(tiles.map((t) => t.def), f, scope),
+      targets: modules.map((m) => {
+        const list = tiles.filter((t) => t.def.module === m && t.status !== 'No Data');
+        return { module: m, value: Math.round(list.reduce((a, t) => a + t.attainment, 0) / list.length) };
       }),
-      catchError(this.fail),
-      finalize(() => this.loading.set(false))
-    );
+      exceptions: tiles.filter((t) => t.status === 'Watch' || t.status === 'At Risk' || t.status === 'Over Budget').sort((a, b) => a.attainment - b.attainment),
+      insights: insightsOf(tiles),
+      library: KPI_MODULES.map((module) => ({ module, count: s.defs.filter((x) => x.module === module).length }))
+    };
+    this.dashboard.set(d);
+    this.loaded.set(true);
+    this.loading.set(false);
+    return of(d);
   }
 
-  /** GET /trend: the KPI Performance Trend for another granularity. */
+  /** The KPI Performance Trend for another granularity. */
   loadTrend(f: KdFilters): Observable<KpiTrendVm> {
-    return this.http.get<SectionDto<TrendDto>>(`${this.apiUrl}/trend`, { params: toParams(this.query(f)) }).pipe(
-      map((dto) => toTrend(dto.data)),
-      tap((trend) => this.dashboard.update((d) => ({ ...d, trend }))),
-      catchError(this.fail)
-    );
+    const s = getStore();
+    const view = s.views.find((v) => v.key === f.viewKey);
+    const ids = new Set((view?.items ?? []).filter((i) => i.visible).map((i) => i.id));
+    const trend = trendOf(s.defs.filter((d) => ids.has(d.id)), f, scopeOf(f));
+    this.dashboard.update((d) => ({ ...d, trend }));
+    return of(trend);
   }
 
-  /** GET /export: the Excel workbook of the view for the filter bar. */
+  /** The view's tiles as a CSV download. */
   export(f: KdFilters): Observable<void> {
-    return this.http.get(`${this.apiUrl}/export`, { params: toParams({ ...this.query(f), format: 'xlsx' }), observe: 'response', responseType: 'blob' }).pipe(
-      map((res) => saveBlob(res, 'kpi-dashboard.xlsx')),
-      catchError(this.fail)
+    const d = this.dashboard().viewKey === f.viewKey && this.loaded() ? this.dashboard() : null;
+    const tiles = d?.tiles ?? [];
+    downloadCsv(
+      `kpi-dashboard-${f.viewKey.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.csv`,
+      ['KPI', 'Module', 'Current', 'Target', 'Variance', 'Change vs previous period', 'Status', 'Owner', 'Due Date', 'Period', 'Organization', 'Location', 'Category'],
+      tiles.map((s) => [
+        s.def.name, s.def.module, s.valueText, s.targetText, s.varianceText, s.changeText, s.status, s.def.owner || 'Unassigned', s.due, f.period,
+        f.organization, f.location, f.category
+      ])
     );
+    return of(undefined);
   }
 
   // ----- KPI library -----
 
-  /** POST /kpis: a custom KPI (added as a tile on body.viewKey). */
+  /** A custom KPI (added as a tile on body.viewKey). */
   createKpi(body: SaveKpiBody): Observable<KpiDef> {
-    return this.http.post<KpiDefinitionDto>(`${this.apiUrl}/kpis`, { ...body, ...this.tenant() }).pipe(map(toDef), catchError(this.fail));
+    const s = getStore();
+    const name = body.name.trim();
+    if (s.defs.some((d) => d.name.toLowerCase() === name.toLowerCase())) return throwError(() => new Error('A KPI with this name already exists.'));
+    const metric = body.metric ? KPI_SEEDS.find((m) => m.id === body.metric) : undefined;
+    const def: KpiDef = {
+      id: `custom-${s.seq++}`,
+      name,
+      module: body.module,
+      unit: metric?.unit ?? body.unit,
+      target: body.target,
+      direction: metric?.direction ?? body.direction,
+      owner: body.owner.trim(),
+      info: metric ? `Custom KPI measuring ${metric.name.toLowerCase()}` : 'Custom KPI with a manually reported value',
+      metric: metric?.id ?? null,
+      manualValue: metric ? null : body.value,
+      flow: !!metric?.flow,
+      history: metric ? metric.history !== false : false,
+      source: metric?.source ?? 'Manual',
+      reviewDue: body.reviewDueDate,
+      custom: true
+    };
+    s.defs = [...s.defs, def];
+    const view = s.views.find((v) => v.key === body.viewKey);
+    if (view) view.items = [...view.items, { id: def.id, visible: true }];
+    return of(def);
   }
 
-  /** PUT /kpis/{kpiId}: built-in KPIs keep their module, unit and metric. */
+  /** Built-in KPIs keep their module, unit and metric. */
   updateKpi(kpiId: string, body: SaveKpiBody): Observable<KpiDef> {
-    return this.http.put<KpiDefinitionDto>(`${this.apiUrl}/kpis/${encodeURIComponent(kpiId)}`, { ...body, ...this.tenant() }).pipe(map(toDef), catchError(this.fail));
+    const s = getStore();
+    const current = s.defs.find((d) => d.id === kpiId);
+    if (!current) return throwError(() => new Error('KPI not found.'));
+    const metric = current.custom && body.metric ? KPI_SEEDS.find((m) => m.id === body.metric) : undefined;
+    const def: KpiDef = current.custom
+      ? {
+          ...current, name: body.name.trim(), module: body.module, unit: metric?.unit ?? body.unit, direction: metric?.direction ?? body.direction,
+          target: body.target, owner: body.owner.trim(), metric: metric?.id ?? null, manualValue: metric ? null : body.value, flow: !!metric?.flow,
+          history: metric ? metric.history !== false : false, source: metric?.source ?? 'Manual', reviewDue: body.reviewDueDate
+        }
+      : { ...current, name: body.name.trim(), direction: body.direction, target: body.target, owner: body.owner.trim(), reviewDue: body.reviewDueDate };
+    s.defs = s.defs.map((d) => (d.id === kpiId ? def : d));
+    return of(def);
   }
 
   // ----- Views -----
 
-  /** POST /views: Save current tiles as a custom view. */
+  /** Save current tiles as a custom view. */
   createView(label: string, ids: string[]): Observable<KpiViewDef> {
-    const body = { label, items: ids.map((kpiId) => ({ kpiId, visible: true })), ...this.tenant() };
-    return this.http.post<ViewDto>(`${this.apiUrl}/views`, body).pipe(map(toView), catchError(this.fail));
+    const s = getStore();
+    const name = label.trim();
+    if (s.views.some((v) => v.label.toLowerCase() === name.toLowerCase())) return throwError(() => new Error(`A view named “${name}” already exists.`));
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'view';
+    let key = `custom:${slug}`;
+    for (let i = 2; s.views.some((v) => v.key === key); i++) key = `custom:${slug}-${i}`;
+    const view: KpiViewDef = { key, label: name, dashboard: `${name} (custom)`, custom: true, items: ids.map((id) => ({ id, visible: true })), defaultIds: ids.slice() };
+    s.views = [...s.views, view];
+    return of(view);
   }
 
-  /** PUT /views/{viewKey}: the tiles of a view in order, with their visibility. */
+  /** The tiles of a view in order, with their visibility. */
   saveLayout(viewKey: string, items: { id: string; visible: boolean }[]): Observable<KpiViewDef> {
-    const body = { items: items.map((i) => ({ kpiId: i.id, visible: i.visible })), ...this.tenant() };
-    return this.http.put<ViewDto>(`${this.apiUrl}/views/${encodeURIComponent(viewKey)}`, body).pipe(map(toView), catchError(this.fail));
+    return this.updateView(viewKey, (v) => ({ ...v, items: items.map((i) => ({ ...i })) }));
   }
 
-  /** POST /views/{viewKey}/reset: back to the default tiles. */
+  /** Back to the default tiles. */
   resetView(viewKey: string): Observable<KpiViewDef> {
-    return this.http.post<ViewDto>(`${this.apiUrl}/views/${encodeURIComponent(viewKey)}/reset`, null, { params: toParams(this.tenant()) }).pipe(
-      map(toView),
-      catchError(this.fail)
-    );
+    return this.updateView(viewKey, (v) => ({ ...v, items: v.defaultIds.map((id) => ({ id, visible: true })) }));
   }
 
-  /** DELETE /views/{viewKey}: custom views only. */
+  /** Custom views only. */
   deleteView(viewKey: string): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}/views/${encodeURIComponent(viewKey)}`, { params: toParams(this.tenant()) }).pipe(catchError(this.fail));
+    const s = getStore();
+    const view = s.views.find((v) => v.key === viewKey);
+    if (!view) return throwError(() => new Error(`View '${viewKey}' was not found.`));
+    if (!view.custom) return throwError(() => new Error('Standard views cannot be deleted.'));
+    s.views = s.views.filter((v) => v.key !== viewKey);
+    return of(undefined);
+  }
+
+  private updateView(viewKey: string, change: (v: KpiViewDef) => KpiViewDef): Observable<KpiViewDef> {
+    const s = getStore();
+    const view = s.views.find((v) => v.key === viewKey);
+    if (!view) return throwError(() => new Error(`View '${viewKey}' was not found.`));
+    const updated = change(view);
+    s.views = s.views.map((v) => (v.key === viewKey ? updated : v));
+    return of(updated);
   }
 }

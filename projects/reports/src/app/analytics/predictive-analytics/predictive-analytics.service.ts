@@ -1,131 +1,15 @@
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
-import { Observable, catchError, finalize, map, tap, throwError } from 'rxjs';
-import { environment } from 'shared-ui';
+import { Injectable, signal } from '@angular/core';
+import { Observable, of } from 'rxjs';
+import { downloadCsv } from '../shared/analytics-common';
 import { ChartSeries, RA_COLORS } from '../shared/charts';
 import { ALL_CATEGORIES, ALL_TYPES } from '../asset-performance/kit/asset-universe';
+import { monthLabel } from '../asset-performance/kit/api-utils';
 import {
-  DashboardPeriodDto, FilterOptionsDto, KpiWidgetDto, PerformanceSeriesDto, apiErrorMessage, monthLabel, num, optionLabels, saveBlob, seriesValues, toParams
-} from '../asset-performance/kit/api-utils';
-import {
-  ACCURACY_TARGET, ALL_LOCATIONS, ALL_ORGANIZATIONS, ALL_PREDICTIONS_VIEW, ALL_RISK_LEVELS, FAILURE_WINDOW_DAYS, HIGH_RISK_SCORE, ModelRow,
-  PA_DEFAULT_PERIOD, PA_FALLBACK_PERIODS, PaAsset, PaInsight, PaKpiValue, PredictiveView, REVIEW_CONFIDENCE, RISK_COLORS, RISK_LEVELS, emptyPredictive
+  ACCURACY_TARGET, ALL_LOCATIONS, ALL_ORGANIZATIONS, ALL_PREDICTIONS_VIEW, ALL_RISK_LEVELS, ANOMALY_SIGNALS, DAY_MS, FAILURE_WINDOW_DAYS,
+  HIGH_RISK_SCORE, ModelRow, PA_ASSET_TYPES, PA_AVG_CORRECTIVE_COST, PA_CATEGORIES, PA_DEFAULT_PERIOD, PA_DEMO, PA_FALLBACK_PERIODS, PA_GROUP,
+  PA_MODELS, PA_ORGANIZATIONS, PA_SITES, PA_TODAY, PaAsset, PaDemoAsset, PaInsight, PredictiveView, REVIEW_CONFIDENCE, RISK_COLORS, RISK_LEVELS,
+  emptyPredictive, failureWindow, monthCategory, monthStart, periodOffsets, riskLevel, rulHours
 } from './predictive-analytics.data';
-
-// ----- API shapes (/api/predictive-analytics) -----
-
-interface AppliedFiltersDto {
-  viewId: string | null;
-  organization: string | null;
-  location: string | null;
-  category: string | null;
-  assetType: string | null;
-  riskLevel: string | null;
-  accuracyTarget: number;
-  reviewConfidence: number;
-  failureWindowDays: number;
-  toleranceDays: number;
-  highRiskScore: number;
-}
-
-interface PredictionDto {
-  key: string;
-  assetId: string;
-  assetName: string;
-  location: string | null;
-  category: string | null;
-  assetType: string | null;
-  riskLevel: string;
-  riskScore: number | null;
-  healthScore: number | null;
-  confidence: number | null;
-  failureWindowDays: number | null;
-  remainingUsefulLifeHours: number | null;
-  predictedFailureDate: string | null;
-  predictedIssue: string | null;
-  modelName: string | null;
-  sensorType: string | null;
-  recommendedAction: string;
-  vibrationAnomaly: boolean;
-  recentAnomalies: number;
-  owner: string | null;
-  alertStatus: string | null;
-  resolved: boolean;
-}
-
-interface OverviewDto {
-  generatedAt: string;
-  filters: AppliedFiltersDto;
-  period: DashboardPeriodDto;
-  summary: { assetsMonitored: KpiWidgetDto; highRiskAssets: KpiWidgetDto; predictedFailures: KpiWidgetDto; predictionAccuracy: KpiWidgetDto };
-  riskTrend: { trend: PerformanceSeriesDto; highRiskThreshold: number };
-  remainingLife: { forecast: PerformanceSeriesDto; currentHighRiskHours: number | null };
-  riskDistribution: { total: number; items: { label: string; count: number; percentage: number }[] };
-  anomalies: { total: number; trend: PerformanceSeriesDto };
-  accuracy: {
-    accuracy: number | null; precision: number | null; recall: number | null; falsePositiveRate: number | null; target: number; evaluated: number;
-  };
-  maintenanceCost: { trend: PerformanceSeriesDto; avoidedCost: number; preventedFailures: number; averageCorrectiveCost: number | null };
-  modelPerformance: {
-    assetType: string; monitored: number; accuracy: number | null; precision: number | null; recall: number | null; evaluated: number; status: string; models: string[];
-  }[];
-  insights: { key: string; severity: string; title: string; message: string; count: number; amount: number | null; assetIds: string[] }[];
-  predictions: PredictionDto[];
-  predictionTotal: number;
-}
-
-interface SectionDto<T> {
-  generatedAt: string;
-  filters: AppliedFiltersDto;
-  period: DashboardPeriodDto;
-  data: T;
-}
-
-interface PredictionListDto {
-  items: PredictionDto[];
-  totalCount: number;
-}
-
-interface OptionsDto {
-  datePresets: string[];
-  defaultDatePreset: string;
-  riskLevels: string[];
-  defaultAccuracyTarget: number;
-}
-
-interface ViewFiltersDto {
-  organization: string | null;
-  location: string | null;
-  category: string | null;
-  assetType: string | null;
-  riskLevel: string | null;
-  datePreset: string;
-}
-
-interface ViewDto {
-  viewId: string;
-  viewName: string;
-  isBuiltIn: boolean;
-  isDefault: boolean;
-  filters: ViewFiltersDto;
-}
-
-/** Body of POST /views and PUT /views/{viewId}. The owner is the signed-in user (from the access token). */
-interface SaveViewRequest {
-  viewName: string;
-  isDefault: boolean;
-  filters: {
-    organization: string | null;
-    location: string | null;
-    category: string | null;
-    assetType: string | null;
-    riskLevel: string | null;
-    datePreset: string;
-    timeZone: string;
-  };
-  tenantId?: string;
-  clientId?: string;
-}
 
 // ----- UI shapes -----
 
@@ -160,263 +44,346 @@ export interface PaFilterLists {
   assetTypes: string[];
 }
 
-const TIME_ZONE = 'UTC';
-/** The overview returns up to this many monitored assets, so the tables and lists can be sorted in the browser. */
-const PREDICTION_ROWS = 500;
+const BAND_COLORS: Record<string, string> = { 'High Risk': RA_COLORS.red, 'Medium Risk': RA_COLORS.orange, 'Low Risk': RA_COLORS.green };
+const ANOMALY_COLORS = [RA_COLORS.red, RA_COLORS.blue, RA_COLORS.orange, RA_COLORS.violet, RA_COLORS.teal];
+const ALERT_STATUSES = ['Open', 'Acknowledged', 'In Progress'];
 
-const BAND_COLORS: Record<string, string> = { 'High Risk': RA_COLORS.red, 'Medium Risk': RA_COLORS.orange, 'Low Risk': RA_COLORS.green, 'High Risk Threshold': RA_COLORS.grey };
-const RUL_COLORS: Record<string, string> = {
-  'High Risk Assets': RA_COLORS.purple, 'Medium Risk Assets': RA_COLORS.blue, 'All Monitored': RA_COLORS.green,
-  'Confidence band (upper)': RA_COLORS.lavender, 'Confidence band (lower)': RA_COLORS.lavender
-};
-const COST_COLORS: Record<string, string> = { Preventive: RA_COLORS.violet, Corrective: RA_COLORS.blue, Other: RA_COLORS.grey, 'Avoided Cost': RA_COLORS.green };
-const ANOMALY_COLORS = [RA_COLORS.red, RA_COLORS.blue, RA_COLORS.orange, RA_COLORS.violet, RA_COLORS.teal, RA_COLORS.pink, RA_COLORS.grey];
+const round1 = (v: number) => Math.round(v * 10) / 10;
+const sum = (list: number[]) => list.reduce((s, v) => s + v, 0);
+const mean = (list: number[]) => (list.length ? sum(list) / list.length : null);
+const iso = (ms: number) => new Date(ms).toISOString();
+/** Relative change in %, one decimal. */
+const change = (now: number | null, before: number | null) => (now === null || !before ? 0 : round1(((now - before) / before) * 100));
+const all = (value: string, everything: string) => !value || value === everything;
+const monitoredAt = (a: PaDemoAsset, m: number) => a.monitoredSince >= m;
 
-const kpi = (dto: KpiWidgetDto | null | undefined): PaKpiValue => ({ value: dto?.value ?? null, change: num(dto?.change) });
+function inScope(a: PaDemoAsset, f: PaFilters): boolean {
+  return (all(f.organization, ALL_ORGANIZATIONS) || f.organization === PA_GROUP || a.organization === f.organization)
+    && (all(f.location, ALL_LOCATIONS) || a.location === f.location)
+    && (all(f.category, ALL_CATEGORIES) || a.category === f.category)
+    && (all(f.assetType, ALL_TYPES) || a.type === f.assetType)
+    && (all(f.riskLevel, ALL_RISK_LEVELS) || riskLevel(a.scores[0]) === f.riskLevel);
+}
 
-function toAsset(dto: PredictionDto): PaAsset {
+/** The asset's current prediction as the page shows it. */
+function toAsset(a: PaDemoAsset, index: number): PaAsset {
+  const score = a.scores[0];
+  const risk = riskLevel(score);
+  const rul = rulHours(score, 0.85 + ((index * 37) % 30) / 100);
+  const days = Math.ceil(rul / 24);
+  const predicted = days <= 90;
+  const vibration = (a.sensor === 'Vibration' && score >= 45) || (a.anomalies[0]['Vibration'] ?? 0) > 0;
   return {
-    key: dto.key,
-    id: dto.assetId,
-    name: dto.assetName || dto.assetId,
-    location: dto.location ?? '—',
-    category: dto.category ?? '—',
-    type: dto.assetType ?? '—',
-    risk: dto.riskLevel,
-    riskScore: dto.riskScore,
-    health: dto.healthScore,
-    confidence: dto.confidence,
-    failureWindowDays: dto.failureWindowDays,
-    rulHours: dto.remainingUsefulLifeHours,
-    predictedFailureDate: dto.predictedFailureDate ? dto.predictedFailureDate.slice(0, 10) : null,
-    issue: dto.predictedIssue,
-    model: dto.modelName,
-    sensor: dto.sensorType,
-    action: dto.recommendedAction,
-    vibrationAnomaly: dto.vibrationAnomaly,
-    owner: dto.owner ?? 'Unassigned',
-    alertStatus: dto.alertStatus ?? '—'
+    key: a.key,
+    id: a.id,
+    name: a.name,
+    location: a.location,
+    category: a.category,
+    type: a.type,
+    risk,
+    riskScore: score,
+    health: 100 - score,
+    confidence: a.confidence,
+    failureWindowDays: predicted ? days : null,
+    rulHours: rul,
+    predictedFailureDate: predicted ? new Date(PA_TODAY + days * DAY_MS).toISOString().slice(0, 10) : null,
+    issue: score >= 35 ? a.issue : null,
+    model: a.model,
+    sensor: a.sensor,
+    action: score >= 35 ? a.action : 'Continue routine monitoring',
+    vibrationAnomaly: vibration,
+    owner: a.owner ?? 'Unassigned',
+    alertStatus: score >= HIGH_RISK_SCORE ? ALERT_STATUSES[index % ALERT_STATUSES.length] : score >= 35 ? 'Watch' : 'No alert'
   };
 }
 
-function series(dto: PerformanceSeriesDto | null | undefined, colors: Record<string, string>, extra: (name: string) => Partial<ChartSeries> = () => ({})): ChartSeries[] {
-  return (dto?.series ?? []).map((s, i) => ({
-    name: s.name,
-    values: s.values.map(num),
-    color: colors[s.name] ?? ANOMALY_COLORS[i % ANOMALY_COLORS.length],
-    ...extra(s.name)
-  }));
+/** Accuracy figures from evaluated predictions (precision, recall and false positives derived from the match rate). */
+function accuracyOf(list: PaDemoAsset[], months: number[]): { accuracy: number | null; evaluated: number } {
+  const evaluated = sum(list.flatMap((a) => months.map((m) => a.evaluated[m])));
+  const correct = sum(list.flatMap((a) => months.map((m) => a.correct[m])));
+  return { accuracy: evaluated ? round1((correct / evaluated) * 100) : null, evaluated };
 }
 
-function toView(dto: OverviewDto): PredictiveView {
-  const predictions = (dto.predictions ?? []).map(toAsset);
-  const byKey = new Map(predictions.map((p) => [p.key, p]));
-  const insights: PaInsight[] = (dto.insights ?? []).map((i) => ({
-    key: i.key, severity: i.severity, title: i.title, message: i.message, count: i.count, amount: i.amount, assetKeys: i.assetIds ?? []
-  }));
-  const listOf = (key: string) => (insights.find((i) => i.key === key)?.assetKeys ?? []).map((k) => byKey.get(k)).filter((a): a is PaAsset => !!a);
-  const cost = dto.maintenanceCost;
-  const avoidedByMonth = seriesValues(cost?.trend, 'Avoided Cost');
-  const models: ModelRow[] = (dto.modelPerformance ?? []).map((m) => ({
-    type: m.assetType, monitored: m.monitored, accuracy: m.accuracy, precision: m.precision, recall: m.recall, evaluated: m.evaluated, status: m.status,
-    models: m.models ?? []
-  }));
-
-  return {
-    generatedAt: dto.generatedAt,
-    previousFromUtc: dto.period?.previousFromUtc ?? null,
-    previousToUtc: dto.period?.previousToUtc ?? null,
-    accuracyTarget: dto.accuracy?.target ?? dto.filters?.accuracyTarget ?? ACCURACY_TARGET,
-    reviewConfidence: dto.filters?.reviewConfidence ?? REVIEW_CONFIDENCE,
-    highRiskScore: dto.riskTrend?.highRiskThreshold ?? dto.filters?.highRiskScore ?? HIGH_RISK_SCORE,
-    failureWindowDays: dto.filters?.failureWindowDays ?? FAILURE_WINDOW_DAYS,
-    monitoredKpi: kpi(dto.summary?.assetsMonitored),
-    highRiskKpi: kpi(dto.summary?.highRiskAssets),
-    failuresKpi: kpi(dto.summary?.predictedFailures),
-    accuracyKpi: kpi(dto.summary?.predictionAccuracy),
-    accuracy: dto.accuracy?.accuracy ?? null,
-    precision: dto.accuracy?.precision ?? null,
-    recall: dto.accuracy?.recall ?? null,
-    falsePositiveRate: dto.accuracy?.falsePositiveRate ?? null,
-    evaluated: num(dto.accuracy?.evaluated),
-    labels: (dto.riskTrend?.trend?.categories ?? []).map(monthLabel),
-    riskTrend: series(dto.riskTrend?.trend, BAND_COLORS, (name) => (name === 'High Risk Threshold' ? { dashed: true } : {})),
-    rulForecast: series(dto.remainingLife?.forecast, RUL_COLORS, (name) =>
-      name.startsWith('Confidence band') ? { dashed: true } : name === 'High Risk Assets' ? { area: true } : {}),
-    riskSlices: (dto.riskDistribution?.items ?? []).map((s) => ({ name: s.label, value: s.count, color: RISK_COLORS[s.label] ?? RA_COLORS.grey })),
-    anomalies: series(dto.anomalies?.trend, {}),
-    costForecast: series(cost?.trend, COST_COLORS),
-    avoided: num(cost?.avoidedCost),
-    avoidedByMonth,
-    preventedFailures: num(cost?.preventedFailures),
-    predictions,
-    predictionTotal: num(dto.predictionTotal),
-    actionList: predictions.filter((p) => p.risk === 'Critical' || p.risk === 'High'),
-    failures: listOf('predicted_failures'),
-    vibration: listOf('abnormal_vibration'),
-    review: listOf('engineer_review'),
-    models,
-    insights
-  };
-}
-
-/** "All …" in the filter bar is no filter. */
-const pick = (value: string, all: string): string | null => (!value || value === all ? null : value);
-
-function viewFilters(dto: ViewFiltersDto, periods: string[]): Record<string, string> {
-  return {
-    // Custom ranges can't be shown in the period dropdown; such views open on the default period
-    period: dto.datePreset && periods.includes(dto.datePreset) ? dto.datePreset : PA_DEFAULT_PERIOD,
-    organization: dto.organization ?? ALL_ORGANIZATIONS,
-    location: dto.location ?? ALL_LOCATIONS,
-    category: dto.category ?? ALL_CATEGORIES,
-    assetType: dto.assetType ?? ALL_TYPES,
-    riskLevel: dto.riskLevel ?? ALL_RISK_LEVELS
-  };
-}
-
-/** Predictive Analytics figures, filters and saved views from the Report Analytics API (/api/predictive-analytics). */
+/** Predictive Analytics figures, filters and saved views, computed in the browser from the static demo dataset. */
 @Injectable()
 export class PredictiveAnalyticsService {
-  private readonly http = inject(HttpClient);
-  private readonly apiUrl = `${environment.reportAnalyticsApiUrl}api/predictive-analytics`;
-
   readonly view = signal<PredictiveView>(emptyPredictive());
   readonly loading = signal(false);
   readonly loaded = signal(false);
   readonly periods = signal<string[]>(PA_FALLBACK_PERIODS);
   readonly views = signal<PaSavedView[]>([]);
 
-  private fail = (err: HttpErrorResponse) => throwError(() => new Error(apiErrorMessage(err, 'Predictive Analytics')));
+  private savedViews: PaSavedView[] = [
+    {
+      viewId: 'view-critical-uae', name: 'Critical – UAE sites', builtIn: false, isDefault: false,
+      filters: {
+        period: PA_DEFAULT_PERIOD, organization: 'Purple IQ UAE', location: ALL_LOCATIONS, category: ALL_CATEGORIES, assetType: ALL_TYPES, riskLevel: 'Critical'
+      }
+    },
+    {
+      viewId: 'view-rotating', name: 'Rotating equipment', builtIn: false, isDefault: false,
+      filters: {
+        period: 'Last 6 months', organization: ALL_ORGANIZATIONS, location: ALL_LOCATIONS, category: ALL_CATEGORIES, assetType: 'Rotating Equipment',
+        riskLevel: ALL_RISK_LEVELS
+      }
+    }
+  ];
+  private nextViewId = 1;
 
-  private query(f: PaFilters): Record<string, string | null> {
+  /** Period presets and risk levels. */
+  loadOptions(): Observable<PaOptions> {
+    this.periods.set(PA_FALLBACK_PERIODS);
+    return of({ periods: PA_FALLBACK_PERIODS, defaultPeriod: PA_DEFAULT_PERIOD, riskLevels: [ALL_RISK_LEVELS, ...RISK_LEVELS] });
+  }
+
+  /** Organization, Location, Asset Category and Asset Type values. */
+  loadFilters(): Observable<PaFilterLists> {
+    return of({
+      organizations: [ALL_ORGANIZATIONS, ...PA_ORGANIZATIONS],
+      locations: [ALL_LOCATIONS, ...PA_SITES.map((s) => s.location)],
+      categories: [ALL_CATEGORIES, ...PA_CATEGORIES],
+      assetTypes: [ALL_TYPES, ...PA_ASSET_TYPES]
+    });
+  }
+
+  private scoped(f: PaFilters): PaDemoAsset[] {
+    return PA_DEMO.filter((a) => inScope(a, f));
+  }
+
+  /** Every section for the filter bar in one call. */
+  loadOverview(f: PaFilters): Observable<PredictiveView> {
+    this.loading.set(true);
+    const v = this.build(f);
+    this.view.set(v);
+    this.loaded.set(true);
+    this.loading.set(false);
+    return of(v);
+  }
+
+  /** Average risk score of the assets in a band at each month end. */
+  private bandTrend(list: PaDemoAsset[], months: number[], lo: number, hi: number): number[] {
+    return months.map((m) => {
+      const scores = list.filter((a) => monitoredAt(a, m)).map((a) => a.scores[m]).filter((s) => s >= lo && s < hi);
+      return Math.round(mean(scores) ?? 0);
+    });
+  }
+
+  private build(f: PaFilters): PredictiveView {
+    const { current, previous } = periodOffsets(f.period || PA_DEFAULT_PERIOD);
+    const list = this.scoped(f);
+    const labels = current.map((m) => monthLabel(monthCategory(m)));
+    const prevEnd = previous[previous.length - 1];
+    const predictions = list.map((a) => toAsset(a, PA_DEMO.indexOf(a))).sort((a, b) => (b.riskScore ?? 0) - (a.riskScore ?? 0));
+
+    // KPIs now against the end of the previous period
+    const monitored = list.length;
+    const monitoredBefore = list.filter((a) => monitoredAt(a, prevEnd)).length;
+    const highRisk = predictions.filter((p) => (p.riskScore ?? 0) >= HIGH_RISK_SCORE).length;
+    const highRiskBefore = list.filter((a) => monitoredAt(a, prevEnd) && a.scores[prevEnd] >= HIGH_RISK_SCORE).length;
+    const failures = predictions.filter((p) => p.failureWindowDays !== null && p.failureWindowDays <= FAILURE_WINDOW_DAYS)
+      .sort((a, b) => (a.failureWindowDays ?? 0) - (b.failureWindowDays ?? 0));
+    const failuresBefore = list.filter((a) => monitoredAt(a, prevEnd) && rulHours(a.scores[prevEnd]) <= FAILURE_WINDOW_DAYS * 24).length;
+    const acc = accuracyOf(list, current);
+    const accBefore = accuracyOf(list, previous);
+
+    // Accuracy breakdown: precision and recall sit either side of the match rate
+    const accuracy = acc.accuracy;
+    const precision = accuracy === null ? null : round1(Math.min(99, accuracy - 2.6));
+    const recall = accuracy === null ? null : round1(Math.min(99, accuracy + 1.4));
+    const falsePositiveRate = precision === null ? null : round1((100 - precision) * 0.62);
+
+    // Remaining useful life at each month end
+    const rulAt = (m: number, lo: number, hi: number) => {
+      const hours = list.filter((a) => monitoredAt(a, m) && a.scores[m] >= lo && a.scores[m] < hi).map((a) => rulHours(a.scores[m]));
+      return Math.round(mean(hours) ?? 0);
+    };
+    const highRul = current.map((m) => rulAt(m, HIGH_RISK_SCORE, 101));
+    const spread = 1 - (mean(list.filter((a) => a.scores[0] >= HIGH_RISK_SCORE).map((a) => a.confidence)) ?? 85) / 100;
+
+    // Cost and avoided downtime
+    const monthSum = (pick: (a: PaDemoAsset, m: number) => number) => current.map((m) => sum(list.map((a) => pick(a, m))));
+    const preventedByMonth = monthSum((a, m) => a.prevented[m]);
+    const avoidedByMonth = preventedByMonth.map((p) => p * PA_AVG_CORRECTIVE_COST);
+    const prevented = sum(preventedByMonth);
+
+    const actionList = predictions.filter((p) => p.risk === 'Critical' || p.risk === 'High');
+    const vibration = predictions.filter((p) => p.vibrationAnomaly && (p.riskScore ?? 0) >= 35);
+    const review = predictions.filter((p) => p.confidence === null || p.confidence < REVIEW_CONFIDENCE)
+      .filter((p) => (p.riskScore ?? 0) >= 35);
+    const avoided = sum(avoidedByMonth);
+
+    const models: ModelRow[] = PA_ASSET_TYPES.map((type) => {
+      const mine = list.filter((a) => a.type === type);
+      const a = accuracyOf(mine, current);
+      return {
+        type,
+        monitored: mine.length,
+        accuracy: a.accuracy,
+        precision: a.accuracy === null ? null : round1(Math.min(99, a.accuracy - 2.4)),
+        recall: a.accuracy === null ? null : round1(Math.min(99, a.accuracy + 1.2)),
+        evaluated: a.evaluated,
+        status: type === 'IT & Electronics' ? 'Inactive' : 'Online',
+        models: PA_MODELS[type] ?? []
+      };
+    }).filter((m) => m.monitored > 0);
+
+    const aed = (v: number) => `AED ${Math.round(v).toLocaleString('en-US')}`;
+    const insights: PaInsight[] = [
+      {
+        key: 'predicted_failures',
+        severity: failures.length ? 'critical' : 'success',
+        title: `${failures.length} predicted failures within ${FAILURE_WINDOW_DAYS} days`,
+        message: failures.length
+          ? `${failures[0].name} at ${failures[0].location} is expected to fail within ${failures[0].failureWindowDays} days (${failures[0].issue ?? 'degradation'}).`
+          : 'No monitored asset is expected to fail in the next 30 days.',
+        count: failures.length,
+        amount: null,
+        assetKeys: failures.map((p) => p.key)
+      },
+      {
+        key: 'abnormal_vibration',
+        severity: vibration.length ? 'warning' : 'success',
+        title: `${vibration.length} assets show abnormal vibration patterns`,
+        message: vibration.length
+          ? `Vibration anomalies in the last 7 days, mostly on ${[...new Set(vibration.map((p) => p.type))].slice(0, 2).join(' and ')}.`
+          : 'No vibration anomalies in the last 7 days.',
+        count: vibration.length,
+        amount: null,
+        assetKeys: vibration.map((p) => p.key)
+      },
+      {
+        key: 'downtime_cost_avoided',
+        severity: 'success',
+        title: `${aed(avoided)} potential downtime cost avoided`,
+        message: `${prevented} predicted failures were prevented by planned maintenance in the period, at an average corrective cost of ${aed(PA_AVG_CORRECTIVE_COST)}.`,
+        count: prevented,
+        amount: avoided,
+        assetKeys: []
+      },
+      {
+        key: 'engineer_review',
+        severity: review.length ? 'warning' : 'success',
+        title: `${review.length} predictions require engineer review`,
+        message: review.length
+          ? `Model confidence is below ${REVIEW_CONFIDENCE}% on these predictions; confirm them before raising work orders.`
+          : `Every prediction has at least ${REVIEW_CONFIDENCE}% model confidence.`,
+        count: review.length,
+        amount: null,
+        assetKeys: review.map((p) => p.key)
+      }
+    ];
+
     return {
-      datePreset: f.period || PA_DEFAULT_PERIOD,
-      organization: pick(f.organization, ALL_ORGANIZATIONS),
-      location: pick(f.location, ALL_LOCATIONS),
-      category: pick(f.category, ALL_CATEGORIES),
-      assetType: pick(f.assetType, ALL_TYPES),
-      riskLevel: pick(f.riskLevel, ALL_RISK_LEVELS),
-      timeZone: TIME_ZONE,
-      tenantId: environment.tenantId,
-      clientId: environment.clientId
+      generatedAt: new Date().toISOString(),
+      previousFromUtc: iso(monthStart(previous[0])),
+      previousToUtc: iso(monthStart(prevEnd - 1)),
+      accuracyTarget: ACCURACY_TARGET,
+      reviewConfidence: REVIEW_CONFIDENCE,
+      highRiskScore: HIGH_RISK_SCORE,
+      failureWindowDays: FAILURE_WINDOW_DAYS,
+      monitoredKpi: { value: monitored, change: change(monitored, monitoredBefore) },
+      highRiskKpi: { value: highRisk, change: change(highRisk, highRiskBefore) },
+      failuresKpi: { value: failures.length, change: change(failures.length, failuresBefore) },
+      accuracyKpi: { value: accuracy, change: accuracy !== null && accBefore.accuracy !== null ? round1(accuracy - accBefore.accuracy) : 0 },
+      accuracy,
+      precision,
+      recall,
+      falsePositiveRate,
+      evaluated: acc.evaluated,
+      labels,
+      riskTrend: [
+        { name: 'High Risk', values: this.bandTrend(list, current, HIGH_RISK_SCORE, 101), color: BAND_COLORS['High Risk'] },
+        { name: 'Medium Risk', values: this.bandTrend(list, current, 35, HIGH_RISK_SCORE), color: BAND_COLORS['Medium Risk'] },
+        { name: 'Low Risk', values: this.bandTrend(list, current, 0, 35), color: BAND_COLORS['Low Risk'] },
+        { name: 'High Risk Threshold', values: labels.map(() => HIGH_RISK_SCORE), color: RA_COLORS.grey, dashed: true }
+      ],
+      rulForecast: [
+        { name: 'High Risk Assets', values: highRul, color: RA_COLORS.purple, area: true },
+        { name: 'Medium Risk Assets', values: current.map((m) => rulAt(m, 35, HIGH_RISK_SCORE)), color: RA_COLORS.blue },
+        { name: 'All Monitored', values: current.map((m) => rulAt(m, 0, 101)), color: RA_COLORS.green },
+        { name: 'Confidence band (upper)', values: highRul.map((h) => Math.round(h * (1 + spread))), color: RA_COLORS.lavender, dashed: true },
+        { name: 'Confidence band (lower)', values: highRul.map((h) => Math.round(h * (1 - spread))), color: RA_COLORS.lavender, dashed: true }
+      ],
+      riskSlices: RISK_LEVELS.map((r) => ({ name: r, value: predictions.filter((p) => p.risk === r).length, color: RISK_COLORS[r] })).filter((s) => s.value > 0),
+      anomalies: ANOMALY_SIGNALS.map((signal, i) => ({
+        name: signal,
+        values: current.map((m) => sum(list.map((a) => a.anomalies[m][signal] ?? 0))),
+        color: ANOMALY_COLORS[i % ANOMALY_COLORS.length]
+      })),
+      costForecast: [
+        { name: 'Preventive', values: monthSum((a, m) => a.preventiveCost[m]), color: RA_COLORS.violet },
+        { name: 'Corrective', values: monthSum((a, m) => a.correctiveCost[m]), color: RA_COLORS.blue },
+        { name: 'Avoided Cost', values: avoidedByMonth, color: RA_COLORS.green }
+      ],
+      avoided,
+      avoidedByMonth,
+      preventedFailures: prevented,
+      predictions,
+      predictionTotal: predictions.length,
+      actionList,
+      failures,
+      vibration,
+      review,
+      models,
+      insights
     };
   }
 
-  /** GET /options: period presets (Custom left out) and risk levels. */
-  loadOptions(): Observable<PaOptions> {
-    return this.http.get<OptionsDto>(`${this.apiUrl}/options`).pipe(
-      map((dto) => {
-        const periods = (dto.datePresets ?? []).filter((p) => p !== 'Custom');
-        const list = periods.length ? periods : PA_FALLBACK_PERIODS;
-        this.periods.set(list);
-        return {
-          periods: list,
-          defaultPeriod: list.includes(dto.defaultDatePreset) ? dto.defaultDatePreset : PA_DEFAULT_PERIOD,
-          riskLevels: [ALL_RISK_LEVELS, ...(dto.riskLevels?.length ? dto.riskLevels : RISK_LEVELS)]
-        };
-      }),
-      catchError(this.fail)
-    );
+  /** Compare Periods: the previous period's High Risk line. */
+  loadPreviousRisk(f: PaFilters, _range?: { from: string; to: string }): Observable<number[]> {
+    const { previous } = periodOffsets(f.period || PA_DEFAULT_PERIOD);
+    return of(this.bandTrend(this.scoped(f), previous, HIGH_RISK_SCORE, 101));
   }
 
-  /** GET /filters: Organization, Location, Asset Category and Asset Type values (labels; the API matches names). */
-  loadFilters(): Observable<PaFilterLists> {
-    const params = toParams({ tenantId: environment.tenantId, clientId: environment.clientId });
-    return this.http.get<FilterOptionsDto>(`${this.apiUrl}/filters`, { params }).pipe(
-      map((dto) => ({
-        organizations: optionLabels(ALL_ORGANIZATIONS, dto.organizations),
-        locations: optionLabels(ALL_LOCATIONS, dto.locations),
-        categories: optionLabels(ALL_CATEGORIES, dto.assetCategories),
-        assetTypes: optionLabels(ALL_TYPES, dto.assetTypes)
-      })),
-      catchError(this.fail)
-    );
-  }
-
-  /** GET /overview: every section for the filter bar in one call. */
-  loadOverview(f: PaFilters): Observable<PredictiveView> {
-    this.loading.set(true);
-    const params = toParams({ ...this.query(f), predictionLimit: PREDICTION_ROWS });
-    return this.http.get<OverviewDto>(`${this.apiUrl}/overview`, { params }).pipe(
-      map(toView),
-      tap((v) => {
-        this.view.set(v);
-        this.loaded.set(true);
-      }),
-      catchError(this.fail),
-      finalize(() => this.loading.set(false))
-    );
-  }
-
-  /** Compare Periods: the previous period's High Risk line (GET /risk-trend over a custom range). */
-  loadPreviousRisk(f: PaFilters, range: { from: string; to: string }): Observable<number[]> {
-    const params = toParams({ ...this.query(f), datePreset: 'Custom', from: range.from, to: range.to });
-    return this.http.get<SectionDto<{ trend: PerformanceSeriesDto }>>(`${this.apiUrl}/risk-trend`, { params }).pipe(
-      map((dto) => seriesValues(dto.data?.trend, 'High Risk')),
-      catchError(this.fail)
-    );
-  }
-
-  /** GET /predictions?list=…: every row of a list (when the overview was capped). */
+  /** Every row of a list: high-risk, failures, vibration or review. */
   loadList(f: PaFilters, list: string): Observable<{ items: PaAsset[]; total: number }> {
-    const params = toParams({ ...this.query(f), list, page: 1, pageSize: PREDICTION_ROWS });
-    return this.http.get<PredictionListDto>(`${this.apiUrl}/predictions`, { params }).pipe(
-      map((dto) => ({ items: (dto.items ?? []).map(toAsset), total: dto.totalCount ?? 0 })),
-      catchError(this.fail)
-    );
+    const v = this.build(f);
+    const items = list === 'failures' ? v.failures : list === 'vibration' ? v.vibration : list === 'review' ? v.review
+      : list === 'high-risk' ? v.actionList : v.predictions;
+    return of({ items, total: items.length });
   }
 
-  /** GET /export: the Excel workbook (or CSV) for the filter bar. */
-  export(f: PaFilters, format: 'xlsx' | 'csv' = 'xlsx'): Observable<void> {
-    const params = toParams({ ...this.query(f), format });
-    return this.http.get(`${this.apiUrl}/export`, { params, observe: 'response', responseType: 'blob' }).pipe(
-      map((res) => saveBlob(res, `predictive-analytics.${format}`)),
-      catchError(this.fail)
-    );
+  /** Every prediction for the filter bar, as a CSV download. */
+  export(f: PaFilters, _format: 'xlsx' | 'csv' = 'csv'): Observable<void> {
+    const v = this.build(f);
+    const opt = (n: number | null) => (n === null ? '' : n);
+    downloadCsv('predictive-analytics.csv',
+      ['Asset ID', 'Asset Name', 'Location', 'Category', 'Asset Type', 'Risk Level', 'Risk Score', 'Health', 'Confidence %', 'Failure Window',
+        'Predicted Failure Date', 'Remaining Life (hrs)', 'Predicted Issue', 'Recommended Action', 'Model', 'Sensor', 'Owner', 'Alert Status'],
+      v.predictions.map((a) => [
+        a.id, a.name, a.location, a.category, a.type, a.risk, opt(a.riskScore), opt(a.health), opt(a.confidence), failureWindow(a),
+        a.predictedFailureDate ?? '', opt(a.rulHours), a.issue ?? '', a.action, a.model ?? '', a.sensor ?? '', a.owner, a.alertStatus
+      ]));
+    return of(undefined);
   }
 
-  // ----- Saved views -----
+  // ----- Saved views (kept in memory for the session) -----
 
-  /** GET /views: the built-in All Predictions view, then the user's own. */
+  /** The built-in All Predictions view, then the user's own. */
   loadViews(): Observable<PaSavedView[]> {
-    const params = toParams({ tenantId: environment.tenantId, clientId: environment.clientId });
-    return this.http.get<ViewDto[]>(`${this.apiUrl}/views`, { params }).pipe(
-      map((rows) => {
-        const list = rows.map((v) => this.toSavedView(v));
-        if (!list.some((v) => v.builtIn)) list.unshift(this.allPredictionsView());
-        this.views.set(list);
-        return list;
-      }),
-      catchError(this.fail)
-    );
+    const list = [this.allPredictionsView(), ...this.savedViews];
+    this.views.set(list);
+    return of(list);
   }
 
-  /** POST /views. */
   createView(name: string, f: PaFilters, isDefault = false): Observable<PaSavedView> {
-    const body: SaveViewRequest = { ...this.toRequest(name, f, isDefault), tenantId: environment.tenantId, clientId: environment.clientId };
-    return this.http.post<ViewDto>(`${this.apiUrl}/views`, body).pipe(
-      map((dto) => this.toSavedView(dto)),
-      tap((saved) => this.views.update((list) => [...list, saved])),
-      catchError(this.fail)
-    );
+    const saved: PaSavedView = { viewId: `view-${Date.now()}-${this.nextViewId++}`, name: name.trim(), builtIn: false, isDefault, filters: this.toFilters(f) };
+    this.savedViews = [...this.savedViews, saved];
+    this.views.update((list) => [...list, saved]);
+    return of(saved);
   }
 
-  /** PUT /views/{viewId}. */
   updateView(viewId: string, name: string, f: PaFilters, isDefault = false): Observable<PaSavedView> {
-    return this.http.put<ViewDto>(`${this.apiUrl}/views/${encodeURIComponent(viewId)}`, this.toRequest(name, f, isDefault)).pipe(
-      map((dto) => this.toSavedView(dto)),
-      tap((saved) => this.views.update((list) => list.map((v) => (v.viewId === saved.viewId ? saved : v)))),
-      catchError(this.fail)
-    );
+    const saved: PaSavedView = { viewId, name: name.trim(), builtIn: false, isDefault, filters: this.toFilters(f) };
+    this.savedViews = this.savedViews.map((v) => (v.viewId === viewId ? saved : v));
+    this.views.update((list) => list.map((v) => (v.viewId === viewId ? saved : v)));
+    return of(saved);
   }
 
-  /** DELETE /views/{viewId}. */
   deleteView(viewId: string): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}/views/${encodeURIComponent(viewId)}`).pipe(
-      tap(() => this.views.update((list) => list.filter((v) => v.viewId !== viewId))),
-      catchError(this.fail)
-    );
+    this.savedViews = this.savedViews.filter((v) => v.viewId !== viewId);
+    this.views.update((list) => list.filter((v) => v.viewId !== viewId));
+    return of(undefined);
   }
 
   allPredictionsView(): PaSavedView {
@@ -429,23 +396,14 @@ export class PredictiveAnalyticsService {
     };
   }
 
-  private toSavedView(dto: ViewDto): PaSavedView {
-    return { viewId: dto.viewId, name: dto.viewName, builtIn: dto.isBuiltIn, isDefault: dto.isDefault, filters: viewFilters(dto.filters, this.periods()) };
-  }
-
-  private toRequest(name: string, f: PaFilters, isDefault: boolean): SaveViewRequest {
+  private toFilters(f: PaFilters): Record<string, string> {
     return {
-      viewName: name.trim(),
-      isDefault,
-      filters: {
-        organization: pick(f.organization, ALL_ORGANIZATIONS),
-        location: pick(f.location, ALL_LOCATIONS),
-        category: pick(f.category, ALL_CATEGORIES),
-        assetType: pick(f.assetType, ALL_TYPES),
-        riskLevel: pick(f.riskLevel, ALL_RISK_LEVELS),
-        datePreset: f.period || PA_DEFAULT_PERIOD,
-        timeZone: TIME_ZONE
-      }
+      period: f.period && this.periods().includes(f.period) ? f.period : PA_DEFAULT_PERIOD,
+      organization: f.organization || ALL_ORGANIZATIONS,
+      location: f.location || ALL_LOCATIONS,
+      category: f.category || ALL_CATEGORIES,
+      assetType: f.assetType || ALL_TYPES,
+      riskLevel: f.riskLevel || ALL_RISK_LEVELS
     };
   }
 }

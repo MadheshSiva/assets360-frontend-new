@@ -1,12 +1,12 @@
-import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, catchError, map } from 'rxjs';
+import { Observable } from 'rxjs';
 import { AuthService } from 'shared-ui';
-import { apiError, tenantBody, tenantParams, trackingUrl } from '../shared/tracking-api';
+import { DEMO_USER, demo, demoError, newRecordId } from '../shared/tracking-api';
 import { actorName } from '../geofence-alerts/geofence-api.service';
 import { LocEvent, LocEventType } from './location-data';
+import { LOCATION_EVENTS } from './location-events.data';
 
-/** GET /api/location-events row. */
+/** A location event record. */
 export interface LocationEventDto {
   id: string;
   eventId: string;
@@ -56,48 +56,47 @@ export function toLocationEventRequest(e: Omit<LocEvent, 'id'> & { event: LocEve
     zoneName: e.zone,
     details: e.details && e.details !== '—' ? e.details : null,
     createdBy,
-    ...tenantBody(),
+    clientId: 'demo-client',
+    tenantId: 'demo-tenant',
   };
 }
 
-/** Recent Location Events: /api/location-events (newest first). */
+/** Recent Location Events (static demo, location-events.data.ts), newest first. */
 @Injectable({ providedIn: 'root' })
 export class LocationEventApiService {
-  private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
-  private readonly url = trackingUrl('location-events');
 
   list(): Observable<LocEvent[]> {
-    return this.http.get<LocationEventDto[]>(this.url, { params: tenantParams() }).pipe(
-      map((rows) => rows.map(toLocEvent)),
-      catchError((err) => apiError(err, 'Could not load location events.')),
-    );
+    return demo(LOCATION_EVENTS.map(toLocEvent));
   }
 
   get(eventId: string): Observable<LocEvent> {
-    return this.http.get<LocationEventDto>(`${this.url}/${encodeURIComponent(eventId)}`, { params: tenantParams() }).pipe(
-      map(toLocEvent),
-      catchError((err) => apiError(err, 'Could not load the location event.')),
-    );
+    const e = LOCATION_EVENTS.find((x) => x.eventId === eventId);
+    return e ? demo(toLocEvent(e)) : demoError('The location event was not found.');
   }
 
   create(e: Omit<LocEvent, 'id'> & { event: LocEventType }): Observable<LocEvent> {
-    return this.http.post<LocationEventDto>(this.url, toLocationEventRequest(e, actorName(this.auth)), { params: tenantParams() }).pipe(
-      map(toLocEvent),
-      catchError((err) => apiError(err, 'Could not save the location event.')),
-    );
+    const n = LOCATION_EVENTS.reduce((m, x) => Math.max(m, Number(x.eventId.slice(2)) || 0), 0) + 1;
+    const dto = this.toDto(`LE${String(n).padStart(6, '0')}`, e, null);
+    LOCATION_EVENTS.unshift(dto);
+    return demo(toLocEvent(dto));
   }
 
   update(e: LocEvent & { event: LocEventType }): Observable<LocEvent> {
-    return this.http.put<LocationEventDto>(`${this.url}/${encodeURIComponent(e.id)}`, toLocationEventRequest(e, actorName(this.auth)), { params: tenantParams() }).pipe(
-      map(toLocEvent),
-      catchError((err) => apiError(err, 'Could not update the location event.')),
-    );
+    const i = LOCATION_EVENTS.findIndex((x) => x.eventId === e.id);
+    if (i < 0) return demoError('Could not update the location event: it no longer exists.');
+    LOCATION_EVENTS[i] = this.toDto(e.id, e, LOCATION_EVENTS[i]);
+    return demo(toLocEvent(LOCATION_EVENTS[i]));
   }
 
   delete(eventId: string): Observable<void> {
-    return this.http.delete<void>(`${this.url}/${encodeURIComponent(eventId)}`, { params: tenantParams() }).pipe(
-      catchError((err) => apiError(err, 'Could not delete the location event.')),
-    );
+    const i = LOCATION_EVENTS.findIndex((x) => x.eventId === eventId);
+    if (i >= 0) LOCATION_EVENTS.splice(i, 1);
+    return demo(undefined as void);
+  }
+
+  private toDto(eventId: string, e: Omit<LocEvent, 'id'> & { event: LocEventType }, old: LocationEventDto | null): LocationEventDto {
+    const req = toLocationEventRequest(e, old?.createdBy ?? (actorName(this.auth) || DEMO_USER));
+    return { ...req, id: old?.id ?? newRecordId(), eventId, eventTime: req.eventTime ?? new Date().toISOString(), createdAt: old?.createdAt ?? new Date().toISOString() };
   }
 }

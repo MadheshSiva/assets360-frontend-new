@@ -1,19 +1,13 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, catchError, map, of, switchMap } from 'rxjs';
-import { AuthService, environment } from 'shared-ui';
-import { apiError, getAllPages, savedRecord, tenantBody, tenantParams, trackingUrl } from '../shared/tracking-api';
+import { Observable } from 'rxjs';
+import { AuthService } from 'shared-ui';
+import { DEMO_ASSETS, DEMO_SITES, siteById, siteByName } from '../shared/master-data.data';
+import { DEMO_USER, demo, demoError, newRecordId } from '../shared/tracking-api';
+import { DEVICE_MODELS, modelByNumber } from '../device-type-model/device-models.data';
 import { Conn, DevEvent, Device, Health, LinkedAsset, Power } from './device-data';
+import { DEVICE_CONN, IOT_DEVICES, LAST_SEEN_MIN, deviceById, liveDevices } from './iot-devices.data';
 
-/** One row of GET {assetApiUrl}api/asset-registrations (Asset service): what the asset picker needs. */
-interface AssetListItemDto {
-  id: string;
-  assetRegistrationId: string | null;
-  assetName: string | null;
-  assetTag: string | null;
-}
-
-/** A device as GET/POST/PUT /api/iot-devices returns it (addressed by deviceId). */
+/** A device record (addressed by deviceId). */
 export interface IoTDeviceDto {
   id: string;
   deviceId: string;
@@ -47,31 +41,6 @@ export interface IoTDeviceDto {
   lowBattery?: boolean | null;
   signalDbm?: number | null;
   modelDisplayName?: string | null;
-}
-
-/** Body of POST /api/iot-devices and PUT /api/iot-devices/{deviceId}. */
-export interface IoTDeviceRequest {
-  deviceId: string;
-  deviceName: string;
-  deviceType: string;
-  model: string;
-  serialNumber: string;
-  connectivity: string;
-  siteId: string | null;
-  siteName: string | null;
-  assetRegistrationId: string | null;
-  assetCode: string | null;
-  assetName: string | null;
-  gateway: string | null;
-  /** Left out (null) on create: the API takes it from the model. */
-  powerSource: string | null;
-  batteryLevel: number | null;
-  lastSeenAt: string | null;
-  health: string | null;
-  firmwareVersion: string | null;
-  createdBy: string;
-  clientId: string;
-  tenantId: string;
 }
 
 /** GET /api/iot-devices/models */
@@ -161,156 +130,122 @@ export function deviceFromDto(dto: IoTDeviceDto): Device {
   };
 }
 
-/** Fields of a list row the full record should keep (drops undefined so they do not overwrite it). */
-function stripUndefined(o: IoTDeviceDto | undefined): Partial<IoTDeviceDto> {
-  return Object.fromEntries(Object.entries(o ?? {}).filter(([, v]) => v !== undefined)) as Partial<IoTDeviceDto>;
-}
-
-/** IoT Device Management → /api/iot-devices (Tracking service). */
+/** IoT Device Management (static demo): the in-memory device registry of iot-devices.data.ts. */
 @Injectable({ providedIn: 'root' })
 export class IoTDeviceApiService {
-  private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
-  private readonly url = trackingUrl('iot-devices');
 
   currentUser(): string {
-    return this.auth.getUser()?.userName || this.auth.getUserEmail() || 'Unknown user';
+    return this.auth.getUser()?.userName || this.auth.getUserEmail() || DEMO_USER;
   }
 
-  /** GET /api/iot-devices: every page (a plain array is still accepted). */
   getAll(): Observable<Device[]> {
-    return getAllPages<IoTDeviceDto>(this.http, this.url).pipe(
-      map((rows) => rows.map(deviceFromDto)),
-      catchError((e) => apiError(e, 'Could not load devices.')),
-    );
+    return demo(liveDevices().map(deviceFromDto));
   }
 
-  /** GET /api/iot-devices/{deviceId} */
   get(deviceId: string): Observable<Device> {
-    return this.http.get<IoTDeviceDto>(`${this.url}/${encodeURIComponent(deviceId)}`, { params: tenantParams() }).pipe(
-      map(deviceFromDto),
-      catchError((e) => apiError(e, `Could not load ${deviceId}.`)),
-    );
+    const dto = liveDevices().find((d) => d.deviceId === deviceId);
+    return dto ? demo(deviceFromDto(dto)) : demoError(`Device ${deviceId} was not found.`);
   }
 
-  /** GET /api/iot-devices/device-types */
   deviceTypes(): Observable<string[]> {
-    return this.http.get<string[]>(`${this.url}/device-types`, { params: tenantParams() }).pipe(catchError(() => of([])));
+    return demo([...new Set([...DEVICE_MODELS.map((m) => m.deviceType), ...IOT_DEVICES.map((d) => d.deviceType)])].sort());
   }
 
-  /** GET /api/iot-devices/models (all device types) */
   models(deviceType?: string): Observable<DeviceModelOption[]> {
-    return this.http.get<DeviceModelOption[]>(`${this.url}/models`, { params: tenantParams({ deviceType }) }).pipe(catchError(() => of([])));
+    return demo(
+      DEVICE_MODELS.filter((m) => m.status !== 'Inactive' && (!deviceType || m.deviceType === deviceType)).map((m) => ({
+        modelNumber: m.modelNumber,
+        manufacturer: m.manufacturer,
+        displayName: `${m.manufacturer} ${m.modelNumber}`,
+        deviceType: m.deviceType,
+        connectivity: m.connectivity,
+        protocol: m.protocol,
+        defaultConnectivity: m.protocol ?? m.connectivity,
+        powerSource: m.powerSource,
+      })),
+    );
   }
 
-  /** GET /api/iot-devices/connectivities?model&deviceType */
   connectivities(model?: string, deviceType?: string): Observable<string[]> {
-    return this.http.get<string[]>(`${this.url}/connectivities`, { params: tenantParams({ model, deviceType }) }).pipe(catchError(() => of([])));
+    const rows = DEVICE_MODELS.filter((m) => (!model || m.modelNumber === model) && (!deviceType || m.deviceType === deviceType));
+    return demo([...new Set(rows.flatMap((m) => [m.protocol ?? '', m.connectivity]).filter(Boolean))].sort());
   }
 
-  /** GET /api/iot-devices/gateways (every site) */
   gateways(siteId?: string): Observable<GatewayOption[]> {
-    return this.http.get<GatewayOption[]>(`${this.url}/gateways`, { params: tenantParams({ siteId }) }).pipe(catchError(() => of([])));
+    return demo(
+      IOT_DEVICES.filter((d) => d.deviceType === 'Gateway' && (!siteId || d.siteId === siteId)).map((d) => ({
+        deviceId: d.deviceId, deviceName: d.deviceName, siteId: d.siteId, siteName: d.siteName,
+      })),
+    );
   }
 
-  /**
-   * Registered assets for the "Link to asset" pickers: GET {assetApiUrl}api/asset-registrations (Asset service, first 1000),
-   * the same list Tag Management offers. Empty when the Asset service cannot be reached.
-   */
+  /** Registered assets for the "Link to asset" pickers. */
   registeredAssets(): Observable<LinkedAsset[]> {
-    const params = tenantParams({ page: 1, pageSize: 1000 });
-    return this.http.get<AssetListItemDto[] | { items?: AssetListItemDto[] }>(`${environment.assetApiUrl}api/asset-registrations`, { params }).pipe(
-      map((res) => (Array.isArray(res) ? res : res?.items ?? [])
-        .map((r): LinkedAsset => {
-          const code = (r.assetTag || r.assetRegistrationId || '').trim();
-          return { name: r.assetName?.trim() || code, code, registrationId: r.assetRegistrationId ?? undefined };
-        })
-        .filter((a) => !!a.code)
-        .sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code))),
-      catchError(() => of([])),
+    return demo(
+      DEMO_ASSETS.map((a): LinkedAsset => ({ name: a.name, code: a.tag, registrationId: a.regId })).sort((a, b) => a.name.localeCompare(b.name)),
     );
   }
 
-  /** Master-data sites; empty when the service cannot be reached. */
   sites(): Observable<SiteOption[]> {
-    type SiteRow = { id?: string; siteName?: string; name?: string; status?: string; isDeleted?: boolean };
-    // Master Data service (GET /api/master-data/sites); a list or a page of { items }
-    return this.http.get<SiteRow[] | { items?: SiteRow[] }>(`${environment.masterDataApiUrl}api/master-data/sites`, { params: tenantParams() }).pipe(
-      map((res) => (Array.isArray(res) ? res : res?.items ?? [])),
-      map((rows) =>
-        rows
-          .filter((r) => r.id && r.isDeleted !== true && !/^(inactive|disabled|deleted)$/i.test(r.status ?? ''))
-          .map((r) => ({ id: String(r.id), name: String(r.siteName ?? r.name ?? r.id) })),
-      ),
-      catchError(() => of([])),
-    );
+    return demo(DEMO_SITES.map((s) => ({ id: s.id, name: s.name })));
   }
 
-  /** POST /api/iot-devices */
   create(d: Device, siteId: string | null): Observable<Device> {
-    return this.http.post(this.url, this.request(d, siteId), { params: tenantParams(), responseType: 'text' }).pipe(
-      switchMap((body) => this.saved(body, d)),
-      catchError((e) => apiError(e, `Could not register ${d.id}.`)),
-    );
+    if (deviceById(d.id)) return demoError(`A device with id ${d.id} is already registered.`);
+    const dto = this.toDto(d, siteId, null);
+    IOT_DEVICES.unshift(dto);
+    return demo(deviceFromDto(dto));
   }
 
-  /**
-   * The device a successful POST / PUT returned. The body may be the device, a wrapper ({ data } / { item }),
-   * plain text or empty: when it is not a device, reload it by id, or keep the page's copy if that fails too.
-   */
-  private saved(body: string, d: Device): Observable<Device> {
-    const dto = savedRecord<IoTDeviceDto>(body, 'deviceId');
-    if (dto) return of(deviceFromDto(dto));
-    return this.get(d.id).pipe(catchError(() => of(d)));
-  }
-
-  /** PUT /api/iot-devices/{deviceId}: full replace; fields the page does not edit are sent back as loaded. */
   update(d: Device, siteId?: string | null): Observable<Device> {
-    const one = `${this.url}/${encodeURIComponent(d.id)}`;
-    // list rows leave out serial, firmware, etc.: read the full record first so the PUT does not blank them
-    return this.http.get<IoTDeviceDto>(one, { params: tenantParams() }).pipe(
-      catchError(() => of(d.api ?? null)),
-      map((full) => (full ? { ...d, serial: d.serial || full.serialNumber || '', api: { ...full, ...stripUndefined(d.api) } as IoTDeviceDto } : d)),
-      switchMap((dev) =>
-        this.http.put(one, this.request(dev, siteId === undefined ? dev.api?.siteId ?? null : siteId), { params: tenantParams(), responseType: 'text' }).pipe(
-          switchMap((body) => this.saved(body, dev)),
-        ),
-      ),
-      catchError((e) => apiError(e, `Could not save ${d.id}.`)),
-    );
+    const i = IOT_DEVICES.findIndex((x) => x.deviceId === d.id);
+    if (i < 0) return demoError(`Could not save ${d.id}: it is no longer registered.`);
+    const old = IOT_DEVICES[i];
+    const dto = this.toDto(d, siteId === undefined ? old.siteId : siteId, old);
+    IOT_DEVICES[i] = dto;
+    return demo(deviceFromDto(dto));
   }
 
-  /** DELETE /api/iot-devices/{deviceId} */
   delete(deviceId: string): Observable<void> {
-    return this.http.delete<void>(`${this.url}/${encodeURIComponent(deviceId)}`, { params: tenantParams() }).pipe(
-      catchError((e) => apiError(e, `Could not delete ${deviceId}.`)),
-    );
+    const i = IOT_DEVICES.findIndex((x) => x.deviceId === deviceId);
+    if (i < 0) return demoError(`Could not delete ${deviceId}: it is no longer registered.`);
+    IOT_DEVICES.splice(i, 1);
+    delete LAST_SEEN_MIN[deviceId];
+    delete DEVICE_CONN[deviceId];
+    return demo(undefined as void);
   }
 
-  private request(d: Device, siteId: string | null): IoTDeviceRequest {
-    const api = d.api;
-    const sameAsset = !!api && !!d.asset && (api.assetCode || api.assetRegistrationId) === d.asset.code;
+  /** The stored record for a page device (`old` keeps the fields the page does not edit). */
+  private toDto(d: Device, siteId: string | null, old: IoTDeviceDto | null): IoTDeviceDto {
+    const m = modelByNumber(d.model);
+    const site = siteById(siteId) ?? siteByName(d.site);
+    const asset = d.asset ? DEMO_ASSETS.find((a) => a.tag === d.asset!.code || a.regId === d.asset!.code || a.regId === d.asset!.registrationId) : undefined;
+    const now = new Date().toISOString();
+    const user = this.currentUser();
     return {
+      ...(old ?? {
+        id: newRecordId(), lastSeenAt: null, health: 'Good', firmwareVersion: m?.firmwareTo ?? null, pendingFirmwareVersion: null, firmwareUpdateScheduledAt: null,
+        createdBy: user, createdAt: now, updatedBy: null, updatedAt: null, clientId: 'demo-client', tenantId: 'demo-tenant', status: 'Pending', signalDbm: null,
+      }),
       deviceId: d.id,
       deviceName: d.name,
       deviceType: d.type,
       model: d.model,
-      serialNumber: d.serial,
+      serialNumber: d.serial || old?.serialNumber || null,
       connectivity: d.protocol,
-      siteId,
-      siteName: d.site || null,
-      // a registered asset picked from the list carries its registration id; otherwise keep the one already stored
-      assetRegistrationId: d.asset?.registrationId ?? (sameAsset ? api!.assetRegistrationId : null),
-      assetCode: d.asset?.code ?? null,
-      assetName: d.asset && d.asset.name !== d.asset.code ? d.asset.name : sameAsset ? api!.assetName : null,
+      siteId: site?.id ?? siteId ?? null,
+      siteName: site?.name ?? (d.site || null),
+      assetRegistrationId: asset?.regId ?? d.asset?.registrationId ?? (d.asset ? d.asset.code : null),
+      assetCode: asset?.tag ?? d.asset?.code ?? null,
+      assetName: asset?.name ?? (d.asset ? d.asset.name : null),
       gateway: d.gateway || null,
-      powerSource: api?.powerSource ?? null,
-      batteryLevel: api?.batteryLevel ?? null,
-      lastSeenAt: api?.lastSeenAt ?? null,
-      health: api?.health ?? null,
-      firmwareVersion: api?.firmwareVersion ?? null,
-      createdBy: this.currentUser(),
-      ...tenantBody(),
+      powerSource: old?.powerSource ?? m?.powerSource ?? 'Battery (replaceable)',
+      batteryLevel: old ? old.batteryLevel : /battery/i.test(m?.powerSource ?? '') ? 100 : null,
+      batteryPercent: old ? old.batteryPercent ?? old.batteryLevel : /battery/i.test(m?.powerSource ?? '') ? 100 : null,
+      modelDisplayName: m ? `${m.manufacturer} ${m.modelNumber}` : d.model,
+      updatedBy: old ? user : null,
+      updatedAt: old ? now : null,
     };
   }
 }

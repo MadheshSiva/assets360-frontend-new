@@ -529,7 +529,7 @@ export class InventoryAnalyticsPage extends RaDashboardPage implements OnInit {
   /** GET /export: the Excel workbook with every section. */
   exportPage(): void {
     this.api.export(this.filters()).subscribe({
-      next: () => this.notify('Exported Inventory Analytics (Excel).'),
+      next: () => this.notify('Exported Inventory Analytics (CSV).'),
       error: (err: Error) => this.notify(err.message)
     });
   }

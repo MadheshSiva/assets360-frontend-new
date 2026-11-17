@@ -15,7 +15,7 @@ interface CalendarCell {
 }
 
 /**
- * Month calendar marking report generated / scheduled / review-due dates (from GET /api/standard-reports/calendar).
+ * Month calendar marking report generated / scheduled / review-due dates (from the service).
  * Clicking a day filters the table; moving month asks the page to load that month's markers.
  */
 @Component({
@@ -120,7 +120,7 @@ export class ReportCalendar implements OnChanges {
       // Drop a trailing week that lies entirely in the next month
       if (i === 35 && d.getMonth() !== this.month) break;
       const iso = isoDay(d);
-      // The API returns markers for the shown month only, so days of the neighbouring months stay blank
+      // The service returns markers for the shown month only, so days of the neighbouring months stay blank
       const counts = this.days[iso];
       const generated = counts?.generated ?? 0;
       const scheduled = counts?.scheduled ?? 0;

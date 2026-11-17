@@ -1,133 +1,36 @@
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
-import { Observable, catchError, map, tap, throwError } from 'rxjs';
-import { AuthService, environment } from 'shared-ui';
+import { Injectable, signal } from '@angular/core';
+import { Observable, of } from 'rxjs';
 import { CURRENT_USER, todayIso } from '../shared/admin-common';
-import { CATEGORY_CODES, ChecklistItem, ChecklistTemplate, ResponseType, TemplateStatus, bumpVersion } from './checklist-templates.model';
+import { SAVED_ITEMS, TEMPLATES } from './checklist-templates.data';
+import { CATEGORY_CODES, ChecklistItem, ChecklistTemplate, TemplateStatus, bumpVersion } from './checklist-templates.model';
 
-/** Body of POST /api/administration/checklist-items */
-interface CreateChecklistItemRequest {
-  itemText: string;
-  section: string;
-  responseType: ResponseType;
-  isRequired: boolean;
-  isCritical: boolean;
-  helpText: string | null;
-  expectedValue: string | null;
-  attachmentRequired: boolean;
-  scoreValue: number;
-  failureAction: string | null;
-  escalateIssue: boolean;
-  createdBy: string | null;
-  tenantId: string;
-  clientId: string;
-}
-
-/** Item fields shared by create and update; tenant, client and creator are immutable. */
-type ChecklistItemBody = Omit<CreateChecklistItemRequest, 'createdBy' | 'tenantId' | 'clientId'>;
-
-/** Body of PUT /api/administration/checklist-items/{itemId} */
-type UpdateChecklistItemRequest = ChecklistItemBody & { updatedBy: string | null };
-
-/** A persisted item with the section it was saved under (the API has no template, only a section name). */
+/** An item from the organization's item bank with the section it was saved under. */
 export interface SavedChecklistItem {
   section: string;
   item: ChecklistItem;
 }
 
-/** Raw shape returned by the checklist-items API. */
-interface ChecklistItemDto {
-  itemId: string;
-  itemText: string;
-  section: string;
-  responseType: string;
-  isRequired: boolean;
-  isCritical: boolean;
-  helpText: string | null;
-  expectedValue: string | null;
-  attachmentRequired: boolean;
-  scoreValue: number;
-  failureAction: string | null;
-  escalateIssue: boolean;
-  createdBy: string | null;
-  createdAt: string | null;
-  updatedBy: string | null;
-  updatedAt: string | null;
-  tenantId: string | null;
-  clientId: string | null;
-}
-
-function toAppItem(dto: ChecklistItemDto): ChecklistItem {
-  return {
-    id: dto.itemId,
-    text: dto.itemText,
-    responseType: dto.responseType as ResponseType,
-    required: dto.isRequired,
-    critical: dto.isCritical,
-    score: dto.scoreValue,
-    helpText: dto.helpText ?? '',
-    expected: dto.expectedValue ?? '',
-    attachmentRequired: dto.attachmentRequired,
-    failureAction: dto.failureAction ?? 'None',
-    escalate: dto.escalateIssue
-  };
-}
-
-function itemBody(item: ChecklistItem, sectionTitle: string): ChecklistItemBody {
-  return {
-    itemText: item.text.trim(),
-    section: sectionTitle.trim() || 'General',
-    responseType: item.responseType,
-    isRequired: item.required,
-    isCritical: item.critical,
-    helpText: item.helpText.trim() || null,
-    expectedValue: item.expected.trim() || null,
-    attachmentRequired: item.attachmentRequired,
-    scoreValue: item.score,
-    failureAction: item.failureAction && item.failureAction !== 'None' ? item.failureAction : null,
-    escalateIssue: item.escalate
-  };
-}
-
-function toSaved(dto: ChecklistItemDto): SavedChecklistItem {
-  return { section: dto.section, item: toAppItem(dto) };
-}
-
-function errorMessage(err: HttpErrorResponse): string {
-  const errors = err.error?.errors as Record<string, string[]> | undefined;
-  const first = errors ? Object.values(errors)[0]?.[0] : null;
-  return first || err.error?.message || err.error?.title || 'The checklist service could not be reached.';
-}
-
 /*
- * Checklist items are persisted through the Administration API (list, create, update, delete).
- * The API has no template concept, only standalone items tagged with a section name, so
- * DEMO MODE: templates, their section layout, versions and executions still live in memory.
+ * DEMO MODE: templates, their versions and executions and the saved item bank all live in memory,
+ * seeded from checklist-templates.data.ts. Changes last for the session.
  */
 @Injectable({ providedIn: 'root' })
 export class ChecklistTemplatesService {
-  private readonly http = inject(HttpClient);
-  private readonly auth = inject(AuthService);
-  private readonly itemsUrl = `${environment.administrationApiUrl}api/administration/checklist-items`;
-  private readonly store = signal<ChecklistTemplate[]>([]); // templates come from the checklist API once wired
+  private readonly store = signal<ChecklistTemplate[]>(structuredClone(TEMPLATES));
   readonly templates = this.store.asReadonly();
-  private seq = 0;
+  private seq = TEMPLATES.length;
   private idSeq = 1000;
-  private readonly savedStore = signal<SavedChecklistItem[]>([]);
-  /** Items persisted on the server, ordered by section. */
+  private itemSeq = SAVED_ITEMS.length;
+  private readonly savedStore = signal<SavedChecklistItem[]>(structuredClone(SAVED_ITEMS));
+  /** Items in the saved item bank, ordered by section. */
   readonly savedItems = this.savedStore.asReadonly();
 
-  /** GET /api/administration/checklist-items for the current tenant and client. */
+  /** The saved item bank. */
   loadItems(): Observable<SavedChecklistItem[]> {
-    const params = { tenantId: environment.tenantId, clientId: environment.clientId };
-    return this.http.get<ChecklistItemDto[]>(this.itemsUrl, { params }).pipe(
-      map((rows) => rows.map(toSaved)),
-      tap((rows) => this.savedStore.set(rows)),
-      catchError((err: HttpErrorResponse) => throwError(() => new Error(errorMessage(err))))
-    );
+    return of(this.savedStore());
   }
 
-  /** True when the item has a server itemId, so edits and deletes go through the API. */
+  /** True when the item is in the saved item bank. */
   isPersisted(id: string): boolean {
     return this.savedStore().some((s) => s.item.id === id);
   }
@@ -142,39 +45,25 @@ export class ChecklistTemplatesService {
     return `${prefix}-${this.idSeq}`;
   }
 
-  /** POST /api/administration/checklist-items; the returned item carries the server's itemId. */
+  /** Adds the item to the saved item bank with a new ITM-nnnn id. */
   createItem(item: ChecklistItem, sectionTitle: string): Observable<ChecklistItem> {
-    const request: CreateChecklistItemRequest = {
-      ...itemBody(item, sectionTitle),
-      createdBy: this.auth.getUserEmail(),
-      tenantId: environment.tenantId,
-      clientId: environment.clientId
-    };
-    return this.http.post<ChecklistItemDto>(this.itemsUrl, request).pipe(
-      map(toSaved),
-      tap((saved) => this.savedStore.update((list) => [...list, saved])),
-      map((saved) => saved.item),
-      catchError((err: HttpErrorResponse) => throwError(() => new Error(errorMessage(err))))
-    );
+    this.itemSeq += 1;
+    const saved = { section: sectionTitle.trim() || 'General', item: { ...item, text: item.text.trim(), id: `ITM-${String(this.itemSeq).padStart(4, '0')}` } };
+    this.savedStore.update((list) => [...list, saved]);
+    return of(saved.item);
   }
 
-  /** PUT /api/administration/checklist-items/{itemId} for an item that has a server itemId. */
+  /** Updates an item in the saved item bank. */
   updateItem(item: ChecklistItem, sectionTitle: string): Observable<ChecklistItem> {
-    const request: UpdateChecklistItemRequest = { ...itemBody(item, sectionTitle), updatedBy: this.auth.getUserEmail() };
-    return this.http.put<ChecklistItemDto>(`${this.itemsUrl}/${encodeURIComponent(item.id)}`, request).pipe(
-      map(toSaved),
-      tap((saved) => this.savedStore.update((list) => list.map((s) => (s.item.id === saved.item.id ? saved : s)))),
-      map((saved) => saved.item),
-      catchError((err: HttpErrorResponse) => throwError(() => new Error(errorMessage(err))))
-    );
+    const saved = { section: sectionTitle.trim() || 'General', item: { ...item, text: item.text.trim() } };
+    this.savedStore.update((list) => list.map((s) => (s.item.id === saved.item.id ? saved : s)));
+    return of(saved.item);
   }
 
-  /** DELETE /api/administration/checklist-items/{itemId} (soft delete on the server). */
+  /** Removes an item from the saved item bank. */
   deleteItem(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.itemsUrl}/${encodeURIComponent(id)}`).pipe(
-      tap(() => this.savedStore.update((list) => list.filter((s) => s.item.id !== id))),
-      catchError((err: HttpErrorResponse) => throwError(() => new Error(errorMessage(err))))
-    );
+    this.savedStore.update((list) => list.filter((s) => s.item.id !== id));
+    return of(undefined);
   }
 
   codeTaken(code: string, exceptId: string | null): boolean {

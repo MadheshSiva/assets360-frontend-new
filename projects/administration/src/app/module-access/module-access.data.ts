@@ -1,7 +1,7 @@
-import { ASSET360_MODULES } from '../shared/admin-common';
+import { ADMIN_PEOPLE, ASSET360_MODULES } from '../shared/admin-common';
 
-// Option lists, feature catalog and defaults for Module Access. Policies come from the Administration API
-// (module-access.service.ts); module grants, features, exceptions and security settings have no backend fields yet and stay client-side.
+// Static demo data for Module Access: option lists, feature catalog, defaults and the seeded access policies
+// (module-access.service.ts keeps them in memory).
 
 export type PolicyType = 'Role' | 'Team' | 'User';
 export type PolicyStatus = 'Active' | 'Inactive';
@@ -175,6 +175,161 @@ function defaultFeatures(grants: ModuleGrant[]): string[] {
 }
 
 // ===== Policies =====
+interface Seed {
+  name: string;
+  code: string;
+  type: PolicyType;
+  icon: PolicyIcon;
+  tone: Tone;
+  users: number;
+  status?: PolicyStatus;
+  description: string;
+  roles: string[];
+  levels: Partial<Record<string, Level>>;
+  scopes?: Partial<Record<string, string>>;
+  locked?: Partial<Record<string, ModulePerm[]>>;
+  dataScope: string;
+  landing: string;
+  timeout: number;
+  mfa: boolean;
+  updated: string;
+  by: string;
+}
+
+const SEEDS: Seed[] = [
+  {
+    name: 'Standard Employee', code: 'STD-EMP-001', type: 'Role', icon: 'user', tone: 'blue', users: 48,
+    description: 'Baseline access for every employee: dashboards, own assets and service requests.',
+    roles: ['Help Desk Agent'], levels: { Dashboard: 'read', Assets: 'read', Maintenance: 'limited', 'Reports & Analytics': 'read' },
+    scopes: { Assets: 'Assigned Locations', Maintenance: 'Assigned Teams' },
+    dataScope: 'Own Records', landing: 'Dashboard', timeout: 30, mfa: false, updated: '2024-02-20T09:12:00', by: 'Sarah Ahmed'
+  },
+  {
+    name: 'Operations Manager', code: 'OPS-MGR-001', type: 'Role', icon: 'users', tone: 'purple', users: 32,
+    description: 'Grants operational management access to core Asset360 modules with full operational permissions and restricted admin.',
+    roles: ['Operations Manager'],
+    levels: { Dashboard: 'full', Assets: 'full', 'Tracking & IoT': 'full', 'Movement & Custody': 'full', Maintenance: 'full', Inspection: 'limited', Inventory: 'read', 'Audit & Compliance': 'read', 'Reports & Analytics': 'read' },
+    scopes: { 'Tracking & IoT': 'All Assets', 'Movement & Custody': 'Company Locations', Maintenance: 'Assigned Locations', Inspection: 'Assigned Teams', Inventory: 'Selected Locations', 'Reports & Analytics': 'All Data' },
+    locked: { Administration: ['view'] },
+    dataScope: 'Assigned Locations', landing: 'Dashboard', timeout: 60, mfa: true, updated: '2024-03-15T10:24:00', by: 'Sarah Ahmed'
+  },
+  {
+    name: 'Maintenance Team', code: 'MNT-TEAM-001', type: 'Team', icon: 'wrench', tone: 'blue', users: 28,
+    description: 'Work orders, preventive maintenance and inspections for the maintenance crews.',
+    roles: ['Maintenance Lead', 'Field Technician'], levels: { Dashboard: 'read', Assets: 'read', Maintenance: 'full', Inspection: 'full', Inventory: 'limited', 'Reports & Analytics': 'read' },
+    scopes: { Maintenance: 'Assigned Locations', Inspection: 'Assigned Teams', Inventory: 'Selected Locations' },
+    dataScope: 'Assigned Teams', landing: 'Maintenance', timeout: 120, mfa: false, updated: '2024-04-02T14:05:00', by: 'Omar Hassan'
+  },
+  {
+    name: 'Inventory Team', code: 'INV-TEAM-001', type: 'Team', icon: 'box', tone: 'green', users: 18,
+    description: 'Stores, stock movements and cycle counts.',
+    roles: ['Inventory Manager', 'Storekeeper'], levels: { Dashboard: 'read', Assets: 'read', Inventory: 'full', 'Movement & Custody': 'limited', 'Reports & Analytics': 'read' },
+    scopes: { Inventory: 'Selected Locations' },
+    dataScope: 'Assigned Locations', landing: 'Inventory', timeout: 120, mfa: false, updated: '2024-04-18T11:40:00', by: 'Aisha Rahman'
+  },
+  {
+    name: 'Compliance Team', code: 'CMP-TEAM-001', type: 'Team', icon: 'shield', tone: 'pink', users: 14,
+    description: 'Audits, findings and compliance evidence across all locations.',
+    roles: ['Compliance Officer'], levels: { Dashboard: 'read', Assets: 'read', Inspection: 'read', 'Audit & Compliance': 'full', 'Contracts & Warranty': 'read', 'Reports & Analytics': 'full' },
+    dataScope: 'All Data', landing: 'Audit & Compliance', timeout: 60, mfa: true, updated: '2024-05-06T08:30:00', by: 'Sarah Ahmed'
+  },
+  {
+    name: 'Executive Viewer', code: 'EXEC-VIEW-001', type: 'Role', icon: 'eye', tone: 'purple', users: 12, status: 'Inactive',
+    description: 'Read-only executive dashboards and reports (paused pending review).',
+    roles: ['Report Viewer'], levels: { Dashboard: 'read', Assets: 'read', Financial: 'read', 'Reports & Analytics': 'read' },
+    scopes: { Dashboard: 'All Data' },
+    dataScope: 'All Data', landing: 'Dashboard', timeout: 30, mfa: true, updated: '2024-06-11T16:20:00', by: 'James Tan'
+  },
+  {
+    name: 'Finance Team', code: 'FIN-TEAM-001', type: 'Team', icon: 'coins', tone: 'orange', users: 22,
+    description: 'Depreciation, valuation, budgets and financial reporting.',
+    roles: ['Finance Controller'], levels: { Dashboard: 'read', Assets: 'read', Financial: 'full', 'Contracts & Warranty': 'limited', 'Reports & Analytics': 'full' },
+    dataScope: 'All Data', landing: 'Financial', timeout: 60, mfa: true, updated: '2024-07-03T10:00:00', by: 'Priya Sharma'
+  },
+  {
+    name: 'IT Support', code: 'IT-SUP-001', type: 'Team', icon: 'server', tone: 'blue', users: 16,
+    description: 'Devices, integrations and technical administration.',
+    roles: ['IT Administrator'], levels: { Dashboard: 'read', Assets: 'limited', 'Tracking & IoT': 'full', Administration: 'limited', 'Master Data Management': 'limited' },
+    dataScope: 'Company Locations', landing: 'Tracking & IoT', timeout: 60, mfa: true, updated: '2024-07-21T13:15:00', by: 'Daniel Kim'
+  },
+  {
+    name: 'Field Technicians', code: 'FLD-TECH-001', type: 'Team', icon: 'hammer', tone: 'orange', users: 26,
+    description: 'Mobile access to assigned work orders and inspections.',
+    roles: ['Field Technician'], levels: { Dashboard: 'read', Assets: 'read', Maintenance: 'limited', Inspection: 'limited' },
+    scopes: { Maintenance: 'Assigned Teams', Inspection: 'Assigned Teams' },
+    dataScope: 'Own Records', landing: 'Maintenance', timeout: 240, mfa: false, updated: '2024-08-14T07:45:00', by: 'Omar Hassan'
+  },
+  {
+    name: 'Contractor Access', code: 'CNTR-USR-001', type: 'User', icon: 'badge', tone: 'pink', users: 9,
+    description: 'Named external contractors with time-boxed maintenance access.',
+    roles: [], levels: { Dashboard: 'read', Maintenance: 'limited' },
+    scopes: { Maintenance: 'Selected Locations' },
+    dataScope: 'Own Records', landing: 'Maintenance', timeout: 30, mfa: true, updated: '2024-09-09T12:00:00', by: 'Sarah Ahmed'
+  },
+  {
+    name: 'Auditor Access', code: 'AUD-USR-001', type: 'User', icon: 'search', tone: 'purple', users: 6,
+    description: 'Named internal and external auditors with read access to registers and reports.',
+    roles: ['Auditor'], levels: { Dashboard: 'read', Assets: 'read', Inventory: 'read', 'Audit & Compliance': 'read', Financial: 'read', 'Reports & Analytics': 'read' },
+    dataScope: 'All Data', landing: 'Audit & Compliance', timeout: 60, mfa: true, updated: '2024-10-01T09:30:00', by: 'Fatima Noor'
+  },
+  {
+    name: 'Site Supervisors', code: 'SITE-SUP-001', type: 'Role', icon: 'building', tone: 'green', users: 17,
+    description: 'Site-level oversight of assets, custody and maintenance.',
+    roles: ['Operations Manager', 'Security Officer'], levels: { Dashboard: 'read', Assets: 'limited', 'Movement & Custody': 'full', Maintenance: 'limited', Inspection: 'read', 'Reports & Analytics': 'read' },
+    scopes: { 'Movement & Custody': 'Assigned Locations' },
+    dataScope: 'Assigned Locations', landing: 'Dashboard', timeout: 120, mfa: false, updated: '2024-11-12T15:10:00', by: 'Mohammed Ali'
+  }
+];
+
+const EXCEPTION_REASONS = ['Quarterly budget review', 'Covering for team lead on leave', 'Pending security training', 'Project handover', 'Audit support engagement'];
+
+/** Two or three exceptions per policy, picked deterministically from the people and modules lists */
+function seedExceptions(policyIndex: number, grants: ModuleGrant[]): AccessException[] {
+  const count = policyIndex % 3 === 0 ? 3 : policyIndex % 3 === 1 ? 2 : 1;
+  const out: AccessException[] = [];
+  for (let i = 0; i < count; i++) {
+    const g = grants[(policyIndex * 5 + i * 4 + 3) % grants.length];
+    out.push({
+      id: `EXC-${policyIndex + 1}-${i + 1}`,
+      user: ADMIN_PEOPLE[(policyIndex * 3 + i * 7 + 1) % ADMIN_PEOPLE.length],
+      module: g.module,
+      access: g.enabled ? (i % 2 === 0 ? 'No Access' : 'Read Only') : i % 2 === 0 ? 'Read Only' : 'Full Access',
+      reason: EXCEPTION_REASONS[(policyIndex + i) % EXCEPTION_REASONS.length],
+      expires: i === 1 ? '' : `2027-${String(((policyIndex + i * 4) % 12) + 1).padStart(2, '0')}-28`,
+      addedBy: 'Sarah Ahmed',
+      addedOn: `2026-${String(((policyIndex + i) % 9) + 1).padStart(2, '0')}-15`
+    });
+  }
+  return out;
+}
+
+export function seedPolicies(): PolicyRecord[] {
+  return SEEDS.map((s, i) => {
+    const grants = ASSET360_MODULES.map((m) => grant(m, s.levels[m] ?? 'off', s.scopes?.[m], s.locked?.[m] ?? []));
+    return {
+      id: `POL-${String(i + 1).padStart(3, '0')}`,
+      name: s.name,
+      code: s.code,
+      description: s.description,
+      type: s.type,
+      status: s.status ?? 'Active',
+      icon: s.icon,
+      tone: s.tone,
+      users: s.users,
+      roles: [...s.roles],
+      grants,
+      features: defaultFeatures(grants),
+      exceptions: seedExceptions(i, grants),
+      dataScope: s.dataScope,
+      landingModule: s.landing,
+      sessionTimeout: s.timeout,
+      mfaRequired: s.mfa,
+      updatedAt: s.updated,
+      updatedBy: s.by
+    };
+  });
+}
+
 export function blankPolicy(): PolicyRecord {
   const grants = blankGrants();
   return {

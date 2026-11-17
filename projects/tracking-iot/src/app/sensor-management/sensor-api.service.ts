@@ -1,11 +1,13 @@
-import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, catchError, map } from 'rxjs';
+import { Observable } from 'rxjs';
 import { AuthService } from 'shared-ui';
-import { apiError, tenantBody, tenantParams, trackingUrl } from '../shared/tracking-api';
+import { DEMO_USER, demo, demoError, newRecordId } from '../shared/tracking-api';
+import { IOT_DEVICES } from '../device-management/iot-devices.data';
+import { generateReadings } from '../tracking-telemetry/telemetry-readings.data';
 import { Parameter, Sensor } from './sensor-data';
+import { MEASUREMENT_POINTS, SENSORS, SENSOR_FORM_OPTIONS } from './sensors.data';
 
-/** A sensor as GET/POST/PUT /api/sensors return it (addressed by sensorId, e.g. SEN-T-80214). */
+/** A sensor record (addressed by sensorId, e.g. SEN-T-80214). */
 export interface SensorDto {
   id: string;
   sensorId: string;
@@ -95,72 +97,112 @@ export interface SensorDeviceOptionDto {
 /** GET /api/sensors/devices/{deviceId}/channels. */
 export interface SensorChannelsDto { deviceId: string; usedChannels: number[]; nextChannel: number }
 
-/** GET /api/telemetry-readings?sensorId=… (used for the Readings chart). */
-export interface TelemetryReadingDto { readingId: string; recordedAt: string; deviceId: string; sensorId: string | null; parameter: string; value: number; unit: string | null }
-
-/** Sensor Management → Tracking service /api/sensors. */
+/** Sensor Management (static demo, sensors.data.ts). */
 @Injectable({ providedIn: 'root' })
 export class SensorApiService {
-  private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
 
   list(): Observable<SensorDto[]> {
-    return this.http.get<SensorDto[]>(trackingUrl('sensors'), { params: tenantParams() }).pipe(catchError((e) => apiError(e, 'Could not load sensors.')));
+    return demo(SENSORS);
   }
 
   get(sensorId: string): Observable<SensorDto> {
-    return this.http.get<SensorDto>(trackingUrl(`sensors/${encodeURIComponent(sensorId)}`), { params: tenantParams() }).pipe(catchError((e) => apiError(e, `Could not load ${sensorId}.`)));
+    const x = SENSORS.find((s) => s.sensorId === sensorId);
+    return x ? demo(x) : demoError(`Sensor ${sensorId} was not found.`);
   }
 
   create(body: Omit<SensorRequest, 'clientId' | 'tenantId' | 'createdBy'>): Observable<SensorDto> {
-    return this.http
-      .post<SensorDto>(trackingUrl('sensors'), { ...body, createdBy: this.userName(), ...tenantBody() }, { params: tenantParams() })
-      .pipe(catchError((e) => apiError(e, 'Could not add the sensor.')));
+    const type = SENSOR_FORM_OPTIONS.sensorTypes.find((t) => t.sensorType === body.sensorType);
+    const prefix = type?.idPrefix ?? 'SEN';
+    let id = body.sensorId?.trim() || '';
+    if (!id) {
+      const n = SENSORS.filter((s) => s.sensorId.startsWith(prefix + '-')).reduce((m, s) => Math.max(m, Number(s.sensorNumber) || 0), 80000) + 1;
+      id = `${prefix}-${body.sensorNumber?.trim() || n}`;
+    }
+    if (SENSORS.some((s) => s.sensorId.toLowerCase() === id.toLowerCase())) return demoError(`Sensor ${id} already exists.`);
+    const dto = this.toDto(id, body, null);
+    SENSORS.unshift(dto);
+    return demo(dto);
   }
 
   update(sensorId: string, body: Omit<SensorRequest, 'clientId' | 'tenantId' | 'createdBy'>): Observable<SensorDto> {
-    return this.http
-      .put<SensorDto>(trackingUrl(`sensors/${encodeURIComponent(sensorId)}`), { ...body, createdBy: null, ...tenantBody() }, { params: tenantParams() })
-      .pipe(catchError((e) => apiError(e, `Could not update ${sensorId}.`)));
+    const i = SENSORS.findIndex((s) => s.sensorId === sensorId);
+    if (i < 0) return demoError(`Could not update ${sensorId}: it no longer exists.`);
+    SENSORS[i] = this.toDto(sensorId, body, SENSORS[i]);
+    return demo(SENSORS[i]);
   }
 
   remove(sensorId: string): Observable<void> {
-    return this.http.delete<void>(trackingUrl(`sensors/${encodeURIComponent(sensorId)}`), { params: tenantParams() }).pipe(catchError((e) => apiError(e, `Could not delete ${sensorId}.`)));
+    const i = SENSORS.findIndex((s) => s.sensorId === sensorId);
+    if (i >= 0) SENSORS.splice(i, 1);
+    return demo(undefined as void);
   }
 
   formOptions(): Observable<SensorFormOptionsDto> {
-    return this.http.get<SensorFormOptionsDto>(trackingUrl('sensors/form-options'), { params: tenantParams() }).pipe(catchError((e) => apiError(e, 'Could not load the sensor form options.')));
+    return demo(SENSOR_FORM_OPTIONS);
   }
 
   /** Common points for the type plus any already used on sensors of that type. */
   measurementPoints(sensorType: string): Observable<string[]> {
-    return this.http.get<string[]>(trackingUrl('sensors/measurement-points'), { params: tenantParams({ sensorType }) }).pipe(catchError((e) => apiError(e, 'Could not load measurement points.')));
+    const used = SENSORS.filter((s) => s.sensorType === sensorType).map((s) => s.measurementPoint ?? '').filter(Boolean);
+    return demo([...new Set([...(MEASUREMENT_POINTS[sensorType] ?? []), ...used])]);
   }
 
   devices(search = '', limit = 100): Observable<SensorDeviceOptionDto[]> {
-    return this.http.get<SensorDeviceOptionDto[]>(trackingUrl('sensors/devices'), { params: tenantParams({ search, limit }) }).pipe(catchError((e) => apiError(e, 'Could not load devices.')));
+    const q = search.trim().toLowerCase();
+    return demo(
+      IOT_DEVICES.filter((d) => d.deviceType !== 'Gateway' && d.deviceType !== 'RFID Reader')
+        .filter((d) => !q || [d.deviceId, d.deviceName, d.model, d.assetName ?? ''].some((v) => v.toLowerCase().includes(q)))
+        .slice(0, limit)
+        .map((d) => {
+          const used = this.usedChannels(d.deviceId);
+          return {
+            deviceId: d.deviceId, deviceName: d.deviceName, deviceType: d.deviceType, model: d.model, siteId: d.siteId, siteName: d.siteName,
+            assetRegistrationId: d.assetRegistrationId, assetCode: d.assetCode, assetName: d.assetName, usedChannels: used, nextChannel: nextFree(used),
+          };
+        }),
+    );
   }
 
   channels(deviceId: string): Observable<SensorChannelsDto> {
-    return this.http.get<SensorChannelsDto>(trackingUrl(`sensors/devices/${encodeURIComponent(deviceId)}/channels`), { params: tenantParams() }).pipe(catchError((e) => apiError(e, `Device ${deviceId} was not found.`)));
+    if (!IOT_DEVICES.some((d) => d.deviceId === deviceId)) return demoError(`Device ${deviceId} was not found.`);
+    const used = this.usedChannels(deviceId);
+    return demo({ deviceId, usedChannels: used, nextChannel: nextFree(used) });
   }
 
   /** Readings of the last `days` days, oldest first. */
   readings(sensorId: string, days = 1): Observable<{ at: number; v: number | null }[]> {
-    return this.http
-      .get<TelemetryReadingDto[]>(trackingUrl('telemetry-readings'), { params: tenantParams({ sensorId, days, limit: 500 }) })
-      .pipe(
-        map((rows) => rows.map((r) => ({ at: new Date(r.recordedAt).getTime(), v: Number(r.value) })).sort((a, b) => a.at - b.at)),
-        catchError((e) => apiError(e, 'Could not load readings.')),
-      );
+    return demo(generateReadings({ sensorId, days, limit: 500 }).map((r) => ({ at: new Date(r.recordedAt).getTime(), v: Number(r.value) })).sort((a, b) => a.at - b.at));
   }
 
   /** Signed-in user for createdBy. */
   userName(): string | null {
-    let stored: string | null = null;
-    try { stored = localStorage.getItem('userEmail'); } catch { /* storage blocked */ }
-    return this.auth.getUser()?.userName || this.auth.getUserEmail() || stored || null;
+    return this.auth.getUser()?.userName || this.auth.getUserEmail() || DEMO_USER;
   }
+
+  private usedChannels(deviceId: string): number[] {
+    return SENSORS.filter((s) => s.deviceId === deviceId && s.channel !== null).map((s) => s.channel!).sort((a, b) => a - b);
+  }
+
+  private toDto(sensorId: string, b: Omit<SensorRequest, 'clientId' | 'tenantId' | 'createdBy'>, old: SensorDto | null): SensorDto {
+    const type = SENSOR_FORM_OPTIONS.sensorTypes.find((t) => t.sensorType === b.sensorType);
+    const now = new Date().toISOString();
+    return {
+      id: old?.id ?? newRecordId(), sensorId, sensorNumber: b.sensorNumber ?? sensorId.split('-').pop() ?? null, serialNumber: b.serialNumber, name: b.name ?? sensorId,
+      sensorType: b.sensorType, measuredParameter: b.measuredParameter ?? type?.measuredParameter ?? '', unit: b.unit ?? type?.unit ?? null, deviceId: b.deviceId,
+      deviceModel: b.deviceModel ?? IOT_DEVICES.find((d) => d.deviceId === b.deviceId)?.model ?? null, channel: b.channel, samplingIntervalSeconds: b.samplingIntervalSeconds,
+      lowAlarm: b.lowAlarm, highAlarm: b.highAlarm, siteId: b.siteId, siteName: b.siteName, assetRegistrationId: b.assetRegistrationId, assetCode: b.assetCode,
+      assetName: b.assetName, measurementPoint: b.measurementPoint, liveReading: b.liveReading ?? old?.liveReading ?? null,
+      calibrationDueDate: b.calibrationDueDate ? `${b.calibrationDueDate.slice(0, 10)}T00:00:00Z` : null, status: b.status ?? 'Active',
+      createdBy: old?.createdBy ?? this.userName(), createdAt: old?.createdAt ?? now, updatedBy: old ? this.userName() : null, updatedAt: old ? now : null,
+    };
+  }
+}
+
+function nextFree(used: number[]): number {
+  let n = 1;
+  while (used.includes(n)) n++;
+  return n;
 }
 
 function ms(iso: string | null | undefined): number | null {

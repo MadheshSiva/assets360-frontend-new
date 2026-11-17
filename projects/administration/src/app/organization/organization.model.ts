@@ -4,8 +4,6 @@ export type Tone = 'green' | 'orange' | 'red' | 'pink' | 'blue' | 'purple' | 'gr
 
 /** One node of the location hierarchy: Location (site) > Building > Floor > Zone. */
 export interface OrgLocation {
-  /** Server locationId; absent until the record is saved. */
-  id?: string;
   code: string;
   name: string;
   type: LocationType;

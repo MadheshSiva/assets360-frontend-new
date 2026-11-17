@@ -16,7 +16,7 @@ import { CustomReportsService, LibraryQuery, cloneReport } from './custom-report
 const MAX_IMPORT_BYTES = 1_000_000;
 const ANY_TIME = 'Any time';
 
-/** Reports & Analytics > Custom Reports (data from /api/custom-reports) */
+/** Reports & Analytics > Custom Reports (static demo data, see custom-reports.service.ts) */
 @Component({
   selector: 'app-ra-custom-reports',
   imports: [FormsModule, RouterLink, LucideAngularModule, ReportLibrary, ReportBuilder, ReportConfig, ConfirmDialog],
@@ -35,7 +35,7 @@ export class CustomReportsPage extends AnalyticsPage {
   readonly icons = { FileText, Funnel, Calendar, File, Plus, Upload, Download, Search };
   readonly statuses: ReportStatus[] = ['Draft', 'Published', 'Scheduled'];
 
-  // Filters (sent to the API)
+  // Library filters
   search = '';
   /** Owner id */
   owner = '';
@@ -141,7 +141,7 @@ export class CustomReportsPage extends AnalyticsPage {
   }
   private searchTimer?: ReturnType<typeof setTimeout>;
 
-  /** The API sorts by name / last update; favourites first is applied here. */
+  /** The service sorts by name / last update; favourites first is applied here. */
   private applySort(): void {
     const list = [...this.service.reports()];
     if (this.librarySort === 'favourites') {

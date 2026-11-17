@@ -39,7 +39,7 @@ const FREQUENCY_TONES: Record<ReportFrequency, string> = {
   Daily: 'green', Weekly: 'blue', Monthly: 'blue', Quarterly: 'purple', Yearly: 'purple', 'On demand': 'purple'
 };
 
-/** Table column → sortBy accepted by GET /api/standard-reports. */
+/** Table column → sortBy of the list query. */
 const SORT_FIELDS: Record<SortKey, ReportSortField> = {
   name: 'reportName',
   module: 'category',
@@ -137,7 +137,7 @@ export class StandardReportsPage extends AnalyticsPage implements OnInit {
 
   // ===== Table =====
   /**
-   * Rows for the picked calendar day. The API has no generated/scheduled-on-day filter, so while a day is
+   * Rows for the picked calendar day. The list query has no generated/scheduled-on-day filter, so while a day is
    * picked the page loads up to SR_MAX_PAGE_SIZE matching reports and filters and pages them here.
    */
   private get dayRows(): StandardReport[] {
@@ -288,7 +288,7 @@ export class StandardReportsPage extends AnalyticsPage implements OnInit {
     };
   }
 
-  /** GET /api/standard-reports for the current search, sort and page. A newer call cancels an older one. */
+  /** Loads the list for the current search, sort and page. A newer call cancels an older one. */
   private loadList(): void {
     this.listSub?.unsubscribe();
     this.listSub = this.service
@@ -373,7 +373,7 @@ export class StandardReportsPage extends AnalyticsPage implements OnInit {
     });
   }
 
-  /** Downloads one report's output (GET /{id}/output) as CSV. The API's /export covers the table listing. */
+  /** Downloads one report's output as CSV. */
   exportCsv(r: StandardReport): void {
     this.service.output(r).subscribe({
       next: (out) => {

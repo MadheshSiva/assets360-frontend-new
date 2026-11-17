@@ -114,14 +114,15 @@ export class Login {
       else localStorage.removeItem(REMEMBER_KEY);
     } catch {}
     this.isLoading = true;
-    this.auth.login({ userName, password: this.credentials.password }).subscribe({
-      next: (res) => {
-        this.isLoading = false;
+    // DEMO MODE: no backend, so any username and password signs in straight away (no code step)
+    this.auth.signIn({ userName, password: this.credentials.password }).subscribe({
+      next: () => {
         this.credentials.password = '';
-        this.challenge = res;
-        this.challengeUser = userName;
-        this.code = '';
-        this.infoMsg = res.message;
+        const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+        this.access.load().subscribe(() => {
+          this.isLoading = false;
+          this.router.navigateByUrl(returnUrl || this.startPage());
+        });
       },
       error: (err) => {
         this.isLoading = false;

@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, ViewChild, effect, inject } from '@angular/core';
+import { Component, ElementRef, HostListener, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { EMPTY, catchError, concatMap, finalize, from, tap } from 'rxjs';
@@ -80,22 +80,10 @@ export class UserManagementPage extends AdminPage {
 
   constructor() {
     super();
-    // Primary / secondary role options come from the Role & Access Control API, fetched fresh on each visit
+    // Primary / secondary role options follow the roles of Role & Access Control
     this.roleService.load().subscribe({
       next: (roles) => setUserRoles(roles),
       error: (err) => this.notify(`Couldn't load roles: ${adminApiError(err, 'roles')}`, 'error')
-    });
-    // Load results from the Administration API show up as a toast
-    let announced = false;
-    effect(() => {
-      const error = this.service.error();
-      const loading = this.service.loading();
-      if (error) this.notify(error, 'error');
-      else if (!loading && !announced) {
-        announced = true;
-        const n = this.service.count();
-        this.notify(n ? `Loaded ${n} user${n === 1 ? '' : 's'} from the server.` : 'No users yet. Add the first user.', 'success');
-      }
     });
   }
 

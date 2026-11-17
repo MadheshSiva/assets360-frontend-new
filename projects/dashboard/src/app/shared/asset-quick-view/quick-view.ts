@@ -1,7 +1,6 @@
 import { DestroyRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, catchError, map, of, switchMap } from 'rxjs';
-import { environment } from '../../../../../../src/environments/environment';
 import type { ConnectedAssetDetail, Dashboard } from '../../services/dashboard/dashboard';
 
 // ===== Asset registration DTOs (Asset service, camelCase) — only the fields the Quick View reads =====
@@ -138,11 +137,11 @@ export interface QuickViewAsset {
   iot: { network: string; gateway: string; lastSeen: string; readings: number } | null;
 }
 
-/** Absolute URL of a file the Asset API returns as a relative path. */
+/** URL of an asset file: demo images and pages are served by the shell from the site root. */
 export function assetFileUrl(url: string | null | undefined): string {
   if (!url) return '';
   if (/^(https?:|blob:|data:)/i.test(url)) return url;
-  return environment.assetApiUrl.replace(/\/$/, '') + (url.startsWith('/') ? url : '/' + url);
+  return url.startsWith('/') ? url : '/' + url;
 }
 
 const day = (v: string | null | undefined) => (v ? v.slice(0, 10) : '');

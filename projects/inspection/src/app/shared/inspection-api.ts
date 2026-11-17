@@ -1,6 +1,5 @@
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, tap } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { AuthService, environment } from 'shared-ui';
 import {
   CalibrationInstrument,
@@ -18,28 +17,19 @@ import {
   TaskCategory,
   WorkingCalendar
 } from './inspection.models';
+import { INSPECTION_SEED } from './inspection-seed.data';
 
-/** Inspection service routes, reached through the API gateway. */
-export const INSPECTION_API = `${environment.inspectionApiUrl}api/`;
-
-/** Readable message for a failed call: first validation error, the server's `message`, or the status. */
+/** Readable message for a failed store call. */
 export function apiErrorMessage(err: unknown): string {
-  if (!(err instanceof HttpErrorResponse)) return 'Something went wrong.';
-  if (err.status === 0) return 'Inspection service is unreachable.';
-  const body = err.error;
-  if (body?.errors && typeof body.errors === 'object') {
-    const first = Object.values(body.errors as Record<string, string[]>).flat()[0];
-    if (first) return first;
-  }
-  if (typeof body?.message === 'string') return body.message;
-  if (typeof body?.title === 'string') return body.title;
-  if (err.status === 404) return 'Record not found.';
-  return `Request failed (${err.status}).`;
+  return err instanceof Error && err.message ? err.message : 'Something went wrong.';
 }
 
+let nextId = 1;
+const newId = () => `local-${Date.now().toString(36)}-${nextId++}`;
+
 /**
- * In-memory copy of one API resource. Pages read `items()` and call `load()` on init; `save()` creates
- * when the record has no id, otherwise updates, and keeps `items()` in step with the server.
+ * In-memory copy of one Inspection resource, seeded with the static demo data. Pages read `items()` and call
+ * `load()` on init; `save()` creates when the record has no id, otherwise updates. Changes last for the session.
  */
 export class ResourceStore<T extends InspectionAudit> {
   readonly items = signal<T[]>([]);
@@ -49,27 +39,19 @@ export class ResourceStore<T extends InspectionAudit> {
   readonly count = computed(() => this.items().length);
 
   constructor(
-    private readonly http: HttpClient,
     private readonly auth: AuthService,
     readonly resource: string
-  ) {}
+  ) {
+    // Seeded up front so cross-references (e.g. sites from calendars) resolve even before a page calls load().
+    this.load();
+  }
 
-  /** Fetches the list once; pass `force` to refetch. */
+  /** Fills the list from the seed once; `force` re-reads the seed (dropping session changes). */
   load(force = false): void {
-    if ((this.loaded() || this.loading()) && !force) return;
-    this.loading.set(true);
+    if (this.loaded() && !force) return;
+    this.items.set(structuredClone((INSPECTION_SEED[this.resource] ?? []) as T[]));
     this.error.set(null);
-    this.http.get<T[]>(this.url()).subscribe({
-      next: (rows) => {
-        this.items.set(rows);
-        this.loaded.set(true);
-        this.loading.set(false);
-      },
-      error: (err) => {
-        this.error.set(apiErrorMessage(err));
-        this.loading.set(false);
-      }
-    });
+    this.loaded.set(true);
   }
 
   byId(id: string | null | undefined): T | undefined {
@@ -78,28 +60,38 @@ export class ResourceStore<T extends InspectionAudit> {
 
   save(record: Partial<T>): Observable<T> {
     const actor = this.auth.getUserEmail() || 'unknown';
+    const now = new Date().toISOString();
     if (record.id) {
-      return this.http
-        .put<T>(this.url(record.id), { ...record, updatedBy: actor })
-        .pipe(tap((saved) => this.items.update((rows) => rows.map((r) => (r.id === saved.id ? saved : r)))));
+      const existing = this.byId(record.id);
+      if (!existing) return throwError(() => new Error('Record not found.'));
+      const saved = { ...existing, ...record, updatedBy: actor, updatedAt: now } as T;
+      this.items.update((rows) => rows.map((r) => (r.id === saved.id ? saved : r)));
+      return of(structuredClone(saved));
     }
-    const body = { ...record, createdBy: actor, clientId: environment.clientId, tenantId: environment.tenantId };
-    return this.http.post<T>(this.url(), body).pipe(tap((saved) => this.items.update((rows) => [saved, ...rows])));
+    const saved = {
+      ...record,
+      id: newId(),
+      status: record.status ?? 'Active',
+      createdBy: actor,
+      createdAt: now,
+      updatedBy: null,
+      updatedAt: null,
+      clientId: environment.clientId,
+      tenantId: environment.tenantId
+    } as T;
+    this.items.update((rows) => [saved, ...rows]);
+    return of(structuredClone(saved));
   }
 
   remove(id: string): Observable<unknown> {
-    return this.http.delete(this.url(id)).pipe(tap(() => this.items.update((rows) => rows.filter((r) => r.id !== id))));
-  }
-
-  private url(id?: string): string {
-    return `${INSPECTION_API}${this.resource}${id ? `/${id}` : ''}`;
+    this.items.update((rows) => rows.filter((r) => r.id !== id));
+    return of(null);
   }
 }
 
 /** One store per Inspection resource, shared by every page so data loads once per session. */
 @Injectable({ providedIn: 'root' })
 export class InspectionApi {
-  private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
 
   readonly types = this.store<InspectionType>('inspection-types');
@@ -117,6 +109,6 @@ export class InspectionApi {
   readonly calendars = this.store<WorkingCalendar>('holiday-and-working-calendars');
 
   private store<T extends InspectionAudit>(resource: string): ResourceStore<T> {
-    return new ResourceStore<T>(this.http, this.auth, resource);
+    return new ResourceStore<T>(this.auth, resource);
   }
 }

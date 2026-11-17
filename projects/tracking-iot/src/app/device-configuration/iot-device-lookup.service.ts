@@ -1,9 +1,9 @@
-import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, catchError } from 'rxjs';
-import { apiError, getAllPages, trackingUrl } from '../shared/tracking-api';
+import { Injectable } from '@angular/core';
+import { Observable } from 'rxjs';
+import { demo } from '../shared/tracking-api';
+import { liveDevices } from '../device-management/iot-devices.data';
 
-/** A device as GET /api/iot-devices returns it. Read-only here: the IoT Device Management page owns create / update / delete. */
+/** A registered IoT device. Read-only here: the IoT Device Management page owns create / update / delete. */
 export interface IoTDeviceDto {
   id: string;
   deviceId: string;
@@ -44,13 +44,11 @@ export function sameModel(deviceModel: string | null | undefined, firmwareModel:
   return a === b || a.endsWith(' ' + b) || b.endsWith(' ' + a);
 }
 
-/** Read-only access to the IoT device registry (GET /api/iot-devices). */
+/** Read-only access to the demo IoT device registry (device-management/iot-devices.data.ts). */
 @Injectable({ providedIn: 'root' })
 export class IoTDeviceLookupService {
-  private readonly http = inject(HttpClient);
-
-  /** Every registered device (all pages of the list). */
+  /** Every registered device. */
   list(): Observable<IoTDeviceDto[]> {
-    return getAllPages<IoTDeviceDto>(this.http, trackingUrl('iot-devices')).pipe(catchError((e) => apiError(e, 'Could not load IoT devices.')));
+    return demo(liveDevices());
   }
 }
