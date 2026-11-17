@@ -7,7 +7,16 @@
     { "name": "Main Store", "site": "Main Plant", "zone": "Central Store", "type": "Storage", "lat": 24.98516, "lng": 55.1706 },
     { "name": "Building 1", "site": "Main Plant", "zone": "Plant Area", "type": "Operational", "lat": 24.98686, "lng": 55.16518 },
     { "name": "Client Site - Project A", "site": "External Site", "zone": "Site Area", "type": "Deployment", "lat": 25.01055, "lng": 55.20495 },
-    { "name": "Dispatch Bay", "site": "Main Plant", "zone": "Loading Area", "type": "Operational", "lat": 24.98587, "lng": 55.17151 }
+    { "name": "Dispatch Bay", "site": "Main Plant", "zone": "Loading Area", "type": "Operational", "lat": 24.98587, "lng": 55.17151 },
+    { "name": "IT Department", "site": "Head Office", "zone": "Building A - Level 2", "type": "Operational", "lat": 24.98912, "lng": 55.16205 },
+    { "name": "Finance Office", "site": "Head Office", "zone": "Building A - Level 3", "type": "Operational", "lat": 24.98935, "lng": 55.16248 },
+    { "name": "Head Office Store", "site": "Head Office", "zone": "Building B - Basement", "type": "Storage", "lat": 24.98871, "lng": 55.16302 },
+    { "name": "Loading Bay 2", "site": "Warehouse", "zone": "Loading Area", "type": "Operational", "lat": 24.98322, "lng": 55.17388 },
+    { "name": "Storage Zone C", "site": "Warehouse", "zone": "Racking Area", "type": "Storage", "lat": 24.98276, "lng": 55.17441 },
+    { "name": "DC Room", "site": "Data Center", "zone": "Building A - Ground", "type": "Operational", "lat": 24.98981, "lng": 55.16733 },
+    { "name": "Substation Yard", "site": "Main Substation", "zone": "Outdoor", "type": "Operational", "lat": 24.98402, "lng": 55.16111 },
+    { "name": "Roof Deck", "site": "Building B", "zone": "Roof", "type": "Operational", "lat": 24.98774, "lng": 55.16581 },
+    { "name": "Electrical Room C", "site": "Building C", "zone": "Ground Floor", "type": "Operational", "lat": 24.98463, "lng": 55.16871 }
   ],
   "geofence": [
     [24.9876, 55.1633],

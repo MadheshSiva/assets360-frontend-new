@@ -111,7 +111,7 @@ export class Sidebar {
         { label: 'Location History', path: '/assets/location-history' },
         { label: 'Assignment', path: '/assets/assignment' },
         // { label: 'Maintenance', path: '/assets/maintenance' },
-        { label: 'Asset Relationship', path: '/assets/asset-relationships' },
+        { label: 'Asset Relationships', path: '/assets/asset-relationships' },
         { label: 'Custom Fields', path: '/assets/custom-fields' },
         { label: 'Asset Documents', path: '/assets/all-documents' },
         { label: 'Asset Images', path: '/assets/all-images' },

@@ -1,6 +1,6 @@
 <section class="lh-page">
   <nav class="breadcrumb" aria-label="Breadcrumb">
-    <a routerLink="/assets/list">Assets</a><span class="sep" aria-hidden="true">›</span><span class="crumb-current">Location History</span>
+    <a routerLink="/assets/list">Assets</a><span class="sep" aria-hidden="true">›</span><a routerLink="/assets/location-history">Location History</a><span class="sep" aria-hidden="true">›</span><span class="crumb-current">{{ asset.tag }}</span>
   </nav>
 
   <!-- ===== Page header ===== -->
@@ -10,6 +10,7 @@
       <h1>Location History</h1>
       <p>View the movement and location history of an asset over time.</p>
     </div>
+    <a class="btn btn-outline" routerLink="/assets/location-history"><lucide-icon [img]="icons.ChevronLeft" [size]="17"></lucide-icon>All Assets</a>
     <button type="button" class="btn btn-outline" (click)="export()"><lucide-icon [img]="icons.Download" [size]="17"></lucide-icon>Export History</button>
   </div>
 
@@ -207,7 +208,7 @@
         <label class="field"><span class="field-label">Movement Type</span><select class="control" [(ngModel)]="f.movement" name="mv"><option value="In">In</option><option value="Out">Out</option><option value="Move">Move</option></select></label>
         <label class="field"><span class="field-label">Date &amp; Time <em>*</em></span><input class="control" type="datetime-local" [(ngModel)]="f.at" name="at" /></label>
       </div>
-      <label class="field"><span class="field-label">Source</span><select class="control" [(ngModel)]="f.source" name="src"><option>Manual Update</option><option>GPS Tag</option><option>RFID Gate</option><option>Barcode Scan</option></select></label>
+      <label class="field"><span class="field-label">Source</span><select class="control" [(ngModel)]="f.source" name="src"><option *ngFor="let s of sources" [value]="s.value">{{ s.value }}</option></select></label>
       <label class="field"><span class="field-label">Remarks</span><input class="control" [(ngModel)]="f.remarks" name="rem" /></label>
       <p *ngIf="recordError" class="form-error" role="alert">{{ recordError }}</p>
       <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="recordForm = null">Cancel</button><button type="submit" class="btn btn-primary">Save Movement</button></div>

@@ -19,7 +19,7 @@ import { AssetHealthOverview } from './asset-health-score/asset-health-overview'
 import { AssetBulk } from './asset-bulk/asset-bulk';
 import { BulkAssignment } from './asset-bulk/bulk-assignment/bulk-assignment';
 import { AssetMerge } from './asset-merge/asset-merge';
-import { LocationHistory } from './asset-location-history/location-history';
+import { LocationHistoryOverview } from './asset-location-history/location-history-overview';
 import { AssetAssignment } from './asset-assignment/asset-assignment';
 import { AssignAsset } from './asset-assignment/assign-asset/assign-asset';
 import { AssetMaintenance } from './asset-maintenance/asset-maintenance';
@@ -51,7 +51,8 @@ export const routes: Routes = [
   { path: 'types-models', component: AssetTypesModels },
   { path: 'hierarchy', component: AssetHierarchy },
   { path: 'components', component: AssetComponents },
-  { path: 'location-history', component: LocationHistory },
+  // Every asset's latest location and location changes; ?tag= opens one asset's location history
+  { path: 'location-history', component: LocationHistoryOverview },
   { path: 'assignment', component: AssetAssignment },
   // ?type= preselects the assignee kind, ?assets= the asset tags
   { path: 'assignment/assign-asset', component: AssignAsset },

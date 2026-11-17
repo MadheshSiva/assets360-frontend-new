@@ -27,37 +27,8 @@ import {
   Users,
   X,
 } from 'lucide-angular';
-import DATA from './location-history.json';
 import { ASSET_RECORDS, ASSET_TYPE_ICONS, AssetRecord, findAsset } from 'shared-ui';
-
-type MovementType = 'In' | 'Out' | 'Move';
-
-interface Place {
-  name: string;
-  site: string;
-  zone: string;
-  type: string;
-  lat: number;
-  lng: number;
-}
-
-interface Movement {
-  id: number;
-  /** Local time, "YYYY-MM-DDTHH:mm". */
-  at: string;
-  location: string;
-  movement: MovementType;
-  source: string;
-  remarks: string;
-  by: string;
-}
-
-interface AssetHistory {
-  serialNumber: string;
-  assignedTo: string;
-  custodian: string;
-  movements: Movement[];
-}
+import { AssetHistory, GEOFENCE, LOCATION_SOURCES, Movement, MovementType, PLACES, Place, findPlace, historyOf, parseLocal, recordMovement, stamp } from './location-history.data';
 
 /** A movement with its place and how long the asset stayed there. */
 interface Row extends Movement {
@@ -97,8 +68,6 @@ interface RecordForm {
   remarks: string;
 }
 
-const SOURCE = DATA as unknown as { locations: Place[]; geofence: [number, number][]; assets: Record<string, AssetHistory> };
-const PLACES: Place[] = SOURCE.locations;
 const DEFAULT_TAG = 'GEN-00045';
 const CURRENT_USER = 'Rex Kumar';
 
@@ -121,57 +90,6 @@ function unproject(x: number, y: number, z: number): { lat: number; lng: number 
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
-const stamp = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-
-function parseLocal(s: string): Date {
-  const [date, time = '00:00'] = s.split('T');
-  const [y, m, d] = date.split('-').map(Number);
-  const [hh, mm] = time.split(':').map(Number);
-  return new Date(y, m - 1, d, hh, mm);
-}
-
-/**
- * Assets without recorded history get a plausible one built from their tag, so every asset in the register
- * can be opened here. DEMO MODE until the tracking API is wired up.
- */
-function buildHistory(asset: AssetRecord): AssetHistory {
-  let seed = 0;
-  for (const ch of asset.tag) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
-  const rnd = () => {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 0x100000000;
-  };
-  const inside = PLACES.filter((p) => p.site === 'Main Plant');
-  const remarks: Record<string, string> = {
-    Operational: 'Moved to operating area', Maintenance: 'Sent for preventive maintenance', Storage: 'Moved to storage', Deployment: 'Deployed to client site',
-  };
-  const movements: Movement[] = [];
-  let t = parseLocal('2026-10-15T09:40').getTime();
-  let last = '';
-  const count = 5 + Math.floor(rnd() * 4);
-  for (let i = 0; i < count; i++) {
-    let place = inside[Math.floor(rnd() * inside.length)];
-    if (place.name === last) place = inside[(inside.indexOf(place) + 1) % inside.length];
-    last = place.name;
-    movements.push({
-      id: count - i, at: stamp(new Date(t)), location: place.name, movement: i === count - 1 ? 'Move' : 'In', source: rnd() > 0.35 ? 'GPS Tag' : 'Manual Update',
-      remarks: remarks[place.type] ?? 'Internal movement', by: 'System',
-    });
-    t -= (18 + Math.floor(rnd() * 60)) * 3_600_000 + Math.floor(rnd() * 4) * 15 * 60_000;
-  }
-  return { serialNumber: `${asset.model.replace(/\W/g, '').toUpperCase().slice(0, 6)}${asset.id.toString().padStart(4, '0')}`, assignedTo: `${asset.department} Dept.`, custodian: asset.custodian, movements };
-}
-
-/** DEMO MODE: histories kept in memory per asset (recorded movements survive moving between pages). */
-const HISTORIES = new Map<string, AssetHistory>();
-function historyOf(asset: AssetRecord): AssetHistory {
-  let h = HISTORIES.get(asset.tag);
-  if (!h) {
-    h = SOURCE.assets[asset.tag] ? structuredClone(SOURCE.assets[asset.tag]) : buildHistory(asset);
-    HISTORIES.set(asset.tag, h);
-  }
-  return h;
-}
 
 @Component({
   selector: 'app-location-history',
@@ -189,6 +107,7 @@ export class LocationHistory implements AfterViewInit, OnDestroy {
   readonly places = PLACES;
   readonly assets = ASSET_RECORDS;
   readonly pageSizes = [10, 25, 50];
+  readonly sources = LOCATION_SOURCES;
 
   @ViewChild('mapEl') mapEl?: ElementRef<HTMLDivElement>;
 
@@ -284,7 +203,7 @@ export class LocationHistory implements AfterViewInit, OnDestroy {
   }
 
   place(name: string): Place {
-    return PLACES.find((p) => p.name === name) ?? { name, site: '—', zone: '—', type: '—', lat: 0, lng: 0 };
+    return findPlace(name);
   }
 
   // ===== History rows =====
@@ -454,7 +373,7 @@ export class LocationHistory implements AfterViewInit, OnDestroy {
     }
     pins.sort((a, b) => Number(a.current) - Number(b.current));
     const path = [...rows].sort((a, b) => a.at.localeCompare(b.at)).map((r) => at(r.place.lat, r.place.lng)).map((p) => `${p.x},${p.y}`).join(' ');
-    const fence = SOURCE.geofence.map(([lat, lng]) => at(lat, lng)).map((p) => `${p.x},${p.y}`).join(' ');
+    const fence = GEOFENCE.map(([lat, lng]) => at(lat, lng)).map((p) => `${p.x},${p.y}`).join(' ');
     const view = { tiles, pins, path, fence };
     this.viewCache = { key, view };
     return view;
@@ -554,12 +473,8 @@ export class LocationHistory implements AfterViewInit, OnDestroy {
   saveRecord(): void {
     const f = this.recordForm;
     if (!f) return;
-    if (!f.location || !f.at) return void (this.recordError = 'Choose the location and the date and time.');
-    const cur = this.current;
-    if (cur && f.at <= cur.at) return void (this.recordError = `The movement must be after the current location's arrival (${cur.at.replace('T', ' ')}).`);
-    if (cur && f.location === cur.location) return void (this.recordError = `${this.asset.tag} is already at ${f.location}.`);
-    const id = Math.max(0, ...this.history.movements.map((m) => m.id)) + 1;
-    this.history.movements = [...this.history.movements, { id, at: f.at, location: f.location, movement: f.movement, source: f.source, remarks: f.remarks.trim() || 'Location updated', by: CURRENT_USER }];
+    const error = recordMovement(this.asset, { at: f.at, location: f.location, movement: f.movement, source: f.source, remarks: f.remarks.trim() || 'Location updated', by: CURRENT_USER });
+    if (error) return void (this.recordError = error);
     this.recordForm = null;
     this.page = 0;
     this.fit();
