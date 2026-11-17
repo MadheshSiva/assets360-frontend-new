@@ -1,14 +1,12 @@
-import { RA_CATEGORIES, money } from '../shared/analytics-common';
+import { money } from '../shared/analytics-common';
 import { RA_COLORS } from '../shared/charts/chart-utils';
-import { PeriodWindow, periodWindow, siteInScope, sumOf } from '../inventory-analytics/parts/ra-parts';
 
-// Financial analytics: site cost splits, monthly TCO series, cost centers, asset costs, CAPEX requests and disposal
-// candidates come from the finance system. No data source is wired yet, so everything starts empty.
-// Amounts are held in AED and converted for display.
+// Financial Analytics view model. Figures come from the Report Analytics API (/api/financial-analytics, see financial-analytics.service.ts)
+// in the register's base currency (AED) and are converted for display.
 
 export type Currency = 'AED' | 'USD' | 'SAR';
 export const CURRENCIES: Currency[] = ['AED', 'USD', 'SAR'];
-/** Fixed demo rates: AED per one unit of the currency */
+/** DEMO MODE: fixed display rates (AED per one unit of the currency); no exchange-rate service exists yet. */
 const AED_PER: Record<Currency, number> = { AED: 1, USD: 3.6725, SAR: 0.979 };
 
 export function toCurrency(aed: number, cur: Currency): number {
@@ -20,56 +18,42 @@ export function moneyIn(aed: number, cur: Currency, digits = 2): string {
   return money(toCurrency(aed, cur), digits).replace('AED', cur);
 }
 
-interface SiteCost {
-  site: string;
-  /** Share of group asset base and spend */
-  share: number;
-  /** Maintenance mix: labour, parts, contractor */
-  mix: [number, number, number];
-}
-
-const SITES: SiteCost[] = [];
-
+/** TCO components the API reports month by month (acquisition / CAPEX and maintenance spend). */
+export const TCO_COMPONENTS = ['Acquisition', 'Maintenance'];
+export const TCO_COLORS = [RA_COLORS.blue, RA_COLORS.green];
 export const CATEGORY_COLORS = [RA_COLORS.blue, RA_COLORS.green, RA_COLORS.orange, RA_COLORS.violet, RA_COLORS.pink, RA_COLORS.teal, RA_COLORS.grey];
 
-export const TCO_COMPONENTS = ['Acquisition', 'Maintenance', 'Operating & Energy', 'Depreciation', 'Downtime', 'Disposal'];
-export const TCO_COLORS = [RA_COLORS.blue, RA_COLORS.green, RA_COLORS.orange, RA_COLORS.violet, RA_COLORS.pink, RA_COLORS.teal];
-
-// ===== Cost centers =====
-
-export interface CostCenter {
-  code: string;
-  name: string;
-  /** Budget and actual for the period, AED */
-  budget: number;
-  actual: number;
-  /** TCO component the actual follows month by month (-1 = flat) */
-  driver: number;
-}
-
-export const COST_CENTERS: CostCenter[] = [];
 export const BUDGET_TARGET = 90;
+/** Maintenance to date above this share of acquisition cost flags an asset for repair-vs-replace review (API default). */
+export const MAINTENANCE_RATIO_LIMIT = 50;
 
-// ===== Asset-level rows =====
+export const ALL_CATEGORIES = 'All categories';
+export const ALL_COST_CENTERS = 'All cost centers';
+export const ALL_ORGANIZATIONS = 'All organizations';
+export const ALL_LOCATIONS = 'All locations';
+export const FA_DEFAULT_PERIOD = 'This year';
+export const FA_FALLBACK_PERIODS = ['Today', 'Last 7 days', 'Last 30 days', 'This month', 'Last month', 'This quarter', 'This year'];
 
 export interface CostAsset {
+  /** Row key (asset record id, or the asset id work orders use) */
+  key: string;
   id: string;
   name: string;
   category: string;
   site: string;
   acquisition: number;
+  /** Maintenance to the end of the period */
   maintenance: number;
+  /** Accumulated depreciation at the end of the period */
   depreciation: number;
+  netBookValue: number;
+  /** Acquisition + maintenance to date */
   tco: number;
-  hours: number;
-  costPerHour: number;
-  /** Expected lifecycle cost to date */
-  plannedTco: number;
-  lifecyclePct: number;
+  hours: number | null;
+  costPerHour: number | null;
+  /** Maintenance to date as a % of acquisition cost; null without an acquisition cost */
+  maintenanceRatio: number | null;
 }
-
-export const COST_ASSETS: CostAsset[] = [];
-export const LIFECYCLE_LIMIT = 120;
 
 export interface CapexRequest {
   ref: string;
@@ -79,9 +63,8 @@ export interface CapexRequest {
   amount: number;
   requestedBy: string;
   submitted: string;
+  status: string;
 }
-
-export const CAPEX_REQUESTS: CapexRequest[] = [];
 
 export interface DisposalCandidate {
   id: string;
@@ -89,22 +72,8 @@ export interface DisposalCandidate {
   category: string;
   site: string;
   utilization: number;
+  /** Net book value */
   recoverable: number;
-}
-
-export const DISPOSAL_CANDIDATES: DisposalCandidate[] = [];
-
-// ===== View for the current filters =====
-
-export const ALL_CATEGORIES = 'All categories';
-export const ALL_COST_CENTERS = 'All cost centers';
-
-export interface FinancialFilters {
-  period: string;
-  organization: string;
-  location: string;
-  category: string;
-  costCenter: string;
 }
 
 export interface SiteMaintenance {
@@ -121,8 +90,9 @@ export interface CostCenterRow {
   budget: number;
   actual: number;
   variance: number;
-  utilization: number;
-  status: 'Over Budget' | 'At Risk' | 'On Track';
+  /** Actual ÷ budget in %; null when the cost center has no budget */
+  utilization: number | null;
+  status: string;
 }
 
 export interface CategoryCost {
@@ -131,79 +101,79 @@ export interface CategoryCost {
   color: string;
 }
 
+/** A KPI's value, previous-period value and % change (null when there is nothing to compare with). */
+export interface FinancialKpi {
+  value: number;
+  previous: number;
+  change: number | null;
+}
+
 /** All amounts in AED; the page converts for display */
 export interface FinancialView {
-  window: PeriodWindow;
-  hasScope: boolean;
-  totalAssetValue: number;
-  maintenance: number;
-  capex: number;
-  opex: number;
-  netBookValue: number;
+  generatedAt: string | null;
+  /** Month labels of the period ("Jan\n2026") */
+  labels: string[];
+  caption: string;
+  totalAssetValue: FinancialKpi;
+  maintenance: FinancialKpi;
+  capex: FinancialKpi;
+  opex: FinancialKpi;
+  netBookValue: FinancialKpi;
+  /** One monthly series per TCO_COMPONENTS entry */
   tco: number[][];
   tcoCumulative: number[];
+  tcoCumulativePrevious: number[];
   tcoTotal: number;
   categoryCosts: CategoryCost[];
   depreciation: number[];
   accumulated: number[];
+  depreciationPrevious: number[];
   costCenters: CostCenterRow[];
   budget: number;
   spend: number;
+  budgetUtilization: number | null;
+  budgetTarget: number;
+  maintenanceRatioLimit: number;
+  utilizationThreshold: number;
   siteMaintenance: SiteMaintenance[];
   assets: CostAsset[];
+  assetTotal: number;
   capexRequests: CapexRequest[];
   disposals: DisposalCandidate[];
 }
 
-export function buildFinancialView(f: FinancialFilters): FinancialView {
-  const w = periodWindow(f.period);
-  const sites = SITES.filter((s) => siteInScope(s.site, f.organization, f.location));
-  const siteShare = sumOf(sites.map((s) => s.share));
-  const c = RA_CATEGORIES.indexOf(f.category);
+const emptyKpi = (): FinancialKpi => ({ value: 0, previous: 0, change: null });
 
-  // Monthly TCO components, category split and depreciation are not available until a data source is wired
-  const tco: number[][] = TCO_COMPONENTS.map(() => []);
-  const tcoCumulative: number[] = [];
-  const tcoTotal = 0;
-  const categoryCosts: CategoryCost[] = [];
-  const acc: number[] = [];
-
-  const costCenters: CostCenterRow[] = COST_CENTERS.filter((cc) => f.costCenter === ALL_COST_CENTERS || f.costCenter === `${cc.code} ${cc.name}`).map((cc) => {
-    const utilization = cc.budget ? (cc.actual / cc.budget) * 100 : 0;
-    return {
-      code: cc.code, name: cc.name, budget: cc.budget, actual: cc.actual, variance: cc.actual - cc.budget, utilization,
-      status: utilization > 105 ? 'Over Budget' : utilization > 100 ? 'At Risk' : 'On Track'
-    };
-  });
-
-  const maintenanceTotal = sumOf(tco[1]);
-  const siteMaintenance = sites.map((s) => {
-    const total = siteShare ? (maintenanceTotal * s.share) / siteShare : 0;
-    return { site: s.site, labour: total * s.mix[0], parts: total * s.mix[1], contractor: total * s.mix[2], total };
-  });
-
-  const assetInScope = (a: { site: string; category: string }) => sites.some((s) => s.site === a.site) && (c < 0 || a.category === f.category);
-
+/** The page before the first response (and after a failed one): no figures. */
+export function emptyFinancial(): FinancialView {
   return {
-    window: w,
-    hasScope: sites.length > 0,
-    totalAssetValue: 0,
-    maintenance: maintenanceTotal,
-    capex: sumOf(tco[0]),
-    opex: sumOf(tco[2]),
-    netBookValue: 0,
-    tco,
-    tcoCumulative,
-    tcoTotal,
-    categoryCosts,
-    depreciation: tco[3],
-    accumulated: acc,
-    costCenters,
-    budget: sumOf(costCenters.map((x) => x.budget)),
-    spend: sumOf(costCenters.map((x) => x.actual)),
-    siteMaintenance,
-    assets: COST_ASSETS.filter(assetInScope),
-    capexRequests: CAPEX_REQUESTS.filter(assetInScope),
-    disposals: DISPOSAL_CANDIDATES.filter(assetInScope)
+    generatedAt: null,
+    labels: [],
+    caption: '',
+    totalAssetValue: emptyKpi(),
+    maintenance: emptyKpi(),
+    capex: emptyKpi(),
+    opex: emptyKpi(),
+    netBookValue: emptyKpi(),
+    tco: TCO_COMPONENTS.map(() => []),
+    tcoCumulative: [],
+    tcoCumulativePrevious: [],
+    tcoTotal: 0,
+    categoryCosts: [],
+    depreciation: [],
+    accumulated: [],
+    depreciationPrevious: [],
+    costCenters: [],
+    budget: 0,
+    spend: 0,
+    budgetUtilization: null,
+    budgetTarget: BUDGET_TARGET,
+    maintenanceRatioLimit: MAINTENANCE_RATIO_LIMIT,
+    utilizationThreshold: 25,
+    siteMaintenance: [],
+    assets: [],
+    assetTotal: 0,
+    capexRequests: [],
+    disposals: []
   };
 }

@@ -10,9 +10,9 @@ import { Bookmark, GitCompareArrows, House, LucideAngularModule, RefreshCw, Uplo
     <nav class="crumbs" aria-label="Breadcrumb">
       <lucide-icon [img]="icons.House" [size]="14"></lucide-icon>
       <a routerLink="/dashboard">Asset360</a>
-      <span aria-hidden="true">›</span>
+      <span>/</span>
       <a [routerLink]="basePath">Reports &amp; Analytics</a>
-      <span aria-hidden="true">›</span>
+      <span>/</span>
       <strong>{{ title }}</strong>
     </nav>
     <header class="ra-head">

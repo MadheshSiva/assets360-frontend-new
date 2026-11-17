@@ -1,12 +1,15 @@
-import { Component, DoCheck, Input } from '@angular/core';
+import { Component, DestroyRef, DoCheck, Input, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subject, catchError, debounceTime, of, switchMap, tap } from 'rxjs';
 import { ChartColumn, ChartLine, ChartPie, LucideAngularModule, Table } from 'lucide-angular';
 import { CartesianChart, ChartSeries, ChartSlice, DonutChart, RA_COLORS, RA_SERIES_COLORS, ValueFormat, compactNumber } from '../../shared/charts';
-import { formatCell, runReport } from '../custom-reports.engine';
+import { formatCell } from '../custom-reports.engine';
 import { FieldKind, PreviewColumn, PreviewResult, ReportDefinition, ReportRow, VizType } from '../custom-reports.model';
+import { CustomReportsService } from '../custom-reports.service';
 
 /**
- * Renders a report definition as a table or chart from generated sample rows.
- * Recomputes only when the definition changes (checked by signature) so chart inputs stay stable.
+ * Renders a report definition as a table or chart from live data (POST /api/custom-reports/preview).
+ * Re-runs only when the definition changes (checked by signature), debounced while the user edits.
  */
 @Component({
   selector: 'cr-report-preview',
@@ -20,8 +23,12 @@ import { FieldKind, PreviewColumn, PreviewResult, ReportDefinition, ReportRow, V
       </div>
     </div>
 
-    @if (!result.columns.length) {
+    @if (!definition.fields.length) {
       <p class="empty">Select fields to see a preview.</p>
+    } @else if (error) {
+      <p class="empty cr-error">{{ error }}</p>
+    } @else if (!result.columns.length) {
+      <p class="empty">{{ loading ? 'Loading preview…' : 'No preview yet.' }}</p>
     } @else {
       <p class="cr-preview__title">{{ mode === 'Table' ? reportName || 'Report preview' : result.title }}</p>
       @if (mode === 'Table') {
@@ -51,7 +58,7 @@ import { FieldKind, PreviewColumn, PreviewResult, ReportDefinition, ReportRow, V
         <ra-cartesian-chart [labels]="labels" [series]="series" [kind]="mode === 'Line' ? 'line' : 'bar'" [height]="compact ? 200 : 300"
           [showValues]="mode === 'Bar'" [legend]="false" [format]="valueFormat" [ariaLabel]="result.title" />
       }
-      <p class="muted cr-preview__foot">DEMO MODE · sample data · showing {{ result.rows.length }} of {{ result.matched }} {{ grouped ? 'groups' : 'records' }}</p>
+      <p class="muted cr-preview__foot">{{ loading ? 'Refreshing… · ' : '' }}Live data · showing {{ result.rows.length }} of {{ result.matched }} {{ grouped ? 'groups' : 'records' }}</p>
     }
   `,
   styleUrls: ['../../shared/analytics-page.css', '../custom-reports.css']
@@ -63,9 +70,13 @@ export class ReportPreview implements DoCheck {
   /** Smaller table/chart for the side panel */
   @Input() compact = false;
 
+  private readonly service = inject(CustomReportsService);
+  private readonly runs = new Subject<ReportDefinition>();
   readonly Table = Table;
 
-  result: PreviewResult = { columns: [], rows: [], matched: 0, labelKey: '', valueKey: '', title: '' };
+  result: PreviewResult = EMPTY_RESULT;
+  loading = false;
+  error = '';
   labels: string[] = [];
   series: ChartSeries[] = [];
   slices: ChartSlice[] = [];
@@ -75,6 +86,30 @@ export class ReportPreview implements DoCheck {
   /** Local override of the visualization (Table view / chart toggle) */
   private override: VizType | null = null;
   private signature = '';
+
+  constructor() {
+    this.runs
+      .pipe(
+        debounceTime(350),
+        tap(() => {
+          this.loading = true;
+          this.error = '';
+        }),
+        switchMap((def) =>
+          this.service.preview(def, def.rowLimit).pipe(
+            catchError((err: Error) => {
+              this.error = err.message;
+              return of(EMPTY_RESULT);
+            })
+          )
+        ),
+        takeUntilDestroyed(inject(DestroyRef))
+      )
+      .subscribe((r) => {
+        this.loading = false;
+        this.apply(r);
+      });
+  }
 
   get mode(): VizType {
     return this.override ?? this.definition.viz;
@@ -102,23 +137,29 @@ export class ReportPreview implements DoCheck {
     // A new visualization chosen in the builder wins over the local toggle
     if (this.signature && JSON.parse(this.signature).viz !== this.definition.viz) this.override = null;
     this.signature = sig;
-    this.recompute();
+    this.grouped = !!this.definition.groupBy;
+    if (!this.definition.fields.length) {
+      this.apply(EMPTY_RESULT);
+      return;
+    }
+    // Send a snapshot: the builder keeps mutating the same object
+    this.runs.next(JSON.parse(sig) as ReportDefinition);
   }
 
-  private recompute(): void {
-    const r = runReport(this.definition);
+  private apply(r: PreviewResult): void {
     this.result = r;
-    this.grouped = !!this.definition.groupBy;
     const valueCol = r.columns.find((c) => c.key === r.valueKey);
     const kind: FieldKind = valueCol?.kind ?? 'number';
     this.valueLabel = valueCol?.label ?? '';
     this.valueFormat = kind === 'money' ? moneyShort : kind === 'percent' ? pct : compactNumber;
+    // Chart points from the API cover every matching row; otherwise plot the preview rows
+    const points = r.points ?? r.rows.map((row) => ({ label: String(row[r.labelKey] ?? ''), value: Number(row[r.valueKey]) || 0 }));
     // Charts read best with a handful of categories
-    const top = r.rows.slice(0, 10);
-    this.labels = top.map((row) => shorten(String(row[r.labelKey] ?? '')));
-    this.series = [{ name: this.valueLabel, values: top.map((row) => Number(row[r.valueKey]) || 0), color: RA_COLORS.purple }];
-    const pie: ChartSlice[] = r.rows.slice(0, 6).map((row, i) => ({ name: String(row[r.labelKey] ?? ''), value: Number(row[r.valueKey]) || 0, color: RA_SERIES_COLORS[i % RA_SERIES_COLORS.length] }));
-    const rest = r.rows.slice(6).reduce((sum, row) => sum + (Number(row[r.valueKey]) || 0), 0);
+    const top = points.slice(0, 10);
+    this.labels = top.map((p) => shorten(p.label));
+    this.series = [{ name: this.valueLabel, values: top.map((p) => p.value), color: RA_COLORS.purple }];
+    const pie: ChartSlice[] = points.slice(0, 6).map((p, i) => ({ name: p.label, value: p.value, color: RA_SERIES_COLORS[i % RA_SERIES_COLORS.length] }));
+    const rest = points.slice(6).reduce((sum, p) => sum + p.value, 0);
     if (rest > 0) pie.push({ name: 'Other', value: rest, color: RA_COLORS.grey });
     this.slices = pie;
   }
@@ -131,6 +172,8 @@ export class ReportPreview implements DoCheck {
     return formatCell(c.kind, row[c.key]);
   }
 }
+
+const EMPTY_RESULT: PreviewResult = { columns: [], rows: [], matched: 0, labelKey: '', valueKey: '', title: '', points: null };
 
 function moneyShort(v: number): string {
   return `AED ${compactNumber(v)}`;

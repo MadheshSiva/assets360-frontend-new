@@ -1,7 +1,8 @@
-import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { availableFields, isNumeric } from '../custom-reports.engine';
+import { CALC_GROUP, availableFields, isNumeric } from '../custom-reports.engine';
 import { CalcField, CalcOperator, CustomReport, FieldDef } from '../custom-reports.model';
+import { CustomReportsService } from '../custom-reports.service';
 
 /** Add calculated field: name + <numeric field> <operator> <numeric field>. */
 @Component({
@@ -26,28 +27,28 @@ import { CalcField, CalcOperator, CustomReport, FieldDef } from '../custom-repor
             <div class="field" [class.invalid]="submitted && !left">
               <label for="cr-calc-left">Field</label>
               <select id="cr-calc-left" name="left" [(ngModel)]="left">
-                <option value="">Select Field</option>
+                <option value="">Select…</option>
                 @for (f of numericFields; track f.key) { <option [value]="f.key">{{ f.label }}</option> }
               </select>
             </div>
-            <div class="field cr-calc-op" [class.invalid]="submitted && !op">
+            <div class="field cr-calc-op">
               <label for="cr-calc-op">Operator</label>
               <select id="cr-calc-op" name="op" [(ngModel)]="op">
-                <option value="" disabled>Select Operator</option>
                 @for (o of operators; track o) { <option [value]="o">{{ o }}</option> }
               </select>
             </div>
             <div class="field" [class.invalid]="submitted && !right">
               <label for="cr-calc-right">Field</label>
               <select id="cr-calc-right" name="right" [(ngModel)]="right">
-                <option value="">Select Field</option>
+                <option value="">Select…</option>
                 @for (f of numericFields; track f.key) { <option [value]="f.key">{{ f.label }}</option> }
               </select>
             </div>
           </div>
           @if (submitted && exprError) { <p class="cr-error">{{ exprError }}</p> }
           @if (left && right) {
-            <p class="cr-formula"><strong>{{ name || 'New field' }}</strong> = {{ labelOf(left) }} {{ op }} {{ labelOf(right) }}</p>
+            <p class="cr-formula"><strong>{{ name || 'New field' }}</strong> = {{ labelOf(left) }} {{ op }} {{ labelOf(right) }}
+              @if (op === '÷') { <span class="muted">· division by zero shows 0</span> }</p>
           }
         }
 
@@ -65,17 +66,18 @@ export class CalcFieldDialog implements OnInit {
   @Output() save = new EventEmitter<CalcField>();
   @Output() close = new EventEmitter<void>();
 
+  private readonly service = inject(CustomReportsService);
   readonly operators: CalcOperator[] = ['+', '-', '×', '÷'];
   numericFields: FieldDef[] = [];
   name = '';
   left = '';
-  op: CalcOperator | '' = '';
+  op: CalcOperator = '÷';
   right = '';
   submitted = false;
 
   ngOnInit(): void {
     // Calculated fields only combine source fields, not other calculated fields
-    this.numericFields = availableFields(this.report).filter((f) => isNumeric(f.kind) && f.group !== 'calculated');
+    this.numericFields = availableFields(this.service.catalog(), this.report).filter((f) => isNumeric(f.kind) && f.group !== CALC_GROUP);
   }
 
   labelOf(key: string): string {
@@ -86,13 +88,12 @@ export class CalcFieldDialog implements OnInit {
     const n = this.name.trim();
     if (!n) return 'Enter a field name.';
     if (n.length < 3) return 'Use at least 3 characters.';
-    const taken = availableFields(this.report).some((f) => f.label.toLowerCase() === n.toLowerCase());
+    const taken = availableFields(this.service.catalog(), this.report).some((f) => f.label.toLowerCase() === n.toLowerCase());
     return taken ? 'A field with this name already exists.' : '';
   }
 
   get exprError(): string {
     if (!this.left || !this.right) return 'Choose both fields.';
-    if (!this.op) return 'Choose an operator.';
     if (this.left === this.right && (this.op === '-' || this.op === '÷')) return 'Choose two different fields for this operator.';
     return '';
   }
@@ -100,10 +101,11 @@ export class CalcFieldDialog implements OnInit {
   submit(): void {
     this.submitted = true;
     if (this.nameError || this.exprError || !this.numericFields.length) return;
-    const slug = this.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'field';
-    let key = `calc:${slug}`;
+    // Same key format the API uses (calc_<snake_case label>), so selected fields still match after a save
+    const slug = this.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'field';
+    let key = `calc_${slug}`;
     let i = 1;
-    while (this.report.calcFields.some((c) => c.key === key)) key = `calc:${slug}-${++i}`;
-    this.save.emit({ key, label: this.name.trim(), left: this.left, op: this.op as CalcOperator, right: this.right });
+    while (this.report.calcFields.some((c) => c.key === key)) key = `calc_${slug}_${++i}`;
+    this.save.emit({ key, label: this.name.trim(), left: this.left, op: this.op, right: this.right });
   }
 }

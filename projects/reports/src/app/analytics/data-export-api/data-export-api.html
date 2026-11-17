@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a [routerLink]="basePath">Reports &amp; Analytics</a>
-  <span aria-hidden="true">›</span>
+  <span>/</span>
   <strong>Data Export / API</strong>
 </nav>
 
@@ -40,28 +40,24 @@
   </label>
   @if (tab === 'exports') {
     <select class="select" [(ngModel)]="formatFilter" aria-label="Type">
-      <option value="" disabled>Select Type</option>
       <option value="">Type</option>
       @for (f of formats; track f) {
         <option [value]="f">{{ f }}</option>
       }
     </select>
     <select class="select" [(ngModel)]="statusFilter" aria-label="Status">
-      <option value="" disabled>Select Status</option>
       <option value="">Status</option>
       @for (s of statuses; track s) {
         <option [value]="s">{{ s }}</option>
       }
     </select>
     <select class="select" [(ngModel)]="ownerFilter" aria-label="Owner">
-      <option value="" disabled>Select Owner</option>
       <option value="">Owner</option>
       @for (o of owners; track o) {
         <option [value]="o">{{ o }}</option>
       }
     </select>
     <select class="select" [(ngModel)]="lastRunFilter" aria-label="Last run">
-      <option value="" disabled>Select Last Run</option>
       <option value="">Last Run</option>
       <option value="24h">Last 24 hours</option>
       <option value="7d">Last 7 days</option>
@@ -72,6 +68,24 @@
     }
   }
 </div>
+
+@if (service.error(); as err) {
+  <div class="dx-notice dx-notice--error" role="alert">
+    {{ err }}
+    <button type="button" class="btn btn--link" (click)="refresh()" [disabled]="refreshing">Retry</button>
+  </div>
+} @else if (!service.loaded() && service.loading()) {
+  <div class="dx-notice" role="status">Loading export jobs, connections and datasets…</div>
+} @else if (empty) {
+  <div class="dx-notice">
+    No export jobs or API connections yet, and the datasets hold no records for this client.
+    <button type="button" class="btn btn--link" (click)="createExport()">Create an export</button>
+  </div>
+}
+<p class="dx-delivery-note muted dx-small">
+  Run now generates the file from the live dataset and keeps it with the run history. Delivery to S3, SFTP, e-mail or API:
+  {{ service.deliveryNote }}.
+</p>
 
 @switch (tab) {
   @case ('exports') {
@@ -86,16 +100,12 @@
             </span>
             <span class="dx-kpi-row">
               <span class="kpi__value">{{ k.value }}</span>
-              @if (k.trend.length) {
-                <ra-sparkline [values]="k.trend" [color]="k.color" [width]="72" [height]="26" [area]="true"></ra-sparkline>
-              }
+              <ra-sparkline [values]="k.trend" [color]="k.color" [width]="72" [height]="26" [area]="true"></ra-sparkline>
             </span>
-            @if (k.delta) {
-              <span class="kpi__delta" [class.kpi__delta--bad]="!k.up">
-                <lucide-icon [img]="k.up ? icons.ArrowUp : icons.ArrowDown" [size]="12"></lucide-icon>
-                {{ k.delta }} <small>vs last week</small>
-              </span>
-            }
+            <span class="kpi__delta" [class.kpi__delta--bad]="!k.up">
+              <lucide-icon [img]="k.up ? icons.ArrowUp : icons.ArrowDown" [size]="12"></lucide-icon>
+              {{ k.delta }} <small>{{ k.since }}</small>
+            </span>
           </div>
         </div>
       }

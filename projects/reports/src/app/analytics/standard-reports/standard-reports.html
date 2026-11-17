@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a [routerLink]="basePath">Reports &amp; Analytics</a>
-  <span aria-hidden="true">›</span>
+  <span>/</span>
   <strong>Standard Reports</strong>
 </nav>
 
@@ -36,14 +36,19 @@
 </header>
 
 <div class="sr-top">
-  <app-sr-period-panel [period]="reportingPeriod" [today]="service.today" (apply)="applyPeriod($event)" />
-  <app-sr-report-calendar [reports]="service.reports" [today]="service.today" [selected]="dayFilter" (selectDay)="selectDay($event)" />
+  <app-sr-period-panel [period]="reportingPeriod" [busy]="applying" (apply)="applyPeriod($event)" />
+  <app-sr-report-calendar
+    [days]="service.calendarDays()"
+    [today]="service.today()"
+    [selected]="dayFilter"
+    (selectDay)="selectDay($event)"
+    (monthChange)="calendarMoved($event)"
+  />
 </div>
 
 <section class="widget sr-list">
   <div class="sr-list__head">
     <h2>All Standard Reports</h2>
-    <button type="button" class="btn btn--primary btn--sm" (click)="openCreate()"><lucide-icon [img]="icons.Plus" [size]="14" /> New report</button>
     @if (dayFilter) {
       <span class="pill" data-tone="purple">
         Generated or scheduled {{ dayFilterText }}
@@ -56,26 +61,6 @@
       <lucide-icon [img]="icons.Search" [size]="16" />
       <input type="search" placeholder="Search reports..." aria-label="Search reports" [(ngModel)]="search" (ngModelChange)="searchChanged()" />
     </label>
-  </div>
-  <div class="sr-filters">
-    <select class="select" aria-label="Category" [(ngModel)]="categoryFilter" (ngModelChange)="filterChanged()">
-      <option value="">Select Category</option>
-      @for (c of categoryOptions; track c) {
-        <option [value]="c">{{ c }}</option>
-      }
-    </select>
-    <select class="select" aria-label="Frequency" [(ngModel)]="frequencyFilter" (ngModelChange)="filterChanged()">
-      <option value="">Select Frequency</option>
-      @for (f of frequencyOptions; track f) {
-        <option [value]="f">{{ f }}</option>
-      }
-    </select>
-    <select class="select" aria-label="Status" [(ngModel)]="statusFilter" (ngModelChange)="filterChanged()">
-      <option value="">Select Status</option>
-      @for (s of statusOptions; track s) {
-        <option [value]="s">{{ s }}</option>
-      }
-    </select>
   </div>
 
   <div class="table-wrap">
@@ -140,15 +125,13 @@
           </tr>
         } @empty {
           <tr>
-            <td colspan="8" class="empty">
-              @if (loading) {
-                Loading reports…
-              } @else if (loadError) {
-                {{ loadError }} <button type="button" class="link" (click)="load()">Retry</button>
-              } @else {
-                {{ service.reports.length ? 'No reports match the selected day.' : 'No reports found.' }}
-              }
-            </td>
+            @if (loading) {
+              <td colspan="8" class="empty">Loading reports…</td>
+            } @else if (loadError) {
+              <td colspan="8" class="empty">{{ loadError }}</td>
+            } @else {
+              <td colspan="8" class="empty">No reports match the current search or day.</td>
+            }
           </tr>
         }
       </tbody>
@@ -174,11 +157,7 @@
 }
 
 @if (scheduling) {
-  <app-sr-schedule-dialog [report]="scheduling" (close)="scheduling = null" (save)="saveSchedule($event)" />
-}
-
-@if (creating) {
-  <app-sr-create-dialog [period]="reportingPeriod" [saving]="saving" [error]="createError" (close)="creating = false" (save)="createReport($event)" />
+  <app-sr-schedule-dialog [report]="scheduling" [busy]="savingSchedule" (close)="scheduling = null" (save)="saveSchedule($event)" />
 }
 
 @if (toast) {

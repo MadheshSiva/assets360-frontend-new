@@ -35,7 +35,7 @@ export interface ActionPlan {
           <div class="field" [class.invalid]="tried && !plan.owner">
             <label for="rak-plan-owner">Owner <span class="req">*</span></label>
             <select id="rak-plan-owner" name="owner" [(ngModel)]="plan.owner">
-              <option value="">Select Owner</option>
+              <option value="">Select owner</option>
               @for (p of people; track p) { <option [value]="p">{{ p }}</option> }
             </select>
             @if (tried && !plan.owner) { <small>Choose an owner.</small> }
@@ -45,13 +45,11 @@ export interface ActionPlan {
             <input id="rak-plan-due" name="due" type="date" [min]="today" [(ngModel)]="plan.due" />
             @if (tried && dueError) { <small>{{ dueError }}</small> }
           </div>
-          <div class="field" [class.invalid]="tried && !plan.priority">
+          <div class="field">
             <label for="rak-plan-priority">Priority</label>
             <select id="rak-plan-priority" name="priority" [(ngModel)]="plan.priority">
-              <option value="" disabled>Select Priority</option>
               @for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }
             </select>
-            @if (tried && !plan.priority) { <small>Choose a priority.</small> }
           </div>
         </div>
         <div class="field">
@@ -78,11 +76,12 @@ export class RaActionPlanDialog implements OnInit {
   readonly people = RA_PEOPLE;
   readonly priorities = ['Critical', 'High', 'Medium', 'Low'];
   readonly today = new Date().toISOString().slice(0, 10);
-  plan: ActionPlan = { title: '', owner: '', due: '', priority: '', notes: '' };
+  plan: ActionPlan = { title: '', owner: '', due: '', priority: 'High', notes: '' };
   tried = false;
 
   ngOnInit(): void {
     this.plan.title = this.defaultTitle;
+    this.plan.owner = this.defaultOwner;
   }
 
   get dueError(): string {
@@ -92,7 +91,7 @@ export class RaActionPlanDialog implements OnInit {
 
   submit(): void {
     this.tried = true;
-    if (!this.plan.title.trim() || !this.plan.owner || !this.plan.priority || this.dueError) return;
+    if (!this.plan.title.trim() || !this.plan.owner || this.dueError) return;
     this.saved.emit({ ...this.plan, title: this.plan.title.trim() });
   }
 
@@ -283,7 +282,7 @@ export class RaSaveViewDialog implements OnInit {
         <div class="field" [class.invalid]="tried && !selected.length">
           <label for="rak-share-person">People</label>
           <select id="rak-share-person" name="person" [(ngModel)]="pick" (ngModelChange)="add($event)">
-            <option value="" disabled>Select People</option>
+            <option value="">Add a person…</option>
             @for (p of available; track p) { <option [value]="p">{{ p }}</option> }
           </select>
           @if (tried && !selected.length) { <small>Add at least one person.</small> }
@@ -295,15 +294,13 @@ export class RaSaveViewDialog implements OnInit {
             }
           </div>
         }
-        <div class="field" [class.invalid]="tried && !access">
+        <div class="field">
           <label for="rak-share-access">Access</label>
           <select id="rak-share-access" name="access" [(ngModel)]="access">
-            <option value="" disabled>Select Access</option>
             <option>Can view</option>
             <option>Can comment</option>
             <option>Can edit layout</option>
           </select>
-          @if (tried && !access) { <small>Choose an access level.</small> }
         </div>
         <div class="field">
           <span>Link</span>
@@ -332,7 +329,7 @@ export class RaShareDialog {
 
   selected: string[] = [];
   pick = '';
-  access = '';
+  access = 'Can view';
   tried = false;
 
   get available(): string[] {
@@ -359,7 +356,7 @@ export class RaShareDialog {
 
   submit(): void {
     this.tried = true;
-    if (!this.selected.length || !this.access) return;
+    if (!this.selected.length) return;
     const who = this.selected.length === 1 ? this.selected[0] : `${this.selected.length} people`;
     this.shared.emit(`Shared with ${who} (${this.access.toLowerCase()}).`);
   }

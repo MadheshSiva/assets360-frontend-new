@@ -33,7 +33,7 @@ import { CONNECTION_TONES } from './dx-format';
                 }
                 {{ c.status }}
               </span>
-              <small>{{ c.uptime }}% uptime</small>
+              <small>{{ c.uptime === null ? 'Not tested' : c.uptime + '% uptime' }}</small>
             </span>
             <button type="button" class="btn btn--sm" [disabled]="c.status === 'Testing'" (click)="test.emit(c)">Test</button>
             <span class="row-menu">

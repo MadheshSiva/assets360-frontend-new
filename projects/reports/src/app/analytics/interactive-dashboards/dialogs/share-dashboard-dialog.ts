@@ -25,7 +25,7 @@ export interface ShareResult {
           <label for="sh-person">Add people</label>
           <div class="idb-share-add">
             <select id="sh-person" class="select" [(ngModel)]="person">
-              <option value="">Select Person</option>
+              <option value="">Select a person</option>
               @for (p of availablePeople; track p) { <option [value]="p">{{ p }}</option> }
             </select>
             <button type="button" class="btn" [disabled]="!person" (click)="addPerson()">Add</button>
@@ -45,7 +45,7 @@ export interface ShareResult {
           <label for="sh-group">Add groups</label>
           <div class="idb-share-add">
             <select id="sh-group" class="select" [(ngModel)]="group">
-              <option value="">Select Group</option>
+              <option value="">Select a group</option>
               @for (g of availableGroups; track g) { <option [value]="g">{{ g }}</option> }
             </select>
             <button type="button" class="btn" [disabled]="!group" (click)="addGroup()">Add</button>
@@ -118,6 +118,7 @@ export class ShareDashboardDialog implements OnInit {
     this.organization = this.dashboard.sharing === 'organization';
   }
 
+  // People and groups are picked from client-side lists: the Report Analytics API has no user/group directory endpoint
   get availablePeople(): string[] {
     return RA_PEOPLE.filter((p) => p !== this.dashboard.owner && !this.people.includes(p));
   }

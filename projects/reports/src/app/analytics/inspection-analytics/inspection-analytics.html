@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a [routerLink]="basePath">Reports &amp; Analytics</a>
-  <span aria-hidden="true">›</span>
+  <span>/</span>
   <strong>Inspection Analytics</strong>
 </nav>
 
@@ -28,42 +28,36 @@
   <label class="filter filter--period">
     <span>Period</span>
     <select [(ngModel)]="period" (ngModelChange)="apply()">
-      <option value="">Select Period</option>
       @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Organization</span>
     <select [(ngModel)]="organization" (ngModelChange)="apply()">
-      <option value="">Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Location</span>
     <select [(ngModel)]="location" (ngModelChange)="apply()">
-      <option value="">Select Location</option>
       @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Asset Category</span>
     <select [(ngModel)]="category" (ngModelChange)="apply()">
-      <option value="">Select Asset Category</option>
       @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Inspection Type</span>
     <select [(ngModel)]="type" (ngModelChange)="apply()">
-      <option value="">Select Inspection Type</option>
       @for (t of types; track t) { <option [value]="t">{{ t }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Inspector</span>
     <select [(ngModel)]="inspector" (ngModelChange)="apply()">
-      <option value="">Select Inspector</option>
       @for (i of inspectorOptions; track i) { <option [value]="i">{{ i }}</option> }
     </select>
   </label>
@@ -91,20 +85,24 @@
     </app-ra-widget>
 
     <app-ra-widget class="span-2" title="Findings by Category" info="Findings raised in the period by finding category" (exportCsv)="exportCategories()">
-      <ra-cartesian-chart [labels]="findingTypes" [series]="categorySeries" kind="bar" [showValues]="true" [legend]="false" [height]="240" yTitle="Number of Findings" ariaLabel="Findings by category" />
+      @if (view.categories.length) {
+        <ra-cartesian-chart [labels]="view.categories" [series]="categorySeries" kind="bar" [showValues]="true" [legend]="false" [height]="240" yTitle="Number of Findings" ariaLabel="Findings by category" />
+      } @else {
+        <div class="empty">No findings raised in the period.</div>
+      }
     </app-ra-widget>
 
-    <app-ra-widget class="span-2" title="Inspection Compliance" info="Inspections completed on time against the 90% target" (exportCsv)="exportCompliance()">
+    <app-ra-widget class="span-2" title="Inspection Compliance"
+      [info]="'Assets whose latest inspection is still in date (' + view.compliance.compliantAssets + ' of ' + view.compliance.scheduledAssets + ') against the ' + view.compliance.target + '% target'"
+      (exportCsv)="exportCompliance()">
       <div class="ia-compliance">
-        <ra-gauge-chart [value]="view.completionRate" [display]="kpis[1].value" [target]="complianceTarget" [color]="'#10b981'" [size]="190" />
-        @if (kpis[1].delta) {
-          <div class="ia-compliance__delta">
-            <strong><lucide-icon [img]="icons.ArrowUp" [size]="16" /> {{ kpis[1].delta }}</strong>
-            <span class="muted">vs. previous period</span>
-          </div>
-        }
+        <ra-gauge-chart [value]="view.compliance.value ?? 0" [display]="complianceText" [target]="view.compliance.target" [color]="'#10b981'" [size]="190" />
+        <div class="ia-compliance__delta">
+          <strong><lucide-icon [img]="(view.compliance.change ?? 0) < 0 ? icons.ArrowDown : icons.ArrowUp" [size]="16" /> {{ complianceDelta }}</strong>
+          <span class="muted">vs. previous period</span>
+        </div>
       </div>
-      <ra-cartesian-chart [labels]="view.labels" [series]="complianceSeries" kind="line" [height]="130" [min]="80" [max]="100" [format]="percentFormat" [legend]="false" ariaLabel="Inspection compliance trend" />
+      <ra-cartesian-chart [labels]="view.labels" [series]="complianceSeries" kind="line" [height]="130" [min]="complianceMin" [max]="100" [format]="percentFormat" [legend]="false" ariaLabel="Inspection compliance trend" />
     </app-ra-widget>
 
     <app-ra-widget class="span-2" title="Repeat Findings Trend" info="Defects found again on the same asset vs. repeat defects resolved" (exportCsv)="exportRepeat()">
@@ -112,8 +110,8 @@
     </app-ra-widget>
 
     <app-ra-widget class="span-6" title="Open Inspection Findings" info="Open findings, most severe first" (exportCsv)="exportFindings()">
-      <app-ra-inspection-findings-table [rows]="view.findings" (view)="openFinding($event)" (plan)="planFor($event)"
-        (progress)="markInProgress($event)" (viewAll)="viewAllFindings()" />
+      <app-ra-inspection-findings-table [rows]="view.findings" [total]="view.findingsTotal" (view)="openFinding($event)" (plan)="planFor($event)"
+        (progress)="markInProgress($event)" (viewAll)="viewAllFindings()" (sortChange)="onSort($event)" />
     </app-ra-widget>
 
     <app-ra-widget class="span-6" title="Inspector Performance" info="Completed inspections, average duration, finding rate and closure rate" (exportCsv)="exportInspectors()">
@@ -123,7 +121,7 @@
 
   <aside class="insights" aria-label="Inspection insights">
     <div class="widget__head"><h2>Inspection Insights</h2></div>
-    @for (ins of insights; track ins.title) {
+    @for (ins of insights; track ins.model.key) {
       <article class="insight" [attr.data-tone]="ins.tone">
         <div class="insight__head">
           <lucide-icon class="insight__icon" [img]="ins.icon" [size]="24" />
@@ -138,7 +136,7 @@
         </div>
       </article>
     } @empty {
-      <div class="empty">No insights for the current filters.</div>
+      <p class="empty">No insights for the current filters.</p>
     }
   </aside>
 </div>
@@ -154,7 +152,7 @@
   <app-ra-action-plan-dialog [context]="plan.context" [defaultTitle]="plan.title" [defaultOwner]="plan.owner" (saved)="planSaved($event)" (closed)="plan = null" />
 }
 @if (saveOpen) {
-  <app-ra-save-view-dialog defaultName="Inspection Analytics – {{ locationLabel }}" (saved)="saveNamedView($event)" (closed)="saveOpen = false" />
+  <app-ra-save-view-dialog defaultName="Inspection Analytics – {{ location }}" (saved)="saveNamedView($event)" (closed)="saveOpen = false" />
 }
 @if (toast) {
   <div class="toast" role="status">{{ toast }}</div>

@@ -1,8 +1,9 @@
-import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { LucideAngularModule, X } from 'lucide-angular';
 import { CURRENT_USER } from '../shared/analytics-common';
-import { ReportFormat, ReportFrequency, ReportSchedule, SR_FORMATS, SR_SCHEDULE_FREQUENCIES, StandardReport } from './standard-reports.data';
+import { ReportFormat, ReportFrequency, ReportSchedule, SR_FORMATS, SR_TIME_ZONES, StandardReport } from './standard-reports.data';
+import { StandardReportsService } from './standard-reports.service';
 import { WEEKDAYS, isEmail } from './standard-reports.util';
 
 /** Schedule editor: frequency, day, time, recipients (email chips) and output format. */
@@ -14,44 +15,34 @@ import { WEEKDAYS, isEmail } from './standard-reports.util';
     <div class="overlay" (click)="close.emit()">
       <form class="dialog" role="dialog" aria-modal="true" aria-labelledby="sr-schedule-title" (click)="stop($event)" (ngSubmit)="submit()">
         <h2 id="sr-schedule-title">Schedule report</h2>
-        <p>{{ report.name }} · times are in Asia/Dubai (GST).</p>
+        <p>{{ report.name }} · times are in {{ timeZoneLabel }}.</p>
         <div class="sr-form-grid">
-          <div class="field" [class.invalid]="submitted && !frequency">
-            <label for="sr-freq">Frequency <span class="req">*</span></label>
+          <div class="field">
+            <label for="sr-freq">Frequency</label>
             <select id="sr-freq" name="frequency" [(ngModel)]="frequency" (ngModelChange)="frequencyChanged()">
-              <option value="" disabled>Select Frequency</option>
               @for (f of frequencies; track f) {
                 <option [value]="f">{{ f }}</option>
               }
             </select>
-            @if (submitted && !frequency) {
-              <small>Choose a frequency.</small>
-            }
           </div>
-          <div class="field" [class.invalid]="submitted && dayMissing">
-            <label for="sr-day">{{ dayLabel }} <span class="req">*</span></label>
+          <div class="field">
+            <label for="sr-day">{{ dayLabel }}</label>
             @if (frequency === 'Weekly') {
               <select id="sr-day" name="day" [(ngModel)]="day">
-                <option [ngValue]="null" disabled>Select Day</option>
                 @for (w of weekdays; track $index) {
                   <option [ngValue]="$index">{{ w }}</option>
                 }
               </select>
             } @else if (frequency === 'Daily') {
               <select id="sr-day" name="day" disabled>
-                <option value="" disabled>Select Day</option>
                 <option>Every day</option>
               </select>
             } @else {
               <select id="sr-day" name="day" [(ngModel)]="day">
-                <option [ngValue]="null" disabled>Select Day</option>
                 @for (d of monthDays; track d) {
                   <option [ngValue]="d">{{ dayText(d) }}</option>
                 }
               </select>
-            }
-            @if (submitted && dayMissing) {
-              <small>Choose a day.</small>
             }
           </div>
           <div class="field" [class.invalid]="submitted && !time">
@@ -61,17 +52,13 @@ import { WEEKDAYS, isEmail } from './standard-reports.util';
               <small>Choose a time.</small>
             }
           </div>
-          <div class="field" [class.invalid]="submitted && !format">
-            <label for="sr-format">Format <span class="req">*</span></label>
+          <div class="field">
+            <label for="sr-format">Format</label>
             <select id="sr-format" name="format" [(ngModel)]="format">
-              <option value="" disabled>Select Format</option>
               @for (f of formats; track f) {
                 <option [value]="f">{{ f }}</option>
               }
             </select>
-            @if (submitted && !format) {
-              <small>Choose a format.</small>
-            }
           </div>
         </div>
         <div class="field" [class.invalid]="!!emailError || (submitted && recipients.length === 0)">
@@ -105,7 +92,7 @@ import { WEEKDAYS, isEmail } from './standard-reports.util';
         </div>
         <div class="dialog__actions">
           <button type="button" class="btn" (click)="close.emit()">Cancel</button>
-          <button type="submit" class="btn btn--primary">Save schedule</button>
+          <button type="submit" class="btn btn--primary" [disabled]="busy">{{ busy ? 'Saving…' : 'Save schedule' }}</button>
         </div>
       </form>
     </div>
@@ -114,19 +101,24 @@ import { WEEKDAYS, isEmail } from './standard-reports.util';
 })
 export class ReportScheduleDialog implements OnChanges {
   @Input({ required: true }) report!: StandardReport;
+  /** True while the page is saving the schedule */
+  @Input() busy = false;
   @Output() close = new EventEmitter<void>();
   @Output() save = new EventEmitter<ReportSchedule>();
 
+  private readonly service = inject(StandardReportsService);
+
   readonly icons = { X };
-  readonly frequencies = SR_SCHEDULE_FREQUENCIES;
+  // Recipients and format are kept client-side (the API stores only frequency and next run)
+  readonly frequencies = this.service.scheduleFrequencies();
   readonly formats = SR_FORMATS;
   readonly weekdays = WEEKDAYS;
   readonly monthDays = Array.from({ length: 28 }, (_, i) => i + 1);
 
-  frequency = '' as ReportFrequency;
-  day: number | null = null;
+  frequency: ReportFrequency = 'Monthly';
+  day = 1;
   time = '08:00';
-  format = '' as ReportFormat;
+  format: ReportFormat = 'PDF';
   recipients: string[] = [];
   draftEmail = '';
   emailError = '';
@@ -136,17 +128,20 @@ export class ReportScheduleDialog implements OnChanges {
     return this.frequency === 'Weekly' ? 'Day of week' : this.frequency === 'Daily' ? 'Day' : this.frequency === 'Quarterly' ? 'Day of quarter month' : 'Day of month';
   }
 
-  get dayMissing(): boolean {
-    return this.frequency !== 'Daily' && this.day === null;
+  get timeZoneLabel(): string {
+    const zone = this.report.period.timeZone;
+    return SR_TIME_ZONES.find((z) => z.value === zone)?.label ?? zone;
   }
 
-  ngOnChanges(): void {
+  ngOnChanges(changes: SimpleChanges): void {
+    if (!changes['report']) return;
     const s = this.report.schedule;
-    this.frequency = s?.frequency ?? ('' as ReportFrequency);
-    this.day = s ? s.day : null;
+    const current = s?.frequency ?? this.report.frequency;
+    this.frequency = this.frequencies.includes(current) ? current : 'Monthly';
+    this.day = s ? s.day : this.frequency === 'Weekly' ? 0 : 1;
     this.time = s?.time ?? '08:00';
-    this.format = s?.format ?? ('' as ReportFormat);
-    this.recipients = s ? [...s.recipients] : [CURRENT_USER.email];
+    this.format = s?.format ?? 'PDF';
+    this.recipients = s?.recipients.length ? [...s.recipients] : [CURRENT_USER.email];
     this.submitted = false;
   }
 
@@ -156,7 +151,7 @@ export class ReportScheduleDialog implements OnChanges {
   }
 
   frequencyChanged(): void {
-    this.day = null;
+    this.day = this.frequency === 'Weekly' ? 0 : 1;
   }
 
   recipientKey(event: KeyboardEvent): void {
@@ -190,8 +185,8 @@ export class ReportScheduleDialog implements OnChanges {
   submit(): void {
     this.addRecipient();
     this.submitted = true;
-    if (this.emailError || !this.frequency || this.dayMissing || !this.time || !this.format || this.recipients.length === 0) return;
-    this.save.emit({ frequency: this.frequency, day: this.day ?? 1, time: this.time, recipients: [...this.recipients], format: this.format });
+    if (this.emailError || !this.time || this.recipients.length === 0) return;
+    this.save.emit({ frequency: this.frequency, day: this.day, time: this.time, recipients: [...this.recipients], format: this.format });
   }
 
   stop(event: Event): void {

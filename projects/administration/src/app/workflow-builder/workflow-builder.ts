@@ -1,5 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Observable, concatMap, from, toArray } from 'rxjs';
 import { RouterLink } from '@angular/router';
 import {
   ArrowDown, ArrowUp, ChevronDown, Circle, Clock, ClipboardCheck, Download, Ellipsis, EllipsisVertical, FileText, Funnel,
@@ -78,10 +79,45 @@ export class WorkflowBuilderPage extends AdminPage {
   templatesOpen = false;
   confirm: { kind: ConfirmKind; title: string; message: string; payload: string } | null = null;
 
+  /** True while a request to the Workflows API is in flight; blocks a second save / publish. */
+  busy = false;
+  readonly loading = this.service.loading;
+  loadError = '';
+
   constructor() {
     super();
-    const first = this.service.all()[0];
-    if (first) this.load(first.id);
+    this.reload();
+  }
+
+  /** Fetches the workflows from the API and opens the first one. */
+  reload(): void {
+    this.loadError = '';
+    this.service.load().subscribe({
+      next: (list) => {
+        if (list[0]) this.load(list[0].id);
+        else this.wf = null;
+      },
+      error: (err: Error) => {
+        this.loadError = err.message;
+        this.notify(err.message);
+      }
+    });
+  }
+
+  /** Runs one API call at a time; failures are shown as a toast. */
+  private run<T>(request: Observable<T>, done: (value: T) => void): void {
+    if (this.busy) return;
+    this.busy = true;
+    request.subscribe({
+      next: (value) => {
+        this.busy = false;
+        done(value);
+      },
+      error: (err: Error) => {
+        this.busy = false;
+        this.notify(err.message);
+      }
+    });
   }
 
   // ===== Stats =====
@@ -328,10 +364,11 @@ export class WorkflowBuilderPage extends AdminPage {
       this.notify(problems[0]);
       return;
     }
-    this.wf.updated = todayIso();
-    this.service.save(this.wf);
-    this.dirty = false;
-    this.notify(`${this.wf.name} saved (${this.wf.status}, ${this.wf.version}).`);
+    this.run(this.service.update(this.wf), (saved) => {
+      this.wf = structuredClone(saved);
+      this.dirty = false;
+      this.notify(`${saved.name} saved (${saved.status}, ${saved.version}).`);
+    });
   }
 
   /** DEMO MODE: walks the graph from the trigger taking the "Yes" / approved path. */
@@ -365,14 +402,19 @@ export class WorkflowBuilderPage extends AdminPage {
       return;
     }
     const version = this.nextVersion(this.wf.version);
-    this.wf.version = version;
-    this.wf.status = 'Active';
-    this.wf.updated = todayIso();
-    this.wf.versions = [{ version, publishedOn: todayIso(), graph: structuredClone(this.wf.graph) }, ...this.wf.versions].slice(0, 6);
-    this.service.save(this.wf);
-    this.viewVersion = version;
-    this.dirty = false;
-    this.notify(`${this.wf.name} published as ${version} and is now Active.`);
+    const next: Workflow = {
+      ...this.wf,
+      version,
+      status: 'Active',
+      versions: [{ version, publishedOn: todayIso(), graph: structuredClone(this.wf.graph) }, ...this.wf.versions].slice(0, 6)
+    };
+    this.run(this.service.update(next), (saved) => {
+      this.wf = structuredClone(saved);
+      this.viewVersion = version;
+      this.selectedNodeId = null;
+      this.dirty = false;
+      this.notify(`${saved.name} published as ${version} and is now Active.`);
+    });
   }
 
   // ===== Header menu =====
@@ -387,18 +429,20 @@ export class WorkflowBuilderPage extends AdminPage {
       return;
     }
     const status: WorkflowStatus = this.wf.status === 'Active' ? 'Inactive' : 'Active';
-    saved.status = status;
-    saved.updated = todayIso();
-    this.wf.status = status;
-    this.wf.updated = saved.updated;
-    this.notify(`${this.wf.name} is now ${status}.`);
+    // Sends the stored workflow so unsaved canvas edits are not saved along with the status
+    this.run(this.service.update({ ...saved, status }), (updated) => {
+      if (!this.wf || this.wf.id !== updated.id) return;
+      this.wf.status = updated.status;
+      this.wf.updated = updated.updated;
+      this.notify(`${updated.name} is now ${updated.status}.`);
+    });
   }
 
   duplicate(): void {
     if (!this.wf) return;
     this.headMenuOpen = false;
     const copy: Workflow = structuredClone(this.wf);
-    copy.id = this.service.newId();
+    copy.id = '';
     copy.name = `${this.wf.name} (Copy)`;
     copy.code = this.uniqueCode(`${this.wf.code}-C`);
     copy.status = 'Draft';
@@ -408,9 +452,10 @@ export class WorkflowBuilderPage extends AdminPage {
     copy.updated = todayIso();
     copy.runningInstances = 0;
     copy.pendingApprovals = 0;
-    this.service.save(copy);
-    this.load(copy.id);
-    this.notify(`Created ${copy.name} as a draft.`);
+    this.run(this.service.create(copy), (saved) => {
+      this.load(saved.id);
+      this.notify(`Created ${saved.name} as a draft.`);
+    });
   }
 
   askDeleteWorkflow(): void {
@@ -437,11 +482,12 @@ export class WorkflowBuilderPage extends AdminPage {
       this.load(c.payload);
     } else {
       const name = this.wf?.name ?? 'Workflow';
-      this.service.remove(c.payload);
-      const first = this.visible()[0] ?? this.service.all()[0];
-      if (first) this.load(first.id);
-      else this.wf = null;
-      this.notify(`${name} deleted.`);
+      this.run(this.service.remove(c.payload), () => {
+        const first = this.visible()[0] ?? this.service.all()[0];
+        if (first) this.load(first.id);
+        else this.wf = null;
+        this.notify(`${name} deleted.`);
+      });
     }
   }
 
@@ -506,12 +552,15 @@ export class WorkflowBuilderPage extends AdminPage {
     if (Object.keys(this.detailErrors()).length) return;
 
     if (d.id && this.wf && this.wf.id === d.id) {
-      // Edit: update the working copy and the stored record's details
-      Object.assign(this.wf, { name: d.name.trim(), code: d.code.trim(), category: d.category, owner: d.owner, description: d.description.trim(), updated: todayIso() });
-      const saved = this.service.get(d.id);
-      if (saved) Object.assign(saved, { name: this.wf.name, code: this.wf.code, category: d.category, owner: d.owner, description: this.wf.description, updated: this.wf.updated });
-      this.details = null;
-      this.notify('Workflow details updated.');
+      // Edit: save the new details on the stored record (unsaved canvas edits stay in the working copy only)
+      const stored = this.service.get(d.id);
+      if (!stored) return;
+      const changes = { name: d.name.trim(), code: d.code.trim(), category: d.category, owner: d.owner, description: d.description.trim() };
+      this.run(this.service.update({ ...stored, ...changes }), (saved) => {
+        if (this.wf && this.wf.id === saved.id) Object.assign(this.wf, changes, { updated: saved.updated });
+        this.details = null;
+        this.notify('Workflow details updated.');
+      });
       return;
     }
 
@@ -520,7 +569,7 @@ export class WorkflowBuilderPage extends AdminPage {
       ? tpl.build()
       : { nodes: [{ id: 'n1', type: 'trigger', name: 'New Trigger', x: 20, y: 110, config: blankConfig() }], edges: [] };
     const wf: Workflow = {
-      id: this.service.newId(),
+      id: '',
       code: d.code.trim(),
       name: d.name.trim(),
       category: d.category,
@@ -536,12 +585,13 @@ export class WorkflowBuilderPage extends AdminPage {
       icon: 'zap',
       tone: 'purple'
     };
-    this.service.save(wf);
-    this.details = null;
-    this.clearFilters();
-    this.search = '';
-    this.load(wf.id);
-    this.notify(`${wf.name} created as a draft.`);
+    this.run(this.service.create(wf, !!tpl), (saved) => {
+      this.details = null;
+      this.clearFilters();
+      this.search = '';
+      this.load(saved.id);
+      this.notify(`${saved.name} created as a draft.`);
+    });
   }
 
   // ===== Import / export =====
@@ -583,15 +633,20 @@ export class WorkflowBuilderPage extends AdminPage {
         this.notify('Import failed: the file is not valid JSON.');
         return;
       }
-      const items = (Array.isArray(parsed) ? parsed : [parsed]) as Partial<Workflow>[];
-      let added = 0;
-      let lastId = '';
-      for (const item of items) {
-        if (!item || typeof item.name !== 'string' || !item.graph || !Array.isArray(item.graph.nodes) || !Array.isArray(item.graph.edges)) continue;
-        const wf: Workflow = {
-          id: this.service.newId(),
+      const items = ((Array.isArray(parsed) ? parsed : [parsed]) as Partial<Workflow>[]).filter(
+        (item) => item && typeof item.name === 'string' && item.graph && Array.isArray(item.graph.nodes) && Array.isArray(item.graph.edges)
+      );
+      if (!items.length) {
+        this.notify('Import failed: no workflows with a name and graph were found.');
+        return;
+      }
+      // One at a time, so each code is checked against the workflows created before it
+      const build = (item: Partial<Workflow>): Workflow => {
+        const graph = item.graph as WfGraph;
+        return {
+          id: '',
           code: this.uniqueCode(typeof item.code === 'string' && item.code ? item.code : 'WF-IMP'),
-          name: item.name,
+          name: item.name as string,
           category: typeof item.category === 'string' ? item.category : this.categories[0],
           owner: CURRENT_USER.name,
           description: typeof item.description === 'string' ? item.description : '',
@@ -599,22 +654,21 @@ export class WorkflowBuilderPage extends AdminPage {
           updated: todayIso(),
           version: 'v0.1',
           versions: [],
-          graph: { nodes: item.graph.nodes.map((n) => ({ ...n, config: { ...defaultConfig(), ...n.config } })), edges: item.graph.edges },
+          graph: { nodes: graph.nodes.map((n) => ({ ...n, config: { ...defaultConfig(), ...n.config } })), edges: graph.edges },
           runningInstances: 0,
           pendingApprovals: 0,
           icon: 'file',
           tone: 'blue'
         };
-        this.service.save(wf);
-        lastId = wf.id;
-        added++;
-      }
-      if (!added) {
-        this.notify('Import failed: no workflows with a name and graph were found.');
-        return;
-      }
-      this.load(lastId);
-      this.notify(`Imported ${added} workflow${added === 1 ? '' : 's'} as draft.`);
+      };
+      const created = from(items).pipe(
+        concatMap((item) => this.service.create(build(item))),
+        toArray()
+      );
+      this.run(created, (saved) => {
+        this.load(saved[saved.length - 1].id);
+        this.notify(`Imported ${saved.length} workflow${saved.length === 1 ? '' : 's'} as draft.`);
+      });
     });
   }
 }

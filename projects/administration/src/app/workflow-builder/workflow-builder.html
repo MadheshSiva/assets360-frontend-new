@@ -129,7 +129,13 @@
           </span>
         </button>
       } @empty {
-        <p class="list-empty">No workflows match your search or filters.</p>
+        @if (loading()) {
+          <p class="list-empty">Loading workflows...</p>
+        } @else if (loadError) {
+          <p class="list-empty">{{ loadError }} <button type="button" class="btn btn--outline" (click)="reload()">Retry</button></p>
+        } @else {
+          <p class="list-empty">{{ totalCount ? 'No workflows match your search or filters.' : 'No workflows yet. Create one to get started.' }}</p>
+        }
       }
     </div>
   </div>
@@ -156,9 +162,9 @@
           </div>
         </div>
         <div class="detail-head__actions">
-          <button type="button" class="btn btn--outline" (click)="save()"><lucide-icon [img]="icons.Save" [size]="15"></lucide-icon> Save</button>
+          <button type="button" class="btn btn--outline" [disabled]="busy" (click)="save()"><lucide-icon [img]="icons.Save" [size]="15"></lucide-icon> Save</button>
           <button type="button" class="btn btn--outline" (click)="test()" title="DEMO MODE: simulated run"><lucide-icon [img]="icons.Play" [size]="15"></lucide-icon> Test</button>
-          <button type="button" class="btn btn--primary" (click)="publish()"><lucide-icon [img]="icons.Upload" [size]="15"></lucide-icon> Publish</button>
+          <button type="button" class="btn btn--primary" [disabled]="busy" (click)="publish()"><lucide-icon [img]="icons.Upload" [size]="15"></lucide-icon> Publish</button>
           <div class="row-menu">
             <button type="button" class="icon-btn icon-btn--bare" (click)="headMenuOpen = !headMenuOpen" aria-label="More actions"><lucide-icon [img]="icons.EllipsisVertical" [size]="18"></lucide-icon></button>
             @if (headMenuOpen) {
@@ -268,7 +274,7 @@
       </div>
       <div class="confirm__actions">
         <button type="button" class="btn" (click)="details = null">Cancel</button>
-        <button type="submit" class="btn btn--primary">{{ d.id ? 'Save Details' : 'Create Draft' }}</button>
+        <button type="submit" class="btn btn--primary" [disabled]="busy">{{ d.id ? 'Save Details' : 'Create Draft' }}</button>
       </div>
     </form>
   </div>

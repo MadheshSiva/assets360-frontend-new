@@ -1,8 +1,8 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
 import { Database, LucideAngularModule } from 'lucide-angular';
-import { DATA_SOURCES } from '../custom-reports.data';
 import { applySource, groupsOf } from '../custom-reports.engine';
 import { CustomReport, DataSource } from '../custom-reports.model';
+import { CustomReportsService } from '../custom-reports.service';
 
 /** Builder step 1: pick the data source (a module or a combination of modules). */
 @Component({
@@ -13,6 +13,9 @@ import { CustomReport, DataSource } from '../custom-reports.model';
       <h3>Data Source</h3>
       <p class="muted">Choose the Asset360 data the report reads from. Combined sources join records on the asset.</p>
     </div>
+    @if (!sources.length) {
+      <p class="muted">Loading data sources…</p>
+    }
     <div class="cr-sources" role="radiogroup" aria-label="Data source">
       @for (s of sources; track s.key) {
         <button type="button" class="cr-source" role="radio" [attr.aria-checked]="s.key === report.sourceKey"
@@ -34,15 +37,19 @@ export class SourceStep {
   @Output() notice = new EventEmitter<string>();
 
   readonly Database = Database;
-  readonly sources = DATA_SOURCES;
+  private readonly service = inject(CustomReportsService);
+
+  get sources(): DataSource[] {
+    return this.service.catalog().sources;
+  }
 
   fieldCount(s: DataSource): number {
-    return groupsOf(s.key).reduce((n, g) => n + g.fields.length, 0);
+    return groupsOf(this.service.catalog(), s.key).reduce((n, g) => n + g.fields.length, 0);
   }
 
   choose(s: DataSource): void {
     if (s.key === this.report.sourceKey) return;
-    const removed = applySource(this.report, s.key);
+    const removed = applySource(this.service.catalog(), this.report, s.key);
     this.notice.emit(removed ? `Data source set to ${s.label}. ${removed} field(s) not in this source were removed.` : `Data source set to ${s.label}.`);
   }
 }

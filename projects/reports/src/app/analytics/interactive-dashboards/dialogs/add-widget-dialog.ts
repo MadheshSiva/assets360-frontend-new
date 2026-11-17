@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { METRICS, MetricDef, MetricKey, WIDGET_SIZES, WIDGET_TYPES, WidgetSpan, WidgetType } from '../interactive-dashboards.data';
+import { MetricDef, MetricKey, WIDGET_SIZES, WIDGET_TYPES, WidgetSpan, WidgetType, WidgetTypeDef } from '../interactive-dashboards.data';
 
 export interface NewWidget {
   type: WidgetType;
@@ -19,18 +19,16 @@ export interface NewWidget {
       <form class="dialog" (click)="$event.stopPropagation()" (ngSubmit)="submit()" novalidate role="dialog" aria-modal="true" aria-label="Add widget">
         <h2>Add widget</h2>
         <p>Choose what the widget shows. Values follow the dashboard filters.</p>
-        <div class="field" [class.invalid]="tried && !type">
-          <label for="aw-type">Widget type <span class="req">*</span></label>
+        <div class="field">
+          <label for="aw-type">Widget type</label>
           <select id="aw-type" name="type" [(ngModel)]="type" (ngModelChange)="onTypeChange()">
-            <option value="" disabled>Select Widget Type</option>
-            @for (t of types; track t.type) { <option [value]="t.type">{{ t.label }}</option> }
+            @for (t of types; track t.type) { <option [value]="t.type" [disabled]="!hasMetrics(t.type)">{{ t.label }}</option> }
           </select>
-          @if (tried && !type) { <small>Choose a widget type.</small> }
         </div>
         <div class="field" [class.invalid]="tried && !metric">
           <label for="aw-metric">Data source / metric <span class="req">*</span></label>
           <select id="aw-metric" name="metric" [(ngModel)]="metric" (ngModelChange)="onMetricChange()">
-            <option value="">Select Metric</option>
+            <option value="">{{ allMetrics.length ? 'Select a metric' : 'Loading metrics…' }}</option>
             @for (m of metrics; track m.key) { <option [value]="m.key">{{ m.label }}</option> }
           </select>
           @if (tried && !metric) { <small>Choose the metric this widget shows.</small> }
@@ -38,20 +36,18 @@ export interface NewWidget {
         </div>
         <div class="field" [class.invalid]="tried && !title.trim()">
           <label for="aw-title">Title <span class="req">*</span></label>
-          <input id="aw-title" name="title" [(ngModel)]="title" maxlength="60" />
+          <input id="aw-title" name="title" [(ngModel)]="title" maxlength="100" />
           @if (tried && !title.trim()) { <small>Enter a title.</small> }
         </div>
-        <div class="field" [class.invalid]="tried && span === null">
-          <label for="aw-size">Size <span class="req">*</span></label>
+        <div class="field">
+          <label for="aw-size">Size</label>
           <select id="aw-size" name="span" [(ngModel)]="span">
-            <option [ngValue]="null" disabled>Select Size</option>
             @for (s of sizes; track s.span) { <option [ngValue]="s.span">{{ s.label }}</option> }
           </select>
-          @if (tried && span === null) { <small>Choose a size.</small> }
         </div>
         <div class="dialog__actions">
           <button type="button" class="btn" (click)="cancel.emit()">Cancel</button>
-          <button type="submit" class="btn btn--primary">Add widget</button>
+          <button type="submit" class="btn btn--primary" [disabled]="busy">{{ busy ? 'Adding…' : 'Add widget' }}</button>
         </div>
       </form>
     </div>
@@ -59,16 +55,19 @@ export interface NewWidget {
   styleUrls: ['../../shared/analytics-page.css']
 })
 export class AddWidgetDialog implements OnInit {
-  @Input() initialType: WidgetType | '' = '';
+  @Input() initialType: WidgetType = 'kpi';
+  /** Widget types and metric catalog from GET /options */
+  @Input() types: WidgetTypeDef[] = WIDGET_TYPES;
+  @Input('metrics') allMetrics: MetricDef[] = [];
+  @Input() busy = false;
   @Output() added = new EventEmitter<NewWidget>();
   @Output() cancel = new EventEmitter<void>();
 
-  readonly types = WIDGET_TYPES;
   readonly sizes = WIDGET_SIZES;
-  type: WidgetType | '' = '';
+  type: WidgetType = 'kpi';
   metric: MetricKey | '' = '';
   title = '';
-  span: WidgetSpan | null = null;
+  span: WidgetSpan = 3;
   tried = false;
 
   ngOnInit(): void {
@@ -77,16 +76,21 @@ export class AddWidgetDialog implements OnInit {
   }
 
   get metrics(): MetricDef[] {
-    const type = this.type;
-    return type ? METRICS.filter((m) => m.types.includes(type)) : [];
+    return this.allMetrics.filter((m) => m.types.includes(this.type));
+  }
+
+  hasMetrics(type: WidgetType): boolean {
+    return !this.allMetrics.length || this.allMetrics.some((m) => m.types.includes(type));
   }
 
   get selected(): MetricDef | undefined {
-    return METRICS.find((m) => m.key === this.metric);
+    return this.allMetrics.find((m) => m.key === this.metric);
   }
 
   onTypeChange(): void {
-    if (this.type) this.span = WIDGET_TYPES.find((t) => t.type === this.type)?.span ?? 6;
+    const span = this.types.find((t) => t.type === this.type)?.span ?? 6;
+    // Default width from the API; the size list offers the nearest standard size
+    this.span = WIDGET_SIZES.reduce((best, s) => (Math.abs(s.span - span) < Math.abs(best - span) ? s.span : best), WIDGET_SIZES[0].span);
     if (!this.metrics.some((m) => m.key === this.metric)) this.metric = '';
     if (this.metrics.length === 1) this.metric = this.metrics[0].key;
     this.onMetricChange();
@@ -94,13 +98,13 @@ export class AddWidgetDialog implements OnInit {
 
   onMetricChange(): void {
     // Keep a title the user typed; otherwise follow the metric
-    if (this.title.trim() && !METRICS.some((m) => m.label === this.title)) return;
+    if (this.title.trim() && !this.allMetrics.some((m) => m.label === this.title)) return;
     this.title = this.selected?.label ?? '';
   }
 
   submit(): void {
     this.tried = true;
-    if (!this.type || !this.metric || !this.title.trim() || this.span === null) return;
+    if (!this.metric || !this.title.trim() || this.busy) return;
     this.added.emit({ type: this.type, metric: this.metric, title: this.title.trim(), span: this.span });
   }
 }

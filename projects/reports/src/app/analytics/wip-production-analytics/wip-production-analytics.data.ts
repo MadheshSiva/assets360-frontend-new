@@ -1,43 +1,21 @@
 import { RA_COLORS } from '../shared/charts/chart-utils';
-import { PeriodWindow, periodWindow, siteInScope, sumOf } from '../inventory-analytics/parts/ra-parts';
 
-// Production analytics: lines, products, work centers, monthly series and active orders come from the production
-// system. No data source is wired yet, so everything starts empty and each widget shows its empty state.
+// View models for the WIP / Production Analytics page. Every figure comes from /api/production-analytics
+// (wip-production-analytics.service.ts).
 
-export interface ProductionLine {
-  name: string;
-  site: string;
-  /** Share of group output */
-  share: number;
-  utilization: number;
-  onTime: number;
-  /** Availability relative to the group average */
-  availabilityTilt: number;
-}
+export const ALL_ORGANIZATIONS = 'All organizations';
+export const ALL_PLANTS = 'All plants';
+export const ALL_LINES = 'All production lines';
+export const ALL_WORK_CENTERS = 'All work centers';
+export const ALL_PRODUCTS = 'All products';
+export const ALL_PRODUCTION_VIEW = 'All Production';
 
-export const LINES: ProductionLine[] = [];
-export const PLANTS = [...new Set(LINES.map((l) => l.site))];
+/** Period presets used until /options answers. "Custom" is left out: the filter bar has no date pickers. */
+export const PA_FALLBACK_PERIODS = ['Today', 'Last 7 days', 'Last 30 days', 'This month', 'Last month', 'This quarter', 'This year'];
+export const PA_DEFAULT_PERIOD = 'This year';
+
+/** Used until the API reports the target it applied (ProductionAnalyticsOptions.DefaultUtilizationTarget). */
 export const UTILIZATION_TARGET = 85;
-
-export interface Product {
-  code: string;
-  name: string;
-  share: number;
-  /** Standard cost per unit, AED */
-  unitCost: number;
-}
-
-export const PRODUCTS: Product[] = [];
-
-export interface WorkCenter {
-  code: string;
-  name: string;
-  queue: number;
-  avgWait: number;
-  capacity: number;
-}
-
-export const WORK_CENTERS: WorkCenter[] = [];
 
 export const WIP_STAGES = ['Raw Material', 'In Process', 'Quality Inspection', 'Ready for Dispatch'];
 export const WIP_STAGE_COLORS = [RA_COLORS.blue, RA_COLORS.violet, RA_COLORS.orange, RA_COLORS.pink];
@@ -45,120 +23,154 @@ export const WIP_STAGE_COLORS = [RA_COLORS.blue, RA_COLORS.violet, RA_COLORS.ora
 export const WORK_ORDER_STATUSES = ['Not Started', 'In Progress', 'On Hold', 'Completed'];
 export const WORK_ORDER_COLORS = [RA_COLORS.blue, RA_COLORS.green, RA_COLORS.orange, RA_COLORS.pink];
 
+/** Downtime causes shown until the first response (the API may add others, e.g. Planned). */
 export const DOWNTIME_CAUSES = ['Mechanical', 'Material Shortage', 'Changeover', 'Quality Hold', 'Unplanned'];
 
-// ===== Active production orders =====
-
-export type OrderStatus = 'In Progress' | 'On Track' | 'At Risk' | 'Quality Hold';
-
+/** An unfinished production order (API ProductionOrderRow). Quantities are null when the jobs carry none. */
 export interface ProductionOrder {
+  /** Record id */
+  key: string;
+  /** Order number shown to users (falls back to the record id) */
   code: string;
   product: string;
   line: string;
   site: string;
   workCenter: string;
-  planned: number;
-  completed: number;
-  wip: number;
+  assetId: string | null;
+  planned: number | null;
+  completed: number | null;
+  wip: number | null;
+  unit: string;
+  /** 0–100 */
+  progress: number;
+  /** yyyy-MM-dd, null when the order has no due date */
+  due: string | null;
+  /** Not Started, In Progress, On Hold or Completed */
+  status: string;
+  /** Raw Material, In Process, Quality Inspection or Ready for Dispatch */
+  stage: string;
+  /** Delayed, At Risk or On Track */
+  schedule: string;
+  /** What the Status pill shows: Delayed / At Risk first, then Quality Hold, else the status */
+  state: string;
   wipValue: number;
-  due: string;
-  status: OrderStatus;
-  materialShortage: boolean;
-  supervisor: string;
+  priority: string | null;
 }
 
-export const ORDERS: ProductionOrder[] = [];
-
-// ===== View for the current filters =====
-
-export const ALL_PLANTS = 'All plants';
-export const ALL_LINES = 'All production lines';
-export const ALL_WORK_CENTERS = 'All work centers';
-export const ALL_PRODUCTS = 'All products';
-
-export interface ProductionFilters {
-  period: string;
-  organization: string;
-  plant: string;
+/** A Bottleneck Work Centers row (API BottleneckRow). */
+export interface WorkCenter {
+  name: string;
   line: string;
-  workCenter: string;
-  product: string;
+  queue: number;
+  inProgress: number;
+  /** Average days from raising an open order to its start */
+  avgWait: number | null;
+  utilization: number | null;
+  risk: string;
+}
+
+export interface LineRow {
+  name: string;
+  workCenters: number;
+  utilization: number | null;
+  target: number;
+  meetsTarget: boolean | null;
+}
+
+export interface ProductionInsight {
+  key: string;
+  severity: string;
+  title: string;
+  message: string;
+  count: number;
+  value: number | null;
+  lines: string[];
+  actions: string[];
+  /** Query string for /orders behind "View orders", e.g. schedule=At Risk,Delayed */
+  query: string;
+}
+
+/** A KPI value with the previous period's value and the change between them. */
+export interface PaKpiValue {
+  value: number | null;
+  previous: number | null;
+  change: number;
 }
 
 export interface ProductionView {
-  window: PeriodWindow;
-  hasScope: boolean;
-  output: number;
-  wipValue: number;
-  onTime: number;
-  utilization: number;
-  oee: number;
+  generatedAt: string | null;
+  /** Previous period (UTC, end exclusive), used by Compare Periods */
+  previousFromUtc: string | null;
+  previousToUtc: string | null;
+  utilizationTarget: number;
+  /** "units" (or the jobs' own unit), or "orders" when the jobs carry no quantities */
+  outputUnit: string;
+  output: PaKpiValue;
+  wipValue: PaKpiValue;
+  onTime: PaKpiValue;
+  utilization: PaKpiValue;
+  oee: PaKpiValue;
+  /** Month labels shared by the trend charts ("Jan\n2026") */
+  labels: string[];
   actual: number[];
   planned: number[];
-  target: number[];
-  stageStacks: number[][];
-  workOrders: number[];
-  lines: ProductionLine[];
+  /** Only when an output target is set */
+  target: number[] | null;
+  /** One series per WIP stage */
+  stageStacks: { name: string; values: number[] }[];
+  workOrderTotal: number;
+  workOrders: { name: string; count: number }[];
+  lines: LineRow[];
+  downtimeCauses: string[];
   downtime: number[];
+  /** Hours per month for each cause */
+  downtimeTrend: { name: string; values: number[] }[];
   availability: number[];
   performance: number[];
   quality: number[];
   oeeTrend: number[];
+  /** True when any efficiency figure could be measured */
+  hasEfficiency: boolean;
   orders: ProductionOrder[];
-  workCenters: (WorkCenter & { risk: 'High' | 'Medium' | 'Low' })[];
+  ordersTotal: number;
+  workCenters: WorkCenter[];
+  insights: ProductionInsight[];
 }
 
-function weighted(lines: ProductionLine[], pick: (l: ProductionLine) => number): number {
-  const total = sumOf(lines.map((l) => l.share));
-  return total ? sumOf(lines.map((l) => l.share * pick(l))) / total : 0;
-}
+const none = (): PaKpiValue => ({ value: null, previous: null, change: 0 });
 
-export function buildProductionView(f: ProductionFilters): ProductionView {
-  const w = periodWindow(f.period);
-  const location = f.plant === ALL_PLANTS ? 'All locations' : f.plant;
-  const lines = LINES.filter((l) => siteInScope(l.site, f.organization, location) && (f.line === ALL_LINES || f.line === l.name));
-  const product = PRODUCTS.find((p) => p.name === f.product) ?? null;
-
-  // Monthly series (output, WIP by stage, OEE components) and downtime are not available until a data source is wired
-  const actual: number[] = [];
-  const planned: number[] = [];
-  const target: number[] = [];
-  const stageStacks: number[][] = WIP_STAGES.map(() => []);
-  const availability: number[] = [];
-  const performance: number[] = [];
-  const quality: number[] = [];
-  const oeeTrend: number[] = [];
-  const downtime = DOWNTIME_CAUSES.map(() => 0);
-
-  const lineNames = lines.map((l) => l.name);
-  const orders = ORDERS.filter((o) => lineNames.includes(o.line) && (!product || o.product === product.name)
-    && (f.workCenter === ALL_WORK_CENTERS || f.workCenter === o.workCenter));
-
-  const workCenters = WORK_CENTERS.filter((c) => f.workCenter === ALL_WORK_CENTERS || f.workCenter === c.name).map((c) => ({
-    ...c,
-    risk: (c.capacity >= 85 ? 'High' : c.capacity >= 70 ? 'Medium' : 'Low') as 'High' | 'Medium' | 'Low'
-  }));
-
+/** What the page shows before the first response. */
+export function emptyProductionView(): ProductionView {
   return {
-    window: w,
-    hasScope: lines.length > 0,
-    output: sumOf(actual),
-    wipValue: sumOf(orders.map((o) => o.wipValue)),
-    onTime: weighted(lines, (l) => l.onTime),
-    utilization: weighted(lines, (l) => l.utilization),
-    oee: oeeTrend.length ? sumOf(oeeTrend) / oeeTrend.length : 0,
-    actual,
-    planned,
-    target,
-    stageStacks,
-    workOrders: WORK_ORDER_STATUSES.map(() => 0),
-    lines,
-    downtime,
-    availability,
-    performance,
-    quality,
-    oeeTrend,
-    orders,
-    workCenters
+    generatedAt: null,
+    previousFromUtc: null,
+    previousToUtc: null,
+    utilizationTarget: UTILIZATION_TARGET,
+    outputUnit: 'units',
+    output: none(),
+    wipValue: none(),
+    onTime: none(),
+    utilization: none(),
+    oee: none(),
+    labels: [],
+    actual: [],
+    planned: [],
+    target: null,
+    stageStacks: [],
+    workOrderTotal: 0,
+    workOrders: [],
+    lines: [],
+    downtimeCauses: DOWNTIME_CAUSES,
+    downtime: DOWNTIME_CAUSES.map(() => 0),
+    downtimeTrend: [],
+    availability: [],
+    performance: [],
+    quality: [],
+    oeeTrend: [],
+    hasEfficiency: false,
+    orders: [],
+    ordersTotal: 0,
+    workCenters: [],
+    insights: []
   };
 }

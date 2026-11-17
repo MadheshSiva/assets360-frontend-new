@@ -1,7 +1,7 @@
-import { Component, EventEmitter, Output, inject } from '@angular/core';
+import { Component, EventEmitter, Output, effect, inject, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Check, Info, LucideAngularModule, Play, Plus, Trash2 } from 'lucide-angular';
-import { DatasetField, DeliveryType, ExportDraft, ExportFilter, ExportFormat, ExportJob, Frequency } from './data-export-api.model';
+import { DatasetField, DeliveryType, ExportDraft, ExportFilter, ExportJob, Frequency } from './data-export-api.model';
 import { DataExportService } from './data-export-api.service';
 
 const OPERATORS: Record<string, string[]> = {
@@ -17,7 +17,7 @@ const EMAIL = /^[^\s@,;]+@[^\s@,;]+\.[a-z]{2,}$/i;
 
 function blankDraft(datasetId: string): ExportDraft {
   return {
-    id: null, name: '', datasetId, format: 'CSV', fields: [], filters: [], delivery: 'S3', target: '',
+    id: null, name: '', datasetId, format: 'CSV', fields: [], filters: [], delivery: 'S3', target: 's3://piq-asset360-exports/',
     frequency: 'Daily', time: '02:00', encrypted: true
   };
 }
@@ -59,7 +59,6 @@ function blankDraft(datasetId: string): ExportDraft {
             <label class="dx-row-field">
               <span>Dataset</span>
               <select class="select" [ngModel]="draft.datasetId" (ngModelChange)="setDataset($event)" name="ds">
-                <option value="" disabled>Select Dataset</option>
                 @for (d of service.datasets; track d.id) {
                   <option [value]="d.id">{{ d.name }}</option>
                 }
@@ -68,13 +67,15 @@ function blankDraft(datasetId: string): ExportDraft {
             <label class="dx-row-field">
               <span>File format</span>
               <select class="select" [(ngModel)]="draft.format" name="fmt">
-                <option value="" disabled>Select Format</option>
-                @for (f of formats; track f) {
+                @for (f of service.formats; track f) {
                   <option [value]="f">{{ f }}</option>
                 }
               </select>
             </label>
             <p class="muted dx-small">{{ datasetSummary }}</p>
+            @if (!service.datasets.length) {
+              <p class="muted dx-small">Datasets are loading from the API…</p>
+            }
           }
           @case (1) {
             <div class="dx-field-tools">
@@ -101,14 +102,12 @@ function blankDraft(datasetId: string): ExportDraft {
             @for (r of draft.filters; track $index; let i = $index) {
               <div class="dx-filter-row">
                 <select class="select" [(ngModel)]="r.field" [name]="'ff' + i" (ngModelChange)="fieldChanged(r)" aria-label="Field">
-                  <option value="" disabled>Select Field</option>
                   <option value="">Field…</option>
                   @for (fl of allFields; track fl.name) {
                     <option [value]="fl.name">{{ fl.name }}</option>
                   }
                 </select>
                 <select class="select" [(ngModel)]="r.operator" [name]="'fo' + i" aria-label="Operator">
-                  <option value="" disabled>Select Operator</option>
                   @for (o of operatorsFor(r); track o) {
                     <option [value]="o">{{ o }}</option>
                   }
@@ -138,7 +137,7 @@ function blankDraft(datasetId: string): ExportDraft {
               <label class="dx-row-field">
                 <span>Connection</span>
                 <select class="select" [(ngModel)]="draft.target" name="tgt">
-                  <option value="">Select Connection</option>
+                  <option value="">Select…</option>
                   @for (c of service.connections; track c.id) {
                     <option [value]="c.name">{{ c.name }} ({{ c.status }})</option>
                   }
@@ -153,7 +152,6 @@ function blankDraft(datasetId: string): ExportDraft {
             <label class="dx-row-field">
               <span>Frequency</span>
               <select class="select" [(ngModel)]="draft.frequency" name="freq">
-                <option value="" disabled>Select Frequency</option>
                 @for (fq of frequencies; track fq) {
                   <option [value]="fq">{{ fq }}</option>
                 }
@@ -165,7 +163,6 @@ function blankDraft(datasetId: string): ExportDraft {
                 <span class="dx-inline">
                   @if (draft.frequency === 'Weekly') {
                     <select class="select" [(ngModel)]="weekday" name="wd" aria-label="Day">
-                      <option value="" disabled>Select Day</option>
                       @for (d of weekdays; track d) {
                         <option [value]="d">{{ d }}</option>
                       }
@@ -202,7 +199,7 @@ function blankDraft(datasetId: string): ExportDraft {
           <input type="checkbox" [(ngModel)]="draft.encrypted" name="enc" />
           <i></i>{{ draft.encrypted ? 'On' : 'Off' }}
         </label>
-        <small class="muted">{{ draft.encrypted ? 'AES-256 encryption enabled' : 'Not recommended' }}</small>
+        <small class="muted">{{ draft.encrypted ? 'Requested for delivery (applied by the transport, not configured yet)' : 'Not recommended' }}</small>
       </div>
 
       <div class="dx-builder-actions">
@@ -211,8 +208,8 @@ function blankDraft(datasetId: string): ExportDraft {
           <button type="button" class="btn btn--sm btn--outline" (click)="next()">Next</button>
         }
         <span class="dx-grow"></span>
-        <button type="button" class="btn btn--sm btn--outline" (click)="saveDraft()">Save Draft</button>
-        <button type="button" class="btn btn--sm btn--primary" (click)="runExport()">
+        <button type="button" class="btn btn--sm btn--outline" [disabled]="busy" (click)="saveDraft()">Save Draft</button>
+        <button type="button" class="btn btn--sm btn--primary" [disabled]="busy" (click)="runExport()">
           <lucide-icon [img]="icons.Play" [size]="13"></lucide-icon> {{ draft.id ? 'Save & Run' : 'Run Export' }}
         </button>
       </div>
@@ -226,21 +223,46 @@ export class ExportBuilder {
 
   readonly icons = { Check, Info, Play, Plus, Trash2 };
   readonly steps = ['Select Dataset', 'Choose Fields', 'Apply Filters', 'Set Delivery', 'Review'];
-  readonly formats: ExportFormat[] = ['CSV', 'XLSX', 'JSON', 'Parquet'];
   readonly deliveries: DeliveryType[] = ['S3', 'Secure FTP', 'Email', 'API'];
   readonly frequencies: Frequency[] = ['On demand', 'Hourly', 'Daily', 'Weekly', 'Monthly', 'Real-time'];
   readonly weekdays = WEEKDAYS;
 
   step = 0;
-  draft: ExportDraft = blankDraft('DS-11');
+  draft: ExportDraft = blankDraft('');
+  /** Saving through the API */
+  busy = false;
   fieldSearch = '';
   weekday = 'Mon';
   clock = '02:00';
   submitted = false;
   error = '';
 
+  /** The page calls this around the API save; an error from the API is shown in the builder. */
+  setBusy(busy: boolean, error = ''): void {
+    this.busy = busy;
+    if (error) {
+      this.submitted = true;
+      this.error = error;
+    }
+  }
+
   constructor() {
-    this.selectAll();
+    // The builder renders before the overview arrives: once datasets are known, start a blank export on the first one
+    effect(() => {
+      this.service.version();
+      untracked(() => {
+        if (!this.draft.id && !this.service.dataset(this.draft.datasetId) && this.service.datasets.length) {
+          this.draft.datasetId = this.defaultDataset();
+          this.draft.filters = [];
+          this.selectAll();
+        }
+      });
+    });
+  }
+
+  /** First dataset once the list has arrived. */
+  private defaultDataset(): string {
+    return this.service.datasets[0]?.id ?? '';
   }
 
   /** Loads a job for editing, or starts a blank export (optionally on a dataset). */
@@ -250,14 +272,14 @@ export class ExportBuilder {
     this.error = '';
     this.fieldSearch = '';
     if (!job) {
-      this.draft = blankDraft(datasetId ?? 'DS-11');
+      this.draft = blankDraft(datasetId ?? this.defaultDataset());
       this.weekday = 'Mon';
       this.clock = '02:00';
       this.selectAll();
       return;
     }
     this.draft = {
-      id: job.id, name: job.name, datasetId: job.datasetId, format: job.format === 'API' ? 'JSON' : job.format, fields: job.fields.slice(),
+      id: job.id, name: job.name, datasetId: job.datasetId, format: job.format, fields: job.fields.slice(),
       filters: job.filters.map((x) => ({ ...x })), delivery: job.delivery, target: job.target, frequency: job.frequency, time: job.time,
       encrypted: job.encrypted
     };
@@ -295,7 +317,9 @@ export class ExportBuilder {
 
   get datasetSummary(): string {
     const ds = this.service.dataset(this.draft.datasetId);
-    return ds ? `${ds.rows.toLocaleString('en-US')} rows · ${this.allFields.length} fields · refreshed ${ds.refreshed ? ds.refreshed.replace('T', ' ') : '—'}` : '';
+    if (!ds) return '';
+    const refreshed = ds.refreshed ? ` · newest record ${ds.refreshed.replace('T', ' ')}` : '';
+    return `${ds.rows.toLocaleString('en-US')} rows · ${this.allFields.length} fields · ${ds.owner}${refreshed}`;
   }
 
   setDataset(id: string): void {
@@ -345,7 +369,7 @@ export class ExportBuilder {
 
   valueHint(r: ExportFilter): string {
     const t = this.fieldType(r.field);
-    if (t === 'date') return r.operator === 'in last' ? '30 days' : new Date().toISOString().slice(0, 10);
+    if (t === 'date') return r.operator === 'in last' ? '30 days' : '2026-10-01';
     if (t === 'text' || t === 'id') return 'Value';
     return '0';
   }
@@ -377,7 +401,7 @@ export class ExportBuilder {
 
   setDelivery(d: DeliveryType): void {
     this.draft.delivery = d;
-    this.draft.target = '';
+    this.draft.target = d === 'S3' ? 's3://piq-asset360-exports/' : d === 'Email' ? '' : d === 'Secure FTP' ? 'sftp.purpleiq.com/exports' : '';
   }
 
   get deliveryError(): string {

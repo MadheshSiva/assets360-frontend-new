@@ -1,11 +1,11 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ChevronDown, ChevronUp, LucideAngularModule, Search } from 'lucide-angular';
-import { DATA_SOURCES } from '../custom-reports.data';
-import { applySource, calcAsField, groupsOf, isNumeric, removeField } from '../custom-reports.engine';
-import { CustomReport, FieldDef } from '../custom-reports.model';
+import { CALC_GROUP, applySource, calcAsField, groupsOf, isNumeric, removeField, sourceOf } from '../custom-reports.engine';
+import { CustomReport, DataSource, FieldDef } from '../custom-reports.model';
+import { CustomReportsService } from '../custom-reports.service';
 
-type FieldView = '' | 'selected' | 'numeric';
+type FieldView = 'all' | 'selected' | 'numeric';
 
 interface TreeGroup {
   key: string;
@@ -26,7 +26,6 @@ interface TreeGroup {
       <label class="cr-inline-field">
         <span>Data source</span>
         <select class="select" [ngModel]="report.sourceKey" (ngModelChange)="changeSource($event)" aria-label="Data source">
-          <option value="" disabled>Select Data Source</option>
           @for (s of sources; track s.key) {
             <option [value]="s.key">{{ s.label }}</option>
           }
@@ -40,7 +39,7 @@ interface TreeGroup {
         <input type="search" placeholder="Search fields..." [(ngModel)]="query" aria-label="Search fields" />
       </label>
       <select class="select" [(ngModel)]="view" aria-label="Show fields">
-        <option value="">Select Show Fields</option>
+        <option value="all">All fields</option>
         <option value="selected">Selected only</option>
         <option value="numeric">Numeric only</option>
       </select>
@@ -84,18 +83,21 @@ export class FieldsStep {
   readonly Search = Search;
   readonly ChevronDown = ChevronDown;
   readonly ChevronUp = ChevronUp;
-  readonly sources = DATA_SOURCES;
+  private readonly service = inject(CustomReportsService);
+
+  get sources(): DataSource[] {
+    return this.service.catalog().sources;
+  }
 
   query = '';
-  view: FieldView = '';
+  view: FieldView = 'all';
   private collapsed = new Set<string>();
 
   get tree(): TreeGroup[] {
     const q = this.query.trim().toLowerCase();
-    if (!this.report.sourceKey) return [];
-    const groups: TreeGroup[] = groupsOf(this.report.sourceKey).map((g) => ({ key: g.key, label: g.label, fields: g.fields }));
+    const groups: TreeGroup[] = groupsOf(this.service.catalog(), this.report.sourceKey).map((g) => ({ key: g.key, label: g.label, fields: g.fields }));
     if (this.report.calcFields.length) {
-      groups.push({ key: 'calculated', label: 'Calculated Fields', fields: this.report.calcFields.map(calcAsField) });
+      groups.push({ key: CALC_GROUP, label: 'Calculated Fields', fields: this.report.calcFields.map(calcAsField) });
     }
     return groups
       .map((g) => ({ ...g, fields: g.fields.filter((f) => this.visible(f, q)) }))
@@ -150,8 +152,9 @@ export class FieldsStep {
   }
 
   changeSource(key: string): void {
-    const label = DATA_SOURCES.find((s) => s.key === key)?.label ?? key;
-    const removed = applySource(this.report, key);
+    const catalog = this.service.catalog();
+    const label = sourceOf(catalog, key).label;
+    const removed = applySource(catalog, this.report, key);
     this.notice.emit(removed ? `Data source set to ${label}. ${removed} field(s) not in this source were removed.` : `Data source set to ${label}.`);
   }
 }

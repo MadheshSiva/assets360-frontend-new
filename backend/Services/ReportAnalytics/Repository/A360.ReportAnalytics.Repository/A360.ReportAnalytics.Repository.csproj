@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MongoDB.Driver" Version="3.8.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Domain\A360.ReportAnalytics.Domain\A360.ReportAnalytics.Domain.csproj" />
+    <ProjectReference Include="..\..\..\..\Repository\A360.Repository\A360.Repository.csproj" />
+  </ItemGroup>
+
+</Project>

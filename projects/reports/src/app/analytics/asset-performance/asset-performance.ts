@@ -1,24 +1,53 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
   ArrowDown, ArrowUp, ArrowUpDown, Bookmark, Box, Calendar, ChartColumn, Clock, Download, GitCompareArrows, GripVertical, Heart, House, Info,
-  LucideAngularModule, RefreshCw, Settings, ShieldCheck, TriangleAlert, Wrench
+  LucideAngularModule, LucideIconData, RefreshCw, Settings, ShieldCheck, TriangleAlert, Wrench
 } from 'lucide-angular';
+import { Observable, Subscription, catchError, forkJoin, map, of, switchMap } from 'rxjs';
 import { downloadCsv, percent } from '../shared/analytics-common';
-import { CartesianChart, HBarChart } from '../shared/charts';
-import { RaAsset } from './kit/asset-universe';
-import { RaInsight, RaInsightCard, RaKpiCard } from './kit/ra-cards';
+import { CartesianChart, ChartSeries, HBarChart, RA_COLORS } from '../shared/charts';
+import { ALL_CATEGORIES, ALL_TYPES } from './kit/asset-universe';
+import { alignTo, previousRange } from './kit/api-utils';
+import { RaInsight, RaInsightAction, RaInsightCard, RaKpiCard, RaTone } from './kit/ra-cards';
 import { RaActionDialog, RaDetailDialog, RaExpandDialog, RaRecords, RaRecordsDialog, RaSaveViewDialog } from './kit/ra-dialogs';
 import { RaMenu } from './kit/ra-menu';
-import { ScopedAnalyticsPage, SortDir, sortRows } from './kit/scoped-page';
-import { AP_DELTAS, ApAssetRow, ApLocationRow, AssetPerformanceView, UTILIZATION_TARGET, buildAssetPerformance } from './asset-performance.data';
+import { ScopedAnalyticsPage, SortDir } from './kit/scoped-page';
+import {
+  AP_DEFAULT_PERIOD, AP_FALLBACK_PERIODS, ALL_ASSETS_VIEW, ALL_LOCATIONS, ALL_ORGANIZATIONS, ApAssetRow, ApInsight, ApInsightAsset, ApLocationRow,
+  AssetPerformanceView
+} from './asset-performance.data';
+import { ApFilterLists, ApFilters, ApPreviousTrends, ApSavedView, AssetPerformanceService } from './asset-performance.service';
 
 type AssetSortKey = 'id' | 'name' | 'location' | 'health' | 'utilization' | 'availability';
 type LocationSortKey = 'name' | 'health' | 'utilization' | 'availability';
 
-const ALL_ASSETS_VIEW = 'All Assets';
+/** Sorts a copy of `rows`; rows without a value go last either way. */
+function sortNullable<T>(rows: T[], key: keyof T, dir: SortDir): T[] {
+  return [...rows].sort((a, b) => {
+    const x = a[key];
+    const y = b[key];
+    if (x === null || x === undefined) return y === null || y === undefined ? 0 : 1;
+    if (y === null || y === undefined) return -1;
+    return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'en', { numeric: true })) * dir;
+  });
+}
+
+const dash = (v: number | null | undefined, suffix = ''): string => (v === null || v === undefined ? '—' : `${v.toLocaleString('en-US')}${suffix}`);
+
+/** Insight cards by API key: action button ids, icon and tone. */
+const INSIGHT_STYLE: Record<string, { id: string; icon: LucideIconData; tone: RaTone }> = {
+  below_health_threshold: { id: 'critical', icon: TriangleAlert, tone: 'red' },
+  maintenance_intervention: { id: 'intervention', icon: Wrench, tone: 'orange' },
+  utilization_below_target: { id: 'utilization', icon: ChartColumn, tone: 'blue' }
+};
+const ACTION_LABELS: Record<string, { suffix: string; label: string; primary?: boolean }> = {
+  view_assets: { suffix: 'view', label: 'View assets' },
+  view_locations: { suffix: 'view', label: 'View locations' },
+  create_work_order: { suffix: 'wo', label: 'Create work order', primary: true }
+};
 
 /** Reports & Analytics > Asset Performance: health, utilization, reliability, downtime and asset ranking. */
 @Component({
@@ -28,94 +57,233 @@ const ALL_ASSETS_VIEW = 'All Assets';
     FormsModule, RouterLink, NgTemplateOutlet, LucideAngularModule, CartesianChart, HBarChart, RaMenu, RaKpiCard, RaInsightCard,
     RaRecordsDialog, RaDetailDialog, RaActionDialog, RaSaveViewDialog, RaExpandDialog
   ],
+  providers: [AssetPerformanceService],
   templateUrl: './asset-performance.html',
   styleUrls: ['../shared/analytics-page.css', './kit/ra-page.css', './asset-performance.css']
 })
 export class AssetPerformancePage extends ScopedAnalyticsPage {
+  private readonly api = inject(AssetPerformanceService);
   readonly icons = {
     House, RefreshCw, GitCompareArrows, Download, Bookmark, ChartColumn, Calendar, GripVertical, Info, ArrowUp, ArrowDown, ArrowUpDown, Settings, Clock
   };
   readonly rowMenu = ['View details', 'Create work order'];
   readonly percentFormat = (v: number) => `${v}%`;
-  readonly utilizationTarget = UTILIZATION_TARGET;
-  readonly deltas = AP_DELTAS;
+  readonly dash = dash;
   protected readonly fileStem = 'asset-performance';
 
-  view!: AssetPerformanceView;
+  // Filter values come from /options and /filters
+  override periods: string[] = AP_FALLBACK_PERIODS;
+  override organizations: string[] = [ALL_ORGANIZATIONS];
+  override locations: string[] = [ALL_LOCATIONS];
+  override categories: string[] = [ALL_CATEGORIES];
+  override assetTypes: string[] = [ALL_TYPES];
+  override period = AP_DEFAULT_PERIOD;
+
   insights: RaInsight[] = [];
-  currentView = '';
+  currentView = ALL_ASSETS_VIEW;
   assetSort: AssetSortKey = 'health';
   assetDir: SortDir = -1;
   locationSort: LocationSortKey = 'health';
   locationDir: SortDir = -1;
+  /** Previous-period lines while Compare Periods is on */
+  private previous: ApPreviousTrends | null = null;
+  private loadSub: Subscription | null = null;
+  private lastUpdated = 0;
+  private readonly clock = setInterval(() => this.tick(), 60_000);
 
   constructor() {
     super();
-    this.views = [{ name: ALL_ASSETS_VIEW, filters: this.snapshot() }];
+    this.views = [this.api.allAssetsView()];
+    this.init();
+  }
+
+  get view(): AssetPerformanceView {
+    return this.api.view();
+  }
+
+  get loaded(): boolean {
+    return this.api.loaded();
+  }
+
+  get utilizationTarget(): number {
+    return this.view.utilizationTarget;
+  }
+
+  get healthThreshold(): number {
+    return this.view.healthThreshold;
+  }
+
+  /** Health trend, plus the previous period's Healthy share when comparing. */
+  get healthSeries(): ChartSeries[] {
+    const list = this.view.healthTrend;
+    if (!this.compare || !this.previous) return list;
+    return [...list, { name: 'Healthy (previous period)', values: alignTo(this.previous.healthy, this.view.labels.length), color: RA_COLORS.green, dashed: true }];
+  }
+
+  get reliabilitySeries(): ChartSeries[] {
+    const list = this.view.reliability;
+    if (!this.compare || !this.previous) return list;
+    return [...list, { name: 'MTBF (previous period)', values: alignTo(this.previous.mtbf, this.view.labels.length), color: RA_COLORS.purple, dashed: true }];
+  }
+
+  /** Options, filter values and saved views, then the figures (opening the user's default view if there is one). */
+  private init(): void {
+    const errors: string[] = [];
+    const soft = <T>(fallback: T) => catchError<T, Observable<T>>((err: Error) => {
+      errors.push(err.message);
+      return of(fallback);
+    });
+    forkJoin({
+      options: this.api.loadOptions().pipe(soft<{ periods: string[]; defaultPeriod: string } | null>(null)),
+      filters: this.api.loadFilters().pipe(soft<ApFilterLists | null>(null)),
+      views: this.api.loadViews().pipe(soft<ApSavedView[]>([this.api.allAssetsView()]))
+    }).subscribe(({ options, filters, views }) => {
+      if (options) {
+        this.periods = options.periods;
+        this.period = options.defaultPeriod;
+      }
+      if (filters) {
+        this.organizations = filters.organizations;
+        this.locations = filters.locations;
+        this.categories = filters.categories;
+        this.assetTypes = filters.assetTypes;
+      }
+      this.views = views;
+      const preferred = views.find((v) => v.isDefault && !v.builtIn);
+      if (preferred) {
+        this.currentView = preferred.name;
+        this.restoreFilters(preferred.filters);
+      }
+      if (errors.length) this.notify(errors[0]);
+      this.recompute();
+    });
+  }
+
+  private filters(): ApFilters {
+    return { period: this.period, organization: this.organization, location: this.location, category: this.category, assetType: this.assetType };
+  }
+
+  /** Reloads the page from GET /overview (and the previous period's trends when comparing). */
+  recompute(announce?: string): void {
+    this.loadSub?.unsubscribe();
+    this.refreshing = true;
+    const f = this.filters();
+    this.loadSub = this.api.loadOverview(f).pipe(
+      switchMap((v) => {
+        if (!this.compare || !v.previousFromUtc || !v.previousToUtc) return of({ v, previous: null });
+        return this.api.loadPrevious(f, previousRange(v.previousFromUtc, v.previousToUtc)).pipe(
+          map((previous) => ({ v, previous: previous as ApPreviousTrends | null })),
+          catchError((err: Error) => {
+            this.notify(err.message);
+            return of({ v, previous: null });
+          })
+        );
+      })
+    ).subscribe({
+      next: ({ v, previous }) => {
+        this.previous = previous;
+        this.build(v);
+        this.refreshing = false;
+        this.lastUpdated = Date.now();
+        this.updatedMinutes = 0;
+        if (announce) this.notify(announce);
+      },
+      error: (err: Error) => {
+        this.refreshing = false;
+        this.notify(err.message);
+      }
+    });
+  }
+
+  override refresh(): void {
+    if (!this.refreshing) this.recompute('Data refreshed.');
+  }
+
+  private tick(): void {
+    if (this.lastUpdated) this.updatedMinutes = Math.floor((Date.now() - this.lastUpdated) / 60_000);
+  }
+
+  override ngOnDestroy(): void {
+    clearInterval(this.clock);
+    this.loadSub?.unsubscribe();
+    super.ngOnDestroy();
+  }
+
+  private build(v: AssetPerformanceView): void {
+    this.kpis = [
+      { id: 'total', label: 'Total Assets', value: v.total.toLocaleString('en-US'), delta: v.totalChange, icon: Box, tone: 'purple' },
+      { id: 'health', label: 'Average Health Score', value: dash(v.health.value, '%'), delta: v.health.change, icon: Heart, tone: 'blue' },
+      { id: 'utilization', label: 'Utilization Rate', value: dash(v.utilization.value, '%'), delta: v.utilization.change, icon: ChartColumn, tone: 'orange' },
+      {
+        id: 'availability', label: 'Availability', value: v.availability.value === null ? '—' : percent(v.availability.value),
+        delta: v.availability.change, icon: ShieldCheck, tone: 'green'
+      },
+      { id: 'mtbf', label: 'MTBF', value: dash(v.mtbf.value, ' hrs'), delta: v.mtbf.change, icon: Settings, tone: 'purple' }
+    ];
+    this.insights = v.insights.map((i) => this.toCard(i));
+  }
+
+  private toCard(i: ApInsight): RaInsight {
+    const style = INSIGHT_STYLE[i.key] ?? { id: i.key, icon: Info, tone: (i.severity === 'critical' ? 'red' : i.severity === 'warning' ? 'orange' : 'blue') as RaTone };
+    const clear = i.count === 0;
+    const actions: RaInsightAction[] = i.actions
+      .filter((a) => ACTION_LABELS[a] && !(clear && a !== 'view_locations'))
+      .map((a) => ({ id: `${style.id}-${ACTION_LABELS[a].suffix}`, label: ACTION_LABELS[a].label, primary: ACTION_LABELS[a].primary }));
+    return { id: style.id, tone: clear ? 'green' : style.tone, icon: clear && style.id === 'critical' ? ShieldCheck : style.icon, title: i.title, text: i.message, actions };
+  }
+
+  private insight(id: string): ApInsight | undefined {
+    const key = Object.keys(INSIGHT_STYLE).find((k) => INSIGHT_STYLE[k].id === id) ?? id;
+    return this.view.insights.find((i) => i.key === key);
+  }
+
+  // ----- Filters and saved views (GET/POST /views) -----
+  protected override restoreFilters(f: Record<string, string>): void {
+    const period = f['period'];
+    this.period = period && this.periods.includes(period) ? period : AP_DEFAULT_PERIOD;
+    this.organization = this.keep('organizations', f['organization'] ?? ALL_ORGANIZATIONS);
+    this.location = this.keep('locations', f['location'] ?? ALL_LOCATIONS);
+    this.category = this.keep('categories', f['category'] ?? ALL_CATEGORIES);
+    this.assetType = this.keep('assetTypes', f['assetType'] ?? ALL_TYPES);
+  }
+
+  /** A saved value no longer offered by /filters stays selectable so the view still opens as saved. */
+  private keep(list: 'organizations' | 'locations' | 'categories' | 'assetTypes', value: string): string {
+    if (!this[list].includes(value)) this[list] = [...this[list], value];
+    return value;
+  }
+
+  override resetFilters(): void {
+    this.currentView = ALL_ASSETS_VIEW;
+    this.restoreFilters({});
     this.recompute();
   }
 
-  recompute(): void {
-    const v = buildAssetPerformance(this.scope, this.period, this.compare);
-    this.view = v;
-    this.kpis = [
-      { id: 'total', label: 'Total Assets', value: v.total.toLocaleString('en-US'), delta: AP_DELTAS.total, icon: Box, tone: 'purple' },
-      { id: 'health', label: 'Average Health Score', value: `${v.health}%`, delta: AP_DELTAS.health, icon: Heart, tone: 'blue' },
-      { id: 'utilization', label: 'Utilization Rate', value: `${v.utilization}%`, delta: AP_DELTAS.utilization, icon: ChartColumn, tone: 'orange' },
-      { id: 'availability', label: 'Availability', value: percent(v.availability), delta: AP_DELTAS.availability, icon: ShieldCheck, tone: 'green' },
-      { id: 'mtbf', label: 'MTBF', value: `${v.mtbf.toLocaleString('en-US')} hrs`, delta: AP_DELTAS.mtbf, icon: Settings, tone: 'purple' }
-    ];
-    this.insights = this.buildInsights(v);
+  override applyView(name: string): void {
+    const view = this.views.find((v) => v.name === name);
+    this.restoreFilters(view ? view.filters : {});
+    this.recompute();
   }
 
-  private buildInsights(v: AssetPerformanceView): RaInsight[] {
-    if (!v.total) return [];
-    const low = v.lowUtilization;
-    return [
-      v.critical.length
-        ? {
-            id: 'critical', tone: 'red', icon: TriangleAlert, title: `${v.critical.length} assets below health threshold`,
-            text: 'Assets with health score < 40 require immediate attention.',
-            actions: [{ id: 'critical-view', label: 'View assets' }, { id: 'critical-wo', label: 'Create work order', primary: true }]
-          }
-        : { id: 'critical', tone: 'green', icon: ShieldCheck, title: 'No assets below health threshold', text: 'Every asset in this view scores 40 or more.', actions: [] },
-      v.intervention.length
-        ? {
-            id: 'intervention', tone: 'orange', icon: Wrench, title: `Maintenance intervention recommended for ${v.intervention.length} asset${v.intervention.length === 1 ? '' : 's'}`,
-            text: 'Based on usage, condition and predicted failures: health 40–49 while running above 80% utilization.',
-            actions: [{ id: 'intervention-view', label: 'View assets' }, { id: 'intervention-wo', label: 'Create work order', primary: true }]
-          }
-        : { id: 'intervention', tone: 'green', icon: Wrench, title: 'No maintenance intervention needed', text: 'No heavily used asset in this view is losing condition.', actions: [] },
-      low.length
-        ? {
-            id: 'utilization', tone: 'blue', icon: ChartColumn, title: `Utilization below target in ${low.length} location${low.length === 1 ? '' : 's'}`,
-            text: `Average utilization is below ${UTILIZATION_TARGET}% in ${this.joinNames(low.map((l) => l.name))}.`,
-            actions: [{ id: 'utilization-view', label: 'View locations' }]
-          }
-        : {
-            id: 'utilization', tone: 'green', icon: ChartColumn, title: 'All locations meet the utilization target',
-            text: `Every location in this view averages ${UTILIZATION_TARGET}% utilization or more.`, actions: [{ id: 'utilization-view', label: 'View locations' }]
-          }
-    ];
-  }
-
-  private joinNames(names: string[]): string {
-    return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0] ?? '';
-  }
-
-  // ----- Saved views -----
   override confirmSaveView(name: string): void {
-    super.confirmSaveView(name);
-    this.currentView = name;
+    this.savingView = false;
+    this.api.createView(name, this.filters()).subscribe({
+      next: (saved) => {
+        this.views = this.api.views();
+        this.currentView = saved.name;
+        this.notify(`View “${saved.name}” saved with the current filters.`);
+      },
+      error: (err: Error) => this.notify(err.message)
+    });
   }
 
-  // ----- Tables -----
+  // ----- Tables (sorted in the browser: the overview returns every row these tables show) -----
   get assetRows(): ApAssetRow[] {
-    return sortRows(this.view.topBottom, this.assetSort, this.assetDir);
+    return sortNullable(this.view.topBottom, this.assetSort, this.assetDir);
   }
 
   get locationRows(): ApLocationRow[] {
-    return sortRows(this.view.locations, this.locationSort, this.locationDir);
+    return sortNullable(this.view.locations, this.locationSort, this.locationDir);
   }
 
   sortAssets(key: AssetSortKey): void {
@@ -136,106 +304,137 @@ export class AssetPerformancePage extends ScopedAnalyticsPage {
     return this.locationSort !== key ? this.icons.ArrowUpDown : this.locationDir === 1 ? this.icons.ArrowUp : this.icons.ArrowDown;
   }
 
-  scoreTone(score: number): string {
-    return score >= 60 ? 'green' : score >= 40 ? 'orange' : 'red';
+  scoreTone(score: number | null): string {
+    return score === null ? 'grey' : score >= 60 ? 'green' : score >= 40 ? 'orange' : 'red';
   }
 
-  scoreColor(score: number): string {
-    return score >= 80 ? '#059669' : score >= 60 ? '#2563eb' : score >= 40 ? '#d97706' : '#dc2626';
+  scoreColor(score: number | null): string {
+    return score === null ? '#64748b' : score >= 80 ? '#059669' : score >= 60 ? '#2563eb' : score >= 40 ? '#d97706' : '#dc2626';
   }
 
-  meterColor(utilization: number): string {
-    return utilization >= UTILIZATION_TARGET ? '#10b981' : utilization >= 65 ? '#f59e0b' : '#ef4444';
+  meterColor(utilization: number | null): string {
+    const u = utilization ?? 0;
+    return u >= this.utilizationTarget ? '#10b981' : u >= this.utilizationTarget - 10 ? '#f59e0b' : '#ef4444';
+  }
+
+  statusTone(status: string): string {
+    return status === 'Top Performer' ? 'green' : status === 'On Track' ? 'blue' : status === 'Underperforming' ? 'red' : 'grey';
+  }
+
+  private priorityOf(health: number | null): string {
+    return health !== null && health < 40 ? 'Critical' : 'Medium';
   }
 
   rowAction(item: string, row: ApAssetRow): void {
-    if (item === 'Create work order') this.openAction('Work order', `Performance review – ${row.name}`, `${row.id} · ${row.location}`, row.health < 40 ? 'Critical' : 'Medium');
-    else this.showAsset(row.asset);
+    if (item === 'Create work order') this.openAction('Work order', `Performance review – ${row.name}`, `${row.id} · ${row.location}`, this.priorityOf(row.health));
+    else this.showAsset(row);
   }
 
-  showAsset(a: RaAsset): void {
+  showAsset(a: ApAssetRow): void {
     this.openDetail(
       {
         title: a.name,
-        subtitle: `${a.id} · ${a.site.name}`,
+        subtitle: `${a.id} · ${a.location}`,
         fields: [
           { label: 'Category', value: a.category },
           { label: 'Asset type', value: a.type },
-          { label: 'Health score', value: `${a.health} / 100` },
-          { label: 'Utilization', value: percent(a.utilization) },
-          { label: 'Availability', value: percent(a.availability) },
-          { label: 'MTBF', value: `${a.mtbf.toLocaleString('en-US')} hrs` },
-          { label: 'Predictive risk', value: a.risk ? `${a.risk} (score ${a.riskScore})` : 'Not monitored' },
-          { label: 'Owner', value: a.owner }
+          { label: 'Health score', value: a.health === null ? 'Not assessed' : `${a.health} / 100` },
+          { label: 'Utilization', value: a.utilization === null ? '—' : percent(a.utilization) },
+          { label: 'Availability', value: a.availability === null ? '—' : percent(a.availability) },
+          { label: 'MTBF', value: dash(a.mtbf, ' hrs') },
+          { label: 'MTTR', value: dash(a.mttr, ' hrs') },
+          { label: 'Downtime', value: `${a.downtime.toLocaleString('en-US')} hrs · ${a.failures} failure${a.failures === 1 ? '' : 's'}` },
+          { label: 'Performance score', value: a.score === null ? 'Not rated' : `${a.score} (${a.band ?? a.status})` }
         ],
         primary: 'Create work order'
       },
-      { kind: 'Work order', title: `Performance review – ${a.name}`, context: `${a.id} · ${a.site.name}`, priority: a.health < 40 ? 'Critical' : 'Medium' }
+      { kind: 'Work order', title: `Performance review – ${a.name}`, context: `${a.id} · ${a.location}`, priority: this.priorityOf(a.health) }
     );
   }
 
   showLocation(l: ApLocationRow): void {
     this.openDetail({
       title: l.name,
-      subtitle: `${l.site.org} · site code ${l.site.code}`,
+      subtitle: `${l.assets.toLocaleString('en-US')} assets · ${l.status}`,
       fields: [
         { label: 'Assets', value: l.assets.toLocaleString('en-US') },
-        { label: 'Average health score', value: l.health },
-        { label: 'Utilization', value: `${l.utilization}% (target ${UTILIZATION_TARGET}%)` },
-        { label: 'Availability', value: percent(l.availability) }
+        { label: 'Average health score', value: dash(l.health) },
+        { label: 'Utilization', value: `${dash(l.utilization, '%')} (target ${this.utilizationTarget}%)` },
+        { label: 'Availability', value: dash(l.availability, '%') },
+        { label: 'Performance score', value: dash(l.score) }
       ]
     });
   }
 
   // ----- Insights -----
   insightAction(id: string): void {
-    const v = this.view;
-    switch (id) {
-      case 'critical-view':
-        this.records = this.assetRecords('Assets below health threshold', 'Health score < 40, lowest first.', v.critical, 'assets-below-health-threshold.csv');
-        break;
-      case 'critical-wo':
-        this.openAction('Work order', `Condition assessment – ${v.critical.length} critical assets`, this.assetList(v.critical), 'Critical');
-        break;
-      case 'intervention-view':
-        this.records = this.assetRecords('Maintenance intervention recommended', 'Health 40–49 while running above 80% utilization.', v.intervention, 'maintenance-intervention.csv');
-        break;
-      case 'intervention-wo':
-        this.openAction('Work order', `Preventive service – ${v.intervention.length} assets`, this.assetList(v.intervention), 'High');
-        break;
-      case 'utilization-view':
-        this.records = {
-          title: 'Utilization by location',
-          subtitle: `Target ${UTILIZATION_TARGET}%. Lowest utilization first.`,
-          columns: [
-            { key: 'location', label: 'Location' }, { key: 'assets', label: 'Assets', num: true }, { key: 'utilization', label: 'Utilization %', num: true },
-            { key: 'gap', label: 'Gap to target (pts)', num: true }, { key: 'availability', label: 'Availability %', num: true }
-          ],
-          rows: sortRows(v.locations, 'utilization', 1).map((l) => ({
-            location: l.name, assets: l.assets, utilization: l.utilization, gap: l.utilization - UTILIZATION_TARGET, availability: l.availability
-          })),
-          file: 'utilization-by-location.csv'
-        };
-        break;
+    const [card, action] = [id.slice(0, id.lastIndexOf('-')), id.slice(id.lastIndexOf('-') + 1)];
+    const insight = this.insight(card);
+    if (!insight) return;
+    if (card === 'utilization') {
+      this.records = this.locationRecords();
+      return;
     }
+    if (action === 'wo') {
+      const critical = card === 'critical';
+      this.openAction(
+        'Work order',
+        critical ? `Condition assessment – ${insight.count} critical assets` : `Preventive service – ${insight.count} assets`,
+        this.assetList(insight.assets),
+        critical ? 'Critical' : 'High'
+      );
+      return;
+    }
+    // "View assets": GET /assets with the insight's query (healthBelow=… or interventionOnly=true)
+    this.api.loadAssets(this.filters(), insight.query).subscribe({
+      next: ({ items }) => {
+        const reasons = new Map(insight.assets.map((a) => [a.key, a.reasons.join('; ')]));
+        this.records = card === 'critical'
+          ? this.assetRecords('Assets below health threshold', `Health score < ${this.healthThreshold}, lowest first.`, items, reasons, 'assets-below-health-threshold.csv')
+          : this.assetRecords('Maintenance intervention recommended', insight.message, items, reasons, 'maintenance-intervention.csv');
+      },
+      error: (err: Error) => this.notify(err.message)
+    });
   }
 
-  private assetList(list: RaAsset[]): string {
+  private locationRecords(): RaRecords {
+    const target = this.utilizationTarget;
+    return {
+      title: 'Utilization by location',
+      subtitle: `Target ${target}%. Lowest utilization first.`,
+      columns: [
+        { key: 'location', label: 'Location' }, { key: 'assets', label: 'Assets', num: true }, { key: 'utilization', label: 'Utilization %', num: true },
+        { key: 'gap', label: 'Gap to target (pts)', num: true }, { key: 'availability', label: 'Availability %', num: true }
+      ],
+      rows: sortNullable(this.view.locations, 'utilization', 1).map((l) => ({
+        location: l.name,
+        assets: l.assets,
+        utilization: l.utilization ?? '—',
+        gap: l.utilization === null ? '—' : Math.round((l.utilization - target) * 10) / 10,
+        availability: l.availability ?? '—'
+      })),
+      file: 'utilization-by-location.csv'
+    };
+  }
+
+  private assetList(list: ApInsightAsset[]): string {
+    if (!list.length) return 'No assets in this view.';
     const names = list.slice(0, 4).map((a) => a.name).join(', ');
     return list.length > 4 ? `${names} and ${list.length - 4} more.` : `${names}.`;
   }
 
-  private assetRecords(title: string, subtitle: string, list: RaAsset[], file: string): RaRecords {
+  private assetRecords(title: string, subtitle: string, list: ApAssetRow[], reasons: Map<string, string>, file: string): RaRecords {
     return {
       title: `${title} (${list.length})`,
       subtitle,
       columns: [
         { key: 'id', label: 'Asset ID' }, { key: 'name', label: 'Asset Name' }, { key: 'location', label: 'Location' }, { key: 'category', label: 'Category' },
         { key: 'health', label: 'Health', num: true }, { key: 'utilization', label: 'Utilization %', num: true }, { key: 'availability', label: 'Availability %', num: true },
-        { key: 'owner', label: 'Owner' }
+        { key: 'reasons', label: 'Reasons' }
       ],
       rows: list.map((a) => ({
-        id: a.id, name: a.name, location: a.site.name, category: a.category, health: a.health, utilization: a.utilization, availability: a.availability, owner: a.owner
+        id: a.id, name: a.name, location: a.location, category: a.category, health: a.health ?? '—', utilization: a.utilization ?? '—',
+        availability: a.availability ?? '—', reasons: reasons.get(a.key) ?? ''
       })),
       file
     };
@@ -247,26 +446,23 @@ export class AssetPerformancePage extends ScopedAnalyticsPage {
     return targets[id] ?? 'ap-trend';
   }
 
+  /** GET /export: the API's Excel workbook (summary, assets, locations, categories, trends and insights). */
   exportPage(): void {
-    this.exportAssets();
-    this.notify(`Exported ${this.view.total.toLocaleString('en-US')} assets.`);
+    this.api.export(this.filters()).subscribe({
+      next: () => this.notify('Asset performance workbook exported.'),
+      error: (err: Error) => this.notify(err.message)
+    });
   }
 
-  private exportAssets(): void {
-    const ranked = [...this.view.assets].sort((a, b) => b.health - a.health);
-    downloadCsv(
-      'asset-performance.csv',
-      ['Rank', 'Asset ID', 'Asset Name', 'Location', 'Category', 'Asset Type', 'Health Score', 'Utilization %', 'Availability %', 'MTBF (hrs)'],
-      ranked.map((a, i) => [i + 1, a.id, a.name, a.site.name, a.category, a.type, a.health, a.utilization, a.availability, a.mtbf])
-    );
-  }
-
+  /** One widget's figures as CSV, built in the browser from the data already loaded (the API exports whole pages only). */
   exportWidget(id: string): void {
     const v = this.view;
     const months = v.labels.map((l) => l.replace('\n', ' '));
+    const lines = (file: string, list: ChartSeries[], unit = '') =>
+      downloadCsv(file, ['Month', ...list.map((s) => `${s.name}${unit}`)], months.map((m, i) => [m, ...list.map((s) => s.values[i] ?? 0)]));
     switch (id) {
       case 'trend':
-        downloadCsv('asset-health-trend.csv', ['Month', ...v.healthTrend.map((s) => `${s.name} (%)`)], months.map((m, i) => [m, ...v.healthTrend.map((s) => s.values[i])]));
+        lines('asset-health-trend.csv', this.healthSeries, ' (%)');
         break;
       case 'category':
         downloadCsv('utilization-by-category.csv', ['Category', ...v.categoryUtilization.map((s) => `${s.name} (%)`)],
@@ -276,17 +472,18 @@ export class AssetPerformancePage extends ScopedAnalyticsPage {
         downloadCsv('performance-score-distribution.csv', ['Band', 'Assets', 'Share'], v.distribution.map((r) => [r.label, r.value, r.display ?? '']));
         break;
       case 'reliability':
-        downloadCsv('reliability-availability.csv', ['Month', ...v.reliability.map((s) => s.name)], months.map((m, i) => [m, ...v.reliability.map((s) => s.values[i])]));
+        lines('reliability-availability.csv', this.reliabilitySeries);
         break;
       case 'downtime':
-        downloadCsv('downtime-analysis.csv', ['Month', 'Planned (hrs)', 'Unplanned (hrs)'], months.map((m, i) => [m, v.downtime[0].values[i], v.downtime[1].values[i]]));
+        lines('downtime-analysis.csv', v.downtime, ' (hrs)');
         break;
       case 'assets':
-        this.exportAssets();
+        downloadCsv('top-bottom-assets.csv', ['Asset ID', 'Asset Name', 'Location', 'Health Score', 'Utilization %', 'Availability %', 'Performance Score', 'Status'],
+          this.assetRows.map((a) => [a.id, a.name, a.location, a.health ?? '', a.utilization ?? '', a.availability ?? '', a.score ?? '', a.status]));
         break;
       case 'locations':
         downloadCsv('asset-performance-by-location.csv', ['Location', 'Assets', 'Avg Health Score', 'Utilization %', 'Availability %'],
-          this.locationRows.map((l) => [l.name, l.assets, l.health, l.utilization, l.availability]));
+          this.locationRows.map((l) => [l.name, l.assets, l.health ?? '', l.utilization ?? '', l.availability ?? '']));
         break;
     }
   }

@@ -4,22 +4,57 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import {
   ArrowDown, ArrowUp, ArrowUpDown, Bookmark, ChartColumn, Clock, Download, FileText, GitCompareArrows, GripVertical, House, Info,
-  LucideAngularModule, Package, RefreshCw, Settings, ShieldCheck, TriangleAlert, Wrench
+  LucideAngularModule, LucideIconData, Package, RefreshCw, Settings, ShieldCheck, TriangleAlert, Wrench
 } from 'lucide-angular';
+import { Observable, Subscription, catchError, forkJoin, map, of, switchMap } from 'rxjs';
 import { downloadCsv, money, percent } from '../shared/analytics-common';
-import { CartesianChart, DonutChart, GaugeChart, RA_COLORS, compactNumber } from '../shared/charts';
-import { RaAsset, RaWorkOrder } from '../asset-performance/kit/asset-universe';
-import { RaInsight, RaInsightCard, RaKpiCard } from '../asset-performance/kit/ra-cards';
+import { CartesianChart, ChartSeries, DonutChart, GaugeChart, RA_COLORS, compactNumber } from '../shared/charts';
+import { ALL_CATEGORIES } from '../asset-performance/kit/asset-universe';
+import { alignTo, previousRange } from '../asset-performance/kit/api-utils';
+import { RaInsight, RaInsightAction, RaInsightCard, RaKpiCard, RaTone } from '../asset-performance/kit/ra-cards';
 import { RaActionDialog, RaDetailDialog, RaExpandDialog, RaRecords, RaRecordsDialog, RaSaveViewDialog } from '../asset-performance/kit/ra-dialogs';
 import { RaMenu } from '../asset-performance/kit/ra-menu';
-import { ScopedAnalyticsPage, SortDir, sortRows } from '../asset-performance/kit/scoped-page';
-import { ALL_MAINTENANCE_TYPES, MAINTENANCE_TYPES, MA_DELTAS, MaintenanceView, PM_TARGET, PRIORITY_RANK, TechnicianRow, buildMaintenance } from './maintenance-analytics.data';
+import { ScopedAnalyticsPage, SortDir } from '../asset-performance/kit/scoped-page';
+import {
+  ALL_LOCATIONS, ALL_MAINTENANCE_TYPES, ALL_MAINTENANCE_VIEW, ALL_ORGANIZATIONS, MA_DEFAULT_PERIOD, MA_FALLBACK_PERIODS, MA_FALLBACK_TYPES, MaInsight,
+  MaInsightAsset, MaInsightOrder, MaKpiValue, MaWorkOrder, MaintenanceView, PRIORITY_RANK, TechnicianRow
+} from './maintenance-analytics.data';
+import { MaFilterLists, MaFilters, MaOptions, MaPreviousTrends, MaSavedView, MaintenanceAnalyticsService } from './maintenance-analytics.service';
 
 type BacklogSortKey = 'priority' | 'id' | 'asset' | 'location' | 'age' | 'technician' | 'status';
 type TechSortKey = 'name' | 'completed' | 'firstTimeFix' | 'response' | 'sla';
 
 const PRIORITY_TONES: Record<string, string> = { Critical: 'red', High: 'pink', Medium: 'orange', Low: 'blue' };
 const STATUS_TONES: Record<string, string> = { Open: 'blue', 'In Progress': 'orange', 'On Hold': 'pink', Completed: 'green', Overdue: 'red' };
+
+const dash = (v: number | null | undefined, suffix = ''): string => (v === null || v === undefined ? '—' : `${v.toLocaleString('en-US')}${suffix}`);
+
+/** Insight cards by API key: action button ids, icon and tone. */
+const INSIGHT_STYLE: Record<string, { id: string; icon: LucideIconData; tone: RaTone }> = {
+  overdue_work_orders: { id: 'overdue', icon: TriangleAlert, tone: 'red' },
+  emergency_cost: { id: 'emergency', icon: ChartColumn, tone: 'orange' },
+  assets_approaching_failure: { id: 'failure', icon: Settings, tone: 'purple' },
+  spare_parts_shortage: { id: 'parts', icon: Package, tone: 'blue' }
+};
+const ACTION_LABELS: Record<string, { suffix: string; label: string; primary?: boolean }> = {
+  view_work_orders: { suffix: 'view', label: 'View work orders' },
+  view_details: { suffix: 'view', label: 'View details' },
+  view_assets: { suffix: 'view', label: 'View assets' },
+  create_action_plan: { suffix: 'plan', label: 'Create action plan', primary: true },
+  open_inventory: { suffix: 'inventory', label: 'Open inventory', primary: true }
+};
+const SEVERITY_TONES: Record<string, RaTone> = { critical: 'red', warning: 'orange', info: 'blue', success: 'green' };
+
+/** Sorts a copy of `rows`; rows without a value go last either way. */
+function sortNullable<T>(rows: T[], value: (row: T) => string | number | null, dir: SortDir): T[] {
+  return [...rows].sort((a, b) => {
+    const x = value(a);
+    const y = value(b);
+    if (x === null) return y === null ? 0 : 1;
+    if (y === null) return -1;
+    return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'en', { numeric: true })) * dir;
+  });
+}
 
 /** Reports & Analytics > Maintenance Analytics: cost, work orders, PM compliance, reliability, backlog and technicians. */
 @Component({
@@ -29,111 +64,253 @@ const STATUS_TONES: Record<string, string> = { Open: 'blue', 'In Progress': 'ora
     FormsModule, RouterLink, NgTemplateOutlet, LucideAngularModule, CartesianChart, DonutChart, GaugeChart, RaMenu, RaKpiCard, RaInsightCard,
     RaRecordsDialog, RaDetailDialog, RaActionDialog, RaSaveViewDialog, RaExpandDialog
   ],
+  providers: [MaintenanceAnalyticsService],
   templateUrl: './maintenance-analytics.html',
   styleUrls: ['../shared/analytics-page.css', '../asset-performance/kit/ra-page.css', './maintenance-analytics.css']
 })
 export class MaintenanceAnalyticsPage extends ScopedAnalyticsPage {
   private readonly router = inject(Router);
+  private readonly api = inject(MaintenanceAnalyticsService);
   readonly icons = { House, RefreshCw, GitCompareArrows, Download, Bookmark, GripVertical, Info, ArrowUp, ArrowDown, ArrowUpDown };
-  readonly maintenanceTypes = MAINTENANCE_TYPES;
-  readonly pmTarget = PM_TARGET;
-  readonly deltas = MA_DELTAS;
   readonly colors = RA_COLORS;
   readonly rowMenu = ['View details', 'Escalate'];
   readonly costFormat = (v: number) => `AED ${compactNumber(v)}`;
   readonly percentFormat = (v: number) => `${v}%`;
+  readonly dash = dash;
   protected readonly fileStem = 'maintenance-analytics';
 
-  maintenanceType = '';
-  view!: MaintenanceView;
+  // Filter values come from /options and /filters
+  override periods: string[] = MA_FALLBACK_PERIODS;
+  override organizations: string[] = [ALL_ORGANIZATIONS];
+  override locations: string[] = [ALL_LOCATIONS];
+  override categories: string[] = [ALL_CATEGORIES];
+  override period = MA_DEFAULT_PERIOD;
+  maintenanceTypes: string[] = [ALL_MAINTENANCE_TYPES, ...MA_FALLBACK_TYPES];
+  maintenanceType = ALL_MAINTENANCE_TYPES;
+
   insights: RaInsight[] = [];
+  currentView = ALL_MAINTENANCE_VIEW;
   backlogSort: BacklogSortKey = 'priority';
   backlogDir: SortDir = -1;
   techSort: TechSortKey = 'completed';
   techDir: SortDir = -1;
+  /** Previous-period lines while Compare Periods is on */
+  private previous: MaPreviousTrends | null = null;
+  private loadSub: Subscription | null = null;
+  private lastUpdated = 0;
+  private readonly clock = setInterval(() => this.tick(), 60_000);
 
   constructor() {
     super();
-    this.recompute();
+    this.views = [this.api.allMaintenanceView()];
+    this.init();
   }
 
-  recompute(): void {
-    const v = buildMaintenance(this.scope, this.period, this.maintenanceType || ALL_MAINTENANCE_TYPES, this.compare);
-    this.view = v;
-    this.kpis = [
-      { id: 'cost', label: 'Maintenance Cost', value: money(v.cost), delta: MA_DELTAS.cost, lowerIsBetter: true, icon: Wrench, tone: 'purple' },
-      { id: 'open', label: 'Open Work Orders', value: String(v.open), delta: MA_DELTAS.open, lowerIsBetter: true, icon: FileText, tone: 'blue' },
-      { id: 'pm', label: 'Preventive Compliance', value: percent(v.pmCompliance), delta: MA_DELTAS.pm, icon: ShieldCheck, tone: 'green' },
-      { id: 'mttr', label: 'MTTR', value: `${v.mttr} hrs`, delta: MA_DELTAS.mttr, lowerIsBetter: true, icon: Clock, tone: 'orange' },
-      { id: 'mtbf', label: 'MTBF', value: `${v.mtbf.toLocaleString('en-US')} hrs`, delta: MA_DELTAS.mtbf, icon: Settings, tone: 'purple' }
-    ];
-    this.insights = this.buildInsights(v);
+  get view(): MaintenanceView {
+    return this.api.view();
   }
 
-  private buildInsights(v: MaintenanceView): RaInsight[] {
-    const overrun = v.emergencyTarget ? Math.round((v.emergencyCost / v.emergencyTarget - 1) * 100) : 0;
-    return [
-      {
-        id: 'overdue', tone: v.overdue.length ? 'red' : 'green', icon: TriangleAlert, title: `${v.overdue.length} overdue work orders`,
-        text: v.overdue.length ? 'Work orders are past due and require immediate attention.' : 'Nothing is past its due date.',
-        actions: [{ id: 'overdue-view', label: 'View work orders' }, { id: 'overdue-plan', label: 'Create action plan', primary: true }]
-      },
-      {
-        id: 'emergency', tone: overrun > 0 ? 'orange' : 'green', icon: ChartColumn,
-        title: overrun > 0 ? `Emergency maintenance cost is ${overrun}% above target` : 'Emergency maintenance cost is within target',
-        text: `Current period emergency costs are ${money(v.emergencyCost)} against a target of ${money(v.emergencyTarget)}.`,
-        actions: [{ id: 'emergency-view', label: 'View details' }, { id: 'emergency-plan', label: 'Create action plan', primary: true }]
-      },
-      {
-        id: 'failure', tone: 'purple', icon: Settings, title: `${v.nearFailure.length} assets approaching failure threshold`,
-        text: 'Assets show high risk of failure within 7 days based on condition and maintenance history.',
-        actions: [{ id: 'failure-view', label: 'View assets' }, { id: 'failure-plan', label: 'Create action plan', primary: true }]
-      },
-      {
-        id: 'parts', tone: 'blue', icon: Package, title: `Spare parts availability affecting ${v.waitingParts.length} work orders`,
-        text: 'Required parts are unavailable, causing delays in maintenance completion.',
-        actions: [{ id: 'parts-view', label: 'View work orders' }, { id: 'parts-inventory', label: 'Open inventory', primary: true }]
-      }
-    ];
+  get loaded(): boolean {
+    return this.api.loaded();
   }
 
-  // ----- Saved views include the maintenance type -----
-  protected override snapshot(): Record<string, string> {
-    return { ...super.snapshot(), maintenanceType: this.maintenanceType };
-  }
-
-  protected override restoreFilters(f: Record<string, string>): void {
-    super.restoreFilters(f);
-    this.maintenanceType = f['maintenanceType'] ?? '';
-  }
-
-  override resetFilters(): void {
-    this.maintenanceType = '';
-    super.resetFilters();
+  get pmTarget(): number {
+    return this.view.complianceTarget;
   }
 
   get typeLabels(): string[] {
     return this.view.typeSeries.map((s) => s.name);
   }
 
-  // ----- Tables -----
-  get backlogRows(): RaWorkOrder[] {
-    const dir = this.backlogDir;
-    const key = this.backlogSort;
-    const value = (o: RaWorkOrder): string | number =>
-      key === 'priority' ? PRIORITY_RANK[o.priority] * 1000 + o.ageDays : key === 'age' ? o.ageDays : key === 'asset' ? o.asset.name
-        : key === 'location' ? o.asset.site.name : key === 'technician' ? o.technician : key === 'status' ? o.status : o.id;
-    return [...this.view.backlog]
-      .sort((a, b) => {
-        const x = value(a);
-        const y = value(b);
-        return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'en', { numeric: true })) * dir;
+  /** Nothing recorded for the filters: no work orders, backlog or cost. */
+  get empty(): boolean {
+    return this.loaded && !this.view.workOrders && !this.view.backlogTotal && !this.view.totalCost;
+  }
+
+  /** Cost trend, plus the previous period's total when comparing. */
+  get costSeries(): ChartSeries[] {
+    const list = this.view.costTrend;
+    if (!this.compare || !this.previous) return list;
+    return [...list, { name: 'Total (previous period)', values: alignTo(this.previous.totalCost, this.view.labels.length), color: RA_COLORS.purple, type: 'line', dashed: true }];
+  }
+
+  get pmSeries(): ChartSeries[] {
+    const list = this.view.pmTrend;
+    if (!this.compare || !this.previous) return list;
+    return [...list, { name: 'Previous period', values: alignTo(this.previous.pm, this.view.labels.length), color: RA_COLORS.green, dashed: true }];
+  }
+
+  /** "+4.2%" or "+4.2 pts" for the gauge. */
+  get pmDeltaText(): string {
+    const c = this.view.pmCompliance;
+    return `${c.change > 0 ? '+' : ''}${Number(c.change.toFixed(1))}${c.unit === 'points' ? ' pts' : '%'}`;
+  }
+
+  /** Options, filter values and saved views, then the figures (opening the user's default view if there is one). */
+  private init(): void {
+    const errors: string[] = [];
+    const soft = <T>(fallback: T) => catchError<T, Observable<T>>((err: Error) => {
+      errors.push(err.message);
+      return of(fallback);
+    });
+    forkJoin({
+      options: this.api.loadOptions().pipe(soft<MaOptions | null>(null)),
+      filters: this.api.loadFilters().pipe(soft<MaFilterLists | null>(null)),
+      views: this.api.loadViews().pipe(soft<MaSavedView[]>([this.api.allMaintenanceView()]))
+    }).subscribe(({ options, filters, views }) => {
+      if (options) {
+        this.periods = options.periods;
+        this.period = options.defaultPeriod;
+        this.maintenanceTypes = options.maintenanceTypes;
+      }
+      if (filters) {
+        this.organizations = filters.organizations;
+        this.locations = filters.locations;
+        this.categories = filters.categories;
+      }
+      this.views = views;
+      const preferred = views.find((v) => v.isDefault && !v.builtIn);
+      if (preferred) {
+        this.currentView = preferred.name;
+        this.restoreFilters(preferred.filters);
+      }
+      if (errors.length) this.notify(errors[0]);
+      this.recompute();
+    });
+  }
+
+  private filters(): MaFilters {
+    return { period: this.period, organization: this.organization, location: this.location, category: this.category, maintenanceType: this.maintenanceType };
+  }
+
+  /** Reloads the page from GET /overview (and the previous period's trends when comparing). */
+  recompute(announce?: string): void {
+    this.loadSub?.unsubscribe();
+    this.refreshing = true;
+    const f = this.filters();
+    this.loadSub = this.api.loadOverview(f).pipe(
+      switchMap((v) => {
+        if (!this.compare || !v.previousFromUtc || !v.previousToUtc) return of({ v, previous: null });
+        return this.api.loadPrevious(f, previousRange(v.previousFromUtc, v.previousToUtc)).pipe(
+          map((previous) => ({ v, previous: previous as MaPreviousTrends | null })),
+          catchError((err: Error) => {
+            this.notify(err.message);
+            return of({ v, previous: null });
+          })
+        );
       })
-      .slice(0, 5);
+    ).subscribe({
+      next: ({ v, previous }) => {
+        this.previous = previous;
+        this.build(v);
+        this.refreshing = false;
+        this.lastUpdated = Date.now();
+        this.updatedMinutes = 0;
+        if (announce) this.notify(announce);
+      },
+      error: (err: Error) => {
+        this.refreshing = false;
+        this.notify(err.message);
+      }
+    });
+  }
+
+  override refresh(): void {
+    if (!this.refreshing) this.recompute('Data refreshed.');
+  }
+
+  private tick(): void {
+    if (this.lastUpdated) this.updatedMinutes = Math.floor((Date.now() - this.lastUpdated) / 60_000);
+  }
+
+  override ngOnDestroy(): void {
+    clearInterval(this.clock);
+    this.loadSub?.unsubscribe();
+    super.ngOnDestroy();
+  }
+
+  private build(v: MaintenanceView): void {
+    const delta = (k: MaKpiValue) => k.change;
+    this.kpis = [
+      { id: 'cost', label: 'Maintenance Cost', value: v.cost.value === null ? '—' : money(v.cost.value), delta: delta(v.cost), lowerIsBetter: true, icon: Wrench, tone: 'purple' },
+      { id: 'open', label: 'Open Work Orders', value: dash(v.open.value), delta: delta(v.open), lowerIsBetter: true, icon: FileText, tone: 'blue' },
+      {
+        id: 'pm', label: 'Preventive Compliance', value: v.pmCompliance.value === null ? '—' : percent(v.pmCompliance.value), delta: delta(v.pmCompliance),
+        icon: ShieldCheck, tone: 'green'
+      },
+      { id: 'mttr', label: 'MTTR', value: dash(v.mttr.value, ' hrs'), delta: delta(v.mttr), lowerIsBetter: true, icon: Clock, tone: 'orange' },
+      { id: 'mtbf', label: 'MTBF', value: dash(v.mtbf.value, ' hrs'), delta: delta(v.mtbf), icon: Settings, tone: 'purple' }
+    ];
+    this.insights = v.insights.map((i) => this.toCard(i));
+  }
+
+  private toCard(i: MaInsight): RaInsight {
+    const style = INSIGHT_STYLE[i.key] ?? { id: i.key, icon: Info, tone: SEVERITY_TONES[i.severity] ?? 'blue' };
+    // The emergency card's tone follows the API's verdict (above / within the baseline); the others turn green when there is nothing to act on
+    const tone: RaTone = i.key === 'emergency_cost' ? (SEVERITY_TONES[i.severity] ?? style.tone) : i.count === 0 ? 'green' : style.tone;
+    const actions: RaInsightAction[] = i.actions
+      .filter((a) => ACTION_LABELS[a])
+      .map((a) => ({ id: `${style.id}-${ACTION_LABELS[a].suffix}`, label: ACTION_LABELS[a].label, primary: ACTION_LABELS[a].primary }));
+    return { id: style.id, tone, icon: i.count === 0 && style.id === 'overdue' ? ShieldCheck : style.icon, title: i.title, text: i.message, actions };
+  }
+
+  private insight(card: string): MaInsight | undefined {
+    const key = Object.keys(INSIGHT_STYLE).find((k) => INSIGHT_STYLE[k].id === card) ?? card;
+    return this.view.insights.find((i) => i.key === key);
+  }
+
+  // ----- Filters and saved views (GET/POST /views; the view includes the maintenance type) -----
+  protected override restoreFilters(f: Record<string, string>): void {
+    const period = f['period'];
+    this.period = period && this.periods.includes(period) ? period : MA_DEFAULT_PERIOD;
+    this.organization = this.keep('organizations', f['organization'] ?? ALL_ORGANIZATIONS);
+    this.location = this.keep('locations', f['location'] ?? ALL_LOCATIONS);
+    this.category = this.keep('categories', f['category'] ?? ALL_CATEGORIES);
+    this.maintenanceType = this.keep('maintenanceTypes', f['maintenanceType'] ?? ALL_MAINTENANCE_TYPES);
+  }
+
+  /** A saved value no longer offered by /filters stays selectable so the view still opens as saved. */
+  private keep(list: 'organizations' | 'locations' | 'categories' | 'maintenanceTypes', value: string): string {
+    if (!this[list].includes(value)) this[list] = [...this[list], value];
+    return value;
+  }
+
+  override resetFilters(): void {
+    this.currentView = ALL_MAINTENANCE_VIEW;
+    this.restoreFilters({});
+    this.recompute();
+  }
+
+  override applyView(name: string): void {
+    const view = this.views.find((v) => v.name === name);
+    this.restoreFilters(view ? view.filters : {});
+    this.recompute();
+  }
+
+  override confirmSaveView(name: string): void {
+    this.savingView = false;
+    this.api.createView(name, this.filters()).subscribe({
+      next: (saved) => {
+        this.views = this.api.views();
+        this.currentView = saved.name;
+        this.notify(`View “${saved.name}” saved with the current filters.`);
+      },
+      error: (err: Error) => this.notify(err.message)
+    });
+  }
+
+  // ----- Tables (sorted in the browser: the overview returns up to 200 backlog rows and every technician) -----
+  get backlogRows(): MaWorkOrder[] {
+    const key = this.backlogSort;
+    const value = (o: MaWorkOrder): string | number | null =>
+      key === 'priority' ? (PRIORITY_RANK[o.priority] ?? 0) * 100_000 + (o.ageDays ?? 0) : key === 'age' ? o.ageDays : key === 'asset' ? o.asset
+        : key === 'location' ? o.location : key === 'technician' ? o.technician : key === 'status' ? o.status : o.id;
+    return sortNullable(this.view.backlog, value, this.backlogDir).slice(0, 5);
   }
 
   get technicianRows(): TechnicianRow[] {
-    return sortRows(this.view.technicians, this.techSort, this.techDir).slice(0, 5);
+    const key = this.techSort;
+    return sortNullable(this.view.technicians, (t) => t[key], this.techDir).slice(0, 5);
   }
 
   sortBacklog(key: BacklogSortKey): void {
@@ -162,135 +339,185 @@ export class MaintenanceAnalyticsPage extends ScopedAnalyticsPage {
     return STATUS_TONES[s] ?? 'grey';
   }
 
-  ageTone(days: number): string {
-    return days > 14 ? 'red' : days > 7 ? 'orange' : 'green';
+  ageTone(days: number | null): string {
+    return days === null ? 'grey' : days > 14 ? 'red' : days > 7 ? 'orange' : 'green';
   }
 
-  rateColor(v: number): string {
-    return v >= 85 ? '#10b981' : v >= 75 ? '#f59e0b' : '#ef4444';
+  rateColor(v: number | null): string {
+    return v === null ? '#94a3b8' : v >= 85 ? '#10b981' : v >= 75 ? '#f59e0b' : '#ef4444';
   }
 
-  rowAction(item: string, o: RaWorkOrder): void {
-    if (item === 'Escalate') this.openAction('Action plan', `Escalate ${o.id} – ${o.asset.name}`, `${o.type} · ${o.status} · ${o.ageDays} days old · assigned to ${o.technician}`, 'High');
+  private age(o: MaWorkOrder): string {
+    return o.ageDays === null ? 'age unknown' : `${o.ageDays} days old`;
+  }
+
+  rowAction(item: string, o: MaWorkOrder): void {
+    if (item === 'Escalate') this.openAction('Action plan', `Escalate ${o.id} – ${o.asset}`, `${o.type} · ${o.status} · ${this.age(o)} · assigned to ${o.technician}`, 'High');
     else this.showOrder(o);
   }
 
-  showOrder(o: RaWorkOrder): void {
+  showOrder(o: MaWorkOrder): void {
     this.openDetail(
       {
         title: o.id,
-        subtitle: `${o.type} maintenance · ${o.asset.name}`,
+        subtitle: `${o.type} maintenance · ${o.asset}`,
         fields: [
-          { label: 'Asset', value: `${o.asset.name} (${o.asset.id})` },
-          { label: 'Location', value: o.asset.site.name },
+          { label: 'Asset', value: `${o.asset} (${o.assetId})` },
+          { label: 'Location', value: o.location },
           { label: 'Priority', value: o.priority },
           { label: 'Status', value: o.status },
-          { label: 'Created', value: o.created },
-          { label: 'Age', value: `${o.ageDays} days` },
+          { label: 'Due', value: o.dueDate ?? '—' },
+          { label: 'Age', value: o.ageDays === null ? '—' : `${o.ageDays} days` },
           { label: 'Assigned to', value: o.technician },
-          { label: 'Cost', value: money(o.cost) },
-          { label: 'Downtime', value: `${o.downtimeHours} hrs (${o.cause})` }
+          { label: 'Spare parts', value: o.partsShortage ? 'Shortage – required parts are out of stock or below minimum' : 'Available' }
         ],
         primary: o.status === 'Completed' ? undefined : 'Escalate'
       },
-      { kind: 'Action plan', title: `Escalate ${o.id} – ${o.asset.name}`, context: `${o.type} · ${o.status} · ${o.ageDays} days old`, priority: 'High' }
+      { kind: 'Action plan', title: `Escalate ${o.id} – ${o.asset}`, context: `${o.type} · ${o.status} · ${this.age(o)}`, priority: 'High' }
     );
   }
 
+  /** The technician's open work orders (GET /backlog?assignedTo=…); the API has no list of completed jobs. */
   showTechnician(t: TechnicianRow): void {
-    const done = this.view.orders.filter((o) => o.status === 'Completed' && o.technician === t.name);
-    this.records = this.orderRecords(`Completed by ${t.name}`, `First-time fix ${t.firstTimeFix}% · SLA compliance ${t.sla}%`, done,
-      `work-orders-${t.name.toLowerCase().replace(/\s+/g, '-')}.csv`);
+    this.api.loadBacklog(this.filters(), { assignedTo: t.name }).subscribe({
+      next: ({ items }) => {
+        this.records = this.orderRecords(
+          `Open work orders assigned to ${t.name}`,
+          `${t.completed} of ${t.assigned} completed in the period · first-time fix ${dash(t.firstTimeFix, '%')} · SLA compliance ${dash(t.sla, '%')}`,
+          items,
+          `work-orders-${t.name.toLowerCase().replace(/\s+/g, '-')}.csv`
+        );
+      },
+      error: (err: Error) => this.notify(err.message)
+    });
   }
 
+  /** GET /backlog: every unfinished work order, most urgent first. */
   openBacklog(): void {
-    this.records = this.orderRecords('Maintenance backlog', 'All work orders not yet completed, highest priority first.', this.view.backlog, 'maintenance-backlog.csv');
+    this.api.loadBacklog(this.filters()).subscribe({
+      next: ({ items, total }) => {
+        const more = total > items.length ? ` Showing the first ${items.length} of ${total}.` : '';
+        this.records = this.orderRecords('Maintenance backlog', `All work orders not yet completed, highest priority first.${more}`, items, 'maintenance-backlog.csv');
+      },
+      error: (err: Error) => this.notify(err.message)
+    });
   }
 
   // ----- Insights -----
   insightAction(id: string): void {
-    const v = this.view;
-    switch (id) {
-      case 'overdue-view':
-        this.records = this.orderRecords('Overdue work orders', 'Past their due date, oldest first.', v.overdue, 'overdue-work-orders.csv');
+    const [card, action] = [id.slice(0, id.lastIndexOf('-')), id.slice(id.lastIndexOf('-') + 1)];
+    const insight = this.insight(card);
+    if (!insight) return;
+    if (action === 'inventory') {
+      this.router.navigate([this.basePath, 'inventory-analytics']);
+      return;
+    }
+    if (action === 'plan') {
+      this.openPlan(card, insight);
+      return;
+    }
+    switch (card) {
+      case 'overdue':
+      case 'parts':
+        // "View work orders": GET /backlog with the insight's query (status=Overdue or partsShortage=true)
+        this.api.loadInsightOrders(this.filters(), insight).subscribe({
+          next: ({ items }) => {
+            this.records = card === 'overdue'
+              ? this.orderRecords('Overdue work orders', 'Past their due date, most urgent first.', items, 'overdue-work-orders.csv')
+              : this.orderRecords('Work orders waiting for spare parts',
+                insight.parts.length ? `Short parts: ${insight.parts.slice(0, 6).join(', ')}${insight.parts.length > 6 ? '…' : ''}` : insight.message,
+                items, 'work-orders-waiting-for-parts.csv');
+          },
+          error: (err: Error) => this.notify(err.message)
+        });
         break;
-      case 'overdue-plan':
-        this.openAction('Action plan', `Clear ${v.overdue.length} overdue work orders`, this.orderList(v.overdue), 'Critical');
+      case 'emergency':
+        this.api.loadPreviousEmergency(this.filters()).subscribe({
+          next: (previous) => (this.records = this.emergencyRecords(insight, previous.values)),
+          error: (err: Error) => this.notify(err.message)
+        });
         break;
-      case 'emergency-view':
-        this.records = this.emergencyRecords();
-        break;
-      case 'emergency-plan':
-        this.openAction('Action plan', 'Reduce emergency maintenance spend', `Emergency cost ${money(v.emergencyCost)} vs target ${money(v.emergencyTarget)}.`, 'High');
-        break;
-      case 'failure-view':
-        this.records = this.assetRecords(v.nearFailure);
-        break;
-      case 'failure-plan':
-        this.openAction('Action plan', `Prevent failure of ${v.nearFailure.length} high-risk assets`, v.nearFailure.map((a) => a.name).join(', ') || 'No assets in this view.', 'Critical');
-        break;
-      case 'parts-view':
-        this.records = this.orderRecords('Work orders waiting for spare parts', 'On hold until the required parts arrive.', v.waitingParts, 'work-orders-waiting-for-parts.csv');
-        break;
-      case 'parts-inventory':
-        this.router.navigate([this.basePath, 'inventory-analytics']);
+      case 'failure':
+        this.records = this.assetRecords(insight.assets);
         break;
     }
   }
 
-  private orderList(list: RaWorkOrder[]): string {
+  private openPlan(card: string, insight: MaInsight): void {
+    switch (card) {
+      case 'overdue':
+        this.openAction('Action plan', `Clear ${insight.count} overdue work orders`, this.orderList(insight.workOrders), 'Critical');
+        break;
+      case 'emergency':
+        this.openAction('Action plan', 'Reduce emergency maintenance spend', `${insight.title}. Emergency cost this period ${money(this.view.emergencyCost)}.`, 'High');
+        break;
+      case 'failure':
+        this.openAction('Action plan', `Prevent failure of ${insight.count} high-risk assets`, this.assetList(insight.assets), 'Critical');
+        break;
+      default:
+        this.openAction('Action plan', insight.title, insight.message, 'High');
+    }
+  }
+
+  private orderList(list: MaInsightOrder[]): string {
     const ids = list.slice(0, 5).map((o) => o.id).join(', ');
     return list.length > 5 ? `${ids} and ${list.length - 5} more.` : ids ? `${ids}.` : 'No work orders in this view.';
   }
 
-  private orderRecords(title: string, subtitle: string, list: RaWorkOrder[], file: string): RaRecords {
+  private assetList(list: MaInsightAsset[]): string {
+    if (!list.length) return 'No assets in this view.';
+    const names = list.slice(0, 5).map((a) => a.name).join(', ');
+    return list.length > 5 ? `${names} and ${list.length - 5} more.` : `${names}.`;
+  }
+
+  private orderRecords(title: string, subtitle: string, list: MaWorkOrder[], file: string): RaRecords {
     return {
       title: `${title} (${list.length})`,
       subtitle,
       columns: [
         { key: 'id', label: 'Work Order' }, { key: 'type', label: 'Type' }, { key: 'priority', label: 'Priority' }, { key: 'asset', label: 'Asset' },
         { key: 'location', label: 'Location' }, { key: 'age', label: 'Age (days)', num: true }, { key: 'technician', label: 'Assigned To' },
-        { key: 'status', label: 'Status' }, { key: 'cost', label: 'Cost (AED)', num: true }
+        { key: 'status', label: 'Status' }, { key: 'due', label: 'Due Date' }
       ],
       rows: list.map((o) => ({
-        id: o.id, type: o.type, priority: o.priority, asset: o.asset.name, location: o.asset.site.name, age: o.ageDays, technician: o.technician, status: o.status, cost: o.cost
+        id: o.id, type: o.type, priority: o.priority, asset: o.asset, location: o.location, age: o.ageDays ?? '—', technician: o.technician, status: o.status,
+        due: o.dueDate ?? '—'
       })),
       file
     };
   }
 
-  private assetRecords(list: RaAsset[]): RaRecords {
+  private assetRecords(list: MaInsightAsset[]): RaRecords {
     return {
       title: `Assets approaching failure threshold (${list.length})`,
-      subtitle: 'Predicted to fail within 7 days by the predictive model.',
+      subtitle: 'Low health score, failure predictions or repeated failures, lowest health first.',
       columns: [
-        { key: 'id', label: 'Asset ID' }, { key: 'name', label: 'Asset Name' }, { key: 'location', label: 'Location' }, { key: 'risk', label: 'Risk Score', num: true },
-        { key: 'rul', label: 'Remaining Life (hrs)', num: true }, { key: 'health', label: 'Health', num: true }, { key: 'owner', label: 'Owner' }
+        { key: 'id', label: 'Asset ID' }, { key: 'name', label: 'Asset Name' }, { key: 'location', label: 'Location' }, { key: 'health', label: 'Health', num: true },
+        { key: 'reasons', label: 'Reasons' }
       ],
-      rows: list.map((a) => ({ id: a.id, name: a.name, location: a.site.name, risk: a.riskScore, rul: a.rulHours, health: a.health, owner: a.owner })),
+      rows: list.map((a) => ({ id: a.id, name: a.name, location: a.location, health: a.health ?? '—', reasons: a.reasons.join('; ') })),
       file: 'assets-approaching-failure.csv'
     };
   }
 
-  private emergencyRecords(): RaRecords {
+  /** Monthly emergency cost against the previous period's (the API's baseline when no target is set). */
+  private emergencyRecords(insight: MaInsight, previous: number[]): RaRecords {
     const v = this.view;
-    const emergency = v.monthlyEmergency;
-    const totals = v.monthlyTotal;
-    const ratio = v.emergencyCost ? v.emergencyTarget / v.emergencyCost : 0;
+    const before = alignTo(previous, v.labels.length);
     return {
-      title: 'Emergency maintenance cost vs target',
-      subtitle: `Period total ${money(v.emergencyCost)} against a target of ${money(v.emergencyTarget)}.`,
+      title: 'Emergency maintenance cost vs previous period',
+      subtitle: insight.message,
       columns: [
-        { key: 'month', label: 'Month' }, { key: 'emergency', label: 'Emergency (AED)', num: true }, { key: 'target', label: 'Target (AED)', num: true },
+        { key: 'month', label: 'Month' }, { key: 'emergency', label: 'Emergency (AED)', num: true }, { key: 'previous', label: 'Previous period (AED)', num: true },
         { key: 'share', label: 'Share of spend %', num: true }
       ],
       rows: v.labels.map((l, i) => ({
         month: l.replace('\n', ' '),
-        emergency: emergency[i],
-        target: Math.round(emergency[i] * ratio),
-        share: totals[i] ? Math.round((emergency[i] / totals[i]) * 1000) / 10 : 0
+        emergency: v.monthlyEmergency[i] ?? 0,
+        previous: before[i],
+        share: v.monthlyTotal[i] ? Math.round(((v.monthlyEmergency[i] ?? 0) / v.monthlyTotal[i]) * 1000) / 10 : 0
       })),
-      file: 'emergency-cost-vs-target.csv'
+      file: 'emergency-cost-vs-previous-period.csv'
     };
   }
 
@@ -300,25 +527,23 @@ export class MaintenanceAnalyticsPage extends ScopedAnalyticsPage {
     return targets[id] ?? 'ma-cost';
   }
 
+  /** GET /export: the API's Excel workbook (summary, trends, insights, backlog and technicians). */
   exportPage(): void {
-    downloadCsv(
-      'maintenance-work-orders.csv',
-      ['Work Order', 'Type', 'Priority', 'Status', 'Asset ID', 'Asset', 'Location', 'Created', 'Age (days)', 'Assigned To', 'Cost (AED)', 'Repair (hrs)', 'Downtime (hrs)', 'Cause'],
-      this.view.orders.map((o) => [
-        o.id, o.type, o.priority, o.status, o.asset.id, o.asset.name, o.asset.site.name, o.created, o.ageDays, o.technician, o.cost, o.repairHours, o.downtimeHours, o.cause
-      ])
-    );
-    this.notify(`Exported ${this.view.orders.length} work orders.`);
+    this.api.export(this.filters()).subscribe({
+      next: () => this.notify('Maintenance analytics workbook exported.'),
+      error: (err: Error) => this.notify(err.message)
+    });
   }
 
+  /** One widget's figures as CSV, built in the browser from the data already loaded (the API exports whole pages only). */
   exportWidget(id: string): void {
     const v = this.view;
     const months = v.labels.map((l) => l.replace('\n', ' '));
-    const series = (file: string, list: { name: string; values: number[] }[]) =>
-      downloadCsv(file, ['Month', ...list.map((s) => s.name)], months.map((m, i) => [m, ...list.map((s) => s.values[i])]));
+    const series = (file: string, list: ChartSeries[]) =>
+      downloadCsv(file, ['Month', ...list.map((s) => s.name)], months.map((m, i) => [m, ...list.map((s) => s.values[i] ?? 0)]));
     switch (id) {
       case 'cost':
-        series('maintenance-cost-trend.csv', v.costTrend);
+        series('maintenance-cost-trend.csv', this.costSeries);
         break;
       case 'types':
         downloadCsv('work-orders-by-type.csv', ['Type', 'Work Orders'], v.typeSeries.map((s, i) => [s.name, s.values[i]]));
@@ -327,7 +552,7 @@ export class MaintenanceAnalyticsPage extends ScopedAnalyticsPage {
         downloadCsv('work-order-status.csv', ['Status', 'Work Orders'], v.statusSlices.map((s) => [s.name, s.value]));
         break;
       case 'pm':
-        series('preventive-maintenance-compliance.csv', v.pmTrend);
+        series('preventive-maintenance-compliance.csv', this.pmSeries);
         break;
       case 'reliability':
         series('mttr-vs-mtbf.csv', v.reliability);
@@ -336,12 +561,12 @@ export class MaintenanceAnalyticsPage extends ScopedAnalyticsPage {
         series('downtime-by-cause.csv', v.downtimeByCause);
         break;
       case 'backlog':
-        downloadCsv('maintenance-backlog.csv', ['Priority', 'Work Order', 'Asset', 'Location', 'Age (days)', 'Assigned To', 'Status'],
-          v.backlog.map((o) => [o.priority, o.id, o.asset.name, o.asset.site.name, o.ageDays, o.technician, o.status]));
+        downloadCsv('maintenance-backlog.csv', ['Priority', 'Work Order', 'Type', 'Asset', 'Location', 'Age (days)', 'Assigned To', 'Status', 'Due Date'],
+          v.backlog.map((o) => [o.priority, o.id, o.type, o.asset, o.location, o.ageDays ?? '', o.technician, o.status, o.dueDate ?? '']));
         break;
       case 'technicians':
-        downloadCsv('technician-performance.csv', ['Technician', 'Completed', 'First-Time Fix %', 'Avg. Response (hrs)', 'SLA Compliance %'],
-          v.technicians.map((t) => [t.name, t.completed, t.firstTimeFix, t.response, t.sla]));
+        downloadCsv('technician-performance.csv', ['Technician', 'Assigned', 'Completed', 'First-Time Fix %', 'Avg. Response (hrs)', 'SLA Compliance %'],
+          v.technicians.map((t) => [t.name, t.assigned, t.completed, t.firstTimeFix ?? '', t.response ?? '', t.sla ?? '']));
         break;
     }
   }

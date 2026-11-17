@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a [routerLink]="basePath">Reports &amp; Analytics</a>
-  <span aria-hidden="true">›</span>
+  <span>/</span>
   <strong>KPI Dashboard</strong>
 </nav>
 
@@ -14,7 +14,7 @@
       <button type="button" aria-label="Refresh data" [disabled]="refreshing" (click)="refresh()">
         <lucide-icon [img]="icons.RefreshCw" [size]="16" [class.kd-spin]="refreshing" />
       </button>
-      {{ updatedText }}
+      {{ refreshing ? 'Refreshing…' : updatedText }}
     </span>
     <button type="button" class="btn" (click)="layoutOpen = true"><lucide-icon [img]="icons.Settings" [size]="16" /> Edit KPI Layout</button>
     <button type="button" class="btn" (click)="shareOpen = true"><lucide-icon [img]="icons.Share2" [size]="16" /> Share</button>
@@ -27,7 +27,6 @@
   <label class="filter kd-dashboard">
     <span>Dashboard</span>
     <select [ngModel]="activeKey" (ngModelChange)="selectView($event)" aria-label="Dashboard">
-      <option value="" disabled>Select Dashboard</option>
       @for (v of views; track v.key) { <option [value]="v.key">{{ v.dashboard }}</option> }
     </select>
   </label>
@@ -46,6 +45,9 @@
             <button type="button" role="menuitem" (click)="selectView(v.key)">{{ v.label }}</button>
           }
           <button type="button" role="menuitem" (click)="customMenuOpen = false; saveCustomOpen = true">Save current tiles as a custom view…</button>
+          @if (activeView.custom) {
+            <button type="button" role="menuitem" (click)="deleteCustomView()">Delete “{{ activeView.label }}”</button>
+          }
         </div>
       }
     </span>
@@ -56,36 +58,39 @@
   <label class="filter filter--period">
     <span>Period</span>
     <select [(ngModel)]="period" (ngModelChange)="apply()">
-      <option value="">Select Period</option>
       @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Organization</span>
     <select [(ngModel)]="organization" (ngModelChange)="apply()">
-      <option value="">Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Location</span>
     <select [(ngModel)]="location" (ngModelChange)="apply()">
-      <option value="">Select Location</option>
       @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
     </select>
   </label>
   <label class="filter">
-    <span>Business Unit</span>
-    <select [(ngModel)]="businessUnit" (ngModelChange)="apply()">
-      <option value="">Select Business Unit</option>
-      @for (b of businessUnits; track b) { <option [value]="b">{{ b }}</option> }
+    <span>Asset Category</span>
+    <select [(ngModel)]="category" (ngModelChange)="apply()">
+      @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>
 </div>
 
 <div class="ra-layout">
   <div class="kd-main">
-    @if (tiles.length) {
+    @if (loadError && !loaded) {
+      <div class="empty kd-no-tiles">
+        {{ loadError }}
+        <button type="button" class="btn btn--link" (click)="apply()">Try again</button>
+      </div>
+    } @else if (!loaded) {
+      <div class="empty kd-no-tiles">Loading KPIs…</div>
+    } @else if (tiles.length) {
       <section class="kd-tiles" aria-label="KPI tiles">
         @for (t of tiles; track t.state.def.id) {
           <app-ra-kpi-tile [state]="t.state" [icon]="t.icon" [tone]="t.tone" (action)="tileAction(t, $event)" />
@@ -101,11 +106,14 @@
     <div class="widgets">
       <app-ra-widget class="span-3" title="KPI Performance Trend" info="Average attainment vs target of the KPIs in this view (100% = on target)" (exportCsv)="exportTrend()">
         <select widget-tools class="select kd-small-select" aria-label="Trend granularity" [(ngModel)]="granularity" (ngModelChange)="setGranularity()">
-          <option value="" disabled>Select Trend Granularity</option>
           @for (g of granularities; track g) { <option [value]="g">{{ g }}</option> }
         </select>
-        <ra-cartesian-chart [labels]="trendLabels" [series]="trendSeries" kind="line" [height]="240" [min]="80" [max]="120" [format]="percentFormat"
+        @if (trendLabels.length) {
+        <ra-cartesian-chart [labels]="trendLabels" [series]="trendSeries" kind="line" [height]="240" [min]="trendMin" [max]="120" [format]="percentFormat"
           yTitle="KPI Score (%)" ariaLabel="KPI performance trend" />
+        } @else {
+          <div class="empty">No months to show for this period.</div>
+        }
       </app-ra-widget>
 
       <app-ra-widget class="span-3" title="KPI Target vs Actual" info="Average attainment vs target per module for the KPIs in this view" (exportCsv)="exportTargets()">
@@ -119,7 +127,6 @@
 
       <app-ra-widget class="span-6" title="KPI Exceptions" info="KPIs in this view that are not on track" (exportCsv)="exportExceptions()">
         <select widget-tools class="select kd-small-select" aria-label="Exception status" [(ngModel)]="exceptionStatus" (ngModelChange)="filterExceptions()">
-          <option value="" disabled>Select Exception Status</option>
           @for (s of exceptionStatuses; track s) { <option [value]="s">{{ s }}</option> }
         </select>
         <app-ra-kpi-exceptions-table [rows]="exceptions" (view)="openDetail($event)" />
@@ -140,11 +147,9 @@
             </div>
           </div>
           <div class="insight__actions">
-            <button type="button" class="btn btn--sm btn--outline" (click)="insightAction(ins)">{{ ins.action.label }}</button>
+            <button type="button" class="btn btn--sm btn--outline" (click)="insightAction(ins)">{{ ins.actionLabel }}</button>
           </div>
         </article>
-      } @empty {
-        <div class="empty">No insights for the current filters.</div>
       }
     </section>
 
@@ -170,7 +175,8 @@
   <app-ra-kpi-layout-dialog [viewLabel]="activeView.dashboard" [layout]="layoutItems" (saved)="saveLayout($event)" (reset)="resetLayout()" (closed)="layoutOpen = false" />
 }
 @if (form) {
-  <app-ra-kpi-form-dialog [kpi]="formKpi" [defaultModule]="formModule" [takenNames]="takenNames" (saved)="saveKpi($event)" (closed)="form = null" />
+  <app-ra-kpi-form-dialog [kpi]="formKpi" [currentValue]="formValue" [defaultModule]="formModule" [takenNames]="takenNames" [metrics]="metrics"
+    [owners]="owners" [saving]="saving" (saved)="saveKpi($event)" (closed)="form = null" />
 }
 @if (shareOpen) {
   <app-ra-share-dialog [title]="activeView.dashboard" [link]="shareLink" (notify)="notify($event)" (shared)="shared($event)" (closed)="shareOpen = false" />

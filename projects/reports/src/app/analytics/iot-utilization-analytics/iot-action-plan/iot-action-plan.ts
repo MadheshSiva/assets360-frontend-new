@@ -1,6 +1,5 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RA_PEOPLE } from '../../shared/analytics-common';
 
 export interface ActionPlan {
   title: string;
@@ -10,7 +9,13 @@ export interface ActionPlan {
   notes: string;
 }
 
-/** "Create action plan" form opened from an IoT insight. */
+/** Today as yyyy-MM-dd (local), the earliest due date. */
+function today(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** "Create action plan" form opened from an IoT insight; the page saves it with POST /action-plans. */
 @Component({
   selector: 'app-iot-action-plan',
   standalone: true,
@@ -26,26 +31,24 @@ export interface ActionPlan {
           @if (tried && !plan.title.trim()) { <small>Enter a title.</small> }
         </div>
         <div class="iot-ap-row">
-          <div class="field" [class.invalid]="tried && !plan.owner">
+          <div class="field" [class.invalid]="tried && !plan.owner.trim()">
             <label for="ap-owner">Owner <span class="req">*</span></label>
-            <select id="ap-owner" name="owner" [(ngModel)]="plan.owner">
-              <option value="">Select Owner</option>
-              @for (p of people; track p) { <option [value]="p">{{ p }}</option> }
-            </select>
-            @if (tried && !plan.owner) { <small>Choose who owns the plan.</small> }
+            <input id="ap-owner" name="owner" [(ngModel)]="plan.owner" maxlength="100" list="ap-owners" placeholder="Name of the owner" />
+            <datalist id="ap-owners">
+              @for (p of people; track p) { <option [value]="p"></option> }
+            </datalist>
+            @if (tried && !plan.owner.trim()) { <small>Enter who owns the plan.</small> }
           </div>
           <div class="field" [class.invalid]="tried && dueError">
             <label for="ap-due">Due date <span class="req">*</span></label>
-            <input id="ap-due" name="due" type="date" min="2026-10-28" [(ngModel)]="plan.due" />
+            <input id="ap-due" name="due" type="date" [min]="minDate" [(ngModel)]="plan.due" />
             @if (tried && dueError) { <small>{{ dueError }}</small> }
           </div>
-          <div class="field" [class.invalid]="tried && !plan.priority">
-            <label for="ap-priority">Priority <span class="req">*</span></label>
+          <div class="field">
+            <label for="ap-priority">Priority</label>
             <select id="ap-priority" name="priority" [(ngModel)]="plan.priority">
-              <option value="" disabled>Select Priority</option>
               @for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }
             </select>
-            @if (tried && !plan.priority) { <small>Choose a priority.</small> }
           </div>
         </div>
         <div class="field">
@@ -54,7 +57,7 @@ export interface ActionPlan {
         </div>
         <div class="dialog__actions">
           <button type="button" class="btn" (click)="cancel.emit()">Cancel</button>
-          <button type="submit" class="btn btn--primary">Create action plan</button>
+          <button type="submit" class="btn btn--primary" [disabled]="saving">{{ saving ? 'Saving…' : 'Create action plan' }}</button>
         </div>
       </form>
     </div>
@@ -70,12 +73,16 @@ export interface ActionPlan {
 export class IotActionPlanDialog implements OnInit {
   @Input() title = '';
   @Input() context = '';
+  /** Technicians from /filters, offered as suggestions; any name can be typed */
+  @Input() people: string[] = [];
+  @Input() priorities = ['Critical', 'High', 'Medium', 'Low'];
+  /** True while the page is saving the plan */
+  @Input() saving = false;
   @Output() saved = new EventEmitter<ActionPlan>();
   @Output() cancel = new EventEmitter<void>();
 
-  readonly people = RA_PEOPLE;
-  readonly priorities = ['Critical', 'High', 'Medium', 'Low'];
-  plan: ActionPlan = { title: '', owner: '', due: '', priority: '', notes: '' };
+  readonly minDate = today();
+  plan: ActionPlan = { title: '', owner: '', due: '', priority: 'High', notes: '' };
   tried = false;
 
   ngOnInit(): void {
@@ -84,14 +91,12 @@ export class IotActionPlanDialog implements OnInit {
 
   get dueError(): string {
     if (!this.plan.due) return 'Pick a due date.';
-    const d = new Date();
-    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    return this.plan.due < today ? 'The due date cannot be in the past.' : '';
+    return this.plan.due < this.minDate ? 'The due date cannot be in the past.' : '';
   }
 
   submit(): void {
     this.tried = true;
-    if (!this.plan.title.trim() || !this.plan.owner || !this.plan.priority || this.dueError) return;
-    this.saved.emit({ ...this.plan, title: this.plan.title.trim() });
+    if (!this.plan.title.trim() || !this.plan.owner.trim() || this.dueError || this.saving) return;
+    this.saved.emit({ ...this.plan, title: this.plan.title.trim(), owner: this.plan.owner.trim() });
   }
 }

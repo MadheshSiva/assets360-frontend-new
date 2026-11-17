@@ -18,7 +18,8 @@ RUN dotnet publish ApiGateway/A360.ApiGateway/A360.ApiGateway.csproj -c Release 
     dotnet publish Services/Administration/Api/A360.Administration.Api/A360.Administration.Api.csproj -c Release -o /out/administration --no-restore && \
     dotnet publish Services/Dashboard/Api/A360.Dashboard.Api/A360.Dashboard.Api.csproj -c Release -o /out/dashboard --no-restore && \
     dotnet publish Services/Tracking/Api/A360.Tracking.Api/A360.Tracking.Api.csproj -c Release -o /out/tracking --no-restore && \
-    dotnet publish Services/MasterDataManagement/Api/A360.MasterDataManagement.Api/A360.MasterDataManagement.Api.csproj -c Release -o /out/masterdatamanagement --no-restore
+    dotnet publish Services/MasterDataManagement/Api/A360.MasterDataManagement.Api/A360.MasterDataManagement.Api.csproj -c Release -o /out/masterdatamanagement --no-restore && \
+    dotnet publish Services/ReportAnalytics/Api/A360.ReportAnalytics.Api/A360.ReportAnalytics.Api.csproj -c Release -o /out/reportanalytics --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app

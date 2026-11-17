@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.104.2" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.27" />
+    <PackageReference Include="MongoDB.Driver" Version="3.9.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Domain\A360.ReportAnalytics.Domain\A360.ReportAnalytics.Domain.csproj" />
+    <ProjectReference Include="..\..\Repository\A360.ReportAnalytics.Repository\A360.ReportAnalytics.Repository.csproj" />
+    <ProjectReference Include="..\..\..\..\Repository\A360.Repository\A360.Repository.csproj" />
+  </ItemGroup>
+
+</Project>

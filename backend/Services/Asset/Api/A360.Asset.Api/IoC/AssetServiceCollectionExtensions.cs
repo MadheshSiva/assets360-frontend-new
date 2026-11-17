@@ -99,6 +99,10 @@ public static class AssetServiceCollectionExtensions
         services.AddScoped<IAssetConditionAssessmentRepository>(serviceProvider => serviceProvider.GetRequiredService<AssetConditionAssessmentRepository>());
         services.AddScoped<IMongoIndexConfigurator>(serviceProvider => serviceProvider.GetRequiredService<AssetConditionAssessmentRepository>());
 
+        services.AddScoped<AssetStatusConditionChangeRepository>();
+        services.AddScoped<IAssetStatusConditionChangeRepository>(serviceProvider => serviceProvider.GetRequiredService<AssetStatusConditionChangeRepository>());
+        services.AddScoped<IMongoIndexConfigurator>(serviceProvider => serviceProvider.GetRequiredService<AssetStatusConditionChangeRepository>());
+
         services.AddScoped<AssetCriticalityAssessmentRepository>();
         services.AddScoped<IAssetCriticalityAssessmentRepository>(serviceProvider => serviceProvider.GetRequiredService<AssetCriticalityAssessmentRepository>());
         services.AddScoped<IMongoIndexConfigurator>(serviceProvider => serviceProvider.GetRequiredService<AssetCriticalityAssessmentRepository>());
@@ -128,6 +132,7 @@ public static class AssetServiceCollectionExtensions
         services.AddScoped<IAssetServiceRequestRepository>(serviceProvider => serviceProvider.GetRequiredService<AssetServiceRequestRepository>());
         services.AddScoped<IMongoIndexConfigurator>(serviceProvider => serviceProvider.GetRequiredService<AssetServiceRequestRepository>());
         services.AddScoped<IMaintenanceLookupRepository, MaintenanceLookupRepository>();
+        services.AddScoped<IStatusConditionLookupRepository, StatusConditionLookupRepository>();
 
         services.AddHostedService<MongoIndexHostedService>();
         services.AddEndpointsApiExplorer();

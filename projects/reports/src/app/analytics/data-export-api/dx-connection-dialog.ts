@@ -28,17 +28,13 @@ export const AUTH_METHODS = ['OAuth 2.0 (client credentials)', 'API key', 'Basic
               <small>{{ nameError }}</small>
             }
           </div>
-          <div class="field" [class.invalid]="submitted && !form.type">
+          <div class="field">
             <label for="dx-con-type">Type</label>
             <select id="dx-con-type" name="type" [(ngModel)]="form.type">
-              <option value="" disabled>Select Type</option>
               @for (t of types; track t) {
                 <option [value]="t">{{ t }}</option>
               }
             </select>
-            @if (submitted && !form.type) {
-              <small>Choose a type.</small>
-            }
           </div>
         </div>
         <div class="field" [class.invalid]="submitted && urlError">
@@ -47,17 +43,13 @@ export const AUTH_METHODS = ['OAuth 2.0 (client credentials)', 'API key', 'Basic
           <small>{{ submitted && urlError ? urlError : 'Must use HTTPS. Do not put keys or tokens in the URL.' }}</small>
         </div>
         <div class="dx-form-grid">
-          <div class="field" [class.invalid]="submitted && !form.auth">
+          <div class="field">
             <label for="dx-con-auth">Authentication</label>
             <select id="dx-con-auth" name="auth" [(ngModel)]="form.auth">
-              <option value="" disabled>Select Authentication</option>
               @for (a of authMethods; track a) {
                 <option [value]="a">{{ a }}</option>
               }
             </select>
-            @if (submitted && !form.auth) {
-              <small>Choose an authentication method.</small>
-            }
           </div>
           <div class="field">
             <label for="dx-con-client">Client ID / user <span class="muted">(optional)</span></label>
@@ -69,13 +61,16 @@ export const AUTH_METHODS = ['OAuth 2.0 (client credentials)', 'API key', 'Basic
           <input id="dx-con-secret" name="secret" type="password" [(ngModel)]="form.secret" autocomplete="new-password" />
           <small>
             <lucide-icon [img]="icons.Lock" [size]="11"></lucide-icon>
-            {{ submitted && secretError ? secretError : 'Stored in the secrets vault and never shown again.' }}
+            {{ submitted && secretError ? secretError : 'Never stored or shown again; only a masked form is kept.' }}
           </small>
         </div>
-        <p class="muted dx-small">DEMO MODE: the connection is simulated and the secret is discarded after saving.</p>
+        <p class="muted dx-small">The connection is tested right away (HTTPS call to the base URL, no credentials sent). Only a masked form of the secret is stored.</p>
+        @if (apiError) {
+          <p class="dx-error">{{ apiError }}</p>
+        }
         <div class="dialog__actions">
           <button type="button" class="btn" (click)="cancel()">Cancel</button>
-          <button type="submit" class="btn btn--primary">Add connection</button>
+          <button type="submit" class="btn btn--primary" [disabled]="saving">{{ saving ? 'Adding and testing…' : 'Add connection' }}</button>
         </div>
       </form>
     </div>
@@ -88,9 +83,13 @@ export class ConnectionDialog {
 
   readonly icons = { Lock };
   readonly types: ConnectionType[] = ['REST', 'OData', 'JDBC'];
-  readonly authMethods = AUTH_METHODS;
-  form: Omit<ConnectionForm, 'type'> & { type: ConnectionType | '' } = { name: '', type: '', baseUrl: 'https://', auth: '', clientId: '', secret: '' };
+  get authMethods(): string[] {
+    return this.service.authMethods.length ? this.service.authMethods : AUTH_METHODS;
+  }
+  form: ConnectionForm = { name: '', type: 'REST', baseUrl: 'https://', auth: AUTH_METHODS[0], clientId: '', secret: '' };
   submitted = false;
+  saving = false;
+  apiError = '';
 
   get secretLabel(): string {
     if (this.form.auth === 'Basic') return 'Password';
@@ -126,10 +125,20 @@ export class ConnectionDialog {
 
   save(): void {
     this.submitted = true;
-    if (this.nameError || !this.form.type || this.urlError || !this.form.auth || this.secretError) return;
-    const con = this.service.addConnection({ ...this.form, type: this.form.type });
-    this.form.secret = '';
-    this.saved.emit(con.name);
+    if (this.saving || this.nameError || this.urlError || this.secretError) return;
+    this.saving = true;
+    this.apiError = '';
+    this.service.addConnection(this.form).subscribe({
+      next: (con) => {
+        this.saving = false;
+        this.form.secret = '';
+        this.saved.emit(con.name);
+      },
+      error: (err: Error) => {
+        this.saving = false;
+        this.apiError = err.message;
+      }
+    });
   }
 
   cancel(): void {

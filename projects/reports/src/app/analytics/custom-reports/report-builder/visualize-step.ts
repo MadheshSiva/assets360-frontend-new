@@ -1,8 +1,9 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ChartColumn, ChartLine, ChartPie, LucideAngularModule, Table } from 'lucide-angular';
 import { isNumeric, outputColumns } from '../custom-reports.engine';
 import { CustomReport, PreviewColumn, VizType } from '../custom-reports.model';
+import { CustomReportsService } from '../custom-reports.service';
 
 /** Builder step 5: visualization type and the value plotted on charts. */
 @Component({
@@ -45,6 +46,7 @@ import { CustomReport, PreviewColumn, VizType } from '../custom-reports.model';
 })
 export class VisualizeStep {
   @Input({ required: true }) report!: CustomReport;
+  private readonly service = inject(CustomReportsService);
 
   readonly types: { type: VizType; icon: typeof Table; hint: string }[] = [
     { type: 'Table', icon: Table, hint: 'Rows and columns' },
@@ -54,11 +56,11 @@ export class VisualizeStep {
   ];
 
   get numericColumns(): PreviewColumn[] {
-    return outputColumns(this.report).filter((c) => isNumeric(c.kind));
+    return outputColumns(this.service.catalog(), this.report).filter((c) => isNumeric(c.kind));
   }
 
   get categoryLabel(): string {
-    const cols = outputColumns(this.report);
+    const cols = outputColumns(this.service.catalog(), this.report);
     const col = this.report.groupBy ? cols[0] : cols.find((c) => !isNumeric(c.kind));
     return col?.label ?? 'None — select a text field';
   }

@@ -16,6 +16,7 @@ export const JOB_TONES: Record<ExportStatus, string> = {
 };
 
 export const CONNECTION_TONES: Record<ConnectionStatus, string> = {
+  Untested: 'grey',
   Connected: 'green',
   Warning: 'orange',
   Disconnected: 'red',

@@ -5,15 +5,19 @@
         <tr>
           <th>#</th>
           @for (c of columns; track c.key) {
-            <th [attr.aria-sort]="ariaSort(c.key)">
-              <button type="button" class="sort" (click)="sortBy(c.key)">{{ c.label }} <lucide-icon [img]="sortIcon(c.key)" [size]="12" /></button>
+            <th [attr.aria-sort]="c.sortable ? ariaSort(c.key) : null">
+              @if (c.sortable) {
+                <button type="button" class="sort" (click)="sortBy(c.key)">{{ c.label }} <lucide-icon [img]="sortIcon(c.key)" [size]="12" /></button>
+              } @else {
+                {{ c.label }}
+              }
             </th>
           }
           <th>Action</th>
         </tr>
       </thead>
       <tbody>
-        @for (r of shown; track r.id; let i = $index) {
+        @for (r of shown; track r.key; let i = $index) {
           <tr>
             <td class="muted">{{ i + 1 }}</td>
             <td><button type="button" class="link" (click)="view.emit(r)">{{ r.id }}</button></td>
@@ -21,16 +25,16 @@
             <td>{{ r.site }}</td>
             <td>{{ r.findingType }}</td>
             <td><span class="pill" [attr.data-tone]="tone(r)"><i></i>{{ r.severity }}</span></td>
-            <td [class.ia-overdue]="r.dueInDays < 0">{{ r.due }}</td>
+            <td [class.ia-overdue]="r.overdue">{{ r.due }}</td>
             <td>{{ r.owner }}</td>
             <td><span class="pill" [attr.data-tone]="r.status === 'Open' ? 'red' : 'blue'"><i></i>{{ r.status }}</span></td>
             <td>
               <button type="button" class="btn btn--sm btn--outline" (click)="view.emit(r)">View</button>
               <span class="row-menu">
-                <button type="button" class="icon-btn" [attr.aria-label]="'More actions for ' + r.id" (click)="toggleMenu(r.id)">
+                <button type="button" class="icon-btn" [attr.aria-label]="'More actions for ' + r.id" (click)="toggleMenu(r.key)">
                   <lucide-icon [img]="icons.Ellipsis" [size]="16" />
                 </button>
-                @if (menuId === r.id) {
+                @if (menuId === r.key) {
                   <div class="menu" role="menu">
                     <button type="button" role="menuitem" (click)="choose('view', r)">View details</button>
                     <button type="button" role="menuitem" (click)="choose('plan', r)">Create action plan</button>
@@ -46,8 +50,8 @@
       </tbody>
     </table>
   </div>
-  @if (rows.length > limit) {
-    <button type="button" class="btn btn--link ia-more" (click)="viewAll.emit()">View all {{ rows.length }} open findings</button>
+  @if (count > limit) {
+    <button type="button" class="btn btn--link ia-more" (click)="viewAll.emit()">View all {{ count }} open findings</button>
   }
 } @else {
   <div class="empty">No open findings for the current filters.</div>

@@ -444,21 +444,3 @@
     width: 100%;
   }
 }
-
-/* ===== Server-side list filters ===== */
-.sr-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.sr-filters .select {
-  min-width: 160px;
-}
-
-@media (max-width: 600px) {
-  .sr-filters .select {
-    flex: 1 1 100%;
-  }
-}

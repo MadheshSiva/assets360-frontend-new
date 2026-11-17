@@ -35,6 +35,7 @@ $Services = @(
   @('workflows',            'Services/Workflows/Api/A360.Workflows.Api',                         'A360.Workflows.Api.dll',             5450),
   @('administration',       'Services/Administration/Api/A360.Administration.Api',               'A360.Administration.Api.dll',        5460),
   @('dashboard',            'Services/Dashboard/Api/A360.Dashboard.Api',                         'A360.Dashboard.Api.dll',             5470),
+  @('reportanalytics',      'Services/ReportAnalytics/Api/A360.ReportAnalytics.Api',             'A360.ReportAnalytics.Api.dll',       5480),
   @('tracking',             'Services/Tracking/Api/A360.Tracking.Api',                           'A360.Tracking.Api.dll',              5490),
   @('masterdatamanagement', 'Services/MasterDataManagement/Api/A360.MasterDataManagement.Api',     'A360.MasterDataManagement.Api.dll',  5500),
   @('apigateway',           'ApiGateway/A360.ApiGateway',                                        'A360.ApiGateway.dll',                5296)

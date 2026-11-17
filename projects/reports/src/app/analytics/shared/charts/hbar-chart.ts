@@ -32,8 +32,6 @@ export interface HBarRow {
             @if (r.targetDisplay) { <em>{{ r.targetDisplay }}</em> }
           </span>
         </div>
-      } @empty {
-        <p class="chart__empty chart__empty--inline">No data</p>
       }
     </div>
   `,
@@ -48,13 +46,10 @@ export class HBarChart implements OnChanges {
   private top = 1;
 
   ngOnChanges(): void {
-    this.rows = this.rows ?? [];
-    const top = this.max ?? niceMax(Math.max(1, ...this.rows.map((r) => Math.max(r.value || 0, r.target || 0))));
-    this.top = Number.isFinite(top) && top > 0 ? top : 1;
+    this.top = this.max ?? niceMax(Math.max(1, ...this.rows.map((r) => Math.max(r.value, r.target ?? 0))));
   }
 
   pct(value: number): number {
-    const pct = ((value || 0) / this.top) * 100;
-    return Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : 0;
+    return Math.min(100, (value / this.top) * 100);
   }
 }

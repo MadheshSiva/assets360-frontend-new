@@ -21,7 +21,7 @@ import { JOB_TONES, MODULE_TONES, destinationIcon, formatStamp, moduleIcon } fro
           </button>
         }
         <select class="select dx-select-sm" [(ngModel)]="module" aria-label="Data source">
-          <option value="">Select Data Source</option>
+          <option value="">All data sources</option>
           @for (m of modules; track m) {
             <option [value]="m">{{ m }}</option>
           }
@@ -65,7 +65,9 @@ import { JOB_TONES, MODULE_TONES, destinationIcon, formatStamp, moduleIcon } fro
                   <span class="dx-dest"><lucide-icon [img]="destinationIcon(j.destination)" [size]="14"></lucide-icon>{{ j.destination }}</span>
                 </td>
                 <td class="dx-two">{{ j.frequency }}<small>{{ scheduleDetail(j) }}</small></td>
-                <td class="dx-two">{{ stampDate(j.lastRun) }}<small>{{ stampTime(j.lastRun) }}</small></td>
+                <td class="dx-two" [title]="j.lastRowCount !== null && j.status !== 'Failed' ? j.lastRowCount + ' rows generated, not delivered (no transport configured)' : ''">
+                  {{ stampDate(j.lastRun) }}<small>{{ stampTime(j.lastRun) }}</small>
+                </td>
                 <td class="dx-two">
                   @if (j.status === 'Running') {
                     In progress
@@ -89,7 +91,7 @@ import { JOB_TONES, MODULE_TONES, destinationIcon, formatStamp, moduleIcon } fro
                     <button type="button" class="icon-btn dx-act" [disabled]="j.status === 'Running'" (click)="run.emit(j)" [attr.aria-label]="'Run ' + j.name" title="Run now">
                       <lucide-icon [img]="icons.Play" [size]="15"></lucide-icon>
                     </button>
-                    <button type="button" class="icon-btn dx-act" (click)="download.emit(j)" [attr.aria-label]="'Download sample of ' + j.name" title="Download sample (CSV)">
+                    <button type="button" class="icon-btn dx-act" (click)="download.emit(j)" [attr.aria-label]="downloadLabel(j) + ': ' + j.name" [title]="downloadLabel(j)">
                       <lucide-icon [img]="icons.Download" [size]="15"></lucide-icon>
                     </button>
                     <span class="row-menu">
@@ -112,7 +114,7 @@ import { JOB_TONES, MODULE_TONES, destinationIcon, formatStamp, moduleIcon } fro
                 </td>
               </tr>
             } @empty {
-              <tr><td colspan="11" class="empty">No export jobs found.</td></tr>
+              <tr><td colspan="11" class="empty">No export jobs match the current filters.</td></tr>
             }
           </tbody>
         </table>
@@ -121,6 +123,11 @@ import { JOB_TONES, MODULE_TONES, destinationIcon, formatStamp, moduleIcon } fro
   `
 })
 export class ExportJobsTable {
+  /** The latest generated file when there is one, otherwise a CSV sample. */
+  downloadLabel(j: ExportJob): string {
+    return j.lastRunId && j.lastSizeBytes && j.status !== 'Failed' ? 'Download latest file' : 'Download sample (CSV)';
+  }
+
   @Input({ required: true }) jobs: ExportJob[] = [];
   @Input() highlightId = '';
   @Output() run = new EventEmitter<ExportJob>();

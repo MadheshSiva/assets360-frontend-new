@@ -5,28 +5,25 @@ export type FieldKind = 'text' | 'number' | 'money' | 'percent' | 'date';
 export type CalcOperator = '+' | '-' | '×' | '÷';
 export type Aggregate = 'Sum' | 'Average' | 'Min' | 'Max';
 export type SortDir = 'asc' | 'desc';
+/** Filter operators as the Custom Reports API names them (labels come from FILTER_OPERATOR_LABELS). */
 export type FilterOperator =
-  | 'equals' | 'not equals' | 'contains'
-  | '=' | '≠' | '>' | '<' | '≥' | '≤'
-  | 'on' | 'before' | 'after';
+  | 'equals' | 'notEquals' | 'contains' | 'notContains' | 'startsWith' | 'in' | 'notIn'
+  | 'greaterThan' | 'greaterOrEqual' | 'lessThan' | 'lessOrEqual' | 'between' | 'inLastDays'
+  | 'isEmpty' | 'isNotEmpty';
 
-/** A reportable field. `values` lists the fixed options offered in filters. */
+/** A reportable field from GET /api/custom-reports/fields (or a calculated field). */
 export interface FieldDef {
   key: string;
   label: string;
   kind: FieldKind;
+  /** Group key on the Select Fields step ('calculated' for calculated fields) */
   group: string;
+  /** API data source the field needs (assets, maintenance, inspection); '' for calculated fields */
+  dataSource: string;
+  /** Filter operators the API accepts for this field */
+  operators: FilterOperator[];
+  /** Optional value suggestions for filters */
   values?: string[];
-  /** ID pattern, e.g. 'WO-{n}' */
-  pattern?: string;
-  start?: number;
-  pad?: number;
-  min?: number;
-  max?: number;
-  step?: number;
-  /** Dates: first day and span in days */
-  from?: string;
-  span?: number;
 }
 
 export interface FieldGroup {
@@ -35,15 +32,30 @@ export interface FieldGroup {
   fields: FieldDef[];
 }
 
+/**
+ * A data source card in the builder. The API joins Assets (always included) with optional sources,
+ * so each card is one combination, e.g. key "assets+maintenance".
+ */
 export interface DataSource {
   key: string;
   label: string;
   module: string;
+  /** Field group keys available with this combination */
   groups: string[];
   description: string;
+  /** API data source keys */
+  sources: string[];
+  fieldCount: number;
 }
 
-/** Calculated field: left <op> right, both numeric fields. Stored with key "calc:<id>". */
+/** Field catalog loaded from the builder endpoints. */
+export interface ReportCatalog {
+  sources: DataSource[];
+  groups: FieldGroup[];
+  fields: FieldDef[];
+}
+
+/** Calculated field: left <op> right, both numeric fields. Keys look like "calc_<name>" (the API's format). */
 export interface CalcField {
   key: string;
   label: string;
@@ -55,7 +67,10 @@ export interface CalcField {
 export interface ReportFilter {
   field: string;
   op: FilterOperator;
+  /** Single value; comma-separated list for in / notIn; days for inLastDays */
   value: string;
+  /** Upper bound for between */
+  valueTo?: string;
 }
 
 /** What the builder edits: data, filters, grouping and visualization. */
@@ -64,15 +79,27 @@ export interface ReportDefinition {
   fields: string[];
   calcFields: CalcField[];
   filters: ReportFilter[];
+  /** Combine filters with And / Or */
+  filterLogic: 'And' | 'Or';
   groupBy: string;
   aggregate: Aggregate;
   sortBy: string;
   sortDir: SortDir;
-  /** null = no limit (new reports start without one) */
-  rowLimit: number | null;
+  rowLimit: number;
   viz: VizType;
   /** Column plotted on charts; '' picks the first numeric column */
   chartValue: string;
+}
+
+/** Schedule as stored by the API; kept so recipients / time zone survive a save. */
+export interface ReportScheduleDto {
+  frequency: string;
+  dayOfWeek: string | null;
+  dayOfMonth: number | null;
+  time: string | null;
+  timeZone: string | null;
+  recipients: string[] | null;
+  nextRunAt?: string | null;
 }
 
 export interface CustomReport extends ReportDefinition {
@@ -80,6 +107,7 @@ export interface CustomReport extends ReportDefinition {
   name: string;
   description: string;
   owner: string;
+  ownerId: string;
   module: string;
   status: ReportStatus;
   favourite: boolean;
@@ -87,9 +115,18 @@ export interface CustomReport extends ReportDefinition {
   updatedAt: string;
   visibility: ReportVisibility;
   schedule: string;
+  /** The API schedule behind `schedule` (null when not scheduled or not loaded) */
+  scheduleDetail: ReportScheduleDto | null;
+  /** False when the report belongs to someone else */
+  canEdit: boolean;
+  /** Builder step to reopen at (1-6) */
+  currentStep: number;
+  /** False for library rows whose definition has not been loaded yet */
+  loaded: boolean;
 }
 
-export type ReportRow = Record<string, string | number>;
+export type ReportCell = string | number | boolean | null;
+export type ReportRow = Record<string, ReportCell>;
 
 export interface PreviewColumn {
   key: string;
@@ -105,4 +142,18 @@ export interface PreviewResult {
   labelKey: string;
   valueKey: string;
   title: string;
+  /** Chart points over every matching row, when the API built a chart */
+  points: { label: string; value: number }[] | null;
+}
+
+export interface ReportOwner {
+  id: string;
+  name: string;
+}
+
+export interface CustomReportStats {
+  total: number;
+  published: number;
+  scheduled: number;
+  drafts: number;
 }

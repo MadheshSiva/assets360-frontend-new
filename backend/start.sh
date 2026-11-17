@@ -33,6 +33,7 @@ declare -A SERVICES=(
   ["dashboard"]="A360.Dashboard.Api.dll:5470"
   ["tracking"]="A360.Tracking.Api.dll:5490"
   ["masterdatamanagement"]="A360.MasterDataManagement.Api.dll:5500"
+  ["reportanalytics"]="A360.ReportAnalytics.Api.dll:5480"
 )
 
 for name in "${!SERVICES[@]}"; do

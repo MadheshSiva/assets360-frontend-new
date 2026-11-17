@@ -20,21 +20,17 @@ import { CustomReport } from '../custom-reports.model';
         <label for="cr-desc">Description</label>
         <textarea id="cr-desc" [(ngModel)]="report.description" rows="2" maxlength="300" placeholder="What does this report answer?"></textarea>
       </div>
-      <div class="field" [class.invalid]="showErrors && !report.visibility">
+      <div class="field">
         <label for="cr-vis"><lucide-icon [img]="Users" [size]="13" /> Visibility</label>
         <select id="cr-vis" [(ngModel)]="report.visibility">
-          <option value="" disabled>Select Visibility</option>
           @for (v of visibilities; track v) { <option [value]="v">{{ v }}</option> }
         </select>
-        @if (showErrors && !report.visibility) { <small>Select a visibility.</small> }
       </div>
-      <div class="field" [class.invalid]="showErrors && !report.schedule">
+      <div class="field">
         <label for="cr-sched"><lucide-icon [img]="Calendar" [size]="13" /> Schedule</label>
         <select id="cr-sched" [(ngModel)]="report.schedule">
-          <option value="" disabled>Select Schedule</option>
           @for (s of schedules; track s) { <option [value]="s">{{ s }}</option> }
         </select>
-        @if (showErrors && !report.schedule) { <small>Select a schedule.</small> }
       </div>
       <div class="cr-config__actions">
         <button type="button" class="btn btn--sm" (click)="saveDraft.emit()">Save Draft</button>

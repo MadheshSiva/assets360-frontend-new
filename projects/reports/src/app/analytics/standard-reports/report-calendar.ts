@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import { ChevronLeft, ChevronRight, LucideAngularModule } from 'lucide-angular';
-import { StandardReport } from './standard-reports.data';
+import { CalendarCounts } from './standard-reports.data';
 import { MONTH_NAMES, formatDay, isoDay, parseDay } from './standard-reports.util';
 
 interface CalendarCell {
@@ -14,7 +14,10 @@ interface CalendarCell {
   label: string;
 }
 
-/** Month calendar marking report generated / scheduled / review-due dates. Clicking a day filters the table. */
+/**
+ * Month calendar marking report generated / scheduled / review-due dates (from GET /api/standard-reports/calendar).
+ * Clicking a day filters the table; moving month asks the page to load that month's markers.
+ */
 @Component({
   selector: 'app-sr-report-calendar',
   standalone: true,
@@ -68,10 +71,13 @@ interface CalendarCell {
   styleUrls: ['../shared/analytics-page.css', './standard-reports.css']
 })
 export class ReportCalendar implements OnChanges {
-  @Input({ required: true }) reports: StandardReport[] = [];
+  /** Markers for the shown month, keyed by 'YYYY-MM-DD'. */
+  @Input({ required: true }) days: Record<string, CalendarCounts> = {};
   @Input({ required: true }) today = '';
   @Input() selected: string | null = null;
   @Output() selectDay = new EventEmitter<string | null>();
+  /** The month now shown (month is 0-based). */
+  @Output() monthChange = new EventEmitter<{ year: number; month: number }>();
 
   readonly icons = { ChevronLeft, ChevronRight };
   readonly weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -98,6 +104,7 @@ export class ReportCalendar implements OnChanges {
     this.year = d.getFullYear();
     this.month = d.getMonth();
     this.build();
+    this.monthChange.emit({ year: this.year, month: this.month });
   }
 
   pick(iso: string): void {
@@ -113,9 +120,11 @@ export class ReportCalendar implements OnChanges {
       // Drop a trailing week that lies entirely in the next month
       if (i === 35 && d.getMonth() !== this.month) break;
       const iso = isoDay(d);
-      const generated = this.reports.filter((r) => r.generatedOn.startsWith(iso)).length;
-      const scheduled = this.reports.filter((r) => !!r.nextScheduled && r.nextScheduled.startsWith(iso)).length;
-      const review = this.reports.filter((r) => r.reviewDue === iso).length;
+      // The API returns markers for the shown month only, so days of the neighbouring months stay blank
+      const counts = this.days[iso];
+      const generated = counts?.generated ?? 0;
+      const scheduled = counts?.scheduled ?? 0;
+      const review = counts?.review ?? 0;
       const parts = [formatDay(iso)];
       if (generated) parts.push(`${generated} generated`);
       if (scheduled) parts.push(`${scheduled} scheduled`);

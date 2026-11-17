@@ -1,6 +1,6 @@
 import { Directive, TemplateRef } from '@angular/core';
 import { AnalyticsPage, downloadCsv } from '../../shared/analytics-common';
-import { CATEGORY_OPTIONS, RaScope, TYPE_OPTIONS } from './asset-universe';
+import { ALL_CATEGORIES, ALL_TYPES, CATEGORY_OPTIONS, RaScope, TYPE_OPTIONS } from './asset-universe';
 import { RaKpi } from './ra-cards';
 import { RaActionForm, RaActionKind, RaActionRequest, RaDetail, RaRecords } from './ra-dialogs';
 
@@ -28,8 +28,8 @@ export function sortRows<T>(rows: T[], key: keyof T, dir: SortDir): T[] {
 export abstract class ScopedAnalyticsPage extends AnalyticsPage {
   readonly categories = CATEGORY_OPTIONS;
   readonly assetTypes = TYPE_OPTIONS;
-  category = '';
-  assetType = '';
+  category = ALL_CATEGORIES;
+  assetType = ALL_TYPES;
   compare = false;
 
   kpis: RaKpi[] = [];
@@ -75,15 +75,15 @@ export abstract class ScopedAnalyticsPage extends AnalyticsPage {
   }
 
   protected restoreFilters(f: Record<string, string>): void {
-    this.period = f['period'] ?? '';
-    this.organization = f['organization'] ?? '';
-    this.location = f['location'] ?? '';
-    this.category = f['category'] ?? '';
-    this.assetType = f['assetType'] ?? '';
+    this.period = f['period'] ?? this.periods[0];
+    this.organization = f['organization'] ?? this.organizations[0];
+    this.location = f['location'] ?? this.locations[0];
+    this.category = f['category'] ?? ALL_CATEGORIES;
+    this.assetType = f['assetType'] ?? ALL_TYPES;
   }
 
   private defaultFilters(): Record<string, string> {
-    return { period: '', organization: '', location: '', category: '', assetType: '' };
+    return { period: this.periods[0], organization: this.organizations[0], location: this.locations[0], category: ALL_CATEGORIES, assetType: ALL_TYPES };
   }
 
   confirmSaveView(name: string): void {
@@ -113,7 +113,7 @@ export abstract class ScopedAnalyticsPage extends AnalyticsPage {
   }
 
   exportKpis(): void {
-    downloadCsv(`${this.fileStem}-kpis.csv`, ['KPI', 'Value', 'Change vs previous period (%)', 'Period'], this.kpis.map((k) => [k.label, k.value, k.delta, this.periodLabel]));
+    downloadCsv(`${this.fileStem}-kpis.csv`, ['KPI', 'Value', 'Change vs previous period (%)', 'Period'], this.kpis.map((k) => [k.label, k.value, k.delta, this.period]));
     this.notify('KPI summary exported.');
   }
 

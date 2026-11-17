@@ -36,14 +36,10 @@ const SPARK_COLORS: Record<string, string> = { green: '#10b981', orange: '#f59e0
       </div>
       <div class="kd-tile__spark"><ra-sparkline [values]="state.spark" [color]="sparkColor" [width]="96" [height]="30" [area]="true" /></div>
       <div class="kd-tile__foot">
-        @if (state.changeText) {
-          <span class="kpi__delta" [class.kpi__delta--bad]="!state.changeGood">
-            <lucide-icon [img]="state.changeUp ? icons.ArrowUp : icons.ArrowDown" [size]="13" />{{ state.changeText }}
-            <small>vs. previous period</small>
-          </span>
-        } @else {
-          <span class="muted">—</span>
-        }
+        <span class="kpi__delta" [class.kpi__delta--bad]="!state.changeGood">
+          <lucide-icon [img]="state.changeUp ? icons.ArrowUp : icons.ArrowDown" [size]="13" />{{ state.changeText }}
+          <small>vs. previous period</small>
+        </span>
         <span class="pill" [attr.data-tone]="statusTone"><i></i>{{ state.status }}</span>
       </div>
     </article>

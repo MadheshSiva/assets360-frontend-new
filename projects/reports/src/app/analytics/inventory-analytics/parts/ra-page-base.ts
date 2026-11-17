@@ -1,5 +1,5 @@
 import { Directive } from '@angular/core';
-import { AnalyticsPage, CURRENT_USER, RA_PEOPLE, downloadCsv } from '../../shared/analytics-common';
+import { AnalyticsPage, RA_PEOPLE, downloadCsv } from '../../shared/analytics-common';
 import { KpiMenuAction } from './kpi-card';
 import { DetailsDialogData, FormDialogData, KpiCardData, ListDialogData } from './ra-parts';
 
@@ -7,7 +7,7 @@ type FormValues = Record<string, string | number>;
 
 const PRIORITIES = ['High', 'Medium', 'Low'];
 // DEMO MODE: reference numbers for requests raised from the insights; the procurement / workflow APIs will issue real ones
-let requestSeq = 0;
+let requestSeq = 418;
 
 /**
  * Adds what the Inventory, Financial and WIP / Production pages share on top of AnalyticsPage:
@@ -97,30 +97,10 @@ export abstract class RaDashboardPage extends AnalyticsPage {
 
   protected nextRef(prefix: string): string {
     requestSeq += 1;
-    return `${prefix}-${new Date().getFullYear()}-${String(requestSeq).padStart(5, '0')}`;
+    return `${prefix}-2026-${String(requestSeq).padStart(5, '0')}`;
   }
 
-  openPurchaseRequest(item: string, quantity: number, supplier: string, priority = 'High'): void {
-    this.openForm(
-      {
-        title: 'Create Purchase Request',
-        intro: 'Raises a purchase request in Procurement for the selected stock.',
-        submitLabel: 'Create Request',
-        fields: [
-          { key: 'item', label: 'Item(s)', type: 'text', value: item, required: true },
-          { key: 'quantity', label: 'Quantity', type: 'number', value: quantity, required: true },
-          { key: 'supplier', label: 'Preferred supplier', type: 'text', value: supplier },
-          { key: 'needBy', label: 'Needed by', type: 'date', value: '', required: true },
-          { key: 'priority', label: 'Priority', type: 'select', value: priority, options: PRIORITIES },
-          { key: 'requester', label: 'Requested by', type: 'select', value: CURRENT_USER.name, options: RA_PEOPLE },
-          { key: 'notes', label: 'Justification', type: 'textarea', value: '' }
-        ]
-      },
-      (v) => `Purchase request ${this.nextRef('PR')} created for ${v['item']} (demo mode).`
-    );
-  }
-
-  openActionPlan(subject: string, owner = RA_PEOPLE[0] ?? ''): void {
+  openActionPlan(subject: string, owner = RA_PEOPLE[1]): void {
     this.openForm(
       {
         title: 'Create Action Plan',
@@ -129,7 +109,7 @@ export abstract class RaDashboardPage extends AnalyticsPage {
         fields: [
           { key: 'title', label: 'Action title', type: 'text', value: subject, required: true },
           { key: 'owner', label: 'Owner', type: 'select', value: owner, options: RA_PEOPLE, required: true },
-          { key: 'due', label: 'Due date', type: 'date', value: '', required: true },
+          { key: 'due', label: 'Due date', type: 'date', value: '2026-11-15', required: true },
           { key: 'priority', label: 'Priority', type: 'select', value: 'High', options: PRIORITIES },
           { key: 'notes', label: 'Planned actions', type: 'textarea', value: '', required: true, hint: 'What will be done and how success is measured.' }
         ]
