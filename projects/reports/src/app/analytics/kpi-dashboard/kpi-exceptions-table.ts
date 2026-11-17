@@ -37,7 +37,7 @@ const STATUS_RANK: Record<string, number> = { 'At Risk': 4, 'Over Budget': 3, Wa
                 <td class="num">{{ targetValue(r) }}</td>
                 <td class="num kd-bad">{{ r.varianceText }}</td>
                 <td><ra-sparkline [values]="r.spark" [color]="r.changeGood ? '#10b981' : '#ef4444'" [width]="70" [height]="22" /></td>
-                <td>{{ r.def.owner || 'Unassigned' }}</td>
+                <td>{{ r.def.owner }}</td>
                 <td>{{ r.due }}</td>
                 <td><span class="pill" [attr.data-tone]="tone(r)"><i></i>{{ r.status }}</span></td>
                 <td><button type="button" class="btn btn--sm btn--outline" (click)="view.emit(r)">View Details</button></td>
@@ -98,7 +98,7 @@ export class KpiExceptionsTable implements OnChanges {
         case 'owner':
           return r.def.owner;
         case 'due':
-          return r.dueInDays ?? Number.MAX_SAFE_INTEGER;
+          return r.def.dueInDays;
         case 'value':
           return r.attainment;
         case 'variance':

@@ -2,7 +2,7 @@
   <section class="sm-main">
     <header class="sm-head">
       <div class="grow">
-        <nav class="crumbs" aria-label="Breadcrumb"><span class="crumb-link">IoT &amp; Tracking</span><span class="sep" aria-hidden="true">›</span><strong>Sensor Management</strong></nav>
+        <nav class="crumbs" aria-label="Breadcrumb"><span class="crumb-link">IoT &amp; Tracking</span><span class="sep">/</span><strong>Sensor Management</strong></nav>
         <h1>Sensor Management</h1>
         <p>Register sensors, map measurement points and monitor readings across connected assets.</p>
       </div>
@@ -35,7 +35,6 @@
     </div>
 
     <section class="card work" aria-label="Sensors">
-      <p *ngIf="loadError" class="form-error load-error" role="alert">{{ loadError }} <button type="button" class="link-btn" (click)="load()"><lucide-icon [img]="icons.RotateCcw" [size]="13"></lucide-icon>Retry</button></p>
       <nav class="tabs" role="tablist" aria-label="Sensor sections">
         <button type="button" role="tab" [class.is-active]="tab === 'sensors'" [attr.aria-selected]="tab === 'sensors'" (click)="setTab('sensors')"><lucide-icon [img]="icons.Radio" [size]="16"></lucide-icon>Sensors</button>
         <button type="button" role="tab" [class.is-active]="tab === 'params'" [attr.aria-selected]="tab === 'params'" (click)="setTab('params')"><lucide-icon [img]="icons.SlidersHorizontal" [size]="16"></lucide-icon>Measurement Parameters</button>
@@ -46,10 +45,10 @@
       <!-- Filters (sensors, calibration and mapping) -->
       <div *ngIf="tab !== 'params'" class="filters">
         <label class="search"><lucide-icon [img]="icons.Search" [size]="16"></lucide-icon><input type="search" [(ngModel)]="search" (ngModelChange)="onFilter()" placeholder="Search by Sensor ID or name..." aria-label="Search sensors" /></label>
-        <label class="lsel"><span>Type</span><select class="control" [(ngModel)]="typeFilter" (ngModelChange)="onFilter()"><option value="">Select Type</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
-        <label class="lsel"><span>Asset</span><select class="control" [(ngModel)]="kindFilter" (ngModelChange)="onFilter()"><option value="">Select Kind</option><option *ngFor="let k of kinds" [value]="k">{{ k }}</option></select></label>
-        <label class="lsel"><span>Site</span><select class="control" [(ngModel)]="siteFilter" (ngModelChange)="onFilter()"><option value="">Select Site</option><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></label>
-        <label class="lsel"><span>Status</span><select class="control" [(ngModel)]="statusFilter" (ngModelChange)="onFilter()"><option value="">Select Status</option><option *ngFor="let s of statuses" [value]="s">{{ s }}</option></select></label>
+        <label class="lsel"><span>Type</span><select class="control" [(ngModel)]="typeFilter" (ngModelChange)="onFilter()"><option value="">All Types</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
+        <label class="lsel"><span>Asset</span><select class="control" [(ngModel)]="kindFilter" (ngModelChange)="onFilter()"><option value="">All Assets</option><option *ngFor="let k of kinds" [value]="k">{{ k }}</option></select></label>
+        <label class="lsel"><span>Site</span><select class="control" [(ngModel)]="siteFilter" (ngModelChange)="onFilter()"><option value="">All Sites</option><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></label>
+        <label class="lsel"><span>Status</span><select class="control" [(ngModel)]="statusFilter" (ngModelChange)="onFilter()"><option value="">All Statuses</option><option *ngFor="let s of statuses" [value]="s">{{ s }}</option></select></label>
         <button type="button" class="link-btn clear" [disabled]="!hasFilters" (click)="clearFilters()">Clear</button>
       </div>
 
@@ -86,10 +85,9 @@
                   <button type="button" role="menuitem" (click)="openEdit(s)">Edit</button>
                   <button type="button" role="menuitem" (click)="openCalibrate(s)">Calibrate</button>
                   <button type="button" role="menuitem" (click)="viewDevice(s)">View device</button>
-                  <button type="button" role="menuitem" class="danger" (click)="deleteSensor(s)">Delete</button>
                 </div></span></td>
             </tr>
-            <tr *ngIf="!pageRows.length"><td colspan="10" class="empty"><ng-container *ngIf="emptyText; else noMatch">{{ emptyText }}</ng-container><ng-template #noMatch>No sensors match these filters. <button type="button" class="link-btn" (click)="clearFilters()">Clear filters</button></ng-template></td></tr>
+            <tr *ngIf="!pageRows.length"><td colspan="10" class="empty">No sensors match these filters. <button type="button" class="link-btn" (click)="clearFilters()">Clear filters</button></td></tr>
           </tbody>
         </table>
       </div>
@@ -100,12 +98,11 @@
           <thead><tr><th>Parameter</th><th>Unit</th><th>Sensor Type</th><th>Make / Model</th><th>Measuring Range</th><th>Accuracy</th><th class="num">Sensors</th><th class="num">Active</th><th class="num">Attention</th><th class="num">No Data</th><th></th></tr></thead>
           <tbody>
             <tr *ngFor="let r of paramRows" (click)="viewParamSensors(r.p)" tabindex="0" (keydown.enter)="viewParamSensors(r.p)">
-              <td><strong>{{ r.p.label }}</strong></td><td>{{ r.p.unit || '—' }}</td><td>{{ r.p.type }}</td><td>—</td>
-              <td class="nowrap">—</td><td class="nowrap">—</td>
+              <td><strong>{{ r.p.label }}</strong></td><td>{{ r.p.unit }}</td><td>{{ r.p.type }}</td><td>{{ r.p.make }} {{ r.p.model }}</td>
+              <td class="nowrap">{{ r.p.range[0] }} – {{ r.p.range[1] }} {{ r.p.unit }}</td><td class="nowrap">{{ r.p.accuracy }}</td>
               <td class="num">{{ r.total | number }}</td><td class="num c-green">{{ r.active | number }}</td><td class="num c-amber">{{ r.alerts | number }}</td><td class="num c-red">{{ r.offline | number }}</td>
               <td class="col-go"><button type="button" class="link-btn" (click)="$event.stopPropagation(); viewParamSensors(r.p)">View sensors<lucide-icon [img]="icons.ArrowRight" [size]="13"></lucide-icon></button></td>
             </tr>
-            <tr *ngIf="!paramRows.length"><td colspan="11" class="empty">{{ loading ? 'Loading…' : 'No sensor types available.' }}</td></tr>
           </tbody>
         </table>
       </div>
@@ -124,11 +121,11 @@
               <tr *ngFor="let s of pageRows" [class.is-selected]="selectedId === s.id" (click)="select(s)" tabindex="0" (keydown.enter)="select(s)">
                 <td><span class="id-link">{{ s.id }}</span><small class="sub">{{ s.type }}</small></td>
                 <td>{{ s.assetName }}<small class="sub">{{ s.point }} · {{ s.site }}</small></td>
-                <td>—</td>
+                <td>{{ s.param.make }} {{ s.param.model }}</td>
                 <td class="nowrap">{{ fmtDate(s.lastCal) }}</td>
                 <td class="nowrap">{{ fmtDate(s.calDue) }}</td>
                 <td><span class="cs" [ngClass]="calState(s).cls">{{ calState(s).text }}</span></td>
-                <td>{{ s.certificate || '—' }}</td>
+                <td (click)="$event.stopPropagation()"><button type="button" class="link-btn" (click)="downloadCertificate(s)">{{ s.certificate }}</button></td>
                 <td class="col-btn" (click)="$event.stopPropagation()"><button type="button" class="btn btn-outline btn-xs" (click)="openCalibrate(s)"><lucide-icon [img]="icons.Settings" [size]="14"></lucide-icon>Calibrate</button></td>
               </tr>
               <tr *ngIf="!pageRows.length"><td colspan="8" class="empty">No sensors are due for calibration in the next {{ calWindow }} days.</td></tr>
@@ -145,10 +142,10 @@
             <tr *ngFor="let s of pageRows" [class.is-selected]="selectedId === s.id" (click)="select(s)" tabindex="0" (keydown.enter)="select(s)">
               <td><span class="map-box"><lucide-icon [img]="icons.Radio" [size]="15"></lucide-icon><span><span class="id-link">{{ s.id }}</span><small class="sub">{{ s.param.label }} ({{ s.param.unit }})</small></span></span></td>
               <td class="col-arrow"><lucide-icon [img]="icons.ArrowRight" [size]="15"></lucide-icon></td>
-              <td><span class="map-box"><lucide-icon [img]="icons.Cpu" [size]="15"></lucide-icon><span><span class="id-link">{{ s.deviceId }}</span><small class="sub">Channel {{ s.channel ?? '—' }} · {{ s.deviceModel || '—' }}</small></span></span></td>
+              <td><span class="map-box"><lucide-icon [img]="icons.Cpu" [size]="15"></lucide-icon><span><span class="id-link">{{ s.deviceId }}</span><small class="sub">Channel {{ s.channel }} · {{ s.deviceModel }}</small></span></span></td>
               <td class="col-arrow"><lucide-icon [img]="icons.ArrowRight" [size]="15"></lucide-icon></td>
               <td><span class="map-box"><lucide-icon [img]="icons.Building2" [size]="15"></lucide-icon><span><span class="id-link">{{ s.assetName }}</span><small class="sub">{{ s.point }}</small></span></span></td>
-              <td>{{ s.site || '—' }}</td>
+              <td>{{ s.site }}</td>
               <td class="nowrap">{{ intervalText(s.intervalSec) }}</td>
               <td><span class="ps" [ngClass]="statusClass(s)"><i></i>{{ s.status }}</span></td>
               <td class="col-btn" (click)="$event.stopPropagation()"><button type="button" class="btn btn-outline btn-xs" (click)="openEdit(s)"><lucide-icon [img]="icons.Pencil" [size]="13"></lucide-icon>Remap</button></td>
@@ -192,14 +189,14 @@
         <h3 class="p-h3">Sensor Identity</h3>
         <dl class="kv">
           <dt>Sensor ID</dt><dd>{{ s.id }}</dd>
-          <dt>Name</dt><dd>{{ s.name || '—' }}</dd>
-          <dt>Make / Model</dt><dd>—</dd>
-          <dt>Serial Number</dt><dd>{{ s.serial || '—' }}</dd>
+          <dt>Name</dt><dd>{{ s.type }}</dd>
+          <dt>Make / Model</dt><dd>{{ s.param.make }} / {{ s.param.model }}</dd>
+          <dt>Serial Number</dt><dd>{{ s.serial }}</dd>
           <dt class="gap">Sensor Type</dt><dd class="gap">{{ s.type }}</dd>
           <dt>Measured Parameter</dt><dd>{{ s.param.label }}</dd>
-          <dt>Unit</dt><dd>{{ s.param.unit || '—' }}</dd>
+          <dt>Unit</dt><dd>{{ s.param.unit }}</dd>
           <dt>Range</dt><dd>{{ rangeText(s) }}</dd>
-          <dt>Accuracy</dt><dd>—</dd>
+          <dt>Accuracy</dt><dd>{{ s.param.accuracy }}</dd>
           <dt>Sampling Interval</dt><dd>{{ intervalText(s.intervalSec) }}</dd>
         </dl>
 
@@ -207,7 +204,7 @@
         <div class="chain">
           <div class="ch-box"><lucide-icon [img]="icons.Radio" [size]="20"></lucide-icon><span><small>Sensor</small><b>{{ s.id }}</b><small>{{ s.param.label }}</small></span></div>
           <lucide-icon class="ch-arrow" [img]="icons.ArrowRight" [size]="15"></lucide-icon>
-          <div class="ch-box"><lucide-icon [img]="icons.Cpu" [size]="20"></lucide-icon><span><small>Device Channel</small><b>{{ s.deviceId }}</b><small>Channel {{ s.channel ?? '—' }}</small></span></div>
+          <div class="ch-box"><lucide-icon [img]="icons.Cpu" [size]="20"></lucide-icon><span><small>Device Channel</small><b>{{ s.deviceId }}</b><small>Channel {{ s.channel }}</small></span></div>
           <lucide-icon class="ch-arrow" [img]="icons.ArrowRight" [size]="15"></lucide-icon>
           <div class="ch-box"><lucide-icon [img]="icons.Building2" [size]="20"></lucide-icon><span><small>Asset / Point</small><b>{{ s.assetName }}</b><small>{{ s.point }}</small></span></div>
         </div>
@@ -215,7 +212,7 @@
 
         <div class="lr-head">
           <h3 class="p-h3">Latest Reading <span>(Last 24 hours)</span></h3>
-          <span class="lr-now"><b>Current: <span [ngClass]="readingClass(s)">{{ fmtValue(s, s.reading) }}</span></b><small>{{ readingsLoading ? 'Loading readings…' : lastReadingText(s) }}</small></span>
+          <span class="lr-now"><b>Current: <span [ngClass]="readingClass(s)">{{ fmtValue(s, s.reading) }}</span></b><small>{{ s.reading === null ? 'Last data ' + ago(s.lastSeenMin) : 'Today, ' + clock(now) }}</small></span>
         </div>
         <ng-container *ngTemplateOutlet="chartTpl"></ng-container>
 
@@ -223,7 +220,7 @@
         <dl class="kv">
           <dt>Last Calibrated</dt><dd>{{ fmtDate(s.lastCal) }}</dd>
           <dt>Calibration Due</dt><dd><b [class.c-green]="!overdue(s)" [class.c-red]="overdue(s)">{{ fmtDate(s.calDue) }}</b> <span class="muted">{{ calCountdown(s) }}</span></dd>
-          <dt>Calibration Certificate</dt><dd><span *ngIf="s.certificate; else noCert" class="cert"><lucide-icon [img]="icons.FileText" [size]="15"></lucide-icon>{{ s.certificate }}</span><ng-template #noCert>—</ng-template></dd>
+          <dt>Calibration Certificate</dt><dd><button type="button" class="link-btn cert" (click)="downloadCertificate(s)"><lucide-icon [img]="icons.FileText" [size]="15"></lucide-icon><u>{{ s.certificate }}</u><lucide-icon [img]="icons.ExternalLink" [size]="13"></lucide-icon></button></dd>
         </dl>
       </ng-container>
 
@@ -235,7 +232,7 @@
         </div>
         <ng-container *ngTemplateOutlet="chartTpl"></ng-container>
         <div *ngIf="readingStats as st" class="stats"><span><small>Min</small><b>{{ st.min }}</b></span><span><small>Average</small><b>{{ st.avg }}</b></span><span><small>Max</small><b>{{ st.max }}</b></span>
-          <span><small>Alarm band</small><b>{{ fmtLimit(s, s.low) }} – {{ fmtLimit(s, s.high) }}</b></span></div>
+          <span><small>Alarm band</small><b>{{ s.low }} – {{ s.high }} {{ s.param.unit }}</b></span></div>
         <table class="mini-table">
           <thead><tr><th>Time</th><th>Value</th><th>State</th></tr></thead>
           <tbody><tr *ngFor="let r of readingRows"><td>{{ clock(r.at) }}</td><td [ngClass]="valueClass(s, r.v)">{{ fmtValue(s, r.v) }}</td><td>{{ r.v === null ? 'No data' : valueClass(s, r.v) === 'rd--bad' ? 'Out of range' : 'Normal' }}</td></tr></tbody>
@@ -246,22 +243,22 @@
       <ng-container *ngIf="panelTab === 'configuration'">
         <h3 class="p-h3">Acquisition</h3>
         <dl class="kv">
-          <dt>Linked Device</dt><dd>{{ s.deviceId || '—' }} · {{ s.deviceModel || '—' }}</dd>
-          <dt>Channel</dt><dd>{{ s.channel !== null ? 'Channel ' + s.channel : '—' }}</dd>
+          <dt>Linked Device</dt><dd>{{ s.deviceId }} · {{ s.deviceModel }}</dd>
+          <dt>Channel</dt><dd>Channel {{ s.channel }}</dd>
           <dt>Sampling Interval</dt><dd>{{ intervalText(s.intervalSec) }}</dd>
-          <dt>Unit</dt><dd>{{ s.param.unit || '—' }}</dd>
+          <dt>Unit</dt><dd>{{ s.param.unit }}</dd>
         </dl>
         <h3 class="p-h3">Alarm Thresholds</h3>
         <dl class="kv">
-          <dt>Low alarm</dt><dd>{{ fmtLimit(s, s.low) }}</dd>
-          <dt>High alarm</dt><dd>{{ fmtLimit(s, s.high) }}</dd>
+          <dt>Low alarm</dt><dd>{{ s.low }} {{ s.param.unit }}</dd>
+          <dt>High alarm</dt><dd>{{ s.high }} {{ s.param.unit }}</dd>
           <dt>Measuring range</dt><dd>{{ rangeText(s) }}</dd>
         </dl>
         <h3 class="p-h3">Mapping</h3>
         <dl class="kv">
-          <dt>Asset</dt><dd>{{ s.assetName || '—' }}</dd>
-          <dt>Measurement Point</dt><dd>{{ s.point || '—' }}</dd>
-          <dt>Site</dt><dd>{{ s.site || '—' }}</dd>
+          <dt>Asset</dt><dd>{{ s.assetName }}</dd>
+          <dt>Measurement Point</dt><dd>{{ s.point }}</dd>
+          <dt>Site</dt><dd>{{ s.site }}</dd>
           <dt>Installed</dt><dd>{{ fmtDate(s.installedOn) }}</dd>
         </dl>
         <button type="button" class="btn btn-outline btn-sm" (click)="openEdit(s)"><lucide-icon [img]="icons.Pencil" [size]="14"></lucide-icon>Edit configuration</button>
@@ -301,7 +298,6 @@
         }
         <p *ngIf="c.empty" class="chart-empty">No readings in the last 24 hours.</p>
       </div>
-      <p *ngIf="!chart" class="muted">{{ readingsLoading ? 'Loading readings…' : readingsError || 'No readings in the last 24 hours.' }}</p>
     </ng-template>
   </aside>
 </div>
@@ -312,21 +308,21 @@
     <div class="modal-head"><h2 id="sm-form">{{ d.f.editId ? 'Edit ' + d.f.editId : 'Add Sensor' }}</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
     <form class="modal-body" (ngSubmit)="saveForm()">
       <div class="two">
-        <label class="field"><span class="field-label">Sensor type</span><select class="control" [(ngModel)]="d.f.type" name="type" [disabled]="!!d.f.editId" (ngModelChange)="onFormType(d.f)"><option value="" disabled>Select Sensor Type</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
+        <label class="field"><span class="field-label">Sensor type</span><select class="control" [(ngModel)]="d.f.type" name="type" [disabled]="!!d.f.editId" (ngModelChange)="onFormType(d.f)"><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
         <label class="field"><span class="field-label">Sensor number <em>*</em></span><input class="control" [(ngModel)]="d.f.number" name="num" inputmode="numeric" [disabled]="!!d.f.editId" /><small class="muted">Sensor ID: <strong>{{ formPreview(d.f) }}</strong></small></label>
         <label class="field"><span class="field-label">Serial number <em>*</em></span><input class="control" [(ngModel)]="d.f.serial" name="serial" placeholder="e.g. TS300-80999-0001" /></label>
-        <label class="field"><span class="field-label">Sampling interval</span><select class="control" [(ngModel)]="d.f.intervalSec" name="int"><option [ngValue]="null">Not set</option><option *ngFor="let i of intervals" [ngValue]="i.seconds">{{ i.label }}</option></select></label>
-        <label class="field"><span class="field-label">Linked device <em>*</em></span><sm-combo [(value)]="d.f.deviceId" [options]="deviceCombo" placeholder="e.g. TS-80214" (committed)="onFormDevice(d.f)"></sm-combo></label>
-        <label class="field"><span class="field-label">Channel</span><input class="control" type="number" min="1" [(ngModel)]="d.f.channel" name="ch" /><small *ngIf="channelHint" class="muted">{{ channelHint }}</small></label>
-        <label class="field"><span class="field-label">Asset <em>*</em></span><sm-combo [(value)]="d.f.asset" [options]="assetCombo" placeholder="e.g. Cold Room CR-03"></sm-combo></label>
-        <label class="field"><span class="field-label">Measurement point <em>*</em></span><sm-combo [(value)]="d.f.point" [options]="pointCombo" placeholder="e.g. Supply Air"></sm-combo></label>
+        <label class="field"><span class="field-label">Sampling interval</span><select class="control" [(ngModel)]="d.f.intervalSec" name="int"><option [ngValue]="30">30 seconds</option><option [ngValue]="60">60 seconds</option><option [ngValue]="120">2 minutes</option><option [ngValue]="300">5 minutes</option></select></label>
+        <label class="field"><span class="field-label">Linked device <em>*</em></span><input class="control" [(ngModel)]="d.f.deviceId" name="dev" placeholder="e.g. TS-80214" /></label>
+        <label class="field"><span class="field-label">Channel</span><input class="control" type="number" min="1" max="16" [(ngModel)]="d.f.channel" name="ch" /></label>
+        <label class="field"><span class="field-label">Asset <em>*</em></span><input class="control" [(ngModel)]="d.f.asset" name="asset" list="sm-assets" placeholder="e.g. Cold Room CR-03" autocomplete="off" /></label>
+        <label class="field"><span class="field-label">Measurement point <em>*</em></span><input class="control" [(ngModel)]="d.f.point" name="point" placeholder="e.g. Supply Air" /></label>
         <label class="field"><span class="field-label">Low alarm</span><input class="control" type="number" [(ngModel)]="d.f.low" name="low" /></label>
         <label class="field"><span class="field-label">High alarm</span><input class="control" type="number" [(ngModel)]="d.f.high" name="high" /></label>
-        <label class="field"><span class="field-label">Site</span><select class="control" [(ngModel)]="d.f.site" name="site"><option value="">From linked device</option><option *ngFor="let x of sites" [value]="x">{{ x }}</option></select></label>
+        <label class="field"><span class="field-label">Site</span><select class="control" [(ngModel)]="d.f.site" name="site"><option *ngFor="let x of sites" [value]="x">{{ x }}</option></select></label>
         <label class="field"><span class="field-label">Calibration due <em>*</em></span><input class="control" type="date" [(ngModel)]="d.f.calDue" name="due" /></label>
       </div>
       <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
-      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-primary" [disabled]="saving">{{ saving ? 'Saving…' : d.f.editId ? 'Save changes' : 'Add Sensor' }}</button></div>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-primary">{{ d.f.editId ? 'Save changes' : 'Add Sensor' }}</button></div>
     </form>
   </div>
 </div>
@@ -339,12 +335,12 @@
       <p *ngIf="calTarget(d.f) as t" class="muted">{{ t.type }} on {{ t.assetName }} · {{ t.point }}. Last calibrated {{ fmtDate(t.lastCal) }}; the next due date is set one year after this calibration.</p>
       <div class="two">
         <label class="field"><span class="field-label">Calibration date <em>*</em></span><input class="control" type="date" [(ngModel)]="d.f.date" name="date" /></label>
-        <label class="field"><span class="field-label">Result</span><select class="control" [(ngModel)]="d.f.result" name="res"><option value="" disabled>Select Result</option><option value="Pass">Pass (as found)</option><option value="Adjusted">Adjusted</option></select></label>
+        <label class="field"><span class="field-label">Result</span><select class="control" [(ngModel)]="d.f.result" name="res"><option value="Pass">Pass (as found)</option><option value="Adjusted">Adjusted</option></select></label>
       </div>
       <label class="field"><span class="field-label">Certificate <em>*</em></span><input class="control" [(ngModel)]="d.f.certificate" name="cert" /></label>
       <label class="field"><span class="field-label">Note</span><input class="control" [(ngModel)]="d.f.note" name="note" placeholder="e.g. 2-point check against reference probe" /></label>
       <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
-      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-primary" [disabled]="saving">{{ saving ? 'Saving…' : 'Save calibration' }}</button></div>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-primary">Save calibration</button></div>
     </form>
   </div>
 </div>
@@ -354,7 +350,7 @@
   <div class="modal modal--lg" role="dialog" aria-modal="true" aria-labelledby="sm-imp" (click)="$event.stopPropagation()">
     <div class="modal-head"><h2 id="sm-imp">Import Sensors</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
     <div class="modal-body">
-      <p class="muted">Columns: Type, Sensor Number, Serial Number, Device ID, Channel, Asset, Point, Site, Calibration Due.</p>
+      <p class="muted">Columns: Type, Sensor Number, Serial Number, Device ID, Channel, Asset, Point, Site.</p>
       <div class="import-actions">
         <button type="button" class="btn btn-outline btn-sm" (click)="downloadTemplate()"><lucide-icon [img]="icons.Download" [size]="16"></lucide-icon>Download template</button>
         <label class="btn btn-primary btn-sm file-btn"><lucide-icon [img]="icons.Upload" [size]="16"></lucide-icon>Choose file<input type="file" accept=".xlsx,.xls,.csv" (change)="onImportFile($event)" /></label>
@@ -368,10 +364,11 @@
             <td><span *ngIf="!r.error" class="ok">Ready</span><span *ngIf="r.error" class="bad">{{ r.error }}</span></td></tr></tbody>
         </table>
       </div>
-      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-primary" [disabled]="!importValid || saving" (click)="saveImport()">{{ saving ? 'Importing…' : 'Import ' + importValid + ' sensor' + (importValid === 1 ? '' : 's') }}</button></div>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-primary" [disabled]="!importValid" (click)="saveImport()">Import {{ importValid }} sensor{{ importValid === 1 ? '' : 's' }}</button></div>
     </div>
   </div>
 </div>
 
+<datalist id="sm-assets"><option *ngFor="let a of assetOptions" [value]="a"></option></datalist>
 
 <div *ngIf="toast" class="toast" role="status">{{ toast }}</div>

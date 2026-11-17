@@ -1,5 +1,5 @@
 <section class="fc-page">
-  <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep" aria-hidden="true">›</span><strong>Firmware &amp; Connectivity</strong></nav>
+  <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep">/</span><strong>Firmware &amp; Connectivity</strong></nav>
 
   <header class="fc-head">
     <span class="head-ic"><lucide-icon [img]="icons.Cpu" [size]="28"></lucide-icon></span>
@@ -8,7 +8,7 @@
       <p>Manage device firmware versions, update campaigns and network connectivity.</p>
     </div>
     <button type="button" class="btn btn-outline" (click)="exportReport()"><lucide-icon [img]="icons.Download" [size]="17"></lucide-icon>Export Report</button>
-    <button type="button" class="btn btn-primary" (click)="openCreate()" [disabled]="loading || !updatableModels.length"><lucide-icon [img]="icons.Plus" [size]="17"></lucide-icon>Create Update Campaign</button>
+    <button type="button" class="btn btn-primary" (click)="openCreate()"><lucide-icon [img]="icons.Plus" [size]="17"></lucide-icon>Create Update Campaign</button>
   </header>
 
   <!-- KPIs -->
@@ -16,31 +16,32 @@
     <button type="button" class="card kpi" (click)="tab = 'diagnostics'">
       <span class="kpi-ic kpi-ic--teal"><lucide-icon [img]="icons.Wifi" [size]="26"></lucide-icon></span>
       <span class="kpi-body"><span class="kpi-label">Devices Online</span>
-        <span class="kpi-line"><strong>{{ k.online !== null ? (k.online | number) : '—' }}</strong></span>
+        <span class="kpi-line"><strong>{{ k.online | number }}</strong><span class="delta up"><lucide-icon [img]="icons.ArrowUp" [size]="13"></lucide-icon>{{ k.onlineChange }}%</span></span>
         <span class="kpi-note">of {{ k.devices | number }} total devices</span></span>
+      <svg class="spark" viewBox="0 0 84 30" aria-hidden="true"><path [attr.d]="spark('on', 3, 1040, k.online, 26)" class="spark-line spark--teal"></path></svg>
     </button>
     <button type="button" class="card kpi" (click)="tab = 'inventory'; modelStatus = 'update'">
       <span class="kpi-ic kpi-ic--violet"><lucide-icon [img]="icons.Settings" [size]="26"></lucide-icon></span>
       <span class="kpi-body"><span class="kpi-label">Firmware Updates Available</span>
-        <span class="kpi-line"><strong>{{ k.updates | number }}</strong></span>
+        <span class="kpi-line"><strong>{{ k.updates | number }}</strong><span class="delta warn"><lucide-icon [img]="icons.ArrowUp" [size]="13"></lucide-icon>{{ k.updatesChange }}%</span></span>
         <span class="kpi-note">across {{ k.updateModels }} device models</span></span>
+      <svg class="spark" viewBox="0 0 84 30" aria-hidden="true"><path [attr.d]="spark('up', 9, 150, k.updates, 18)" class="spark-line spark--pink"></path></svg>
     </button>
     <button type="button" class="card kpi" (click)="tab = 'campaigns'">
       <span class="kpi-ic kpi-ic--violet"><lucide-icon [img]="icons.Database" [size]="26"></lucide-icon></span>
       <span class="kpi-body"><span class="kpi-label">Update Campaigns</span>
         <span class="kpi-line"><strong>{{ k.campaigns }}</strong></span>
-        <span class="kpi-note">{{ k.running }} running · {{ k.scheduled }} scheduled</span></span>
+        <span class="kpi-note">{{ k.running }} running · {{ k.completed }} completed</span></span>
+      <svg class="spark spark--bars" viewBox="0 0 84 30" aria-hidden="true"><rect *ngFor="let b of campaignBars(); let i = index" [attr.x]="i * 10.5" [attr.y]="30 - b * 2.6" width="7" [attr.height]="b * 2.6" rx="1.5" [class.is-last]="i >= 5"></rect></svg>
     </button>
     <button type="button" class="card kpi" (click)="tab = 'diagnostics'">
       <span class="kpi-ic kpi-ic--red"><lucide-icon [img]="icons.TriangleAlert" [size]="26"></lucide-icon></span>
       <span class="kpi-body"><span class="kpi-label">Connectivity Issues</span>
-        <span class="kpi-line"><strong>{{ k.issues }}</strong></span>
+        <span class="kpi-line"><strong>{{ k.issues }}</strong><span class="delta up"><lucide-icon [img]="icons.ArrowDown" [size]="13"></lucide-icon>{{ -k.issuesChange }}%</span></span>
         <span class="kpi-note">across {{ k.issueSites }} sites</span></span>
+      <svg class="spark" viewBox="0 0 84 30" aria-hidden="true"><path [attr.d]="spark('is', 5, 58, k.issues, 14)" class="spark-line spark--red"></path></svg>
     </button>
   </div>
-
-  <p *ngIf="loading" class="muted small">Loading firmware and connectivity data…</p>
-  <p *ngIf="loadError" class="form-error" role="alert">{{ loadError }} <button type="button" class="link-btn" (click)="load()">Retry</button></p>
 
   <nav class="tabs" role="tablist" aria-label="Firmware & connectivity sections">
     <button type="button" role="tab" [class.is-active]="tab === 'overview'" [attr.aria-selected]="tab === 'overview'" (click)="tab = 'overview'">Overview</button>
@@ -58,9 +59,8 @@
           <div class="sec-head">
             <span class="sec-ic"><lucide-icon [img]="icons.Cpu" [size]="18"></lucide-icon></span><h2 class="grow">Firmware Versions by Device Model</h2>
             <label class="search search--sm"><lucide-icon [img]="icons.Search" [size]="15"></lucide-icon><input type="search" [(ngModel)]="modelSearch" placeholder="Search device model..." aria-label="Search device model" /></label>
-            <select class="control control-sm" [(ngModel)]="modelStatus" aria-label="Update status"><option value="">Select Update Status</option><option value="update">Update available</option><option value="current">Up to date</option></select>
-            <select class="control control-sm" [(ngModel)]="modelFilter" aria-label="Model"><option value="">Select Device Model</option><option *ngFor="let m of models" [value]="m.id">{{ m.name }}</option></select>
-            <button type="button" class="btn btn-primary btn-sm" (click)="editFirmware()" [disabled]="loading || busy"><lucide-icon [img]="icons.Plus" [size]="15"></lucide-icon>Add Firmware</button>
+            <select class="control control-sm" [(ngModel)]="modelStatus" aria-label="Update status"><option value="">All Status</option><option value="update">Update available</option><option value="current">Up to date</option></select>
+            <select class="control control-sm" [(ngModel)]="modelFilter" aria-label="Model"><option value="">All Models</option><option *ngFor="let m of models" [value]="m.id">{{ m.name }}</option></select>
           </div>
           <div class="table-wrap">
             <table class="dt">
@@ -80,11 +80,9 @@
                       <button *ngIf="hasUpdate(m)" type="button" role="menuitem" (click)="openCreate(m)">Create update campaign</button>
                       <button type="button" role="menuitem" (click)="notesOf = m; menuOpen = ''">Release notes ({{ m.latest }})</button>
                       <button type="button" role="menuitem" (click)="dModel = ''; tab = 'diagnostics'; menuOpen = ''">Connectivity of these devices</button>
-                      <button type="button" role="menuitem" (click)="editFirmware(m)">Edit</button>
-                      <button type="button" role="menuitem" class="danger" (click)="deleteFirmware(m)">Delete</button>
                     </span></span></td>
                 </tr>
-                <tr *ngIf="!modelRows.length"><td colspan="7" class="empty">{{ models.length ? 'No device models match.' : 'No firmware versions recorded yet.' }}</td></tr>
+                <tr *ngIf="!modelRows.length"><td colspan="7" class="empty">No device models match.</td></tr>
               </tbody>
             </table>
           </div>
@@ -106,9 +104,8 @@
           <li *ngFor="let m of models"><span class="bar-name">{{ m.name }}</span>
             <span class="track"><span class="fill" [style.width.%]="hasUpdate(m) ? 0 : 100" [class.fill--warn]="hasUpdate(m)"></span></span>
             <span class="bar-val">{{ hasUpdate(m) ? '0% on ' + m.latest : '100%' }}</span></li>
-          <li *ngIf="!models.length" class="empty">No records found.</li>
         </ul>
-        <p class="muted small">{{ totals.fleetDevices - totals.updates | number }} of {{ totals.fleetDevices | number }} devices run the latest firmware.</p>
+        <p class="muted small">{{ totals.devices - totals.updates | number }} of {{ totals.devices | number }} devices run the latest firmware.</p>
       </section>
       <ng-container *ngTemplateOutlet="campaignTpl"></ng-container>
     </div>
@@ -125,20 +122,21 @@
           <table class="dt">
             <thead><tr><th>Campaign</th><th>Status</th><th>Progress</th><th>Updated</th><th>Failed</th><th>Window</th><th class="col-act"></th></tr></thead>
             <tbody>
-              <tr *ngFor="let c of campaigns" [class.is-selected]="c.id === selectedCampaign?.id" (click)="selectedCampaignId = c.id" class="clickable">
-                <td><strong class="c-name">{{ c.name }}</strong><small class="muted block">{{ modelNames(c) }} → {{ c.targetVersion }} · {{ c.pendingDeviceIds.length }} queued</small></td>
+              <tr *ngFor="let c of campaigns" [class.is-selected]="c.id === selectedCampaign.id" (click)="selectedCampaignId = c.id" class="clickable">
+                <td><strong class="c-name">{{ c.name }}</strong><small class="muted block">{{ c.id }} · {{ modelNames(c) }} · started {{ fmtDate(c.started) }}</small></td>
                 <td><span class="cs" [ngClass]="statusClass(c.status)">{{ c.status }}</span></td>
                 <td class="prog-cell"><span class="track"><span class="fill" [style.width.%]="pct(c.updated, c.target)"></span></span><small>{{ pct(c.updated, c.target) }}%</small></td>
                 <td>{{ c.updated | number }} / {{ c.target | number }}</td>
-                <td [class.bad]="c.failed">{{ c.failed ?? '—' }}</td>
+                <td [class.bad]="c.failed">{{ c.failed }}</td>
                 <td class="nowrap">{{ c.window }}</td>
                 <td class="col-act" (click)="$event.stopPropagation()"><span class="menu-wrap">
                   <button type="button" class="icon-btn" (click)="toggleMenu('c-' + c.id, $event)" aria-haspopup="menu" [attr.aria-label]="'Actions for ' + c.name"><lucide-icon [img]="icons.Ellipsis" [size]="18"></lucide-icon></button>
                   <span *ngIf="menuOpen === 'c-' + c.id" class="menu" role="menu" (click)="$event.stopPropagation()">
+                    <button *ngIf="c.status === 'Running' || c.status === 'Paused' || c.status === 'Scheduled'" type="button" role="menuitem" (click)="togglePause(c); menuOpen = ''">{{ c.status === 'Running' ? 'Pause' : c.status === 'Scheduled' ? 'Start now' : 'Resume' }}</button>
+                    <button *ngIf="c.failed" type="button" role="menuitem" (click)="retryFailed(c)">Retry {{ c.failed }} failed</button>
                     <button *ngIf="c.status !== 'Completed' && c.status !== 'Cancelled'" type="button" role="menuitem" class="danger" (click)="cancel(c)">Cancel campaign</button>
                   </span></span></td>
               </tr>
-              <tr *ngIf="!campaigns.length"><td colspan="7" class="empty">No update campaigns found.</td></tr>
             </tbody>
           </table>
         </div>
@@ -167,7 +165,6 @@
             <td><button type="button" class="switch" [class.is-on]="p.active" (click)="toggleProfile(p)" role="switch" [attr.aria-checked]="p.active" [attr.aria-label]="'Enable ' + p.name"><i></i></button></td>
             <td class="col-act"><button type="button" class="icon-btn" (click)="editProfile(p)" [attr.aria-label]="'Edit ' + p.name"><lucide-icon [img]="icons.Pencil" [size]="16"></lucide-icon></button></td>
           </tr>
-          <tr *ngIf="!profiles.length"><td colspan="8" class="empty">No network profiles found.</td></tr>
         </tbody>
       </table>
     </div>
@@ -181,17 +178,19 @@
       <button type="button" class="link-btn" (click)="tab = 'campaigns'">View All Campaigns<lucide-icon [img]="icons.ArrowRight" [size]="15"></lucide-icon></button></div>
     <div class="camp-id">
       <span class="camp-ic"><lucide-icon [img]="icons.Database" [size]="24"></lucide-icon></span>
-      <div class="grow"><strong>{{ c.name }}</strong><small>{{ modelNames(c) }} → {{ c.targetVersion }}<span class="sep">|</span>Installs {{ c.window }}</small></div>
+      <div class="grow"><strong>{{ c.name }}</strong><small>{{ modelNames(c) }}<span class="sep">|</span>Started {{ fmtDate(c.started) }}</small></div>
       <span class="cs" [ngClass]="statusClass(c.status)"><i></i>{{ c.status }}</span>
     </div>
     <div class="camp-prog"><span><strong>{{ pct(c.updated, c.target) }}%</strong> complete</span><span><strong>{{ c.updated | number }} / {{ c.target | number }}</strong> updated</span></div>
     <span class="track track--lg" role="progressbar" [attr.aria-valuenow]="pct(c.updated, c.target)" aria-valuemin="0" aria-valuemax="100"><span class="fill" [style.width.%]="pct(c.updated, c.target)"></span></span>
     <div class="camp-stats">
       <div><span class="dot dot--ok"></span><strong>{{ c.updated | number }}</strong><small>Updated</small><em>{{ pct(c.updated, c.target) }}%</em></div>
-      <div><span class="dot dot--bad"></span><strong>{{ c.failed ?? '—' }}</strong><small>Failed</small><em class="bad">{{ c.failed !== null ? pct(c.failed, c.target) + '%' : '—' }}</em></div>
+      <div><span class="dot dot--bad"></span><strong>{{ c.failed }}</strong><small>Failed</small><em class="bad">{{ pct(c.failed, c.target) }}%</em></div>
       <div><span class="dot dot--mute"></span><strong>{{ queued(c) }}</strong><small>Queued</small><em>{{ pct(queued(c), c.target) }}%</em></div>
     </div>
-    <button *ngIf="c.pendingDeviceIds.length" type="button" class="btn btn-outline btn-block" (click)="cancel(c)" [disabled]="busy"><lucide-icon [img]="icons.X" [size]="16"></lucide-icon>Cancel Campaign</button>
+    <button *ngIf="c.status === 'Running' || c.status === 'Paused' || c.status === 'Scheduled'" type="button" class="btn btn-outline btn-block" (click)="togglePause(c)">
+      <lucide-icon [img]="c.status === 'Running' ? icons.Pause : icons.Play" [size]="16"></lucide-icon>{{ c.status === 'Running' ? 'Pause Campaign' : c.status === 'Scheduled' ? 'Start Now' : 'Resume Campaign' }}</button>
+    <button *ngIf="c.status === 'Completed' && c.failed" type="button" class="btn btn-outline btn-block" (click)="retryFailed(c)"><lucide-icon [img]="icons.RefreshCw" [size]="16"></lucide-icon>Retry {{ c.failed }} Failed Devices</button>
   </section>
 </ng-template>
 
@@ -201,9 +200,9 @@
       <span class="policy-ic"><lucide-icon [img]="icons.Settings" [size]="20"></lucide-icon></span>
       <div class="grow"><h2 id="fc-pol">Rollout Policy – Staged Deployment</h2><p>Control how firmware updates are rolled out to your device fleet.</p></div>
       <label class="policy-field"><span><lucide-icon [img]="icons.Calendar" [size]="15"></lucide-icon>Maintenance Window</span>
-        <select class="control control-sm" [(ngModel)]="window"><option value="" disabled>Select Maintenance Window</option><option *ngFor="let w of windows" [value]="w">{{ w }}</option></select></label>
+        <select class="control control-sm" [(ngModel)]="window"><option *ngFor="let w of windows" [value]="w">{{ w }}</option></select></label>
       <label class="policy-field"><span><lucide-icon [img]="icons.RefreshCw" [size]="15"></lucide-icon>Retry Policy</span>
-        <select class="control control-sm" [(ngModel)]="retry"><option value="" disabled>Select Retry Policy</option><option *ngFor="let r of retries" [value]="r">{{ r }}</option></select></label>
+        <select class="control control-sm" [(ngModel)]="retry"><option *ngFor="let r of retries" [value]="r">{{ r }}</option></select></label>
       <div class="policy-field"><span>Enable Rollback</span>
         <button type="button" class="switch" [class.is-on]="rollback" (click)="rollback = !rollback" role="switch" [attr.aria-checked]="rollback" aria-label="Enable rollback"><i></i></button>
         <small>Automatically rollback on failure</small></div>
@@ -223,10 +222,10 @@
     <div class="sec-head sec-head--wrap">
       <span class="sec-ic"><lucide-icon [img]="icons.Wifi" [size]="18"></lucide-icon></span>
       <div class="grow"><h2 id="fc-diag">Connectivity Diagnostics</h2><small class="muted">Real-time network status for gateways and cellular connections.</small></div>
-      <label class="inline-field">Site <select class="control control-sm" [(ngModel)]="dSite"><option value="">Select Site</option><option *ngFor="let s of sites" [value]="s.code">{{ s.name }}</option></select></label>
-      <label class="inline-field">Protocol <select class="control control-sm" [(ngModel)]="dProtocol"><option value="">Select Protocol</option><option *ngFor="let p of protocols" [value]="p">{{ p }}</option></select></label>
-      <label class="inline-field">Status <select class="control control-sm" [(ngModel)]="dStatus"><option value="">Select Status</option><option value="Online">Online</option><option value="Stable">Stable</option><option value="Degraded">Degraded</option><option value="Offline">Offline</option></select></label>
-      <label class="inline-field">Device Model <select class="control control-sm" [(ngModel)]="dModel"><option value="">Select Device Model</option><option *ngFor="let m of gatewayModels" [value]="m">{{ m }}</option></select></label>
+      <label class="inline-field">Site <select class="control control-sm" [(ngModel)]="dSite"><option value="">All Sites</option><option *ngFor="let s of sites" [value]="s.code">{{ s.name }}</option></select></label>
+      <label class="inline-field">Protocol <select class="control control-sm" [(ngModel)]="dProtocol"><option value="">All Protocols</option><option *ngFor="let p of protocols" [value]="p">{{ p }}</option></select></label>
+      <label class="inline-field">Status <select class="control control-sm" [(ngModel)]="dStatus"><option value="">All Status</option><option value="Online">Online</option><option value="Stable">Stable</option><option value="Degraded">Degraded</option><option value="Offline">Offline</option></select></label>
+      <label class="inline-field">Device Model <select class="control control-sm" [(ngModel)]="dModel"><option value="">All Models</option><option *ngFor="let m of gatewayModels" [value]="m">{{ m }}</option></select></label>
     </div>
     <div class="diag-grid">
       <div class="sub-card">
@@ -234,12 +233,11 @@
         <ul class="site-list">
           <li *ngFor="let s of filteredSites">
             <span class="site-name">{{ s.name }}</span>
-            <span class="track"><span class="fill" [class.fill--warn]="siteHealth(s) === 'Degraded'" [class.fill--bad]="siteHealth(s) === 'Offline'" [style.width.%]="s.health ?? 0"></span></span>
-            <span class="site-pct">{{ s.health !== null ? s.health + '%' : '—' }}</span>
-            <span class="health" [ngClass]="'hl--' + (siteHealth(s) ?? 'offline').toLowerCase()"><i></i>{{ siteHealth(s) ?? '—' }}</span>
+            <span class="track"><span class="fill" [class.fill--warn]="siteHealth(s) === 'Degraded'" [class.fill--bad]="siteHealth(s) === 'Offline'" [style.width.%]="s.health"></span></span>
+            <span class="site-pct">{{ s.health }}%</span>
+            <span class="health" [ngClass]="'hl--' + siteHealth(s).toLowerCase()"><i></i>{{ siteHealth(s) }}</span>
             <span class="site-gw">{{ s.online }} / {{ s.gateways }} online</span>
           </li>
-          <li *ngIf="!filteredSites.length" class="empty">No sites found.</li>
         </ul>
       </div>
       <div class="sub-card">
@@ -249,11 +247,11 @@
             <thead><tr><th>Gateway ID</th><th>Site</th><th>Connection</th><th>Last Seen</th><th *ngIf="!limit">RSSI</th><th *ngIf="!limit">Devices</th></tr></thead>
             <tbody>
               <tr *ngFor="let g of (limit ? filteredGateways.slice(0, limit) : filteredGateways)" (click)="signalGateway = g.id" class="clickable" [class.is-selected]="signalGateway === g.id">
-                <td><span class="gw"><lucide-icon [img]="protocolIcon(g.protocol)" [size]="15"></lucide-icon>{{ g.id }}</span></td>
+                <td><span class="gw"><lucide-icon [img]="protocolIcon(g.protocol)" [size]="15"></lucide-icon>{{ g.id === 'APN-UAE-M2M' ? 'Cellular APN' : g.id }}<small *ngIf="g.id === 'APN-UAE-M2M'">(UAE-M2M)</small></span></td>
                 <td class="nowrap">{{ siteName(g.site) }}</td>
-                <td><span *ngIf="g.conn; else noConn" class="pill" [ngClass]="connClass(g.conn)"><i></i>{{ g.conn }}</span><ng-template #noConn>—</ng-template></td>
+                <td><span class="pill" [ngClass]="connClass(g.conn)"><i></i>{{ g.conn }}</span></td>
                 <td class="nowrap">{{ ago(g.lastSeenMin) }}</td>
-                <td *ngIf="!limit">{{ g.rssi !== null ? g.rssi + ' dBm' : '—' }}</td>
+                <td *ngIf="!limit">{{ g.rssi > -120 ? g.rssi + ' dBm' : '—' }}</td>
                 <td *ngIf="!limit">{{ g.devices }}</td>
               </tr>
               <tr *ngIf="!filteredGateways.length"><td [attr.colspan]="limit ? 4 : 6" class="empty">No gateways match the filters.</td></tr>
@@ -263,8 +261,8 @@
       </div>
       <div class="sub-card">
         <div class="sub-head"><h3 class="grow">Signal Quality (Last 24 Hours)</h3>
-          <select class="control control-xs" [(ngModel)]="signalGateway" aria-label="Gateway"><option value="">Select Gateway</option><option *ngFor="let g of gateways" [value]="g.id">{{ g.id }}</option></select></div>
-        <div class="chart-wrap" (mouseleave)="hoverSignal = null" *ngIf="signal as sg; else noSignal">
+          <select class="control control-xs" [(ngModel)]="signalGateway" aria-label="Gateway"><option value="">All Gateways</option><option *ngFor="let g of gateways" [value]="g.id">{{ g.id }}</option></select></div>
+        <div class="chart-wrap" (mouseleave)="hoverSignal = null" *ngIf="signal as sg">
           <svg [attr.viewBox]="'0 0 ' + sw + ' ' + sh" class="chart" role="img" aria-label="Signal quality over the last 24 hours, Wi-Fi/Ethernet and cellular">
             <g class="grid"><line *ngFor="let t of signalTicks" [attr.x1]="spad.l" [attr.x2]="sw - spad.r" [attr.y1]="t.y" [attr.y2]="t.y"></line></g>
             <g class="axis"><text *ngFor="let t of signalTicks" [attr.x]="spad.l - 5" [attr.y]="t.y + 3" text-anchor="end">{{ t.p }}%</text>
@@ -285,8 +283,7 @@
             <span><i [style.background]="cellColor"></i>Cellular<b>{{ sg.raw.cellular[hoverSignal] | number: '1.0-0' }}%</b></span>
           </div>
         </div>
-        <ng-template #noSignal><p class="empty">No signal data available.</p></ng-template>
-        <div class="legend"><span><i [style.background]="wifiColor"></i>Wi-Fi / Ethernet</span><span><i [style.background]="cellColor"></i>Cellular</span></div>
+        <div class="legend"><span><i [style.background]="wifiColor"></i>Wi-Fi / Ethernet</span><span><i [style.background]="cellColor"></i>Cellular (UAE-M2M)</span></div>
       </div>
     </div>
   </section>
@@ -312,15 +309,19 @@
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="fc-new" (click)="$event.stopPropagation()">
     <div class="modal-head"><h2 id="fc-new">Create Update Campaign</h2><button type="button" class="icon-btn" (click)="form = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
     <form class="modal-body" (ngSubmit)="saveCampaign()">
+      <label class="field"><span class="field-label">Campaign name <em>*</em></span><input class="control" [(ngModel)]="f.name" name="name" /></label>
       <fieldset class="field"><legend class="field-label">Device models with an update</legend>
         <label *ngFor="let m of updatableModels" class="check-row"><input type="checkbox" [checked]="f.models.includes(m.id)" (change)="toggleFormModel(m.id)" />
-          <span class="grow">{{ m.name }}</span><span class="mono muted">{{ m.current }} → {{ m.latest }}</span><span class="muted">{{ eligibleCount(m) }} registered devices to update</span></label>
+          <span class="grow">{{ m.name }}</span><span class="mono muted">{{ m.current }} → {{ m.latest }}</span><span class="muted">{{ m.devices }} devices</span></label>
         <p *ngIf="!updatableModels.length" class="muted">Every model already runs its latest firmware.</p>
       </fieldset>
-      <label class="field"><span class="field-label">Install at <em>*</em></span><input type="datetime-local" class="control" [(ngModel)]="f.at" name="at" /></label>
-      <p class="muted small">{{ formTarget }} devices will be scheduled for their model's latest firmware.</p>
+      <div class="two">
+        <label class="field"><span class="field-label">Start</span><select class="control" [(ngModel)]="f.start" name="start"><option value="window">In the maintenance window</option><option value="now">Immediately</option></select></label>
+        <label class="field"><span class="field-label">Maintenance window</span><select class="control" [(ngModel)]="f.window" name="win" [disabled]="f.start === 'now'"><option *ngFor="let w of windows" [value]="w">{{ w }}</option></select></label>
+      </div>
+      <p class="muted small">{{ formTarget }} devices · staged rollout (pilot 5 → 10% → 50% → full) · retry {{ retry }} · rollback {{ rollback ? 'on' : 'off' }}.</p>
       <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
-      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="form = null">Cancel</button><button type="submit" class="btn btn-primary" [disabled]="busy">Create Campaign</button></div>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="form = null">Cancel</button><button type="submit" class="btn btn-primary">Create Campaign</button></div>
     </form>
   </div>
 </div>
@@ -330,33 +331,10 @@
   <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="fc-notes" (click)="$event.stopPropagation()">
     <div class="modal-head"><h2 id="fc-notes">{{ m.name }} {{ m.latest }}</h2><button type="button" class="icon-btn" (click)="notesOf = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
     <div class="modal-body">
-      <p class="muted small">Released {{ fmtDate(m.releaseDate) }}{{ m.vendor ? ' · ' + m.vendor : '' }} · installed {{ m.current }} on {{ m.devices }} devices</p>
+      <p class="muted small">Released {{ fmtDate(m.releaseDate) }} · {{ m.vendor }} · installed {{ m.current }} on {{ m.devices }} devices</p>
       <ul class="notes"><li *ngFor="let n of m.notes"><lucide-icon [img]="icons.CircleCheck" [size]="16"></lucide-icon>{{ n }}</li></ul>
-      <p *ngIf="!m.notes.length" class="muted small">No release notes recorded.</p>
       <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="notesOf = null">Close</button><button *ngIf="hasUpdate(m)" type="button" class="btn btn-primary" (click)="notesOf = null; openCreate(m)">Create campaign</button></div>
     </div>
-  </div>
-</div>
-
-<!-- ===== Add / edit firmware version ===== -->
-<div *ngIf="fwForm as w" class="overlay" (click)="fwForm = null">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="fc-fw" (click)="$event.stopPropagation()">
-    <div class="modal-head"><h2 id="fc-fw">{{ w.id ? 'Edit' : 'Add' }} Firmware Version</h2><button type="button" class="icon-btn" (click)="fwForm = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
-    <form class="modal-body" (ngSubmit)="saveFirmware()">
-      <label class="field"><span class="field-label">Device model <em>*</em></span><input class="control" [ngModel]="w.deviceModel" (ngModelChange)="onFormModel($event)" name="model" list="fc-models" maxlength="100" placeholder="e.g. Milesight EM300-TH" />
-        <datalist id="fc-models"><option *ngFor="let m of registryModels" [value]="m"></option></datalist></label>
-      <div class="two">
-        <label class="field"><span class="field-label">Current version <em>*</em></span><input class="control mono" [(ngModel)]="w.currentVersion" name="cur" maxlength="50" placeholder="v1.6.2" /></label>
-        <label class="field"><span class="field-label">Latest version <em>*</em></span><input class="control mono" [(ngModel)]="w.latestVersion" name="lat" maxlength="50" placeholder="v1.7.0" /></label>
-      </div>
-      <div class="two">
-        <label class="field"><span class="field-label">Devices</span><input type="number" class="control" [(ngModel)]="w.deviceCount" name="count" min="0" /></label>
-        <label class="field"><span class="field-label">Release date</span><input type="date" class="control" [(ngModel)]="w.releaseDate" name="rel" /></label>
-      </div>
-      <label class="field"><span class="field-label">Release notes (one per line)</span><textarea class="control" rows="4" [(ngModel)]="w.notes" name="notes"></textarea></label>
-      <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
-      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="fwForm = null">Cancel</button><button type="submit" class="btn btn-primary" [disabled]="busy">Save</button></div>
-    </form>
   </div>
 </div>
 
@@ -367,13 +345,12 @@
     <form class="modal-body" (ngSubmit)="saveProfile()">
       <div class="two">
         <label class="field"><span class="field-label">Name <em>*</em></span><input class="control" [(ngModel)]="p.name" name="name" /></label>
-        <label class="field"><span class="field-label">Type</span><select class="control" [(ngModel)]="p.type" name="type"><option value="" disabled>Select Type</option><option *ngFor="let t of profileTypes" [value]="t">{{ t }}</option></select></label>
+        <label class="field"><span class="field-label">Type</span><select class="control" [(ngModel)]="p.type" name="type"><option *ngFor="let t of protocols" [value]="t">{{ t }}</option></select></label>
       </div>
       <label class="field"><span class="field-label">Settings</span><input class="control" [(ngModel)]="p.detail" name="detail" placeholder="e.g. SSID, APN, band" /></label>
       <label class="field"><span class="field-label">Security</span><input class="control" [(ngModel)]="p.security" name="sec" placeholder="e.g. WPA2-Enterprise" /></label>
       <fieldset class="field"><legend class="field-label">Sites <em>*</em></legend>
-        <div class="chips"><button *ngFor="let s of sites" type="button" class="chip" [class.is-on]="p.sites.includes(s.code)" (click)="toggleProfileSite(s.code)">{{ s.code }}</button></div>
-        <p *ngIf="!sites.length" class="muted small">No sites found.</p></fieldset>
+        <div class="chips"><button *ngFor="let s of sites" type="button" class="chip" [class.is-on]="p.sites.includes(s.code)" (click)="toggleProfileSite(s.code)">{{ s.code }}</button></div></fieldset>
       <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
       <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="profileForm = null">Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
     </form>

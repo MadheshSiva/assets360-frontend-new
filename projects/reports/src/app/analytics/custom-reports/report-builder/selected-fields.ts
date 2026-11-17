@@ -1,9 +1,8 @@
-import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { GripVertical, LucideAngularModule, Plus, X } from 'lucide-angular';
 import { CalcFieldDialog } from '../dialogs/calc-field-dialog';
 import { fieldOf, removeField } from '../custom-reports.engine';
 import { CalcField, CustomReport } from '../custom-reports.model';
-import { CustomReportsService } from '../custom-reports.service';
 
 /** Selected field chips: remove, drag (or Alt+←/→) to reorder, clear all and add a calculated field. */
 @Component({
@@ -50,12 +49,11 @@ export class SelectedFields {
   readonly X = X;
   readonly Plus = Plus;
 
-  private readonly service = inject(CustomReportsService);
   dragIndex: number | null = null;
   calcOpen = false;
 
   label(key: string): string {
-    return fieldOf(this.service.catalog(), this.report, key)?.label ?? key;
+    return fieldOf(this.report, key)?.label ?? key;
   }
 
   remove(key: string): void {

@@ -953,3 +953,16 @@ input[type='radio'] {
     grid-column: 1 / -1;
   }
 }
+
+/* Purple breadcrumb (matches Master Data Management) */
+.crumbs a {
+  color: #6d28d9;
+}
+
+.crumbs a:hover {
+  color: #4c1d95;
+}
+
+.crumbs span {
+  color: #a78bfa;
+}

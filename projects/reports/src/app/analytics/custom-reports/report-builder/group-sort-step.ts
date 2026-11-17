@@ -1,9 +1,7 @@
-import { Component, Input, inject } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { fieldOf, isNumeric, outputColumns } from '../custom-reports.engine';
-import { ROW_LIMITS } from '../custom-reports.data';
 import { Aggregate, CustomReport, FieldDef, PreviewColumn } from '../custom-reports.model';
-import { CustomReportsService } from '../custom-reports.service';
 
 /** Builder step 4: group by a text/date field (with an aggregate for numbers), sort and row limit. */
 @Component({
@@ -26,6 +24,7 @@ import { CustomReportsService } from '../custom-reports.service';
       <div class="field">
         <label for="cr-agg">Aggregate numeric fields</label>
         <select id="cr-agg" [(ngModel)]="report.aggregate" [disabled]="!report.groupBy">
+          <option value="" disabled>Select Aggregate</option>
           @for (a of aggregates; track a) { <option [value]="a">{{ a }}</option> }
         </select>
       </div>
@@ -46,6 +45,7 @@ import { CustomReportsService } from '../custom-reports.service';
       <div class="field">
         <label for="cr-limit">Row limit</label>
         <select id="cr-limit" [(ngModel)]="report.rowLimit">
+          <option [ngValue]="null" disabled>Select Row Limit</option>
           @for (n of limits; track n) { <option [ngValue]="n">{{ n }} rows</option> }
         </select>
       </div>
@@ -57,16 +57,15 @@ export class GroupSortStep {
   @Input({ required: true }) report!: CustomReport;
 
   readonly aggregates: Aggregate[] = ['Sum', 'Average', 'Min', 'Max'];
-  readonly limits = ROW_LIMITS;
-  private readonly service = inject(CustomReportsService);
+  readonly limits = [10, 25, 50, 100];
 
   get groupable(): FieldDef[] {
     return this.report.fields
-      .map((k) => fieldOf(this.service.catalog(), this.report, k))
+      .map((k) => fieldOf(this.report, k))
       .filter((f): f is FieldDef => !!f && !isNumeric(f.kind));
   }
 
   get columns(): PreviewColumn[] {
-    return outputColumns(this.service.catalog(), this.report);
+    return outputColumns(this.report);
   }
 }

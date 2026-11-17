@@ -124,11 +124,6 @@
 .approve { margin-left: 8px; }
 .p-foot { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 8px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--dm-border); }
 
-/* docked: the panel is exactly as tall as the left column (it adds no height of its own and scrolls inside) */
-@media (min-width: 1200px) {
-  .panel { position: static; height: 0; min-height: 100%; max-height: none; }
-}
-
 @media (max-width: 1199px) {
   .panel { position: fixed; top: 84px; right: 16px; bottom: 16px; z-index: 1200; width: min(360px, calc(100vw - 32px)); max-height: none; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.22); animation: dm-drawer-in 0.25s cubic-bezier(0.22, 1, 0.36, 1); }
 }

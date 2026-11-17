@@ -1,9 +1,8 @@
 import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Download, Eye, LucideAngularModule, Play, Plus } from 'lucide-angular';
-import { Subscription } from 'rxjs';
-import { formatBytes } from './data-export-api.data';
-import { AccessLog, ApiConnection, Dataset, DatasetSample, LogResult } from './data-export-api.model';
+import { downloadCsv } from '../shared/analytics-common';
+import { AccessLog, ApiConnection, Dataset, LogResult } from './data-export-api.model';
 import { DataExportService } from './data-export-api.service';
 import { CONNECTION_TONES, MODULE_TONES, formatStamp } from './dx-format';
 
@@ -36,12 +35,10 @@ import { CONNECTION_TONES, MODULE_TONES, formatStamp } from './dx-format';
                 <td>{{ c.type }}</td>
                 <td class="dx-mono">{{ c.baseUrl }}</td>
                 <td>{{ c.auth }}</td>
-                <td class="dx-mono">{{ c.secretStored ? (c.secretMask || '••••••••') : '—' }}</td>
+                <td class="dx-mono">{{ c.secretStored ? '••••••••' : '—' }}</td>
                 <td><span class="pill" [attr.data-tone]="tone(c)"><i></i>{{ c.status }}</span></td>
-                <td class="dx-uptime" [title]="c.uptime === null ? 'Not tested in the last 30 days' : 'Successful tests, last 30 days'">
-                  <span class="meter"><i [style.width.%]="c.uptime ?? 0" [style.background]="meterColor(c)"></i></span>{{ c.uptime === null ? '—' : c.uptime + '%' }}
-                </td>
-                <td [class.dx-warn]="c.certExpiresInDays !== null && c.certExpiresInDays <= 30">{{ c.certExpiresInDays === null ? '—' : c.certExpiresInDays + ' days' }}</td>
+                <td class="dx-uptime"><span class="meter"><i [style.width.%]="c.uptime" [style.background]="meterColor(c)"></i></span>{{ c.uptime }}%</td>
+                <td [class.dx-warn]="c.certExpiresInDays <= 30">{{ c.certExpiresInDays }} days</td>
                 <td>{{ stamp(c.lastTested) }}</td>
                 <td>
                   <span class="dx-actions">
@@ -51,12 +48,12 @@ import { CONNECTION_TONES, MODULE_TONES, formatStamp } from './dx-format';
                 </td>
               </tr>
             } @empty {
-              <tr><td colspan="10" class="empty">No connections match “{{ search }}”.</td></tr>
+              <tr><td colspan="10" class="empty">{{ search ? 'No connections match “' + search + '”.' : 'No records found.' }}</td></tr>
             }
           </tbody>
         </table>
       </div>
-      <p class="muted dx-small">Secrets are write-only: only a masked form is stored. Test calls the base URL over HTTPS without credentials and reads its certificate.</p>
+      <p class="muted dx-small">Secrets are write-only. Rotate keys and certificates in Administration › Integration &amp; API.</p>
     </section>
   `
 })
@@ -80,11 +77,10 @@ export class ConnectionsTab {
   }
 
   meterColor(c: ApiConnection): string {
-    const u = c.uptime ?? 0;
-    return u >= 99 ? '#10b981' : u >= 95 ? '#f59e0b' : '#ef4444';
+    return c.uptime >= 99 ? '#10b981' : c.uptime >= 95 ? '#f59e0b' : '#ef4444';
   }
 
-  stamp(s: string | null): string {
+  stamp(s: string): string {
     return formatStamp(s);
   }
 }
@@ -121,16 +117,16 @@ export class ConnectionsTab {
                 </td>
                 <td class="num">{{ fieldCount(d) }}</td>
                 <td class="num">{{ d.rows.toLocaleString('en-US') }}</td>
-                <td class="num">{{ size(d) }}</td>
+                <td class="num">{{ d.sizeGb }} GB</td>
                 <td>{{ stamp(d.refreshed) }}</td>
-                <td>{{ d.owner }}</td>
+                <td>{{ d.owner || '—' }}</td>
                 <td class="num">{{ exportCount(d) }}</td>
                 <td>
                   <span class="dx-actions">
-                    <button type="button" class="icon-btn" (click)="openPreview(d)" [attr.aria-label]="'Preview ' + d.name" title="Preview sample">
+                    <button type="button" class="icon-btn" (click)="preview = d" [attr.aria-label]="'Preview ' + d.name" title="Preview sample">
                       <lucide-icon [img]="icons.Eye" [size]="15"></lucide-icon>
                     </button>
-                    <button type="button" class="icon-btn" [disabled]="downloading === d.id" (click)="download(d)" [attr.aria-label]="'Download sample of ' + d.name" title="Download sample (CSV)">
+                    <button type="button" class="icon-btn" (click)="download(d)" [attr.aria-label]="'Download sample of ' + d.name" title="Download sample (CSV)">
                       <lucide-icon [img]="icons.Download" [size]="15"></lucide-icon>
                     </button>
                     <button type="button" class="btn btn--sm btn--outline" (click)="createExport.emit(d)">
@@ -151,15 +147,7 @@ export class ConnectionsTab {
       <div class="overlay" (click)="preview = null">
         <div class="dialog dialog--wide" role="dialog" aria-modal="true" aria-labelledby="dx-prev-title" (click)="$event.stopPropagation()">
           <h2 id="dx-prev-title">{{ preview.name }} — sample rows</h2>
-          @if (sampleLoading) {
-            <p class="muted">Loading the newest rows…</p>
-          } @else if (sampleError) {
-            <p class="dx-error">{{ sampleError }}</p>
-          } @else if (!sample.rows.length) {
-            <p class="muted">{{ preview.name }} has no records for this client yet.</p>
-          } @else {
-            <p class="muted">Newest {{ sample.rows.length }} of {{ sample.totalRows.toLocaleString('en-US') }} rows, live from {{ preview.owner }}.</p>
-          }
+          <p class="muted">First {{ sample.rows.length }} of {{ preview.rows.toLocaleString('en-US') }} rows.</p>
           <div class="table-wrap">
             <table class="table">
               <thead>
@@ -173,15 +161,17 @@ export class ConnectionsTab {
                 @for (r of sample.rows; track $index) {
                   <tr>
                     @for (c of r; track $index) {
-                      <td>{{ c ?? '—' }}</td>
+                      <td>{{ c }}</td>
                     }
                   </tr>
+                } @empty {
+                  <tr><td [attr.colspan]="sample.header.length || 1" class="empty">No data</td></tr>
                 }
               </tbody>
             </table>
           </div>
           <div class="dialog__actions">
-            <button type="button" class="btn" [disabled]="downloading === preview.id" (click)="download(preview)">Download CSV</button>
+            <button type="button" class="btn" (click)="download(preview)">Download CSV</button>
             <button type="button" class="btn btn--primary" (click)="preview = null">Close</button>
           </div>
         </div>
@@ -197,46 +187,28 @@ export class DatasetsTab {
 
   readonly icons = { Eye, Download, Play };
   preview: Dataset | null = null;
-  sample: DatasetSample = { header: [], rows: [], totalRows: 0 };
-  sampleLoading = false;
-  sampleError = '';
-  downloading = '';
-  private previewSub?: Subscription;
+  private sampleFor: Dataset | null = null;
+  private sampleCache: { header: string[]; rows: (string | number)[][] } = { header: [], rows: [] };
 
   get rows(): Dataset[] {
     const q = this.search.trim().toLowerCase();
     return this.service.datasets.filter((d) => !q || `${d.name} ${d.modules.join(' ')} ${d.owner}`.toLowerCase().includes(q));
   }
 
-  /** GET /datasets/{id}/preview: the newest 10 rows. */
-  openPreview(d: Dataset): void {
-    this.preview = d;
-    this.sample = { header: d.fields.map((f) => f.name), rows: [], totalRows: d.rows };
-    this.sampleError = '';
-    this.sampleLoading = true;
-    this.previewSub?.unsubscribe();
-    this.previewSub = this.service.preview(d.id, 10).subscribe({
-      next: (s) => {
-        this.sample = s;
-        this.sampleLoading = false;
-      },
-      error: (err: Error) => {
-        this.sampleError = err.message;
-        this.sampleLoading = false;
-      }
-    });
+  get sample(): { header: string[]; rows: (string | number)[][] } {
+    if (this.preview && this.preview !== this.sampleFor) {
+      this.sampleFor = this.preview;
+      this.sampleCache = this.service.sample(this.preview.id, null, 10);
+    }
+    return this.sampleCache;
   }
 
   fieldCount(d: Dataset): number {
-    return d.fields.length;
+    return this.service.fields(d.id).length;
   }
 
   exportCount(d: Dataset): number {
     return this.service.jobs.filter((j) => j.datasetId === d.id).length;
-  }
-
-  size(d: Dataset): string {
-    return formatBytes(d.sizeBytes);
   }
 
   moduleTone(m: string): string {
@@ -248,17 +220,10 @@ export class DatasetsTab {
   }
 
   download(d: Dataset): void {
-    this.downloading = d.id;
-    this.service.downloadDatasetSample(d, 25).subscribe({
-      next: () => {
-        this.downloading = '';
-        this.downloaded.emit(d.name);
-      },
-      error: (err: Error) => {
-        this.downloading = '';
-        this.sampleError = err.message;
-      }
-    });
+    const s = this.service.sample(d.id, null, 25);
+    downloadCsv(`${d.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-sample.csv`, s.header, s.rows);
+    this.service.log('Sample downloaded', d.name, 'Web console');
+    this.downloaded.emit(d.name);
   }
 }
 
@@ -280,12 +245,12 @@ const LOG_PAGE = 15;
           </span>
         }
         <select class="select dx-select-sm" [(ngModel)]="result" (ngModelChange)="page = 0" aria-label="Result">
-          <option value="">All results</option>
+          <option value="">Select Result</option>
           <option value="Success">Success</option>
           <option value="Failed">Failed</option>
           <option value="Denied">Denied</option>
         </select>
-        <button type="button" class="btn btn--sm" [disabled]="exporting" (click)="exportCsv()">
+        <button type="button" class="btn btn--sm" (click)="exportCsv()">
           <lucide-icon [img]="icons.Download" [size]="13"></lucide-icon> Export CSV
         </button>
       </div>
@@ -306,7 +271,7 @@ const LOG_PAGE = 15;
                 <td><span class="pill" [attr.data-tone]="tone(l.result)"><i></i>{{ l.result }}</span></td>
               </tr>
             } @empty {
-              <tr><td colspan="7" class="empty">No log entries match the filters.</td></tr>
+              <tr><td colspan="7" class="empty">{{ service.logs.length ? 'No log entries match the filters.' : 'No records found.' }}</td></tr>
             }
           </tbody>
         </table>
@@ -317,12 +282,6 @@ const LOG_PAGE = 15;
           <span class="muted">Page {{ page + 1 }} of {{ pages }}</span>
           <button type="button" class="btn btn--sm" [disabled]="page >= pages - 1" (click)="page = page + 1">Next</button>
         </div>
-      }
-      @if (exportError) {
-        <p class="dx-error">{{ exportError }}</p>
-      }
-      @if (service.logsTotal > service.logs.length) {
-        <p class="muted dx-small">Showing the latest {{ service.logs.length }} of {{ service.logsTotal }} entries; Export CSV includes every match.</p>
       }
       <p class="muted dx-small">Reporting data access only. The full system audit trail is in Administration › System Audit Log.</p>
     </section>
@@ -338,8 +297,6 @@ export class AccessLogsTab {
   readonly icons = { Download };
   result: '' | LogResult = '';
   page = 0;
-  exporting = false;
-  exportError = '';
 
   get filtered(): AccessLog[] {
     const q = this.search.trim().toLowerCase();
@@ -373,16 +330,11 @@ export class AccessLogsTab {
     this.resourceCleared.emit();
   }
 
-  /** GET /export?section=access-logs with the same search / result / resource filters. */
   exportCsv(): void {
-    this.exporting = true;
-    this.exportError = '';
-    this.service.exportLogs({ search: this.search, result: this.result, resource: this.resource }).subscribe({
-      next: () => (this.exporting = false),
-      error: (err: Error) => {
-        this.exporting = false;
-        this.exportError = err.message;
-      }
-    });
+    downloadCsv(
+      'reporting-access-logs.csv',
+      ['Time (GST)', 'Actor', 'Action', 'Resource', 'Client', 'IP address', 'Result'],
+      this.filtered.map((l) => [l.at.replace('T', ' '), l.actor, l.action, l.resource, l.client, l.ip, l.result])
+    );
   }
 }

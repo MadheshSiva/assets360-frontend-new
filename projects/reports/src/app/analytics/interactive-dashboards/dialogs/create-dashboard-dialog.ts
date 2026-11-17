@@ -1,13 +1,12 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { DashboardTemplate, Sharing } from '../interactive-dashboards.data';
+import { Sharing } from '../interactive-dashboards.data';
 
 export interface NewDashboard {
   name: string;
   description: string;
   sharing: Sharing;
-  /** 'blank', 'copy' (the open dashboard's widgets) or 'template:<key>' (templates from GET /options) */
-  start: string;
+  copyCurrent: boolean;
 }
 
 /** Create Dashboard: name, description, sharing and starting layout. */
@@ -21,12 +20,12 @@ export interface NewDashboard {
         <h2>Create dashboard</h2>
         <div class="field" [class.invalid]="tried && nameError">
           <label for="cd-name">Name <span class="req">*</span></label>
-          <input id="cd-name" name="name" [(ngModel)]="name" maxlength="200" placeholder="e.g. Dubai HQ Operations" />
+          <input id="cd-name" name="name" [(ngModel)]="name" maxlength="60" placeholder="e.g. Dubai HQ Operations" />
           @if (tried && nameError) { <small>{{ nameError }}</small> }
         </div>
         <div class="field">
           <label for="cd-desc">Description</label>
-          <textarea id="cd-desc" name="description" [(ngModel)]="description" maxlength="1000"></textarea>
+          <textarea id="cd-desc" name="description" [(ngModel)]="description" maxlength="240"></textarea>
         </div>
         <fieldset class="field idb-fieldset">
           <legend>Sharing</legend>
@@ -40,25 +39,17 @@ export interface NewDashboard {
         <fieldset class="field idb-fieldset">
           <legend>Start with</legend>
           <label class="idb-radio">
-            <input type="radio" name="start" value="blank" [(ngModel)]="start" />
+            <input type="radio" name="start" [value]="false" [(ngModel)]="copyCurrent" />
             <span><b>Blank dashboard</b><small>Add widgets from the Widget Library.</small></span>
           </label>
-          @for (t of templates; track t.key) {
-            <label class="idb-radio">
-              <input type="radio" name="start" [value]="'template:' + t.key" [(ngModel)]="start" />
-              <span><b>{{ t.name }}</b><small>{{ t.widgetCount }} widgets. {{ t.description }}</small></span>
-            </label>
-          }
-          @if (currentName) {
-            <label class="idb-radio">
-              <input type="radio" name="start" value="copy" [(ngModel)]="start" />
-              <span><b>Copy of “{{ currentName }}”</b><small>Starts with the same widgets and layout.</small></span>
-            </label>
-          }
+          <label class="idb-radio">
+            <input type="radio" name="start" [value]="true" [(ngModel)]="copyCurrent" />
+            <span><b>Copy of “{{ currentName }}”</b><small>Starts with the same widgets and layout.</small></span>
+          </label>
         </fieldset>
         <div class="dialog__actions">
           <button type="button" class="btn" (click)="cancel.emit()">Cancel</button>
-          <button type="submit" class="btn btn--primary" [disabled]="busy">{{ busy ? 'Creating…' : 'Create Dashboard' }}</button>
+          <button type="submit" class="btn btn--primary">Create Dashboard</button>
         </div>
       </form>
     </div>
@@ -78,8 +69,6 @@ export class CreateDashboardDialog {
   @Input() currentName = '';
   /** Returns true when a dashboard with this name already exists */
   @Input() nameTaken: (name: string) => boolean = () => false;
-  @Input() templates: DashboardTemplate[] = [];
-  @Input() busy = false;
   @Output() created = new EventEmitter<NewDashboard>();
   @Output() cancel = new EventEmitter<void>();
 
@@ -91,7 +80,7 @@ export class CreateDashboardDialog {
   name = '';
   description = '';
   sharing: Sharing = 'private';
-  start = 'blank';
+  copyCurrent = false;
   tried = false;
 
   get nameError(): string {
@@ -101,7 +90,7 @@ export class CreateDashboardDialog {
 
   submit(): void {
     this.tried = true;
-    if (this.nameError || this.busy) return;
-    this.created.emit({ name: this.name.trim(), description: this.description.trim(), sharing: this.sharing, start: this.start });
+    if (this.nameError) return;
+    this.created.emit({ name: this.name.trim(), description: this.description.trim(), sharing: this.sharing, copyCurrent: this.copyCurrent });
   }
 }

@@ -15,9 +15,10 @@ import { DataExportService } from './data-export-api.service';
       <div class="widget__head">
         <h2>
           Data Delivery &amp; Integration Health
-          <lucide-icon class="widget__info" [img]="icons.Info" [size]="14" title="Export runs (run history) and logged data access per day (Asia/Dubai)"></lucide-icon>
+          <lucide-icon class="widget__info" [img]="icons.Info" [size]="14" title="Export runs and reporting API calls per day (Asia/Dubai)"></lucide-icon>
         </h2>
         <select class="select dx-select-sm" [(ngModel)]="range" (ngModelChange)="build()" aria-label="Range">
+          <option value="" disabled>Select Range</option>
           <option value="7">Last 7 days</option>
           <option value="30">Last 30 days</option>
         </select>
@@ -25,35 +26,42 @@ import { DataExportService } from './data-export-api.service';
       <div class="dx-health-grid">
         <div>
           <h3 class="dx-h3">Export Run Success Rate</h3>
+          @if (labels.length) {
           <ra-cartesian-chart
             [labels]="labels"
             [series]="runSeries"
             kind="bar"
             [stacked]="true"
             [height]="210"
-            [rightMin]="0"
+            [rightMin]="80"
             [rightMax]="100"
             [rightFormat]="pct"
             yTitle="Number of runs"
             ariaLabel="Export runs per day with success rate"
           ></ra-cartesian-chart>
+          } @else {
+          <p class="empty">No data</p>
+          }
         </div>
         <div>
-          <h3 class="dx-h3">Data Access Requests</h3>
+          <h3 class="dx-h3">API Request Volume</h3>
+          @if (labels.length) {
           <ra-cartesian-chart
             [labels]="labels"
             [series]="apiSeries"
             kind="line"
             [height]="210"
-            ariaLabel="Logged data access requests per day"
+            ariaLabel="Reporting API requests per day"
           ></ra-cartesian-chart>
+          } @else {
+          <p class="empty">No data</p>
+          }
         </div>
       </div>
     </section>
   `
 })
 export class DeliveryHealth implements OnChanges {
-  // Data comes from DataExportService (run history and access logs); the page bumps version when it reloads
   private readonly service = inject(DataExportService);
   /** Bumped by the page after a run so the charts pick up the new counts */
   @Input() version = 0;
@@ -79,16 +87,15 @@ export class DeliveryHealth implements OnChanges {
   build(): void {
     const s = this.range === '7' ? this.service.stats7 : this.service.stats30;
     this.labels = this.range === '7' ? s.labels.slice() : s.labels.map((l, i) => (i % 5 === 4 || i === 0 ? l : l.slice(0, 2)));
-    // Days without runs have no rate; they plot at 0
-    const rate = s.success.map((v, i) => (v + (s.failed[i] ?? 0) ? Number(((v / (v + s.failed[i])) * 100).toFixed(1)) : 0));
+    const rate = s.success.map((v, i) => Number(((v / Math.max(1, v + s.failed[i])) * 100).toFixed(1)));
     this.runSeries = [
       { name: 'Successful', values: s.success.slice(), color: RA_COLORS.green, type: 'bar' },
       { name: 'Failed', values: s.failed.slice(), color: RA_COLORS.red, type: 'bar' },
       { name: 'Success rate', values: rate, color: RA_COLORS.purple, type: 'line', axis: 'right' }
     ];
     this.apiSeries = [
-      { name: 'Successful', values: s.accessOk.slice(), color: RA_COLORS.blue, type: 'line', area: true },
-      { name: 'Failed / denied', values: s.accessFailed.slice(), color: RA_COLORS.red, type: 'line' }
+      { name: 'Successful', values: s.apiOk.slice(), color: RA_COLORS.blue, type: 'line', area: true },
+      { name: 'Failed', values: s.apiFailed.slice(), color: RA_COLORS.red, type: 'line' }
     ];
   }
 }

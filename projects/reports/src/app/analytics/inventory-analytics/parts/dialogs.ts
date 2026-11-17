@@ -145,10 +145,11 @@ export class RaDetailsDialog {
         <div class="rac-form-grid">
           @for (f of fields; track f.key) {
             <div class="field" [class.invalid]="tried && error(f)" [class.rac-wide]="f.type === 'textarea'">
-              <label [attr.for]="'rac-' + f.key">{{ f.label }} @if (f.required) { <span class="req">*</span> }</label>
+              <label [attr.for]="'rac-' + f.key">{{ f.label }} @if (isRequired(f)) { <span class="req">*</span> }</label>
               @switch (f.type) {
                 @case ('select') {
                   <select [id]="'rac-' + f.key" [name]="f.key" [(ngModel)]="f.value">
+                    <option value="" disabled>Select {{ f.label }}</option>
                     @for (o of f.options; track o) { <option [value]="o">{{ o }}</option> }
                   </select>
                 }
@@ -192,14 +193,18 @@ export class RaFormDialog implements OnChanges {
   tried = false;
 
   ngOnChanges(): void {
-    // Work on a copy so cancelling leaves the caller's defaults untouched
-    this.fields = this.data.fields.map((f) => ({ ...f }));
+    // Work on a copy so cancelling leaves the caller's defaults untouched; dropdowns start unselected
+    this.fields = this.data.fields.map((f) => ({ ...f, value: f.type === 'select' ? '' : f.value }));
     this.tried = false;
+  }
+
+  isRequired(f: FormField): boolean {
+    return !!f.required || f.type === 'select';
   }
 
   error(f: FormField): string {
     const v = f.value;
-    if (f.required && (v === null || v === undefined || String(v).trim() === '')) return `${f.label} is required.`;
+    if (this.isRequired(f) && (v === null || v === undefined || String(v).trim() === '')) return `${f.label} is required.`;
     if (f.type === 'number' && v !== '' && v !== null && !(Number(v) > 0)) return `${f.label} must be greater than 0.`;
     return '';
   }

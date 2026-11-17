@@ -1,10 +1,10 @@
-import { Component, HostListener, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import { Component, HostListener, OnDestroy, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import * as XLSX from 'xlsx';
-import { Observable, catchError, forkJoin, of, switchMap } from 'rxjs';
 import {
   LucideAngularModule,
+  LucideIconData,
   ArrowDown,
   ArrowUp,
   Bell,
@@ -19,6 +19,7 @@ import {
   Copy,
   Download,
   Ellipsis,
+  Forklift,
   History,
   Layers,
   Locate,
@@ -34,108 +35,105 @@ import {
   Settings,
   Shapes,
   ShieldAlert,
+  ShoppingCart,
   Timer,
   Trash2,
   TriangleAlert,
+  Truck,
   Wifi,
+  Wrench,
   X,
 } from 'lucide-angular';
 import {
-  AlertEvent, CONDITIONS, EVENT_STATUSES, EventStatus, Rule, SEVERITIES, Severity, TRIGGERS, Trigger,
-  Zone, ZoneShape, ZoneType, startOfToday,
+  ASSETS, ASSET_GROUPS, AlertEvent, AssetKind, BUILDINGS, CONDITIONS, EVENTS, EventStatus, EventType, GATEWAYS, MAP_H, MAP_W, PREV_MONITORED, PREV_OPEN,
+  Pt, RULES, Rule, SCHEDULES, SEVERITIES, SITES, SITE_SLOTS, Severity, Slot, TEAMS, TREES, TRIGGERS, Trigger, UNITS_PER_100M, WORKFLOWS, ZONES, ZONE_COLORS,
+  Zone, ZoneShape, ZoneType, assetGroup, startOfToday,
 } from './geofence-data';
 import type * as Leaflet from 'leaflet';
-import { apiErrorMessage } from '../shared/tracking-api';
 import { MapDrawTools } from '../shared/map-draw-tools/map-draw-tools';
 import { GeofenceMap, MapAlert, MapMode } from './geofence-map';
-import { LL, areaM2 } from './geofence-geo';
-import { DEFAULT_GEOFENCE_OPTIONS, GeofenceApiService, GeofenceOptionsDto, SiteOption } from './geofence-api.service';
-import { AlertRuleApiService } from './alert-rule-api.service';
-import { IoTAlertApiService, IoTAlertDto, IoTAlertStatus, toAlertEvent } from './iot-alert-api.service';
+import { LL, applySeedOutlines, areaM2, siteArea } from './geofence-geo';
 
 type Tab = 'geofences' | 'rules' | 'history';
 type RuleForm = Omit<Rule, 'id' | 'name' | 'zoneId' | 'enabled'>;
 interface RuleDialog extends RuleForm { id: string; name: string; zoneId: string; enabled: boolean }
-interface ZoneForm { id: string; name: string; type: ZoneType; site: string; color: string; groups: string[]; schedule: string; monitorEntry: boolean; monitorExit: boolean; dwellMin: number | null; shape: ZoneShape | ''; points: number; drawn?: LL[] }
+interface ZoneForm { id: string; name: string; type: ZoneType; site: string; color: string; groups: string[]; schedule: string; monitorEntry: boolean; monitorExit: boolean; dwellMin: number; shape: ZoneShape; points: number; drawn?: LL[] }
+interface Geo { z: Zone; circle: boolean; cx: number; cy: number; r: number; pts: string; verts: Pt[]; lx: number; ly: number; lw: number }
+interface Marker { key: string; x: number; y: number; d: string; title: string; sub: string }
+interface Tip { x: number; y: number; title: string; sub: string }
 interface Confirm { title: string; message: string; label: string; run: () => void }
 
-/** Default colour per zone type (matches the API's map colours). */
-const TYPE_COLOR: Record<ZoneType, string> = { Allowed: '#2563EB', Warning: '#F5B40B', Restricted: '#EF4444' };
+/** Converts lucide icon nodes into one SVG path so markers can be drawn inside the map SVG. */
+function iconPath(data: LucideIconData): string {
+  const n = (v: string | number | undefined) => Number(v ?? 0);
+  return data
+    .map(([tag, a]) => {
+      if (tag === 'path') return String(a['d']);
+      if (tag === 'circle' || tag === 'ellipse') {
+        const rx = n(a['r'] ?? a['rx']);
+        const ry = n(a['r'] ?? a['ry']);
+        const cx = n(a['cx']);
+        const cy = n(a['cy']);
+        return `M${cx - rx} ${cy}a${rx} ${ry} 0 1 0 ${2 * rx} 0a${rx} ${ry} 0 1 0 ${-2 * rx} 0`;
+      }
+      if (tag === 'rect') return `M${n(a['x'])} ${n(a['y'])}h${n(a['width'])}v${n(a['height'])}h${-n(a['width'])}Z`;
+      if (tag === 'line') return `M${n(a['x1'])} ${n(a['y1'])}L${n(a['x2'])} ${n(a['y2'])}`;
+      if (tag === 'polyline' || tag === 'polygon') return `M${String(a['points'])}${tag === 'polygon' ? 'Z' : ''}`;
+      return '';
+    })
+    .join(' ');
+}
+
+const KIND_PATH: Record<AssetKind, string> = {
+  Forklift: iconPath(Forklift),
+  'Pallet Jack': iconPath(Forklift),
+  Truck: iconPath(Truck),
+  'Tool Cart': iconPath(ShoppingCart),
+  'Mobile Tool': iconPath(Wrench),
+};
 
 const DEFAULT_RULE: RuleForm = {
-  trigger: '' as Trigger, dwellMin: 5, severity: '' as Severity, group: '', condition: '',
-  createAlert: true, notify: false, team: '', workflow: false, workflowName: '',
+  trigger: 'enter-exit', dwellMin: 5, severity: 'High', group: 'Forklifts', condition: 'During all hours',
+  createAlert: true, notify: true, team: 'Security Team', workflow: true, workflowName: 'Restricted Zone Incident',
   inApp: true, email: true, push: false,
 };
 
 const LIST_PAGE = 5;
 const HIST_PAGE = 10;
-/** Alerts are re-polled this often (ms). */
-const ALERT_POLL_MS = 30_000;
-/** Alert event types that belong to geofences even when no rule id is set. */
-const GEOFENCE_EVENT = /geofence|zone|dwell|enter|exit/i;
 
 @Component({
   selector: 'app-geofence-alerts',
   standalone: true,
   imports: [CommonModule, FormsModule, LucideAngularModule, GeofenceMap, MapDrawTools],
   templateUrl: './geofence-alerts.html',
-  styleUrls: ['./geofence-alerts.css', './geofence-alerts-sections.css', '../shared/iot-purple-theme.css'],
+  styleUrls: ['./geofence-alerts.css', './geofence-alerts-sections.css'],
 })
-export class GeofenceAlerts implements OnInit, OnDestroy {
+export class GeofenceAlerts implements OnDestroy {
   readonly icons = { ArrowDown, ArrowUp, Bell, Box, Boxes, Building2, CalendarClock, Check, ChevronLeft, ChevronRight, Circle, Copy, Download, Ellipsis, History, Layers, Locate, LogIn, LogOut, MapPin, Minus, Pencil, Pentagon, Plus, Power, Search, Settings, Shapes, ShieldAlert, Timer, Trash2, TriangleAlert, Wifi, X };
+  readonly sites = SITES;
+  readonly groups = ASSET_GROUPS;
+  readonly schedules = SCHEDULES;
+  readonly teams = TEAMS;
+  readonly workflows = WORKFLOWS;
   readonly conditions = CONDITIONS;
   readonly severities = SEVERITIES;
   readonly triggers = TRIGGERS;
-  readonly eventStatuses = EVENT_STATUSES;
-  /** Teams / workflows have no API list yet; the inputs accept free text (suggestions from existing rules). */
-  get teams(): string[] {
-    return [...new Set(this.rules.map((r) => r.team).filter(Boolean))].sort();
-  }
-  get workflows(): string[] {
-    return [...new Set(this.rules.map((r) => r.workflowName).filter(Boolean))].sort();
-  }
+  readonly colors = ZONE_COLORS;
+  readonly zoneTypes: ZoneType[] = ['Allowed', 'Warning', 'Restricted'];
+  readonly eventTypes: EventType[] = ['Entered', 'Exited', 'Dwell Exceeded'];
+  readonly eventStatuses: EventStatus[] = ['Unacknowledged', 'Acknowledged', 'Assigned', 'Resolved'];
+  readonly kindPaths = KIND_PATH;
 
-  private readonly geofenceApi = inject(GeofenceApiService);
-  private readonly ruleApi = inject(AlertRuleApiService);
-  private readonly alertApi = inject(IoTAlertApiService);
-
-  // option lists (GET /api/geofences/options, /api/iot-alerts/options)
-  options: GeofenceOptionsDto = DEFAULT_GEOFENCE_OPTIONS;
-  private alertEventTypes: string[] = [];
-  private masterSites: SiteOption[] = [];
-
-  get groups(): string[] {
-    return this.options.assetGroups;
-  }
-  get schedules(): string[] {
-    return this.options.schedules;
-  }
-  get colors(): string[] {
-    return this.options.mapColours;
-  }
-  get zoneTypes(): ZoneType[] {
-    return this.options.zoneTypes as ZoneType[];
-  }
-  get shapes(): ZoneShape[] {
-    return this.options.shapes as ZoneShape[];
-  }
-
-  zones: Zone[] = [];
-  rules: Rule[] = [];
-  events: AlertEvent[] = [];
-  private alertRows: IoTAlertDto[] = [];
-
-  loading = false;
-  loadError = '';
-  saving = false;
+  zones: Zone[] = ZONES;
+  rules: Rule[] = RULES;
+  events: AlertEvent[] = EVENTS;
 
   tab: Tab = 'geofences';
-  selectedId = '';
+  selectedId = ZONES[0].id;
   menuOpen = '';
   toast = '';
   private toastTimer?: ReturnType<typeof setTimeout>;
-  private pollTimer?: ReturnType<typeof setInterval>;
+  private seq = 100;
 
   // map
   satellite = false;
@@ -148,11 +146,9 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
   mapMode: MapMode = 'view';
   editId = '';
   drawCount = 0;
-  zoomInfo = { zoom: 2, min: 2, max: 20 };
+  zoomInfo = { zoom: 16, min: 13, max: 20 };
   /** Site shown while drawing a zone for another site. */
   private drawSite = '';
-  /** Site picked in the map's site selector when it has no zone to select. */
-  private pickedSite = '';
   /** Zone form waiting for a shape drawn on the map. */
   private pendingForm: ZoneForm | null = null;
   private editDraft: LL[] | null = null;
@@ -163,7 +159,7 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
   listPage = 0;
   ruleZone = '';
   ruleSearch = '';
-  hDate: '' | 'today' | 'yesterday' | '7d' | 'all' = '';
+  hDate: 'today' | 'yesterday' | '7d' | 'all' = 'all';
   hZone = '';
   hType = '';
   hStatus = '';
@@ -174,106 +170,23 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
   builder: RuleForm = { ...DEFAULT_RULE };
   zoneForm: ZoneForm | null = null;
   ruleDialog: RuleDialog | null = null;
+  assignOf: { ev: AlertEvent; owner: string } | null = null;
   confirmBox: Confirm | null = null;
   formError = '';
 
-  ngOnInit(): void {
-    this.load();
-    this.pollTimer = setInterval(() => this.loadAlerts(true), ALERT_POLL_MS);
+  constructor() {
+    applySeedOutlines(this.zones);
   }
 
   ngOnDestroy(): void {
     clearTimeout(this.toastTimer);
-    clearInterval(this.pollTimer);
-  }
-
-  // ===== loading =====
-  load(): void {
-    this.loading = true;
-    this.loadError = '';
-    forkJoin({
-      zones: this.geofenceApi.list(),
-      rules: this.ruleApi.list(),
-      options: this.geofenceApi.options().pipe(catchError(() => of(DEFAULT_GEOFENCE_OPTIONS))),
-      sites: this.geofenceApi.sites(),
-      alertOptions: this.alertApi.options().pipe(catchError(() => of(null))),
-    }).subscribe({
-      next: ({ zones, rules, options, sites, alertOptions }) => {
-        this.zones = zones;
-        this.rules = rules;
-        this.options = options;
-        this.masterSites = sites;
-        this.alertEventTypes = alertOptions?.eventTypes ?? [];
-        if (!this.zoneById(this.selectedId)) this.selectedId = zones[0]?.id ?? '';
-        if (this.builder.group && !this.groups.includes(this.builder.group)) this.builder.group = '';
-        this.loading = false;
-        this.loadAlerts();
-      },
-      error: (err) => {
-        this.loading = false;
-        this.loadError = apiErrorMessage(err, 'Could not load geofences.');
-        this.showToast(this.loadError);
-      },
-    });
-  }
-
-  /** Alerts raised by geofence rules (or with a geofence event type), newest first. */
-  loadAlerts(silent = false): void {
-    this.alertApi.list().subscribe({
-      next: (rows) => {
-        this.alertRows = rows;
-        this.rebuildEvents();
-      },
-      error: (err) => {
-        if (!silent) this.showToast(apiErrorMessage(err, 'Could not load alerts.'));
-      },
-    });
-  }
-
-  private rebuildEvents(): void {
-    const ruleIds = new Set(this.rules.map((r) => r.id));
-    this.events = this.alertRows
-      .filter((a) => (a.alertRuleId && ruleIds.has(a.alertRuleId)) || GEOFENCE_EVENT.test(a.eventType ?? ''))
-      .map((a) => toAlertEvent(a, (ruleId) => this.zoneOfRule(ruleId)))
-      .sort((a, b) => b.ts.getTime() - a.ts.getTime());
-  }
-
-  private zoneOfRule(ruleId: string): { id: string; name: string } | null {
-    const r = this.rules.find((x) => x.id === ruleId);
-    const z = r ? this.zoneById(r.zoneId) : undefined;
-    return z ? { id: z.id, name: z.name } : null;
-  }
-
-  private replaceZone(z: Zone): void {
-    const i = this.zones.findIndex((x) => x.id === z.id);
-    if (i >= 0) this.zones[i] = { ...z, geoRev: (this.zones[i].geoRev ?? 0) + 1 };
-    else this.zones.push(z);
-    this.zones = [...this.zones];
-  }
-
-  private fail(err: unknown, fallback: string): void {
-    this.saving = false;
-    this.showToast(apiErrorMessage(err, fallback));
-  }
-
-  // ===== options =====
-  get sites(): string[] {
-    return [...new Set([...this.masterSites.map((s) => s.name), ...this.zones.map((z) => z.site)].filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  }
-
-  get eventTypes(): string[] {
-    return [...new Set([...this.alertEventTypes, ...this.events.map((e) => e.type)])];
-  }
-
-  private siteIdOf(name: string): string | null {
-    return this.masterSites.find((s) => s.name === name)?.id ?? this.zones.find((z) => z.site === name && z.siteId)?.siteId ?? null;
   }
 
   // ===== KPIs =====
   get kpi() {
     const active = this.zones.filter((z) => z.status === 'Active');
-    const activePrev = active.filter((z) => z.createdDaysAgo === null || z.createdDaysAgo >= 30).length;
-    const monitored = active.reduce((t, z) => t + z.monitoredCount, 0);
+    const activePrev = active.filter((z) => z.createdDaysAgo >= 30).length;
+    const monitored = new Set(active.flatMap((z) => z.assetIds)).size;
     const t0 = startOfToday().getTime();
     const y0 = t0 - 86400000;
     const today = this.events.filter((e) => e.ts.getTime() >= t0).length;
@@ -283,9 +196,11 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
       active: active.length,
       activeDelta: active.length - activePrev,
       monitored,
+      monitoredDelta: monitored - PREV_MONITORED,
       today,
       todayPct: yesterday ? Math.round(((today - yesterday) / yesterday) * 100) : 0,
       open,
+      openDelta: open - PREV_OPEN,
     };
   }
 
@@ -305,7 +220,6 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
   selectZone(z: Zone, recenter = false): void {
     if (this.mapMode !== 'view') return;
     this.selectedId = z.id;
-    this.pickedSite = '';
     if (recenter) setTimeout(() => this.locate(), 50);
   }
 
@@ -327,16 +241,12 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
   }
 
   shapeLabel(z: Zone): string {
-    if (z.shape === 'Circle') return z.radiusM ? `Circle (${Math.round(z.radiusM)} m radius)` : 'Circle (not placed)';
-    if (!z.latlngs?.length) return `${z.shape} (not drawn)`;
-    return z.shape === 'Rectangle' ? 'Rectangle' : `Polygon (${z.points} points)`;
+    return z.shape === 'Circle' ? 'Circle' : `Polygon (${z.points} points)`;
   }
 
-  /** Newest alert at the zone, else the zone's own last-event stamp. */
   lastEvent(z: Zone): Date | null {
     const e = this.events.find((x) => x.zoneId === z.id);
-    if (e && (!z.lastEventAt || e.ts > z.lastEventAt)) return e.ts;
-    return z.lastEventAt;
+    return e ? e.ts : null;
   }
 
   fmtWhen(d: Date | null): string {
@@ -356,8 +266,8 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
     return 'zt--' + t.toLowerCase();
   }
 
-  evClass(t: string): string {
-    return /dwell|remain/i.test(t) ? 'ev--dwell' : /exit|left|depart/i.test(t) ? 'ev--out' : 'ev--in';
+  evClass(t: EventType): string {
+    return t === 'Entered' ? 'ev--in' : t === 'Exited' ? 'ev--out' : 'ev--dwell';
   }
 
   stClass(s: EventStatus): string {
@@ -369,15 +279,15 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
   }
 
   triggerLabel(t: Trigger, dwell = 0): string {
-    if (t === 'dwell') return `Remains longer than ${dwell} min`;
+    if (t === 'dwell') return `Dwells longer than ${dwell} min`;
     return (TRIGGERS.find((x) => x.value === t)?.label ?? '').replace('When asset ', '').replace(/^./, (c) => c.toUpperCase());
   }
 
   actionsSummary(r: RuleForm): string {
     const out: string[] = [];
     if (r.createAlert) out.push('Create alert');
-    if (r.notify) out.push(`Notify ${r.team || 'team'}`);
-    if (r.workflow) out.push(`Workflow: ${r.workflowName || '—'}`);
+    if (r.notify) out.push(`Notify ${r.team}`);
+    if (r.workflow) out.push(`Workflow: ${r.workflowName}`);
     return out.join(' · ') || 'No actions';
   }
 
@@ -387,22 +297,21 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
 
   // ===== map =====
   get mapSite(): string {
-    return this.drawSite || this.pickedSite || (this.selected ? this.selected.site : this.sites[0] ?? '');
+    return this.drawSite || (this.selected ? this.selected.site : SITES[0]);
   }
 
   set mapSite(site: string) {
     const first = this.zones.find((z) => z.site === site);
     if (first) this.selectZone(first);
-    else this.pickedSite = site;
   }
 
   get mapArea(): string {
-    return this.mapSite;
+    return siteArea(this.mapSite);
   }
 
   /** Signature of everything the map draws; the map only redraws when it changes. */
   get mapRev(): string {
-    const zs = this.zones.filter((z) => z.site === this.mapSite).map((z) => [z.id, z.name, z.type, z.color, z.status, z.shape, z.points, z.geoRev ?? 0, z.monitoredCount].join(':'));
+    const zs = this.zones.filter((z) => z.site === this.mapSite).map((z) => [z.id, z.name, z.type, z.color, z.status, z.shape, z.points, z.geoRev ?? 0, z.assetIds.length].join(':'));
     return zs.join('|') + '#' + this.mapAlerts.map((a) => a.key).join(',');
   }
 
@@ -410,12 +319,12 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
 
   /** Open (unacknowledged) alerts, newest per zone. */
   get mapAlerts(): MapAlert[] {
-    const open = this.events.filter((e) => e.status === 'Unacknowledged' && e.zoneId);
+    const open = this.events.filter((e) => e.status === 'Unacknowledged');
     const sig = open.map((e) => e.id).join(',');
     if (sig !== this.alertCache.sig) {
       const seen = new Set<string>();
       const list: MapAlert[] = [];
-      for (const e of open) {
+      for (const e of [...open].sort((a, b) => b.ts.getTime() - a.ts.getTime())) {
         if (seen.has(e.zoneId)) continue;
         seen.add(e.zoneId);
         list.push({ key: e.id, zoneId: e.zoneId, assetCode: e.assetCode, title: `${e.type}: ${e.assetCode}`, sub: `${e.zoneName} · ${this.fmtWhen(e.ts)} · Unacknowledged` });
@@ -449,7 +358,6 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
   startDraw(): void {
     const f = this.zoneForm;
     if (!f) return;
-    if (!f.site) { this.formError = 'Choose a site before drawing the outline.'; return; }
     this.pendingForm = f;
     this.zoneForm = null;
     this.drawSite = f.site;
@@ -464,18 +372,11 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
     this.drawSite = '';
     this.pendingForm = null;
     if (!f) return;
-    this.formError = '';
-    if (f.shape === 'Rectangle' && pts.length !== 4) {
-      this.formError = `A rectangle needs exactly 4 corners; ${pts.length} were drawn.`;
-    } else if (pts.length > this.options.maxPolygonPoints) {
-      this.formError = `A zone can have at most ${this.options.maxPolygonPoints} corners.`;
-    } else {
-      f.drawn = pts;
-      if (f.shape === 'Circle') f.shape = 'Polygon';
-      f.points = pts.length;
-      this.showToast(`Outline drawn: ${pts.length} points, about ${this.fmtArea(areaM2(pts))}.`);
-    }
+    f.drawn = pts;
+    f.shape = 'Polygon';
+    f.points = pts.length;
     this.zoneForm = f;
+    this.showToast(`Outline drawn: ${pts.length} points, about ${this.fmtArea(areaM2(pts))}.`);
   }
 
   finishDraw(): void {
@@ -495,7 +396,7 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
 
   // ----- drag the corners of an existing zone -----
   canEditShape(z: Zone | null): boolean {
-    return !!z && z.shape === 'Polygon' && !!z.latlngs?.length;
+    return !!z && z.shape === 'Polygon';
   }
 
   startEditShape(z: Zone): void {
@@ -519,16 +420,12 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
     this.editId = '';
     this.editDraft = null;
     if (!z || !pts) return;
-    this.geofenceApi.update({ ...z, latlngs: pts, points: pts.length }).subscribe({
-      next: (saved) => {
-        this.replaceZone(saved);
-        this.showToast(`“${z.name}” outline saved: ${pts.length} points, about ${this.fmtArea(areaM2(pts))}.`);
-      },
-      error: (err) => {
-        this.replaceZone(z);
-        this.fail(err, 'Could not save the outline.');
-      },
-    });
+    z.latlngs = pts;
+    z.points = pts.length;
+    z.poly = undefined;
+    z.slot = undefined;
+    z.geoRev = (z.geoRev ?? 0) + 1;
+    this.showToast(`“${z.name}” outline saved: ${pts.length} points, about ${this.fmtArea(areaM2(pts))}.`);
   }
 
   cancelShape(): void {
@@ -546,7 +443,6 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
   }
 
   zoneArea(z: Zone): string {
-    if (z.shape === 'Circle' && z.radiusM) return this.fmtArea(Math.PI * z.radiusM * z.radiusM);
     return z.latlngs?.length ? this.fmtArea(areaM2(z.latlngs)) : '';
   }
 
@@ -591,21 +487,15 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
     this.menuOpen = '';
     this.formError = '';
     this.zoneForm = z
-      ? { id: z.id, name: z.name, type: z.type, site: z.site, color: z.color, groups: [...z.groups], schedule: z.schedule, monitorEntry: z.monitorEntry, monitorExit: z.monitorExit, dwellMin: z.dwellMin, shape: z.shape, points: z.points || this.options.defaultPolygonPoints }
-      : { id: '', name: '', type: 'Allowed', site: '', color: TYPE_COLOR.Allowed, groups: this.groups.slice(0, 1), schedule: '', monitorEntry: true, monitorExit: true, dwellMin: 10, shape: '', points: this.options.defaultPolygonPoints };
+      ? { id: z.id, name: z.name, type: z.type, site: z.site, color: z.color, groups: [...z.groups], schedule: z.schedule, monitorEntry: z.monitorEntry, monitorExit: z.monitorExit, dwellMin: z.dwellMin, shape: z.shape, points: z.points }
+      : { id: '', name: '', type: 'Allowed', site: this.mapSite, color: ZONE_COLORS[0], groups: ['Forklifts'], schedule: SCHEDULES[0], monitorEntry: true, monitorExit: true, dwellMin: 10, shape: 'Polygon', points: 4 };
   }
 
   get editingDrawn(): boolean {
     const f = this.zoneForm;
     if (!f || !f.id) return false;
     const z = this.zoneById(f.id);
-    return !!z && !!z.latlngs?.length && f.shape !== 'Circle';
-  }
-
-  /** Monitored asset count of the zone being edited (the API keeps this figure; new zones start at 0). */
-  get formAssetCount(): number | null {
-    const f = this.zoneForm;
-    return f?.id ? this.zoneById(f.id)?.monitoredCount ?? null : null;
+    return !!z && (!!z.poly || !!z.latlngs) && f.shape === 'Polygon' && f.site === z.site;
   }
 
   toggleFormGroup(g: string): void {
@@ -617,172 +507,133 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
   setFormType(t: ZoneType): void {
     if (!this.zoneForm) return;
     this.zoneForm.type = t;
-    if (!this.zoneForm.id) this.zoneForm.color = TYPE_COLOR[t];
+    if (!this.zoneForm.id) this.zoneForm.color = t === 'Restricted' ? '#dc2626' : t === 'Warning' ? '#eab308' : '#2563eb';
+  }
+
+  private fleetFor(site: string, groups: string[]): string[] {
+    return ASSETS.filter((a) => a.site === site && (groups.includes('All assets') || groups.includes(assetGroup(a.kind)))).map((a) => a.id);
+  }
+
+  get formAssetCount(): number {
+    const f = this.zoneForm;
+    return f ? this.fleetFor(f.site, f.groups).length : 0;
+  }
+
+  private freeSlot(site: string, exceptId = ''): Slot {
+    const used = this.zones.filter((z) => z.site === site && z.id !== exceptId && z.slot).map((z) => z.slot);
+    const free = (SITE_SLOTS[site] ?? []).find((s) => !used.includes(s));
+    if (free) return free;
+    const k = used.length % 6;
+    return { x: 300 + k * 26, y: 250 + k * 18, w: 150, h: 96 };
   }
 
   saveZone(): void {
     const f = this.zoneForm;
-    if (!f || this.saving) return;
+    if (!f) return;
     const name = f.name.trim();
     if (!name) { this.formError = 'Enter a zone name.'; return; }
-    if (!f.site) { this.formError = 'Choose a site.'; return; }
-    if (!f.schedule) { this.formError = 'Choose a schedule.'; return; }
-    if (!f.shape) { this.formError = 'Choose a shape.'; return; }
     if (this.zones.some((z) => z.id !== f.id && z.site === f.site && z.name.toLowerCase() === name.toLowerCase())) { this.formError = `“${name}” already exists at ${f.site}.`; return; }
     if (!f.groups.length) { this.formError = 'Select at least one asset group.'; return; }
-    const { minPolygonPoints: min, maxPolygonPoints: max } = this.options;
-    const points = Math.min(max, Math.max(min, Math.round(f.points || this.options.defaultPolygonPoints)));
-    const dwell = f.dwellMin === null || (f.dwellMin as unknown) === '' ? null : Math.max(1, Math.round(f.dwellMin));
+    const points = Math.min(12, Math.max(3, Math.round(f.points || 4)));
+    const dwell = Math.max(1, Math.round(f.dwellMin || 1));
     const existing = f.id ? this.zoneById(f.id) : undefined;
-    const base: Zone = existing
-      ? { ...existing }
-      : { id: '', name, type: f.type, site: f.site, siteId: null, status: 'Active', shape: f.shape, points, color: f.color, groups: [], schedule: f.schedule, monitorEntry: true, monitorExit: true, dwellMin: null, monitoredCount: 0, lastEventAt: null, createdDaysAgo: 0 };
-    const zone: Zone = {
-      ...base, name, type: f.type, site: f.site, siteId: this.siteIdOf(f.site), color: f.color, groups: f.groups, schedule: f.schedule,
-      monitorEntry: f.monitorEntry, monitorExit: f.monitorExit, dwellMin: dwell, shape: f.shape, points,
-    };
-    if (f.shape === 'Circle') {
-      zone.latlngs = undefined;
-      if (existing?.shape !== 'Circle') { zone.center = undefined; zone.radiusM = undefined; }
+    if (existing) {
+      const groupsChanged = existing.site !== f.site || existing.groups.join() !== f.groups.join();
+      const keepPoly = (!!existing.poly || !!existing.latlngs) && f.shape === 'Polygon' && f.site === existing.site;
+      Object.assign(existing, { name, type: f.type, color: f.color, groups: f.groups, schedule: f.schedule, monitorEntry: f.monitorEntry, monitorExit: f.monitorExit, dwellMin: dwell, shape: f.shape });
+      if (f.drawn) {
+        existing.latlngs = f.drawn;
+        existing.poly = undefined;
+        existing.slot = undefined;
+        existing.points = f.drawn.length;
+      } else if (!keepPoly) {
+        if (existing.poly || existing.latlngs || existing.site !== f.site) existing.slot = this.freeSlot(f.site, existing.id);
+        existing.poly = undefined;
+        existing.latlngs = undefined;
+        existing.center = undefined;
+        existing.radiusM = undefined;
+        existing.points = points;
+      }
+      existing.geoRev = (existing.geoRev ?? 0) + 1;
+      existing.site = f.site;
+      if (groupsChanged) existing.assetIds = this.fleetFor(f.site, f.groups);
+      this.showToast(`Geofence “${name}” updated.`);
     } else {
-      zone.center = undefined;
-      zone.radiusM = undefined;
-      if (f.drawn) zone.latlngs = f.drawn;
-      if (zone.latlngs?.length) zone.points = zone.latlngs.length;
-      if (f.shape === 'Rectangle' && zone.latlngs && zone.latlngs.length !== 4) zone.latlngs = undefined;
+      const z: Zone = {
+        id: `gz-${++this.seq}`, name, type: f.type, site: f.site, status: 'Active', shape: f.shape, points, color: f.color, groups: f.groups,
+        schedule: f.schedule, monitorEntry: f.monitorEntry, monitorExit: f.monitorExit, dwellMin: dwell, assetIds: this.fleetFor(f.site, f.groups),
+        createdDaysAgo: 0, slot: f.drawn ? undefined : this.freeSlot(f.site), latlngs: f.drawn,
+      };
+      if (f.drawn) z.points = f.drawn.length;
+      this.zones.push(z);
+      this.selectZone(z);
+      this.listSite = '';
+      this.listSearch = '';
+      this.listPage = this.listPages - 1;
+      this.showToast(`Geofence “${name}” created at ${f.site} with ${z.assetIds.length} monitored assets.`);
     }
-    this.saving = true;
-    this.formError = '';
-    const req = existing ? this.geofenceApi.update(zone) : this.geofenceApi.create(zone);
-    req.subscribe({
-      next: (saved) => {
-        this.saving = false;
-        this.replaceZone(saved);
-        this.zoneForm = null;
-        this.pickedSite = '';
-        if (existing) {
-          this.showToast(`Geofence “${name}” updated.`);
-        } else {
-          this.selectedId = saved.id;
-          this.listSite = '';
-          this.listSearch = '';
-          this.listPage = this.listPages - 1;
-          this.showToast(`Geofence “${name}” created at ${saved.site}.`);
-        }
-      },
-      error: (err) => {
-        this.saving = false;
-        this.formError = apiErrorMessage(err, 'Could not save the geofence.');
-      },
-    });
+    this.zoneForm = null;
   }
 
   duplicateZone(z: Zone): void {
     this.menuOpen = '';
-    let name = `${z.name} (copy)`;
-    for (let i = 2; this.zones.some((x) => x.site === z.site && x.name.toLowerCase() === name.toLowerCase()); i++) name = `${z.name} (copy ${i})`;
-    const zoneRules = this.rules.filter((r) => r.zoneId === z.id);
-    this.geofenceApi
-      .create({ ...z, id: '', name, status: 'Active', lastEventAt: null })
-      .pipe(
-        switchMap((copy) => {
-          this.replaceZone(copy);
-          this.selectedId = copy.id;
-          const reqs = zoneRules.map(({ id: _id, ...r }) => this.ruleApi.create({ ...r, zoneId: copy.id }));
-          return reqs.length ? forkJoin(reqs) : of([] as Rule[]);
-        }),
-      )
-      .subscribe({
-        next: (copied) => {
-          this.rules = [...this.rules, ...copied];
-          this.showToast(`Duplicated “${z.name}” with ${copied.length} rule${copied.length === 1 ? '' : 's'}.`);
-        },
-        error: (err) => this.fail(err, 'Could not duplicate the geofence.'),
-      });
-  }
-
-  private patchZone(z: Zone, patch: Partial<Zone>, message: (saved: Zone) => string): void {
-    this.geofenceApi.update({ ...z, ...patch }).subscribe({
-      next: (saved) => {
-        this.replaceZone(saved);
-        this.showToast(message(saved));
-      },
-      error: (err) => this.fail(err, 'Could not update the geofence.'),
-    });
+    const copy: Zone = { ...z, id: `gz-${++this.seq}`, name: `${z.name} (copy)`, groups: [...z.groups], assetIds: [...z.assetIds], poly: undefined, latlngs: undefined, center: undefined, radiusM: undefined, slot: this.freeSlot(z.site), createdDaysAgo: 0, status: 'Active', geoRev: 0 };
+    this.zones.push(copy);
+    const copied = this.rules.filter((r) => r.zoneId === z.id).map((r) => ({ ...r, id: this.nextRuleId(), zoneId: copy.id }));
+    this.rules.push(...copied);
+    this.selectedId = copy.id;
+    this.showToast(`Duplicated “${z.name}” with ${copied.length} rule${copied.length === 1 ? '' : 's'}.`);
   }
 
   toggleZone(z: Zone): void {
     this.menuOpen = '';
-    this.patchZone(z, { status: z.status === 'Active' ? 'Disabled' : 'Active' }, (s) => `“${s.name}” ${s.status === 'Active' ? 'enabled — monitoring resumed' : 'disabled — no alerts will be raised'}.`);
+    z.status = z.status === 'Active' ? 'Disabled' : 'Active';
+    this.showToast(`“${z.name}” ${z.status === 'Active' ? 'enabled — monitoring resumed' : 'disabled — no alerts will be raised'}.`);
   }
 
   deleteZone(z: Zone): void {
     this.menuOpen = '';
-    const zoneRules = this.rules.filter((r) => r.zoneId === z.id);
-    const n = zoneRules.length;
+    const n = this.ruleCount(z);
     this.confirmBox = {
       title: 'Delete geofence',
-      message: `Delete “${z.name}” (${z.site}) and its ${n} alert rule${n === 1 ? '' : 's'}? Past alerts are kept in the history.`,
+      message: `Delete “${z.name}” (${z.site}) and its ${n} alert rule${n === 1 ? '' : 's'}? Past events are kept in the history.`,
       label: 'Delete',
       run: () => {
-        const deletes: Observable<unknown> = n ? forkJoin(zoneRules.map((r) => this.ruleApi.delete(r.id))) : of(null);
-        deletes.pipe(switchMap(() => this.geofenceApi.delete(z.id))).subscribe({
-          next: () => {
-            this.zones = this.zones.filter((x) => x.id !== z.id);
-            this.rules = this.rules.filter((r) => r.zoneId !== z.id);
-            if (this.selectedId === z.id) this.selectedId = this.zones[0] ? this.zones[0].id : '';
-            if (this.ruleZone === z.id) this.ruleZone = '';
-            this.rebuildEvents();
-            this.showToast(`Geofence “${z.name}” deleted.`);
-          },
-          error: (err) => {
-            // some rules may already be gone: reload rules so the list matches the server
-            this.ruleApi.list().subscribe({ next: (rules) => (this.rules = rules), error: () => undefined });
-            this.fail(err, 'Could not delete the geofence.');
-          },
-        });
+        this.zones = this.zones.filter((x) => x.id !== z.id);
+        this.rules = this.rules.filter((r) => r.zoneId !== z.id);
+        if (this.selectedId === z.id) this.selectedId = this.zones[0] ? this.zones[0].id : '';
+        if (this.ruleZone === z.id) this.ruleZone = '';
+        this.showToast(`Geofence “${z.name}” deleted.`);
       },
     };
   }
 
   toggleMonitor(z: Zone, which: 'entry' | 'exit'): void {
-    const patch = which === 'entry' ? { monitorEntry: !z.monitorEntry } : { monitorExit: !z.monitorExit };
-    this.patchZone(z, patch, (s) => `Asset ${which} monitoring ${(which === 'entry' ? s.monitorEntry : s.monitorExit) ? 'enabled' : 'disabled'} for “${s.name}”.`);
+    if (which === 'entry') z.monitorEntry = !z.monitorEntry;
+    else z.monitorExit = !z.monitorExit;
+    const on = which === 'entry' ? z.monitorEntry : z.monitorExit;
+    this.showToast(`Asset ${which} monitoring ${on ? 'enabled' : 'disabled'} for “${z.name}”.`);
   }
 
   // ===== rules =====
+  private nextRuleId(): string {
+    const max = this.rules.reduce((m, r) => Math.max(m, Number(r.id.slice(3)) || 0), 0);
+    return `AR-${String(max + 1).padStart(3, '0')}`;
+  }
+
   private autoName(f: RuleForm): string {
     if (f.trigger === 'dwell') return `${f.group} dwell over ${f.dwellMin} min`;
     const verb = f.trigger === 'enter' ? 'entry' : f.trigger === 'exit' ? 'exit' : 'entry / exit';
-    return `${f.group} ${verb}${f.condition === CONDITIONS[0] ? '' : ' — ' + f.condition.toLowerCase()}`;
-  }
-
-  private ruleProblem(f: RuleForm): string {
-    if (!f.trigger) return 'Choose a trigger.';
-    if (!f.severity) return 'Choose a severity.';
-    if (!f.createAlert && !f.notify && !f.workflow) return 'Choose at least one action for the rule.';
-    if (!f.group) return 'Choose an asset group.';
-    if (!f.condition) return 'Choose a condition.';
-    if (f.trigger === 'dwell' && !(f.dwellMin >= 1)) return 'Enter the dwell time in minutes.';
-    if (f.notify && !f.team.trim()) return 'Enter the team to notify.';
-    if (f.workflow && !f.workflowName.trim()) return 'Enter the workflow to start.';
-    return '';
+    return `${f.group} ${verb}${f.condition === 'During all hours' ? '' : ' — ' + f.condition.toLowerCase()}`;
   }
 
   saveBuilder(): void {
     const z = this.selected;
-    if (!z || this.saving) return;
-    const problem = this.ruleProblem(this.builder);
-    if (problem) { this.showToast(problem); return; }
-    this.saving = true;
-    this.ruleApi.create({ ...this.builder, name: this.autoName(this.builder), zoneId: z.id, enabled: true }).subscribe({
-      next: (rule) => {
-        this.saving = false;
-        this.rules = [...this.rules, rule];
-        this.showToast(`Rule “${rule.name}” saved to ${z.name} (${this.ruleCount(z)} rules).`);
-      },
-      error: (err) => this.fail(err, 'Could not save the alert rule.'),
-    });
+    if (!z) return;
+    if (!this.builder.createAlert && !this.builder.notify && !this.builder.workflow) { this.showToast('Choose at least one action for the rule.'); return; }
+    const rule: Rule = { ...this.builder, id: this.nextRuleId(), name: this.autoName(this.builder), zoneId: z.id, enabled: true };
+    this.rules.push(rule);
+    this.showToast(`Rule ${rule.id} “${rule.name}” saved to ${z.name} (${this.ruleCount(z)} rules).`);
   }
 
   resetBuilder(): void {
@@ -805,57 +656,42 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
   openRule(r?: Rule): void {
     this.menuOpen = '';
     this.formError = '';
-    const zoneId = r ? r.zoneId : this.ruleZone || this.selected?.id || '';
+    const zoneId = r ? r.zoneId : this.ruleZone || this.selectedId;
     this.ruleDialog = r ? { ...r } : { ...DEFAULT_RULE, id: '', name: '', zoneId, enabled: true };
   }
 
   saveRuleDialog(): void {
     const d = this.ruleDialog;
-    if (!d || this.saving) return;
+    if (!d) return;
     if (!d.zoneId) { this.formError = 'Choose a geofence.'; return; }
-    const problem = this.ruleProblem(d);
-    if (problem) { this.formError = problem; return; }
+    if (!d.createAlert && !d.notify && !d.workflow) { this.formError = 'Choose at least one action.'; return; }
     const name = d.name.trim() || this.autoName(d);
-    this.saving = true;
-    this.formError = '';
-    const req = d.id ? this.ruleApi.update({ ...d, name }) : this.ruleApi.create({ ...d, name });
-    req.subscribe({
-      next: (saved) => {
-        this.saving = false;
-        this.rules = d.id ? this.rules.map((r) => (r.id === saved.id ? saved : r)) : [...this.rules, saved];
-        this.ruleDialog = null;
-        this.showToast(d.id ? `Rule “${saved.name}” updated.` : `Rule “${saved.name}” added to ${this.zoneName(saved.zoneId)}.`);
-      },
-      error: (err) => {
-        this.saving = false;
-        this.formError = apiErrorMessage(err, 'Could not save the alert rule.');
-      },
-    });
+    if (d.id) {
+      const r = this.rules.find((x) => x.id === d.id);
+      if (r) Object.assign(r, { ...d, name });
+      this.showToast(`Rule ${d.id} updated.`);
+    } else {
+      const r: Rule = { ...d, id: this.nextRuleId(), name };
+      this.rules.push(r);
+      this.showToast(`Rule ${r.id} “${name}” added to ${this.zoneName(r.zoneId)}.`);
+    }
+    this.ruleDialog = null;
   }
 
   toggleRule(r: Rule): void {
-    this.ruleApi.update({ ...r, enabled: !r.enabled }).subscribe({
-      next: (saved) => {
-        this.rules = this.rules.map((x) => (x.id === saved.id ? saved : x));
-        this.showToast(`Rule “${saved.name}” ${saved.enabled ? 'enabled' : 'paused'}.`);
-      },
-      error: (err) => this.fail(err, 'Could not update the alert rule.'),
-    });
+    r.enabled = !r.enabled;
+    this.showToast(`Rule ${r.id} ${r.enabled ? 'enabled' : 'paused'}.`);
   }
 
   deleteRule(r: Rule): void {
     this.confirmBox = {
       title: 'Delete alert rule',
-      message: `Delete rule “${r.name}” on ${this.zoneName(r.zoneId)}?`,
+      message: `Delete rule ${r.id} “${r.name}” on ${this.zoneName(r.zoneId)}?`,
       label: 'Delete',
-      run: () =>
-        this.ruleApi.delete(r.id).subscribe({
-          next: () => {
-            this.rules = this.rules.filter((x) => x.id !== r.id);
-            this.showToast(`Rule “${r.name}” deleted.`);
-          },
-          error: (err) => this.fail(err, 'Could not delete the alert rule.'),
-        }),
+      run: () => {
+        this.rules = this.rules.filter((x) => x.id !== r.id);
+        this.showToast(`Rule ${r.id} deleted.`);
+      },
     };
   }
 
@@ -871,7 +707,7 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
     const q = this.hSearch.trim().toLowerCase();
     return this.events.filter((e) => {
       const t = e.ts.getTime();
-      return t >= from && t < to && (!this.hZone || e.zoneId === this.hZone) && (!this.hType || e.type === this.hType) && (!this.hStatus || e.status === this.hStatus) && (!q || `${e.id} ${e.assetCode} ${e.assetSub} ${e.zoneName} ${e.owner} ${e.message}`.toLowerCase().includes(q));
+      return t >= from && t < to && (!this.hZone || e.zoneId === this.hZone) && (!this.hType || e.type === this.hType) && (!this.hStatus || e.status === this.hStatus) && (!q || `${e.id} ${e.assetCode} ${e.assetKind} ${e.zoneName} ${e.owner}`.toLowerCase().includes(q));
     });
   }
 
@@ -915,60 +751,60 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
     this.openHistory('all');
   }
 
-  /** PATCH /api/iot-alerts/{alertId}/status for each event, then refresh the rows from the responses. */
-  private setStatus(list: AlertEvent[], status: IoTAlertStatus, done: (n: number) => string): void {
-    this.menuOpen = '';
-    if (!list.length) return;
-    forkJoin(list.map((e) => this.alertApi.setStatus(e.id, status))).subscribe({
-      next: (rows) => {
-        const byId = new Map(rows.map((r) => [r.alertId, r]));
-        this.alertRows = this.alertRows.map((r) => byId.get(r.alertId) ?? r);
-        this.rebuildEvents();
-        this.showToast(done(rows.length));
-      },
-      error: (err) => {
-        this.loadAlerts(true);
-        this.fail(err, 'Could not update the alert status.');
-      },
-    });
-  }
-
   acknowledge(e: AlertEvent): void {
-    this.setStatus([e], 'Acknowledged', () => `${e.assetCode} alert${e.zoneId ? ' at ' + e.zoneName : ''} acknowledged.`);
+    this.menuOpen = '';
+    e.status = 'Acknowledged';
+    this.showToast(`${e.assetCode} alert at ${e.zoneName} acknowledged.`);
   }
 
   acknowledgeAll(): void {
-    this.setStatus(this.historyRows.filter((e) => e.status === 'Unacknowledged'), 'Acknowledged', (n) => `${n} alert${n === 1 ? '' : 's'} acknowledged.`);
+    const open = this.historyRows.filter((e) => e.status === 'Unacknowledged');
+    open.forEach((e) => (e.status = 'Acknowledged'));
+    this.showToast(`${open.length} alert${open.length === 1 ? '' : 's'} acknowledged.`);
   }
 
-  startProgress(e: AlertEvent): void {
-    this.setStatus([e], 'In Progress', () => `${e.assetCode} alert marked in progress.`);
+  openAssign(e: AlertEvent): void {
+    this.menuOpen = '';
+    this.assignOf = { ev: e, owner: e.owner };
+  }
+
+  saveAssign(): void {
+    const a = this.assignOf;
+    if (!a) return;
+    a.ev.owner = a.owner;
+    a.ev.status = 'Assigned';
+    this.showToast(`${a.ev.assetCode} alert assigned to ${a.owner}.`);
+    this.assignOf = null;
   }
 
   resolve(e: AlertEvent): void {
-    this.setStatus([e], 'Resolved', () => `${e.assetCode} alert${e.zoneId ? ' at ' + e.zoneName : ''} resolved.`);
+    this.menuOpen = '';
+    e.status = 'Resolved';
+    this.showToast(`${e.assetCode} alert at ${e.zoneName} resolved.`);
   }
 
   reopen(e: AlertEvent): void {
-    this.setStatus([e], 'Open', () => `${e.assetCode} alert reopened.`);
+    this.menuOpen = '';
+    e.status = 'Unacknowledged';
+    this.showToast(`${e.assetCode} alert reopened.`);
   }
 
   viewZone(e: AlertEvent): void {
     this.menuOpen = '';
     const z = this.zoneById(e.zoneId);
-    if (!z) { this.showToast('This alert is not linked to a geofence.'); return; }
+    if (!z) { this.showToast(`“${e.zoneName}” no longer exists.`); return; }
     this.tab = 'geofences';
     this.selectZone(z, true);
   }
 
   exportHistory(): void {
     const rows = this.historyRows.map((e) => ({
-      'Alert ID': e.id, Timestamp: e.ts.toLocaleString('en-GB'), Asset: e.assetCode, 'Asset Name': e.assetSub, Geofence: e.zoneName,
-      Site: this.zoneById(e.zoneId)?.site ?? '', Event: e.type, Severity: e.severity, Message: e.message, Owner: e.owner, Status: e.status,
+      'Event ID': e.id, Timestamp: e.ts.toLocaleString('en-GB'), Asset: e.assetCode, 'Asset Type': e.assetKind, Geofence: e.zoneName,
+      Site: this.zoneById(e.zoneId)?.site ?? '', Event: e.type, 'Duration (min)': e.durationMin ?? '', Owner: e.owner, Status: e.status,
     }));
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(rows), 'Events');
-    XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(this.zones.map((z) => ({ Geofence: z.name, Type: z.type, Site: z.site, Status: z.status, 'Monitored Assets': z.monitoredCount, Rules: this.ruleCount(z) }))), 'Geofences');
+    XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(this.zones.map((z) => ({ Geofence: z.name, Type: z.type, Site: z.site, Status: z.status, 'Monitored Assets': z.assetIds.length, Rules: this.ruleCount(z) }))), 'Geofences');
     XLSX.writeFile(book, `Geofence_Events_${new Date().toISOString().slice(0, 10)}.xlsx`);
     this.showToast(`Exported ${rows.length} events to Excel.`);
   }
@@ -1000,6 +836,7 @@ export class GeofenceAlerts implements OnInit, OnDestroy {
     this.layersOpen = false;
     this.zoneForm = null;
     this.ruleDialog = null;
+    this.assignOf = null;
     this.confirmBox = null;
   }
 

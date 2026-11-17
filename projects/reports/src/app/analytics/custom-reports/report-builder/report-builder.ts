@@ -1,9 +1,8 @@
-import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { Check, ChevronLeft, ChevronRight, LucideAngularModule } from 'lucide-angular';
 import { ReportPreview } from '../report-preview/report-preview';
-import { fieldOf, filterError, operatorLabel, sourceOf } from '../custom-reports.engine';
-import { CustomReport, ReportCatalog } from '../custom-reports.model';
-import { CustomReportsService } from '../custom-reports.service';
+import { fieldOf, filterError, sourceOf } from '../custom-reports.engine';
+import { CustomReport } from '../custom-reports.model';
 import { FieldsStep } from './fields-step';
 import { FiltersStep } from './filters-step';
 import { GroupSortStep } from './group-sort-step';
@@ -21,7 +20,6 @@ export const BUILDER_STEPS = ['Data Source', 'Select Fields', 'Filters', 'Group 
   styleUrls: ['../../shared/analytics-page.css', '../custom-reports.css']
 })
 export class ReportBuilder {
-  private readonly service = inject(CustomReportsService);
   @Input({ required: true }) report!: CustomReport;
   @Output() notice = new EventEmitter<string>();
 
@@ -30,10 +28,6 @@ export class ReportBuilder {
   readonly ChevronLeft = ChevronLeft;
   readonly ChevronRight = ChevronRight;
   step = 0;
-
-  private get catalog(): ReportCatalog {
-    return this.service.catalog();
-  }
 
   goTo(i: number): void {
     this.step = Math.max(0, Math.min(this.steps.length - 1, i));
@@ -58,11 +52,14 @@ export class ReportBuilder {
 
   /** Why a step can't be left yet, or '' */
   stepProblem(i: number): string {
+    if (i === 0 && !this.report.sourceKey) return 'Select a data source.';
+    if (i === 1 && !this.report.sourceKey) return 'Select a data source.';
     if (i === 1 && !this.report.fields.length) return 'Select at least one field.';
     if (i === 2) {
-      const bad = this.report.filters.findIndex((f) => filterError(this.catalog, this.report, f));
-      if (bad >= 0) return `Filter ${bad + 1}: ${filterError(this.catalog, this.report, this.report.filters[bad])}`;
+      const bad = this.report.filters.findIndex((f) => filterError(this.report, f));
+      if (bad >= 0) return `Filter ${bad + 1}: ${filterError(this.report, this.report.filters[bad])}`;
     }
+    if (i === 3 && this.report.groupBy && !this.report.aggregate) return 'Select an aggregate.';
     return '';
   }
 
@@ -76,25 +73,21 @@ export class ReportBuilder {
   }
 
   get sourceLabel(): string {
-    return sourceOf(this.catalog, this.report.sourceKey).label;
+    return sourceOf(this.report.sourceKey).label;
   }
 
   get filterSummary(): string {
-    const valid = this.report.filters.filter((f) => !filterError(this.catalog, this.report, f));
+    const valid = this.report.filters.filter((f) => !filterError(this.report, f));
     if (!valid.length) return 'None';
-    return valid.map((f) => {
-      const field = fieldOf(this.catalog, this.report, f.field);
-      const value = f.op === 'between' ? `${f.value} – ${f.valueTo ?? ''}` : f.value;
-      return `${field?.label ?? f.field} ${operatorLabel(field?.kind, f.op)} ${value}`.trim();
-    }).join(' · ');
+    return valid.map((f) => `${fieldOf(this.report, f.field)?.label} ${f.op} ${f.value}`).join(' · ');
   }
 
   get groupSummary(): string {
-    const g = this.report.groupBy ? fieldOf(this.catalog, this.report, this.report.groupBy)?.label : '';
-    const s = this.report.sortBy ? (fieldOf(this.catalog, this.report, this.report.sortBy)?.label ?? '') : '';
-    const parts = [g ? `Grouped by ${g} (${this.report.aggregate.toLowerCase()})` : 'Not grouped'];
+    const g = this.report.groupBy ? fieldOf(this.report, this.report.groupBy)?.label : '';
+    const s = this.report.sortBy ? (fieldOf(this.report, this.report.sortBy)?.label ?? '') : '';
+    const parts = [g ? `Grouped by ${g} (${(this.report.aggregate || 'Sum').toLowerCase()})` : 'Not grouped'];
     if (s) parts.push(`sorted by ${s} ${this.report.sortDir === 'asc' ? '↑' : '↓'}`);
-    parts.push(`max ${this.report.rowLimit} rows`);
+    parts.push(this.report.rowLimit ? `max ${this.report.rowLimit} rows` : 'all rows');
     return parts.join(', ');
   }
 

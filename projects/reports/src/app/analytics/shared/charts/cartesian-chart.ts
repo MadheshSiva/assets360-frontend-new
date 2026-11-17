@@ -33,6 +33,9 @@ interface LinePath {
   standalone: true,
   template: `
     <div class="chart" (mouseleave)="hover = null">
+      @if (empty) {
+        <div class="chart__empty">No data</div>
+      }
       <svg [attr.viewBox]="'0 0 ' + width + ' ' + height" [attr.height]="height" role="img" [attr.aria-label]="ariaLabel">
         @for (t of ticks; track $index) {
           <line class="gridline" [attr.x1]="padL" [attr.x2]="width - padR" [attr.y1]="t.y" [attr.y2]="t.y" />
@@ -67,7 +70,7 @@ interface LinePath {
         @if (hover !== null) {
           <line class="guide" [attr.x1]="labelX[hover]" [attr.x2]="labelX[hover]" [attr.y1]="padT" [attr.y2]="padT + plotH" />
         }
-        @for (x of labelX; track $index) {
+        @for (x of (empty ? [] : labelX); track $index) {
           <rect class="hit" [attr.x]="x - bandW / 2" [attr.y]="padT" [attr.width]="bandW" [attr.height]="plotH" (mouseenter)="hover = $index" />
         }
       </svg>
@@ -128,6 +131,8 @@ export class CartesianChart implements OnChanges, AfterViewInit, OnDestroy {
   labelX: number[] = [];
   labelParts: string[][] = [];
   hover: number | null = null;
+  /** True when there are no labels or no values to plot */
+  empty = true;
 
   get tipLeft(): number {
     return this.hover === null ? 0 : (this.labelX[this.hover] / this.width) * 100;
@@ -158,6 +163,11 @@ export class CartesianChart implements OnChanges, AfterViewInit, OnDestroy {
   }
 
   ngOnChanges(): void {
+    // Normalise inputs so missing / non-numeric values never reach the SVG attributes
+    this.labels = this.labels ?? [];
+    this.series = (this.series ?? []).map((s) => ({ ...s, values: (s.values ?? []).slice(0, this.labels.length).map((v) => (Number.isFinite(v) ? v : 0)) }));
+    this.empty = !this.labels.length || !this.series.some((s) => s.values.length);
+    if (this.hover !== null && this.hover >= this.labels.length) this.hover = null;
     const hasRight = this.series.some((s) => s.axis === 'right');
     this.padL = this.yTitle ? 52 : 44;
     this.padR = hasRight ? 44 : 12;
@@ -177,8 +187,9 @@ export class CartesianChart implements OnChanges, AfterViewInit, OnDestroy {
       stack && list.length
         ? Math.max(0, ...this.labels.map((_, i) => list.reduce((a, s) => a + (s.values[i] ?? 0), 0)))
         : Math.max(0, ...list.flatMap((s) => s.values));
-    const leftMax = this.max ?? niceMax(Math.max(peak(barSeries, this.stacked), peak(left.filter((s) => this.isLine(s)), false)) * 1.08);
-    const rightMax = this.rightMax ?? niceMax(peak(right, false) * 1.08);
+    const finite = (v: number | null) => (v !== null && Number.isFinite(v) ? v : 0);
+    const leftMax = finite(this.max) || niceMax(Math.max(peak(barSeries, this.stacked), peak(left.filter((s) => this.isLine(s)), false)) * 1.08);
+    const rightMax = finite(this.rightMax) || niceMax(peak(right, false) * 1.08);
     const yLeft = (v: number) => this.padT + this.plotH - ((v - this.min) / (leftMax - this.min || 1)) * this.plotH;
     const yRight = (v: number) => this.padT + this.plotH - ((v - this.rightMin) / (rightMax - this.rightMin || 1)) * this.plotH;
 

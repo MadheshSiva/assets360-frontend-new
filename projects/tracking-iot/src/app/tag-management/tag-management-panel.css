@@ -1,22 +1,19 @@
 /* Tag details side panel, activity timeline, dialogs and toast. */
-/* The panel card runs the full height of the page row (same as the left column); its content stays in view while scrolling */
 .panel {
-  align-self: stretch;
+  position: sticky;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 100px);
   padding: 16px 16px 14px;
+  overflow-y: auto;
   border: 1px solid var(--ti-border);
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
-.panel-body {
-  position: sticky;
-  top: 12px;
-  display: flex;
-  flex-direction: column;
-}
-
-.panel-close { position: absolute; top: -2px; right: -4px; }
+.panel-close { position: absolute; top: 14px; right: 12px; }
 .panel-title { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-right: 36px; }
 .panel-title h2 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -0.2px; }
 .panel-sub { margin: 4px 0 10px; font-size: 13px; color: var(--ti-text-2); }
@@ -70,35 +67,7 @@
 .ok { font-weight: 600; color: #15803d; }
 .bad { font-weight: 600; color: #b91c1c; }
 
-/* Toast: top-right card with a tone accent, title, message, close button and a countdown bar (paused on hover) */
-.toast-region { position: fixed; top: 20px; right: 20px; z-index: 10002; display: flex; flex-direction: column; gap: 8px; width: min(320px, calc(100vw - 32px)); pointer-events: none; }
-.toast {
-  --toast-accent: #16a34a; --toast-soft: #dcfce7;
-  position: relative; overflow: hidden; pointer-events: auto;
-  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px;
-  padding: 10px 8px 12px 12px; border-radius: 12px;
-  background: #fff; border: 1px solid #ececf3;
-  box-shadow: 0 10px 28px -10px rgba(30, 20, 80, 0.28), 0 2px 6px rgba(15, 23, 42, 0.05);
-  color: #111827; animation: toast-in 0.28s cubic-bezier(0.21, 1.02, 0.73, 1) both;
-}
-.toast--error { --toast-accent: #dc2626; --toast-soft: #fee2e2; }
-.toast--warning { --toast-accent: #d97706; --toast-soft: #fef3c7; }
-.toast--info { --toast-accent: #5b3fd4; --toast-soft: #ede9fe; }
-.toast-ic { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--toast-soft); color: var(--toast-accent); }
-.toast-body { min-width: 0; }
-.toast-title { display: block; font-size: 13.5px; font-weight: 600; line-height: 1.3; }
-/* one line, cut with … (full text in the tooltip); errors may take two lines */
-.toast-msg { margin: 1px 0 0; font-size: 12.5px; line-height: 1.4; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.toast--error .toast-msg { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
-.toast-close { display: grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 7px; background: transparent; color: #9ca3af; cursor: pointer; }
-.toast-close:hover { background: #f3f4f6; color: #111827; }
-.toast-close:focus-visible { outline: 2px solid var(--toast-accent); outline-offset: 1px; }
-.toast-bar { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--toast-accent); opacity: 0.6; transform-origin: left; animation: toast-countdown linear forwards; }
-.toast.is-paused .toast-bar { animation-play-state: paused; }
-@keyframes toast-in { from { opacity: 0; transform: translateX(24px) scale(0.98); } to { opacity: 1; transform: none; } }
-@keyframes toast-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
-@media (max-width: 600px) { .toast-region { top: 12px; right: 16px; left: 16px; width: auto; } }
-@media (prefers-reduced-motion: reduce) { .toast { animation: none; } .toast-bar { display: none; } }
+.toast { position: fixed; right: 24px; bottom: 24px; z-index: 10002; max-width: 420px; padding: 12px 18px; border-radius: 8px; background: #1f2937; color: #fff; font-size: 13.5px; }
 
 /* narrower screens: details slide in from the right over the table */
 @media (max-width: 1199px) {

@@ -19,17 +19,14 @@ import { CONNECTION_TONES, formatStamp } from './dx-format';
           <dt>Type</dt><dd>{{ connection.type }}</dd>
           <dt>Base URL</dt><dd class="dx-mono">{{ connection.baseUrl }}</dd>
           <dt>Authentication</dt><dd>{{ connection.auth }}</dd>
-          @if (connection.authClientId) {
-            <dt>Client ID / user</dt><dd class="dx-mono">{{ connection.authClientId }}</dd>
-          }
-          <dt>Secret</dt><dd class="dx-mono">{{ connection.secretStored ? (connection.secretMask || '••••••••') + ' (masked; the secret itself is not stored)' : 'Not set' }}</dd>
+          <dt>Secret</dt><dd class="dx-mono">{{ connection.secretStored ? '•••••••••••• (stored in vault)' : 'Not set' }}</dd>
           <dt>Certificate</dt>
-          <dd [class.dx-warn]="expiring">{{ connection.certExpiresInDays === null ? 'Not read yet — run a test' : 'Expires in ' + connection.certExpiresInDays + ' days' }}</dd>
-          <dt>Uptime (30 days)</dt><dd>{{ connection.uptime === null ? 'Not tested' : connection.uptime + '% of tests succeeded' }}</dd>
-          <dt>Last tested</dt><dd>{{ stamp(connection.lastTested) }}</dd>
-          @if (connection.lastTestMessage) {
-            <dt>Last result</dt><dd>{{ connection.lastTestMessage }}</dd>
+          <dd [class.dx-warn]="connection.certExpiresInDays <= 30">Expires in {{ connection.certExpiresInDays }} days</dd>
+          <dt>Uptime (30 days)</dt><dd>{{ connection.uptime }}%</dd>
+          @if (connection.syncDelayMin > 0) {
+            <dt>Sync delay</dt><dd class="dx-warn">{{ connection.syncDelayMin }} minutes behind</dd>
           }
+          <dt>Last tested</dt><dd>{{ stamp(connection.lastTested) }}</dd>
           <dt>Owner</dt><dd>{{ connection.owner }}</dd>
           <dt>Feeds using it</dt>
           <dd>
@@ -45,8 +42,8 @@ import { CONNECTION_TONES, formatStamp } from './dx-format';
           <a class="btn" routerLink="/administration/integration-api">
             Manage credentials <lucide-icon [img]="icons.ExternalLink" [size]="13"></lucide-icon>
           </a>
-          @if (expiring) {
-            <button type="button" class="btn btn--outline" (click)="rotate.emit(connection)">Re-check certificate</button>
+          @if (connection.certExpiresInDays <= 30) {
+            <button type="button" class="btn btn--outline" (click)="rotate.emit(connection)">Rotate certificate</button>
           }
           <button type="button" class="btn btn--outline" [disabled]="connection.status === 'Testing'" (click)="test.emit(connection)">
             {{ connection.status === 'Testing' ? 'Testing…' : 'Test connection' }}
@@ -70,11 +67,7 @@ export class ConnectionDetails {
     return CONNECTION_TONES[this.connection.status];
   }
 
-  get expiring(): boolean {
-    return this.connection.certExpiresInDays !== null && this.connection.certExpiresInDays <= 30;
-  }
-
-  stamp(s: string | null): string {
+  stamp(s: string): string {
     return formatStamp(s);
   }
 }

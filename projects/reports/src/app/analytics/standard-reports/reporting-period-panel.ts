@@ -1,13 +1,12 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CalendarDays, Globe, LucideAngularModule } from 'lucide-angular';
-import { forkJoin } from 'rxjs';
 import { ReportPeriod, SR_TIME_ZONES } from './standard-reports.data';
-import { StandardReportsService } from './standard-reports.service';
+import { quickRange } from './standard-reports.util';
 
 const PRESETS = ['Today', 'This week', 'This month', 'This quarter', 'This year'];
 
-/** Reporting period editor: date range, quick ranges (resolved by the service), time zone and "include time". */
+/** Reporting period editor: date range, quick ranges, time zone and "include time". */
 @Component({
   selector: 'app-sr-period-panel',
   standalone: true,
@@ -39,7 +38,8 @@ const PRESETS = ['Today', 'This week', 'This month', 'This quarter', 'This year'
       <div class="sr-period__row">
         <label class="sr-tz">
           <lucide-icon [img]="icons.Globe" [size]="18" />
-          <select aria-label="Time zone" [(ngModel)]="timeZone" (ngModelChange)="timeZoneChanged()">
+          <select aria-label="Time zone" [(ngModel)]="timeZone">
+            <option value="" disabled>Select Time Zone</option>
             @for (z of timeZones; track z.value) {
               <option [value]="z.value">{{ z.label }}</option>
             }
@@ -51,7 +51,7 @@ const PRESETS = ['Today', 'This week', 'This month', 'This quarter', 'This year'
           Include time
         </label>
         <span class="sr-period__error">{{ error }}</span>
-        <button type="button" class="btn btn--primary sr-period__apply" [disabled]="busy" (click)="submit()">{{ busy ? 'Applying…' : 'Apply Dates' }}</button>
+        <button type="button" class="btn btn--primary sr-period__apply" (click)="submit()">Apply Dates</button>
       </div>
     </section>
   `,
@@ -59,11 +59,8 @@ const PRESETS = ['Today', 'This week', 'This month', 'This quarter', 'This year'
 })
 export class ReportingPeriodPanel implements OnChanges {
   @Input({ required: true }) period!: ReportPeriod;
-  /** True while the page is saving the period */
-  @Input() busy = false;
+  @Input({ required: true }) today = '';
   @Output() apply = new EventEmitter<ReportPeriod>();
-
-  private readonly service = inject(StandardReportsService);
 
   readonly icons = { CalendarDays, Globe };
   readonly presets = PRESETS;
@@ -77,12 +74,8 @@ export class ReportingPeriodPanel implements OnChanges {
   timeZone = 'Asia/Dubai';
   preset = '';
   error = '';
-  /** Quick ranges resolved for the selected time zone */
-  private ranges: Record<string, { start: string; end: string }> = {};
-  private rangesZone = '';
 
-  ngOnChanges(changes: SimpleChanges): void {
-    if (!changes['period']) return;
+  ngOnChanges(): void {
     this.start = this.period.start;
     this.end = this.period.end;
     this.includeTime = !!this.period.startTime;
@@ -90,26 +83,14 @@ export class ReportingPeriodPanel implements OnChanges {
     this.endTime = this.period.endTime ?? '23:59';
     this.timeZone = this.period.timeZone;
     this.preset = this.matchingPreset();
-    this.loadRanges();
   }
 
   usePreset(p: string): void {
-    const range = this.ranges[p];
-    if (range) {
-      this.useRange(p, range);
-      return;
-    }
-    this.service.resolvePeriod(p, this.timeZone).subscribe({
-      next: (r) => {
-        this.ranges[p] = r;
-        this.useRange(p, r);
-      },
-      error: (err: Error) => (this.error = err.message)
-    });
-  }
-
-  timeZoneChanged(): void {
-    this.loadRanges();
+    const range = quickRange(p, this.today);
+    this.start = range.start;
+    this.end = range.end;
+    this.preset = p;
+    this.error = '';
   }
 
   edited(): void {
@@ -142,35 +123,11 @@ export class ReportingPeriodPanel implements OnChanges {
     });
   }
 
-  private useRange(p: string, range: { start: string; end: string }): void {
-    this.start = range.start;
-    this.end = range.end;
-    this.preset = p;
-    this.error = '';
-  }
-
   private matchingPreset(): string {
     for (const p of PRESETS) {
-      const r = this.ranges[p];
-      if (r && r.start === this.start && r.end === this.end) return p;
+      const r = quickRange(p, this.today);
+      if (r.start === this.start && r.end === this.end) return p;
     }
     return '';
-  }
-
-  /** Resolve every quick range for the time zone once, so the matching button can be highlighted. */
-  private loadRanges(): void {
-    const zone = this.timeZone;
-    if (!zone || zone === this.rangesZone) return;
-    this.rangesZone = zone;
-    this.ranges = {};
-    forkJoin(PRESETS.map((p) => this.service.resolvePeriod(p, zone))).subscribe({
-      next: (list) => {
-        if (zone !== this.timeZone) return;
-        PRESETS.forEach((p, i) => (this.ranges[p] = list[i]));
-        this.preset = this.matchingPreset();
-      },
-      // Buttons still work: each one resolves on click
-      error: () => (this.rangesZone = '')
-    });
   }
 }

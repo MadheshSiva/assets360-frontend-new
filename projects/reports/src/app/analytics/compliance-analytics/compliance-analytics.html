@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a [routerLink]="basePath">Reports &amp; Analytics</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <strong>Compliance Analytics</strong>
 </nav>
 
@@ -28,51 +28,46 @@
   <label class="filter filter--period">
     <span>Period</span>
     <select [(ngModel)]="period" (ngModelChange)="apply()">
+      <option value="">Select Period</option>
       @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Organization</span>
     <select [(ngModel)]="organization" (ngModelChange)="apply()">
+      <option value="">Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Location</span>
     <select [(ngModel)]="location" (ngModelChange)="apply()">
+      <option value="">Select Location</option>
       @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Compliance Area</span>
     <select [(ngModel)]="area" (ngModelChange)="apply()">
+      <option value="">Select Compliance Area</option>
       @for (a of areas; track a) { <option [value]="a">{{ a }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Regulation</span>
     <select [(ngModel)]="regulation" (ngModelChange)="apply()">
+      <option value="">Select Regulation</option>
       @for (r of regulations; track r) { <option [value]="r">{{ r }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Risk Level</span>
     <select [(ngModel)]="risk" (ngModelChange)="apply()">
+      <option value="">Select Risk Level</option>
       @for (r of riskLevels; track r) { <option [value]="r">{{ r }}</option> }
     </select>
   </label>
 </div>
-
-@if (loadError && !loaded) {
-  <div class="empty" role="alert">
-    {{ loadError }}
-    <button type="button" class="btn btn--sm btn--outline" (click)="refresh()">Try again</button>
-  </div>
-} @else if (loading && !loaded) {
-  <div class="empty" role="status">Loading compliance analytics…</div>
-} @else if (empty) {
-  <div class="empty">No inspections, findings, permits or certifications are recorded for the current filters.</div>
-}
 
 <section class="kpis" aria-label="Key figures">
   @for (k of kpis; track k.key) {
@@ -84,7 +79,7 @@
 <div class="ra-layout">
   <div class="widgets">
     <app-ra-widget class="span-2" title="Compliance Score Trend" info="Monthly compliance score overall and for regulatory, safety and environmental obligations" (exportCsv)="exportScore()">
-      <ra-cartesian-chart [labels]="view.labels" [series]="scoreSeries" kind="line" [height]="230" [min]="0" [max]="100" [format]="percentFormat"
+      <ra-cartesian-chart [labels]="view.labels" [series]="scoreSeries" kind="line" [height]="230" [min]="70" [max]="100" [format]="percentFormat"
         yTitle="Compliance Score (%)" ariaLabel="Compliance score trend" />
     </app-ra-widget>
 
@@ -102,14 +97,14 @@
 
     <app-ra-widget class="span-2" title="CAPA Closure Rate" info="Corrective and preventive actions closed out of all raised in the period" (exportCsv)="exportCapa()">
       <div class="ca-capa">
-        <ra-gauge-chart [value]="capaRate" [display]="capaDisplay" caption="CAPA Closure Rate" [target]="capaTarget" [size]="180" />
+        <ra-gauge-chart [value]="view.capaRate" [display]="capaDisplay" caption="CAPA Closure Rate" [target]="capaTarget" [size]="180" />
         <div class="mini-stats ca-capa__stats">
           <div class="mini-stat"><div><span>Total CAPA Actions</span><strong>{{ capaTotal }}</strong></div></div>
           <div class="mini-stat"><div><span>Closed</span><strong class="ca-good">{{ view.capaClosed }}</strong></div></div>
           <div class="mini-stat"><div><span>Open</span><strong class="ca-bad">{{ view.capaOpen.length }}</strong></div></div>
         </div>
       </div>
-      <ra-cartesian-chart [labels]="view.labels" [series]="capaSeries" kind="line" [height]="120" [min]="0" [max]="100" [format]="percentFormat" [legend]="false" ariaLabel="CAPA closure trend" />
+      <ra-cartesian-chart [labels]="view.labels" [series]="capaSeries" kind="line" [height]="120" [min]="70" [max]="100" [format]="percentFormat" [legend]="false" ariaLabel="CAPA closure trend" />
     </app-ra-widget>
 
     <app-ra-widget class="span-2" title="Permit & Certification Expiry" info="Permits, certifications and licences by expiry month (next 10 months)" (exportCsv)="exportExpiry()">
@@ -121,7 +116,7 @@
     </app-ra-widget>
 
     <app-ra-widget class="span-6" title="Regulatory Compliance by Location" info="Score, open findings, expiring items and risk per location" (exportCsv)="exportLocations()">
-      <app-ra-compliance-location-table [rows]="view.locations" [target]="view.scoreTarget" (view)="openLocation($event)" />
+      <app-ra-compliance-location-table [rows]="view.locations" (view)="openLocation($event)" />
     </app-ra-widget>
   </div>
 
@@ -141,6 +136,8 @@
           <button type="button" class="btn btn--sm btn--primary" (click)="insightAction(ins, ins.secondary.action)">{{ ins.secondary.label }}</button>
         </div>
       </article>
+    } @empty {
+      <div class="empty">No insights for the current filters.</div>
     }
   </aside>
 </div>
@@ -156,7 +153,7 @@
   <app-ra-action-plan-dialog [context]="plan.context" [defaultTitle]="plan.title" [defaultOwner]="plan.owner" (saved)="planSaved($event)" (closed)="plan = null" />
 }
 @if (saveOpen) {
-  <app-ra-save-view-dialog defaultName="Compliance Analytics – {{ location }}" (saved)="saveNamedView($event)" (closed)="saveOpen = false" />
+  <app-ra-save-view-dialog defaultName="Compliance Analytics – {{ locationLabel }}" (saved)="saveNamedView($event)" (closed)="saveOpen = false" />
 }
 @if (toast) {
   <div class="toast" role="status">{{ toast }}</div>

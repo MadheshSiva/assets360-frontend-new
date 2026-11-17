@@ -1,14 +1,12 @@
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
-import { catchError, of } from 'rxjs';
+import { Component, ElementRef, OnDestroy, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
   ArrowDown, ArrowUp, BookOpen, Calendar, CircleCheck, CirclePlus, Database, FileText, Info, Link, LucideAngularModule, RefreshCw, Search,
   Share2
 } from 'lucide-angular';
-import { AnalyticsPage } from '../shared/analytics-common';
+import { AnalyticsPage, downloadCsv } from '../shared/analytics-common';
 import { RA_COLORS, Sparkline } from '../shared/charts';
-import { formatBytes } from './data-export-api.data';
 import { ApiConnection, Dataset, ExportDraft, ExportFormat, ExportJob, ExportStatus } from './data-export-api.model';
 import { DataExportService } from './data-export-api.service';
 import { ConfirmDialog } from './dx-confirm-dialog';
@@ -34,7 +32,6 @@ interface Kpi {
   trend: number[];
   color: string;
   info: string;
-  since: string;
 }
 
 interface Confirm {
@@ -43,9 +40,11 @@ interface Confirm {
   run: () => void;
 }
 
+const RUN_MS = 2400;
+const TEST_MS = 1400;
 const DAY = 86_400_000;
 
-/** Reports & Analytics > Data Export / API: export jobs, reporting connections, datasets and access logs from /api/data-export. */
+/** Reports & Analytics > Data Export / API: scheduled data feeds, reporting connections, datasets and access logs. */
 @Component({
   standalone: true,
   selector: 'app-ra-data-export-api',
@@ -54,11 +53,10 @@ const DAY = 86_400_000;
     IntegrationStatusCard, AccessSecurityCard, IntegrationInsights, ConnectionsTab, DatasetsTab, AccessLogsTab, ConnectionDialog,
     ConnectionDetails, DocsDialog, ConfirmDialog
   ],
-  providers: [DataExportService],
   templateUrl: './data-export-api.html',
   styleUrls: ['../shared/analytics-page.css', './data-export-api.css']
 })
-export class DataExportApiPage extends AnalyticsPage implements OnInit, OnDestroy {
+export class DataExportApiPage extends AnalyticsPage implements OnDestroy {
   readonly service = inject(DataExportService);
   @ViewChild(ExportBuilder) builder?: ExportBuilder;
   @ViewChild(ExportBuilder, { read: ElementRef }) builderEl?: ElementRef<HTMLElement>;
@@ -70,6 +68,7 @@ export class DataExportApiPage extends AnalyticsPage implements OnInit, OnDestro
     { key: 'datasets', label: 'Datasets' },
     { key: 'logs', label: 'Access Logs' }
   ];
+  readonly formats: ExportFormat[] = ['CSV', 'XLSX', 'JSON', 'Parquet', 'API'];
   readonly statuses: ExportStatus[] = ['Success', 'Running', 'Scheduled', 'Failed', 'Paused', 'Draft'];
 
   tab: Tab = 'exports';
@@ -85,92 +84,36 @@ export class DataExportApiPage extends AnalyticsPage implements OnInit, OnDestro
   confirm: Confirm | null = null;
   logResource = '';
   highlightId = '';
+  healthVersion = 0;
 
+  private readonly runTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly testTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private uiTimer: ReturnType<typeof setTimeout> | null = null;
-  private lastUpdated = 0;
-  private readonly clock = setInterval(() => this.tick(), 60_000);
-
-  get formats(): ExportFormat[] {
-    return this.service.formats;
-  }
-
-  get healthVersion(): number {
-    return this.service.version();
-  }
-
-  /** Nothing to show yet: no jobs, no connections and every dataset empty. */
-  get empty(): boolean {
-    const s = this.service;
-    return s.loaded() && !s.jobs.length && !s.connections.length && s.datasets.every((d) => !d.rows);
-  }
-
-  ngOnInit(): void {
-    this.refreshing = true;
-    this.service.loadOptions().pipe(catchError(() => of(undefined))).subscribe();
-    this.load();
-  }
-
-  private load(announce?: string): void {
-    this.refreshing = true;
-    this.service.loadOverview().subscribe({
-      next: () => {
-        this.refreshing = false;
-        this.lastUpdated = Date.now();
-        this.updatedMinutes = 0;
-        if (announce) this.notify(announce);
-      },
-      error: (err: Error) => {
-        this.refreshing = false;
-        this.notify(err.message);
-      }
-    });
-  }
-
-  override refresh(): void {
-    if (!this.refreshing) this.load('Data refreshed.');
-  }
-
-  private tick(): void {
-    if (this.lastUpdated) this.updatedMinutes = Math.floor((Date.now() - this.lastUpdated) / 60_000);
-  }
 
   // ----- Header figures -----
 
   get kpis(): Kpi[] {
     const s = this.service;
-    const sum = s.summary;
     const rate = s.successRate;
-    const prevRate = sum.successRatePrevious30;
-    const rateTrend = s.stats7.success.map((v, i) => (v + s.stats7.failed[i] ? (v / (v + s.stats7.failed[i])) * 100 : 0));
-    const rateDelta = rate !== null && prevRate !== null ? rate - prevRate : null;
-    const bytesTrend = s.stats7.generatedBytes.slice();
     return [
-      this.kpi('Active Exports', s.activeExports, sum.activeExportsWeekAgo, 'purple', FileText, 'Export jobs that are not paused or drafts'),
-      this.kpi('API Connections', s.connections.length, sum.connectionsWeekAgo, 'blue', Link, 'Reporting systems connected to Asset360'),
-      this.kpi('Scheduled Jobs', s.scheduledJobs, sum.scheduledJobsWeekAgo, 'pink', Calendar, 'Exports that run on a schedule'),
+      this.kpi('Active Exports', s.activeExports, 'purple', FileText, 'Export jobs that are not paused or drafts'),
+      this.kpi('API Connections', s.connections.length, 'blue', Link, 'Reporting systems connected to Asset360'),
+      this.kpi('Scheduled Jobs', s.scheduledJobs, 'pink', Calendar, 'Exports that run on a schedule'),
       {
-        label: 'Successful Runs', value: rate === null ? '—' : `${rate.toFixed(1)}%`,
-        delta: rateDelta === null ? '—' : `${rateDelta >= 0 ? '+' : ''}${rateDelta.toFixed(1)} pts`,
-        up: rateDelta === null || rateDelta >= 0, tone: 'green', icon: CircleCheck, trend: rateTrend, color: RA_COLORS.green,
-        info: 'Export runs that succeeded, last 30 days (vs the 30 days before)', since: 'vs previous 30 days'
+        label: 'Successful Runs', value: rate === null ? '—' : `${rate.toFixed(1)}%`, delta: '', up: true, tone: 'green', icon: CircleCheck,
+        trend: [], color: RA_COLORS.green, info: 'Export runs that succeeded, last 30 days'
       },
       {
-        label: 'Data Generated', value: formatBytes(sum.generatedBytes30), delta: this.pct(sum.generatedBytes30, sum.generatedBytesPrevious30),
-        up: sum.generatedBytes30 >= sum.generatedBytesPrevious30, tone: 'orange', icon: Database, trend: bytesTrend, color: RA_COLORS.orange,
-        info: `Size of the files generated by export runs, last 30 days (${s.deliveryNote})`, since: 'vs previous 30 days'
+        label: 'Data Delivered', value: `${s.deliveredTb.toFixed(1)} TB`, delta: '', up: true, tone: 'orange',
+        icon: Database, trend: [], color: RA_COLORS.orange, info: 'Volume delivered by exports and the API, last 30 days'
       }
     ];
   }
 
-  private kpi(label: string, value: number, weekAgo: number, tone: string, icon: typeof Info, info: string): Kpi {
+  /** Trend history and week-over-week delta come from the API; until then only the current value is shown. */
+  private kpi(label: string, value: number, tone: string, icon: typeof Info, info: string): Kpi {
     const color = tone === 'blue' ? RA_COLORS.blue : tone === 'pink' ? RA_COLORS.pink : RA_COLORS.purple;
-    return { label, value: String(value), delta: this.pct(value, weekAgo), up: value >= weekAgo, tone, icon, trend: [weekAgo, value], color, info, since: 'vs last week' };
-  }
-
-  private pct(now: number, before: number): string {
-    if (!before) return now ? 'new' : '—';
-    const p = ((now - before) / before) * 100;
-    return `${p >= 0 ? '+' : ''}${Math.round(p)}%`;
+    return { label, value: String(value), delta: '', up: true, tone, icon, trend: [], color, info };
   }
 
   // ----- Filters -----
@@ -229,27 +172,25 @@ export class DataExportApiPage extends AnalyticsPage implements OnInit, OnDestro
   // ----- Export jobs -----
 
   runJob(job: ExportJob): void {
-    const current = this.service.jobs.find((j) => j.id === job.id) ?? job;
-    if (current.status === 'Running') return;
+    if (this.runTimers.has(job.id) || job.status === 'Running') return;
+    this.service.startRun(job);
     this.notify(`“${job.name}” is running…`);
-    this.service.runJob(current).subscribe({
-      next: ({ job: done, run }) => {
-        if (run.status === 'Failed') {
-          this.notify(`“${done.name}” failed: ${run.error ?? done.lastError ?? 'unknown error'}`);
-          return;
-        }
-        const rows = `${run.rowCount.toLocaleString('en-US')} row${run.rowCount === 1 ? '' : 's'}`;
-        this.notify(`“${done.name}” generated (${rows}, ${formatBytes(run.sizeBytes)} ${done.format}); ${run.deliveryMessage ?? this.service.deliveryNote}. Use Download to get the file.`);
-      },
-      error: (err: Error) => this.notify(err.message)
-    });
+    this.runTimers.set(
+      job.id,
+      setTimeout(() => {
+        this.runTimers.delete(job.id);
+        this.service.finishRun(job);
+        this.healthVersion++;
+        this.notify(job.status === 'Failed' ? `“${job.name}” failed: ${job.lastError}` : `“${job.name}” delivered to ${job.destination}.`);
+      }, RUN_MS)
+    );
   }
 
   downloadJob(job: ExportJob): void {
-    this.service.downloadJob(job).subscribe({
-      next: (kind) => this.notify(kind === 'file' ? `Latest file of “${job.name}” downloaded.` : `Sample of “${job.name}” downloaded (25 rows, CSV).`),
-      error: (err: Error) => this.notify(err.message)
-    });
+    const s = this.service.sample(job.datasetId, job.fields, 25);
+    downloadCsv(`${this.slug(job.name)}-sample.csv`, s.header, s.rows);
+    this.service.log('Sample downloaded', job.name, 'Web console');
+    this.notify(`Sample of “${job.name}” downloaded (25 rows, CSV).`);
   }
 
   editJob(job: ExportJob): void {
@@ -258,31 +199,27 @@ export class DataExportApiPage extends AnalyticsPage implements OnInit, OnDestro
   }
 
   pauseJob(job: ExportJob): void {
-    this.service.pause(job).subscribe({
-      next: () => this.notify(`“${job.name}” paused.`),
-      error: (err: Error) => this.notify(err.message)
-    });
+    this.service.pause(job);
+    this.notify(`“${job.name}” paused.`);
   }
 
   resumeJob(job: ExportJob): void {
-    this.service.resume(job).subscribe({
-      next: () => this.notify(`“${job.name}” resumed.`),
-      error: (err: Error) => this.notify(err.message)
-    });
+    this.service.resume(job);
+    this.notify(`“${job.name}” resumed.`);
   }
 
   askDeleteJob(job: ExportJob): void {
     this.confirm = {
       title: 'Delete export job?',
-      message: `“${job.name}” and its schedule will be removed. Its run history and generated files are kept.`,
-      run: () =>
-        this.service.deleteJob(job).subscribe({
-          next: () => {
-            if (this.builder?.draft.id === job.id) this.builder.reset();
-            this.notify(`“${job.name}” deleted.`);
-          },
-          error: (err: Error) => this.notify(err.message)
-        })
+      message: `“${job.name}” and its schedule will be removed. Files already delivered to ${job.destination} are not affected.`,
+      run: () => {
+        const t = this.runTimers.get(job.id);
+        if (t) clearTimeout(t);
+        this.runTimers.delete(job.id);
+        this.service.deleteJob(job);
+        if (this.builder?.draft.id === job.id) this.builder.reset();
+        this.notify(`“${job.name}” deleted.`);
+      }
     };
   }
 
@@ -293,33 +230,17 @@ export class DataExportApiPage extends AnalyticsPage implements OnInit, OnDestro
   }
 
   onDraftSaved(draft: ExportDraft): void {
-    this.builder?.setBusy(true);
-    this.service.saveJob(draft, 'Draft').subscribe({
-      next: (job) => {
-        this.builder?.setBusy(false);
-        if (this.builder) this.builder.draft.id = job.id;
-        this.highlightId = job.id;
-        this.notify(`Draft “${job.name}” saved.`);
-      },
-      error: (err: Error) => {
-        this.builder?.setBusy(false, err.message);
-      }
-    });
+    const job = this.service.saveJob(draft, 'Draft');
+    if (this.builder) this.builder.draft.id = job.id;
+    this.highlightId = job.id;
+    this.notify(`Draft “${job.name}” saved.`);
   }
 
   onRunRequested(draft: ExportDraft): void {
-    this.builder?.setBusy(true);
-    this.service.saveJob(draft, 'Scheduled').subscribe({
-      next: (job) => {
-        this.builder?.setBusy(false);
-        this.builder?.reset();
-        this.highlightId = job.id;
-        this.runJob(job);
-      },
-      error: (err: Error) => {
-        this.builder?.setBusy(false, err.message);
-      }
-    });
+    const job = this.service.saveJob(draft, 'Scheduled');
+    this.builder?.reset();
+    this.highlightId = job.id;
+    this.runJob(job);
   }
 
   private withBuilder(fn: (b: ExportBuilder) => void): void {
@@ -335,32 +256,30 @@ export class DataExportApiPage extends AnalyticsPage implements OnInit, OnDestro
 
   // ----- Connections -----
 
-  testConnection(c: ApiConnection, announce?: (con: ApiConnection) => string): void {
-    const current = this.service.connections.find((x) => x.id === c.id) ?? c;
-    if (current.status === 'Testing') return;
-    this.service.testConnection(current).subscribe({
-      next: (con) => this.notify(announce ? announce(con) : `${con.name}: ${con.lastTestMessage ?? con.status}`),
-      error: (err: Error) => this.notify(err.message)
-    });
+  testConnection(c: ApiConnection): void {
+    if (this.testTimers.has(c.id)) return;
+    this.service.startTest(c);
+    this.testTimers.set(
+      c.id,
+      setTimeout(() => {
+        this.testTimers.delete(c.id);
+        this.notify(this.service.finishTest(c));
+      }, TEST_MS)
+    );
   }
 
   openConnection(c: ApiConnection): void {
     this.detailsId = c.id;
   }
 
-  /** Certificates are renewed on the remote system; this re-checks the certificate it now presents. */
   rotateCertificate(c: ApiConnection): void {
-    this.testConnection(c, (con) =>
-      con.certExpiresInDays === null
-        ? `${con.name}: certificate could not be read. ${con.lastTestMessage ?? ''}`
-        : `${con.name} certificate re-checked: expires in ${con.certExpiresInDays} days. Renew it on the ${con.name} side if it is still close to expiry.`
-    );
+    this.service.rotateCertificate(c);
+    this.notify(`Certificate for ${c.name} rotated — valid for 365 days.`);
   }
 
   onConnectionSaved(name: string): void {
     this.showAddConnection = false;
-    const con = this.service.connections.find((c) => c.name === name);
-    this.notify(`${name} added and tested${con ? ` (${con.status})` : ''}. Only a masked form of the secret was stored.`);
+    this.notify(`${name} added. The secret was stored and is no longer shown.`);
   }
 
   askRemoveConnection(c: ApiConnection): void {
@@ -368,16 +287,16 @@ export class DataExportApiPage extends AnalyticsPage implements OnInit, OnDestro
     this.confirm = {
       title: 'Remove API connection?',
       message: used
-        ? `${c.name} is used by ${used} export job${used > 1 ? 's' : ''}; edit them to choose another connection.`
-        : `${c.name} will be removed together with its stored (masked) secret.`,
-      run: () =>
-        this.service.deleteConnection(c).subscribe({
-          next: () => {
-            if (this.detailsId === c.id) this.detailsId = '';
-            this.notify(`${c.name} removed.`);
-          },
-          error: (err: Error) => this.notify(err.message)
-        })
+        ? `${c.name} is used by ${used} export job${used > 1 ? 's' : ''}; they will fail until a new connection is chosen.`
+        : `${c.name} will be disconnected and its stored secret revoked.`,
+      run: () => {
+        const t = this.testTimers.get(c.id);
+        if (t) clearTimeout(t);
+        this.testTimers.delete(c.id);
+        if (this.detailsId === c.id) this.detailsId = '';
+        this.service.deleteConnection(c);
+        this.notify(`${c.name} removed.`);
+      }
     };
   }
 
@@ -415,8 +334,24 @@ export class DataExportApiPage extends AnalyticsPage implements OnInit, OnDestro
     c?.run();
   }
 
+  private slug(s: string): string {
+    return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+
   override ngOnDestroy(): void {
-    clearInterval(this.clock);
+    // Settle simulated runs and tests so nothing is left "Running" in the in-memory store
+    for (const [id, t] of this.runTimers) {
+      clearTimeout(t);
+      const job = this.service.jobs.find((j) => j.id === id);
+      if (job) this.service.finishRun(job);
+    }
+    for (const [id, t] of this.testTimers) {
+      clearTimeout(t);
+      const con = this.service.connections.find((c) => c.id === id);
+      if (con) this.service.finishTest(con);
+    }
+    this.runTimers.clear();
+    this.testTimers.clear();
     if (this.uiTimer) clearTimeout(this.uiTimer);
     super.ngOnDestroy();
   }

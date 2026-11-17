@@ -40,7 +40,6 @@ export function formatStamp(iso: string | null): string {
 
 /** "01 – 30 Sep 2026", "01 Sep – 15 Oct 2026", or with times "01 Sep 2026 00:00 – 30 Sep 2026 23:59" */
 export function formatPeriod(p: ReportPeriod): string {
-  if (!p.start || !p.end) return '—';
   const a = parseDay(p.start);
   const b = parseDay(p.end);
   if (p.startTime && p.endTime) return `${formatDay(p.start)} ${p.startTime} – ${formatDay(p.end)} ${p.endTime}`;
@@ -74,22 +73,25 @@ export function nextRun(schedule: ReportSchedule, today: string): string {
   return `${isoDay(d)}T${schedule.time}`;
 }
 
-/**
- * Wall-clock date and time of a UTC instant in an IANA time zone, e.g. ('2026-08-31T20:00:00Z', 'Asia/Dubai')
- * → { date: '2026-09-01', time: '00:00' }. Unknown zones fall back to UTC.
- */
-export function zonedParts(utcIso: string, timeZone: string): { date: string; time: string } {
-  // The API serialises UTC with a 'Z'; treat a bare value as UTC too.
-  const instant = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(utcIso) ? utcIso : `${utcIso}Z`);
-  const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
-  let fmt: Intl.DateTimeFormat;
-  try {
-    fmt = new Intl.DateTimeFormat('en-US', { ...options, timeZone });
-  } catch {
-    fmt = new Intl.DateTimeFormat('en-US', { ...options, timeZone: 'UTC' });
+/** Calendar quick ranges relative to the reporting "today". */
+export function quickRange(key: string, today: string): { start: string; end: string } {
+  const t = parseDay(today);
+  const y = t.getFullYear();
+  const m = t.getMonth();
+  switch (key) {
+    case 'Today':
+      return { start: today, end: today };
+    case 'This week':
+      return { start: addDays(today, -t.getDay()), end: addDays(today, 6 - t.getDay()) };
+    case 'This month':
+      return { start: isoDay(new Date(y, m, 1)), end: isoDay(new Date(y, m + 1, 0)) };
+    case 'This quarter': {
+      const q = Math.floor(m / 3) * 3;
+      return { start: isoDay(new Date(y, q, 1)), end: isoDay(new Date(y, q + 3, 0)) };
+    }
+    default:
+      return { start: isoDay(new Date(y, 0, 1)), end: isoDay(new Date(y, 11, 31)) };
   }
-  const p = Object.fromEntries(fmt.formatToParts(instant).map((x) => [x.type, x.value]));
-  return { date: `${p['year']}-${p['month']}-${p['day']}`, time: `${p['hour']}:${p['minute']}` };
 }
 
 export function isEmail(value: string): boolean {

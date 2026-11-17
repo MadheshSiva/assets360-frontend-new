@@ -1,7 +1,7 @@
 import { Directive, OnDestroy } from '@angular/core';
 import { ADMIN_LOCATIONS, ADMIN_PEOPLE, CURRENT_USER, ORGANIZATIONS } from './admin-common';
 
-// Shared filter lists, formatting and the page base class for Reports & Analytics. Figures come from the Report Analytics API.
+// Entity lists (organizations, locations, categories, people) and figures come from the APIs (not wired yet).
 
 export { ADMIN_PEOPLE as RA_PEOPLE, CURRENT_USER };
 
@@ -10,21 +10,16 @@ export const RA_BASE_PATH = '/reports-analytics';
 export const RA_ORGANIZATIONS = ['All organizations', ...ORGANIZATIONS];
 
 /** Sites used across Asset360 (same as Administration > Organization). */
-export const RA_LOCATIONS = ['All locations', ...ADMIN_LOCATIONS, 'Jebel Ali Warehouse', 'Al Ain Depot'];
+export const RA_LOCATIONS = ['All locations', ...ADMIN_LOCATIONS];
 
 /** Asset categories from Master Data Management. */
-export const RA_CATEGORIES = ['Vehicles', 'Machinery', 'Facilities', 'IT Equipment', 'HVAC', 'Power & Electrical', 'Safety & PPE'];
+export const RA_CATEGORIES: string[] = [];
 
-/** Reporting months Jan–Oct 2026 for trend charts; '\n' splits the axis label onto two lines. */
-export const RA_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'];
-export const RA_MONTH_LABELS = RA_MONTHS.map((m) => `${m}\n2026`);
+/** Reporting months for trend charts come with the API data. */
+export const RA_MONTHS: string[] = [];
+export const RA_MONTH_LABELS: string[] = [];
 
-export const RA_PERIODS = ['01 Jan 2026 – 28 Oct 2026', '01 Oct 2026 – 28 Oct 2026', '01 Jul 2026 – 30 Sep 2026', 'Last 30 days', 'Last 12 months'];
-
-/** Asset IDs follow the numbering sequence used by the asset register, e.g. AST-2026-DXB-000247. */
-export function assetId(site: string, n: number): string {
-  return `AST-2026-${site}-${String(n).padStart(6, '0')}`;
-}
+export const RA_PERIODS = ['Year to date', 'This month', 'Last quarter', 'Last 30 days', 'Last 12 months'];
 
 /** Amounts are reported in UAE Dirham (the group's base currency). */
 export const RA_CURRENCY = 'AED';
@@ -68,30 +63,38 @@ export abstract class AnalyticsPage implements OnDestroy {
   readonly organizations = RA_ORGANIZATIONS;
   readonly locations = RA_LOCATIONS;
   readonly periods = RA_PERIODS;
-  period = RA_PERIODS[0];
-  organization = RA_ORGANIZATIONS[0];
-  location = RA_LOCATIONS[0];
+  /** Filter values start empty ('' = no filter; an empty period reads as the default, Year to date). */
+  period = '';
+  organization = '';
+  location = '';
+
+  /** Period used for captions and exports: the selected one, or the default when none is picked. */
+  get periodLabel(): string {
+    return this.period || RA_PERIODS[0];
+  }
+
+  get organizationLabel(): string {
+    return this.organization || RA_ORGANIZATIONS[0];
+  }
+
+  get locationLabel(): string {
+    return this.location || RA_LOCATIONS[0];
+  }
 
   /** Minutes since the data was refreshed */
-  updatedMinutes = 5;
+  updatedMinutes = 0;
   refreshing = false;
   toast: string | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
-  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   get updatedText(): string {
     return this.updatedMinutes === 0 ? 'Updated just now' : `Updated ${this.updatedMinutes} min ago`;
   }
 
-  /** Fallback for pages without data to reload; pages backed by the API override this to re-fetch. */
+  /** Pages reload their data from the reporting API here once it exists. */
   refresh(): void {
     if (this.refreshing) return;
-    this.refreshing = true;
-    this.refreshTimer = setTimeout(() => {
-      this.refreshing = false;
-      this.updatedMinutes = 0;
-      this.notify('Data refreshed.');
-    }, 700);
+    this.updatedMinutes = 0;
   }
 
   saveView(name: string): void {
@@ -106,6 +109,5 @@ export abstract class AnalyticsPage implements OnDestroy {
 
   ngOnDestroy(): void {
     if (this.toastTimer) clearTimeout(this.toastTimer);
-    if (this.refreshTimer) clearTimeout(this.refreshTimer);
   }
 }

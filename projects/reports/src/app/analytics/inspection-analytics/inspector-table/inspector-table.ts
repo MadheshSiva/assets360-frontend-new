@@ -1,8 +1,8 @@
 import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
 import { ArrowDown, ArrowUp, ArrowUpDown, LucideAngularModule } from 'lucide-angular';
-import { InspectorRow } from '../inspection-analytics.model';
+import { InspectorRow } from '../inspection-analytics.data';
 
-type SortKey = 'name' | 'completed' | 'avgHours' | 'findingRate' | 'closureRate';
+type SortKey = 'name' | 'inspections' | 'avgHours' | 'findingRate' | 'closureRate';
 
 /** Inspector Performance: workload, speed, finding rate and closure rate per inspector. */
 @Component({
@@ -28,13 +28,13 @@ type SortKey = 'name' | 'completed' | 'avgHours' | 'findingRate' | 'closureRate'
               <tr>
                 <td class="muted">{{ i + 1 }}</td>
                 <td>{{ r.name }}</td>
-                <td class="num">{{ r.completed.toLocaleString('en-US') }}</td>
-                <td class="num">{{ r.avgHours === null ? '—' : r.avgHours + ' hrs' }}</td>
-                <td class="num">{{ r.findingRate === null ? '—' : r.findingRate + '%' }}</td>
+                <td class="num">{{ r.inspections.toLocaleString('en-US') }}</td>
+                <td class="num">{{ r.avgHours }} hrs</td>
+                <td class="num">{{ r.findingRate }}%</td>
                 <td>
                   <span class="ia-closure">
-                    <span class="meter"><i [style.width.%]="r.closureRate ?? 0" [style.background]="closureColor(r)"></i></span>
-                    <b>{{ r.closureRate === null ? '—' : r.closureRate + '%' }}</b>
+                    <span class="meter"><i [style.width.%]="r.closureRate" [style.background]="closureColor(r)"></i></span>
+                    <b>{{ r.closureRate }}%</b>
                   </span>
                 </td>
                 <td><button type="button" class="btn btn--sm btn--outline" (click)="view.emit(r)">View</button></td>
@@ -63,7 +63,7 @@ export class InspectorTable implements OnChanges {
   readonly icons = { ArrowDown, ArrowUp, ArrowUpDown };
   readonly columns: { key: SortKey; label: string }[] = [
     { key: 'name', label: 'Inspector' },
-    { key: 'completed', label: 'Inspections Completed' },
+    { key: 'inspections', label: 'Inspections Completed' },
     { key: 'avgHours', label: 'Avg. Duration' },
     { key: 'findingRate', label: 'Finding Rate' },
     { key: 'closureRate', label: 'Closure Rate' }
@@ -72,7 +72,7 @@ export class InspectorTable implements OnChanges {
   @Input({ required: true }) rows: InspectorRow[] = [];
   @Output() view = new EventEmitter<InspectorRow>();
 
-  sortKey: SortKey = 'completed';
+  sortKey: SortKey = 'inspections';
   sortDir: 1 | -1 = -1;
   sorted: InspectorRow[] = [];
 
@@ -94,18 +94,16 @@ export class InspectorTable implements OnChanges {
     return this.sortKey !== key ? 'none' : this.sortDir === 1 ? 'ascending' : 'descending';
   }
 
-  /** Green at 90%+, orange from 85%, red below; grey when there is nothing to close */
+  /** Green at 90%+, orange from 85%, red below */
   closureColor(r: InspectorRow): string {
-    if (r.closureRate === null) return '#94a3b8';
     return r.closureRate >= 90 ? '#10b981' : r.closureRate >= 85 ? '#f59e0b' : '#ef4444';
   }
 
   private applySort(): void {
     const key = this.sortKey;
     this.sorted = [...this.rows].sort((a, b) => {
-      // Missing figures (no completed inspections / findings) sort below every number
-      const va = a[key] ?? -1;
-      const vb = b[key] ?? -1;
+      const va = a[key];
+      const vb = b[key];
       return (typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb))) * this.sortDir;
     });
   }

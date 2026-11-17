@@ -1,8 +1,8 @@
-import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, HostListener, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription, catchError, forkJoin, of } from 'rxjs';
+import { Subscription } from 'rxjs';
 import {
   LucideAngularModule,
   Activity,
@@ -40,15 +40,13 @@ import {
   Radio,
   ScanLine,
 } from 'lucide-angular';
-import { apiErrorMessage } from '../shared/tracking-api';
-import { Candidate, CheckResult, Compat, DeviceKind, ExistingDevice, HistoryEvent, QUEUE, REASONS, SESSION, STOCK, blankDevice, checksFor, compatOf } from './replacement-data';
-import { IoTDeviceDto, ReplacementDeviceApiService, requestOf, toCandidate, toExisting } from './replacement-device-api.service';
+import { Candidate, CheckResult, Compat, DeviceKind, ExistingDevice, HistoryEvent, QUEUE, REASONS, SESSION, STOCK, checksFor, compatOf } from './replacement-data';
 
 type OptKey = 'telemetry' | 'alerts' | 'group' | 'gateway' | 'history' | 'endPrior';
 interface OptDef { key: OptKey; label: string; desc: string }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const KIND_ICONS: Record<DeviceKind, typeof Cpu> = { beacon: Bluetooth, vibration: Activity, temperature: Thermometer, gps: MapPin, other: Cpu };
+const KIND_ICONS: Record<DeviceKind, typeof Cpu> = { beacon: Bluetooth, vibration: Activity, temperature: Thermometer, gps: MapPin };
 const DEFAULT_OPTS: Record<OptKey, boolean> = { telemetry: true, alerts: true, group: true, gateway: true, history: true, endPrior: true };
 
 @Component({
@@ -56,9 +54,9 @@ const DEFAULT_OPTS: Record<OptKey, boolean> = { telemetry: true, alerts: true, g
   standalone: true,
   imports: [CommonModule, FormsModule, LucideAngularModule],
   templateUrl: './device-replacement.html',
-  styleUrls: ['./device-replacement.css', './device-replacement-steps.css', './device-replacement-panels.css', '../shared/iot-purple-theme.css'],
+  styleUrls: ['./device-replacement.css', './device-replacement-steps.css', './device-replacement-panels.css'],
 })
-export class DeviceReplacement implements OnInit, OnDestroy {
+export class DeviceReplacement implements OnDestroy {
   readonly icons = { ChevronDown, Link2, Radio, ScanLine, Activity, ArrowLeft, ArrowRight, Box, Check, CircleAlert, CircleCheck, CircleX, Clock, Database, FileText, History, Info, LoaderCircle, RotateCcw, Search, Settings, ShieldCheck, Tag, TriangleAlert, Wrench, X };
   readonly reasons = REASONS;
   readonly steps = ['Select Existing Device', 'Choose Replacement', 'Validate Compatibility', 'Transfer Configuration', 'Confirm & Close'];
@@ -74,9 +72,8 @@ export class DeviceReplacement implements OnInit, OnDestroy {
   ];
 
   step = 1;
-  /** Blank until a device from the queue is picked. */
-  device: ExistingDevice = blankDevice();
-  reason = '';
+  device: ExistingDevice = QUEUE[0];
+  reason = QUEUE[0].reason;
   candidateId = '';
   search = '';
   opts: Record<OptKey, boolean> = { ...DEFAULT_OPTS };
@@ -96,63 +93,21 @@ export class DeviceReplacement implements OnInit, OnDestroy {
   doneNewId = '';
   draftNote = '';
   toast = '';
-  loading = false;
-  loadError = '';
-  /** Confirming (PUT of the spare) is in flight. */
-  saving = false;
 
+  private timers: ReturnType<typeof setTimeout>[] = [];
   private toastTimer?: ReturnType<typeof setTimeout>;
-  private sub = new Subscription();
+  private sub?: Subscription;
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-  private readonly api = inject(ReplacementDeviceApiService);
 
-  ngOnInit(): void {
-    this.load();
+  constructor() {
+    this.sub = this.route.queryParamMap.subscribe((q) => this.init(q.get('device')));
   }
 
   ngOnDestroy(): void {
-    this.sub.unsubscribe();
+    this.sub?.unsubscribe();
+    this.timers.forEach((t) => clearTimeout(t));
     clearTimeout(this.toastTimer);
-  }
-
-  /** Stock (GET /api/replacement-devices) and the queue: IoT devices whose health is Critical (GET /api/iot-devices). */
-  load(): void {
-    this.loading = true;
-    this.loadError = '';
-    let iotError = '';
-    this.sub.add(forkJoin({
-      stock: this.api.list(),
-      devices: this.api.iotDevices().pipe(catchError((e: unknown) => {
-        iotError = apiErrorMessage(e, 'Could not load IoT devices.');
-        return of([] as IoTDeviceDto[]);
-      })),
-    }).subscribe({
-      next: ({ stock, devices }) => {
-        STOCK.splice(0, STOCK.length, ...stock.map(toCandidate));
-        const retired = new Set(SESSION.completed.map((c) => c.oldId));
-        QUEUE.splice(0, QUEUE.length, ...devices.filter((d) => d.health === 'Critical' && !retired.has(d.deviceId)).map(toExisting));
-        this.loading = false;
-        if (iotError) this.loadError = iotError;
-        this.sub.add(this.route.queryParamMap.subscribe((q) => this.open(q.get('device'))));
-      },
-      error: (e: unknown) => {
-        this.loading = false;
-        this.loadError = apiErrorMessage(e, 'Could not load replacement stock.');
-      },
-    }));
-  }
-
-  /** A device asked for in the URL joins the queue even when its health is not Critical. */
-  private open(wanted: string | null): void {
-    if (!wanted || this.queue.some((d) => d.id.toLowerCase() === wanted.toLowerCase())) return this.init(wanted);
-    this.sub.add(this.api.iotDevice(wanted).subscribe({
-      next: (d) => {
-        QUEUE.unshift(toExisting(d));
-        this.init(d.deviceId);
-      },
-      error: () => this.init(wanted),
-    }));
   }
 
   private init(wanted: string | null): void {
@@ -164,10 +119,10 @@ export class DeviceReplacement implements OnInit, OnDestroy {
     } else if (draft && this.queue.some((d) => d.id === draft.deviceId)) {
       this.applyDraft();
     } else {
-      const first = this.queue[0];
+      const first = this.queue.find((d) => d.id === 'BLE-20951') || this.queue[0];
       if (first) this.pickDevice(first);
     }
-    if (wanted && !fromQuery) this.showToast(this.device.id ? `Device ${wanted} was not found — showing ${this.device.id}.` : `Device ${wanted} was not found.`);
+    if (wanted && !fromQuery) this.showToast(`Device ${wanted} is not in the replacement queue — showing ${this.device.id}.`);
   }
 
   private applyDraft(): void {
@@ -193,15 +148,15 @@ export class DeviceReplacement implements OnInit, OnDestroy {
     return SESSION.completed.length;
   }
 
-  /** Spares that can still be used (stock records have no device type, so every spare is offered). */
+  /** Stock candidates of the same device family as the existing device. */
   get candidates(): Candidate[] {
-    return STOCK.filter((c) => c.availability !== 'Unavailable');
+    return STOCK.filter((c) => c.kind === this.device.kind);
   }
 
   get filteredCandidates(): Candidate[] {
     const q = this.search.trim().toLowerCase();
     if (!q) return this.candidates;
-    return this.candidates.filter((c) => [c.id, c.model, c.location, c.protocol].some((v) => v.toLowerCase().includes(q)));
+    return this.candidates.filter((c) => [c.id, c.model, c.tag].some((v) => v.toLowerCase().includes(q)));
   }
 
   get candidate(): Candidate | undefined {
@@ -243,7 +198,11 @@ export class DeviceReplacement implements OnInit, OnDestroy {
   }
 
   compatTip(c: Candidate): string {
-    return checksFor(this.device, c).filter((r) => r.status !== 'pass').map((r) => r.text).join(' · ');
+    const missing = this.device.channels.filter((ch) => !c.channels.includes(ch));
+    const notes: string[] = [];
+    if (missing.length) notes.push(`${c.model} has no ${missing.join(', ').toLowerCase()} channel`);
+    checksFor(this.device, c).filter((r) => r.key !== 'chan' && r.status !== 'pass').forEach((r) => notes.push(r.text));
+    return notes.join(' · ');
   }
 
   checkState(i: number): 'pending' | 'running' | 'done' {
@@ -256,8 +215,7 @@ export class DeviceReplacement implements OnInit, OnDestroy {
     return KIND_ICONS[k];
   }
 
-  batteryIcon(v: number | null): typeof Cpu {
-    if (v === null) return Battery;
+  batteryIcon(v: number): typeof Cpu {
     return v < 20 ? BatteryLow : v < 60 ? BatteryMedium : v < 95 ? Battery : BatteryFull;
   }
 
@@ -287,16 +245,10 @@ export class DeviceReplacement implements OnInit, OnDestroy {
   }
 
   optDesc(o: OptDef): string {
-    return o.key === 'gateway' ? `${o.desc} (${this.device.gateway || '—'})` : o.desc;
-  }
-
-  /** "Site / Zone", or — when neither is known. */
-  location(d: ExistingDevice): string {
-    return [d.site, d.zone].filter((x) => !!x).join(' / ') || '—';
+    return o.key === 'gateway' ? `${o.desc} (${this.device.gateway})` : o.desc;
   }
 
   fmt(iso: string): string {
-    if (!iso) return '—';
     const [d, t] = iso.split('T');
     const [y, m, day] = d.split('-').map(Number);
     return `${day} ${MONTHS[m - 1]} ${y}${t ? ' ' + t : ''}`;
@@ -307,13 +259,12 @@ export class DeviceReplacement implements OnInit, OnDestroy {
   }
 
   fmtTime(iso: string): string {
-    return iso ? iso.split('T')[1] ?? '' : '';
+    return iso.split('T')[1] ?? '';
   }
 
   // ===== Stepper =====
 
   get nextBlock(): string {
-    if (this.loading) return 'Loading…';
     if (!this.queue.length) return 'No devices awaiting replacement';
     if (!this.candidate) return 'Select a replacement device';
     if (this.checking) return 'Compatibility check in progress…';
@@ -392,23 +343,27 @@ export class DeviceReplacement implements OnInit, OnDestroy {
     this.checkProgress = 0;
     this.step = Math.max(this.step, 3);
     const n = this.checks.length;
-    // checks are evaluated directly from the device records (no simulated progress)
-    this.checkProgress = n;
-    this.checking = false;
-    this.checkedFor = c.id;
-    const t = new Date();
-    this.checkedAt = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
-    const b = this.blocking;
-    this.step = b ? 3 : 4;
-    if (this.confirmAfterCheck && !b) {
-      this.step = 5;
-      this.confirmChecked = false;
+    for (let i = 1; i <= n; i++) {
+      this.timers.push(setTimeout(() => {
+        this.checkProgress = i;
+        if (i === n) {
+          this.checking = false;
+          this.checkedFor = c.id;
+          const t = new Date();
+          this.checkedAt = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+          const b = this.blocking;
+          this.step = b ? 3 : 4;
+          if (this.confirmAfterCheck && !b) {
+            this.step = 5;
+            this.confirmChecked = false;
+          }
+          this.confirmAfterCheck = false;
+          this.showToast(b ? `${c.id}: blocking issue — ${b.name}.` : `${c.id}: ${this.passCount}/${n} checks passed${this.warnCount ? `, ${this.warnCount} warning(s)` : ''}.`);
+        }
+      }, i * 380));
     }
-    this.confirmAfterCheck = false;
-    this.showToast(b ? `${c.id}: blocking issue — ${b.name}.` : `${c.id}: ${this.passCount}/${n} checks passed${this.warnCount ? `, ${this.warnCount} warning(s)` : ''}.`);
   }
 
-  /** Replacement requests have no API endpoint: the request id is kept for this session only. */
   createRequest(): void {
     if (this.requestId) {
       this.showToast(`Replacement request ${this.requestId} is already open for ${this.device.id}.`);
@@ -416,7 +371,7 @@ export class DeviceReplacement implements OnInit, OnDestroy {
     }
     const id = `REQ-${SESSION.nextRequest++}`;
     SESSION.requests[this.device.id] = id;
-    this.device.history.unshift({ at: this.nowIso(), kind: 'replace', text: `Replacement request ${id} created${this.reason ? ` (${this.reason})` : ''} by ${this.api.userName() ?? '—'}` });
+    this.device.history.unshift({ at: this.nowIso(), kind: 'replace', text: `Replacement request ${id} created (${this.reason})` });
     this.showToast(`Replacement request ${id} created for ${this.device.id}.`);
   }
 
@@ -433,36 +388,16 @@ export class DeviceReplacement implements OnInit, OnDestroy {
     this.showToast('Draft discarded.');
   }
 
-  /**
-   * Takes the spare out of stock (PUT /api/replacement-devices/{id} with Availability = Unavailable). There is no API
-   * for the swap itself, so the old device is marked Retired on this page only.
-   */
   confirm(): void {
     const c = this.candidate;
-    if (!c || !this.confirmChecked || this.done || this.saving) return;
-    if (!this.reason) return this.showToast('Choose the replacement reason.');
-    this.saving = true;
-    this.sub.add(this.api.update(c.id, { ...requestOf(c), availability: 'Unavailable' }).subscribe({
-      next: (saved) => {
-        this.saving = false;
-        const fresh = toCandidate(saved);
-        const idx = STOCK.findIndex((x) => x.id === c.id);
-        if (idx >= 0) STOCK[idx] = fresh;
-        this.completeSwap(fresh);
-      },
-      error: (e: unknown) => {
-        this.saving = false;
-        this.showToast(apiErrorMessage(e, `Could not take ${c.id} out of stock.`));
-      },
-    }));
-  }
-
-  private completeSwap(c: Candidate): void {
+    if (!c || !this.confirmChecked || this.done) return;
     const at = this.nowIso();
     const d = this.device;
     d.status = 'Retired';
     d.reason = this.reason;
-    d.history.unshift({ at, kind: 'replace', text: `Replaced by ${c.id} (${c.model})${d.assetName ? ` on ${d.assetName}` : ''} by ${this.api.userName() ?? '—'}` });
+    d.history.unshift({ at, kind: 'replace', text: `Replaced by ${c.id} (${c.model}); assignment to ${d.assetName} ended — kept in history` });
+    const idx = STOCK.indexOf(c);
+    if (idx >= 0) STOCK.splice(idx, 1);
     SESSION.completed.push({ oldId: d.id, newId: c.id, asset: d.assetName, at });
     if (SESSION.draft && SESSION.draft.deviceId === d.id) SESSION.draft = null;
     delete SESSION.requests[d.id];
@@ -470,7 +405,7 @@ export class DeviceReplacement implements OnInit, OnDestroy {
     this.doneNewId = c.id;
     this.done = true;
     this.draftNote = '';
-    this.showToast(`Replacement completed: ${d.id} → ${c.id}${d.assetName ? ` on ${d.assetName}` : ''}. ${c.id} is now marked Unavailable in stock.`);
+    this.showToast(`Replacement completed: ${d.id} → ${c.id} on ${d.assetName}.`);
   }
 
   replaceAnother(): void {

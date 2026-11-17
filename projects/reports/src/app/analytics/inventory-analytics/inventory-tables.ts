@@ -26,7 +26,7 @@ const RISK_TONES: Record<string, string> = { High: 'red', Medium: 'orange', Low:
           </tr>
         </thead>
         <tbody>
-          @for (r of visible; track r.key; let i = $index) {
+          @for (r of visible; track r.code + r.warehouse; let i = $index) {
             <tr>
               <td class="muted">{{ i + 1 }}</td>
               <td><button type="button" class="link" (click)="view.emit(r)">{{ r.code }}</button></td>
@@ -35,7 +35,7 @@ const RISK_TONES: Record<string, string> = { High: 'red', Medium: 'orange', Low:
               <td>{{ r.warehouseName }}</td>
               <td class="num">{{ r.available }}</td>
               <td class="num">{{ r.reorderLevel }}</td>
-              <td class="num">{{ r.daysCover === null ? '—' : r.daysCover + ' days' }}</td>
+              <td class="num">{{ r.leadTime }} days</td>
               <td>{{ r.supplier }}</td>
               <td><span class="pill" [attr.data-tone]="tone(r.risk)"><i></i>{{ r.risk }}</span></td>
               <td>
@@ -84,7 +84,7 @@ export class ReorderTable implements OnChanges {
     { key: 'warehouseName', label: 'Warehouse', num: false },
     { key: 'available', label: 'Available', num: true },
     { key: 'reorderLevel', label: 'Reorder Level', num: true },
-    { key: 'coverRank', label: 'Days of Cover', num: true },
+    { key: 'leadTime', label: 'Lead Time', num: true },
     { key: 'supplier', label: 'Supplier', num: false },
     { key: 'riskRank', label: 'Risk', num: false }
   ];
@@ -127,7 +127,7 @@ export class ReorderTable implements OnChanges {
 
   private update(): void {
     // Ties within a risk band show the fewest days of cover first
-    const sorted = this.sort.key === 'riskRank' ? sortBy(sortBy(this.rows, { key: 'coverRank', dir: 1 }), this.sort) : sortBy(this.rows, this.sort);
+    const sorted = this.sort.key === 'riskRank' ? sortBy(sortBy(this.rows, { key: 'daysCover', dir: 1 }), this.sort) : sortBy(this.rows, this.sort);
     this.visible = sorted.slice(0, this.limit);
     this.menuIndex = -1;
   }
@@ -159,9 +159,9 @@ export class ReorderTable implements OnChanges {
               <td class="muted">{{ i + 1 }}</td>
               <td>{{ s.name }}</td>
               <td class="num">{{ s.items.toLocaleString('en-US') }}</td>
-              <td class="num">{{ s.stockValue.toLocaleString('en-US', { maximumFractionDigits: 0 }) }}</td>
-              <td class="num">{{ s.belowReorder }}</td>
-              <td class="num">{{ s.rating === null ? '—' : s.rating }}</td>
+              <td class="num"><span class="score" [attr.data-tone]="tone(s.onTime, 95)">{{ s.onTime }}%</span></td>
+              <td class="num"><span class="score" [attr.data-tone]="tone(s.fillRate, 92)">{{ s.fillRate }}%</span></td>
+              <td class="num">{{ s.openPos }}</td>
               <td><button type="button" class="btn btn--sm btn--outline" (click)="view.emit(s)">View</button></td>
             </tr>
           } @empty {
@@ -181,9 +181,9 @@ export class SupplierTable implements OnChanges {
   readonly columns = [
     { key: 'name', label: 'Supplier', num: false },
     { key: 'items', label: 'Items', num: true },
-    { key: 'stockValue', label: 'Stock Value (AED)', num: true },
-    { key: 'belowReorder', label: 'Below Reorder', num: true },
-    { key: 'rating', label: 'Rating', num: true }
+    { key: 'onTime', label: 'On-Time Delivery', num: true },
+    { key: 'fillRate', label: 'Fill Rate', num: true },
+    { key: 'openPos', label: 'Open POs', num: true }
   ];
   sort: SortState = { key: 'items', dir: -1 };
   visible: Supplier[] = [];
@@ -195,5 +195,10 @@ export class SupplierTable implements OnChanges {
   sortOn(key: string): void {
     this.sort = toggleSort(this.sort, key);
     this.visible = sortBy(this.rows, this.sort);
+  }
+
+  /** Green at or above target, orange within 5 points, red below */
+  tone(value: number, target: number): string {
+    return value >= target ? 'green' : value >= target - 5 ? 'orange' : 'red';
   }
 }

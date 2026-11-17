@@ -645,28 +645,3 @@ a.btn {
   height: 100%;
   box-sizing: border-box;
 }
-
-/* API states */
-.dx-notice {
-  margin-bottom: 14px;
-  padding: 10px 14px;
-  border: 1px dashed #d6d3e8;
-  border-radius: 10px;
-  background: #fff;
-  color: #6b6880;
-  font-size: 13px;
-}
-
-.dx-notice--error {
-  border-color: #f3b4b4;
-  color: #b42318;
-  background: #fff7f7;
-}
-
-.dx-notice button {
-  margin-left: 6px;
-}
-
-.dx-delivery-note {
-  margin: -4px 0 12px;
-}

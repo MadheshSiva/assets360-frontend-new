@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a [routerLink]="basePath">Reports &amp; Analytics</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <strong>Custom Reports</strong>
 </nav>
 
@@ -40,33 +40,34 @@
 <div class="filters">
   <label class="search cr-search">
     <lucide-icon [img]="icons.Search" [size]="16" />
-    <input type="search" placeholder="Search custom reports..." [(ngModel)]="search" (ngModelChange)="onSearch()" aria-label="Search custom reports" />
+    <input type="search" placeholder="Search custom reports..." [(ngModel)]="search" (ngModelChange)="refilter()" aria-label="Search custom reports" />
   </label>
   <label class="filter">
     <span>Owner</span>
     <select [(ngModel)]="owner" (ngModelChange)="refilter()">
-      <option value="">All owners</option>
-      @for (o of owners; track o.id) { <option [value]="o.id">{{ o.name }}</option> }
+      <option value="">Select Owner</option>
+      @for (o of owners; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Module</span>
     <select [(ngModel)]="module" (ngModelChange)="refilter()">
-      <option value="">All modules</option>
+      <option value="">Select Module</option>
       @for (m of modules; track m) { <option [value]="m">{{ m }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Status</span>
     <select [(ngModel)]="status" (ngModelChange)="refilter()">
-      <option value="">All statuses</option>
+      <option value="">Select Status</option>
       @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Last Updated</span>
     <select [(ngModel)]="updated" (ngModelChange)="refilter()">
-      @for (u of updatedRanges; track u) { <option [value]="u">{{ u }}</option> }
+      <option value="">Select Last Updated</option>
+      @for (u of updatedRanges; track u.key) { <option [value]="u.key">{{ u.label }}</option> }
     </select>
   </label>
   @if (hasFilters) {
@@ -75,7 +76,7 @@
 </div>
 
 <div class="cr-layout">
-  <section class="widget cr-library-card" [attr.aria-busy]="loading">
+  <section class="widget cr-library-card">
     <cr-report-library [reports]="filtered" [selectedId]="draft.id" [sort]="librarySort" (sortChange)="setSort($event)"
       (open)="openReport($event)" (favourite)="toggleFavourite($event)" (duplicate)="duplicate($event)"
       (remove)="askDelete($event)" (togglePublish)="togglePublish($event)" />

@@ -1,5 +1,4 @@
-import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
-import { catchError, concatMap, from, map, of, toArray } from 'rxjs';
+import { Component, HostListener, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
@@ -58,9 +57,8 @@ import {
 } from 'lucide-angular';
 import {
   ATTRIBUTES, CONNECTIVITY, Connectivity, DeviceModel, DeviceType, FORMS, FormFactor, MEASUREMENTS, MODELS, ModelStatus, POWER_OPTIONS,
-  STATUSES, TYPES, TYPE_ICONS, TypeIcon, blankModel, normalizePower,
+  STATUSES, TYPES, TYPE_ICONS, TypeIcon, blankModel, nextModelId,
 } from './model-data';
-import { DeviceModelApiService, DeviceModelDto, DeviceModelFormOptions, modelFromDto } from './device-model-api.service';
 
 type Icon = typeof Box;
 
@@ -78,7 +76,7 @@ interface ModelForm {
   opTemp: string;
   fwMin: string;
   fwMax: string;
-  status: ModelStatus | '';
+  status: ModelStatus;
   attributes: string[];
 }
 
@@ -93,7 +91,7 @@ interface ImportRow {
 
 type Dialog =
   | { kind: 'model'; editId: string | null; title: string; f: ModelForm }
-  | { kind: 'type'; name: string; icon: TypeIcon; form: FormFactor | ''; description: string }
+  | { kind: 'type'; name: string; icon: TypeIcon; form: FormFactor; description: string }
   | { kind: 'import'; rows: ImportRow[]; fileName: string; error: string }
   | { kind: 'delete'; id: string }
   | { kind: 'retire'; id: string };
@@ -117,10 +115,9 @@ const CONN_ALIASES: Record<string, Connectivity> = {
   standalone: true,
   imports: [CommonModule, FormsModule, RouterModule, LucideAngularModule],
   templateUrl: './device-type-model.html',
-  styleUrls: ['./device-type-model.css', './device-type-model-sections.css', './device-type-model-dialogs.css', '../shared/iot-purple-theme.css'],
+  styleUrls: ['./device-type-model.css', './device-type-model-sections.css', './device-type-model-dialogs.css'],
 })
-export class DeviceTypeModel implements OnInit, OnDestroy {
-  private readonly api = inject(DeviceModelApiService);
+export class DeviceTypeModel implements OnDestroy {
   readonly icons = { Activity, Battery, Bluetooth, Box, ChevronLeft, ChevronRight, CircleCheck, Clock, Copy, Download, Ellipsis, ExternalLink, Info, Layers, Pencil, Plus, Search, Upload, X };
   readonly types = TYPES;
   readonly models = MODELS;
@@ -142,180 +139,17 @@ export class DeviceTypeModel implements OnInit, OnDestroy {
   attrFilter = '';
   page = 0;
 
-  selectedId: string | null = null;
+  selectedId: string | null = typeof window !== 'undefined' && window.innerWidth >= 1200 ? MODELS.find((x) => x.name === 'EM300-TH')?.id ?? null : null;
   menuId = '';
   menuPos = { top: 0, left: 0 };
   attrMoreOpen = false;
   dialog: Dialog | null = null;
   formError = '';
   toast = '';
-  /** True while the model list is being fetched. */
-  loading = false;
-  /** Why the model list could not be loaded. */
-  loadError = '';
-  /** True while a change is being saved. */
-  saving = false;
-  /** Protocol / frequency band suggestions per connectivity (form-options). */
-  protocolsByConn: Record<string, string[]> = {};
-  bandsByConn: Record<string, string[]> = {};
-  ipRatings: string[] = [];
-  private apiManufacturers: string[] = [];
-  private deployedByModel: Record<string, number> = {};
   private toastTimer?: ReturnType<typeof setTimeout>;
   private version = 0;
   private cacheKey = '';
   private cacheRows: DeviceModel[] = [];
-
-  ngOnInit(): void {
-    this.loadOptions();
-    this.load();
-  }
-
-  /** True once GET /api/device-models/form-options has filled the dropdowns. */
-  private optionsLoaded = false;
-  private optionsLoading = false;
-
-  /** GET /api/device-models/form-options (retried); called again when a form opens and the first try failed. */
-  private loadOptions(): void {
-    if (this.optionsLoaded || this.optionsLoading) return;
-    this.optionsLoading = true;
-    this.api.formOptions().subscribe({
-      next: (o) => {
-        this.optionsLoading = false;
-        this.optionsLoaded = true;
-        this.applyOptions(o);
-        // models loaded first were matched against the default connectivity list: match them again
-        if (MODELS.length) this.remapModels();
-      },
-      error: () => (this.optionsLoading = false),
-    });
-  }
-
-  /** Re-reads every loaded model from its API record, so it uses the latest option lists. */
-  private remapModels(): void {
-    for (let i = 0; i < MODELS.length; i++) {
-      const api = MODELS[i].api;
-      if (!api) continue;
-      const form = MODELS[i].form;
-      MODELS[i] = this.toModel(api);
-      if (form) MODELS[i].form = form;
-    }
-    this.version++;
-  }
-
-  /** Adds values the loaded models use (connectivity, power, measurements, attributes) that the option lists lack. */
-  private addModelOptions(rows: DeviceModelDto[]): void {
-    const add = (list: string[], v: string | null | undefined) => {
-      const t = (v ?? '').trim();
-      if (t && !list.some((x) => x.toLowerCase() === t.toLowerCase())) list.push(t);
-    };
-    for (const r of rows) {
-      add(CONNECTIVITY as string[], r.connectivity);
-      add(POWER_OPTIONS, r.powerSource);
-      for (const a of r.configurableAttributes ?? []) add(ATTRIBUTES, a);
-      for (const n of r.supportedMeasurements ?? []) {
-        if (n && !MEASUREMENTS.some((x) => x.name.toLowerCase() === n.toLowerCase())) MEASUREMENTS.push({ name: n, unit: '', short: n });
-      }
-    }
-  }
-
-  /** GET /api/device-models (and the device counts per model from /api/iot-devices). */
-  load(): void {
-    this.loading = true;
-    this.loadError = '';
-    this.api.getAll().subscribe({
-      next: (rows) => {
-        this.addModelOptions(rows);
-        MODELS.splice(0, MODELS.length, ...rows.map((r) => this.toModel(r)));
-        this.loading = false;
-        this.version++;
-        if (this.selectedId && !this.byId(this.selectedId)) this.selectedId = null;
-        this.api.deployedCounts().subscribe((counts) => {
-          this.deployedByModel = counts;
-          for (const m of MODELS) m.deployed = counts[m.name.toLowerCase()] ?? 0;
-          this.version++;
-        });
-      },
-      error: (e: Error) => {
-        this.loading = false;
-        this.loadError = e.message;
-        this.version++;
-      },
-    });
-  }
-
-  /** Replaces the option lists with the API's (device types, connectivity, power, measurements, attributes...). */
-  private applyOptions(o: DeviceModelFormOptions): void {
-    for (const t of o.deviceTypes ?? []) this.typeIdOf(t.deviceType);
-    if (o.connectivities?.length) CONNECTIVITY.splice(0, CONNECTIVITY.length, ...(o.connectivities as Connectivity[]));
-    if (o.powerSources?.length) POWER_OPTIONS.splice(0, POWER_OPTIONS.length, ...o.powerSources);
-    if (o.measurements?.length) {
-      const shortOf = (n: string) => MEASUREMENTS.find((x) => x.name === n)?.short ?? n;
-      MEASUREMENTS.splice(0, MEASUREMENTS.length, ...o.measurements.map((x) => ({ name: x.name, unit: x.unit, short: shortOf(x.name) })));
-    }
-    if (o.configurableAttributes?.length) ATTRIBUTES.splice(0, ATTRIBUTES.length, ...o.configurableAttributes);
-    this.protocolsByConn = o.protocolsByConnectivity ?? {};
-    this.bandsByConn = o.frequencyBandsByConnectivity ?? {};
-    this.ipRatings = o.ipRatings ?? [];
-    this.apiManufacturers = o.manufacturers ?? [];
-    this.version++;
-  }
-
-  /** The page id of an API device type, adding the type to the list when it is new. */
-  private typeIdOf(name: string): string {
-    const found = TYPES.find((t) => t.name.toLowerCase() === (name ?? '').trim().toLowerCase());
-    if (found) return found.id;
-    let id = (name || 'type').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    while (TYPES.some((t) => t.id === id)) id += '-2';
-    TYPES.push({ id, name: name.trim(), icon: 'chip', form: 'box', description: '' });
-    return id;
-  }
-
-  private toModel(dto: DeviceModelDto): DeviceModel {
-    const m = modelFromDto(dto, this.typeIdOf(dto.deviceType));
-    m.deployed = this.deployedByModel[m.name.toLowerCase()] ?? 0;
-    return m;
-  }
-
-  /** Puts a saved model into the list (replacing `oldId` when given). */
-  private commit(dto: DeviceModelDto, oldId?: string, form?: FormFactor): DeviceModel {
-    const m = this.toModel(dto);
-    if (form) m.form = form;
-    const i = MODELS.findIndex((x) => x.id === (oldId ?? m.id));
-    if (i >= 0) MODELS[i] = m;
-    else MODELS.unshift(m);
-    this.version++;
-    return m;
-  }
-
-  /** PUT with a changed status (Approve / Reactivate / Retire). */
-  private saveStatus(m: DeviceModel, status: ModelStatus, done: (saved: DeviceModel) => void): void {
-    if (this.saving) return;
-    this.saving = true;
-    this.api.update({ ...m, status }, this.typeName(m.typeId)).subscribe({
-      next: (dto) => {
-        this.saving = false;
-        done(this.commit(dto, m.id, m.form));
-      },
-      error: (e: Error) => this.failed(e),
-    });
-  }
-
-  private failed(e: Error): void {
-    this.saving = false;
-    if (this.dialog) this.formError = e.message;
-    else this.showToast(e.message);
-  }
-
-  /** Protocol suggestions for the form's connectivity. */
-  protocolHints(c: Connectivity | undefined): string[] {
-    return c ? this.protocolsByConn[c] ?? [] : [];
-  }
-
-  /** The API takes one connectivity per model, so picking one replaces the other. */
-  pickConn(list: Connectivity[], c: Connectivity): void {
-    list.splice(0, list.length, c);
-  }
 
   ngOnDestroy(): void {
     clearTimeout(this.toastTimer);
@@ -432,7 +266,7 @@ export class DeviceTypeModel implements OnInit, OnDestroy {
   // ===== Table =====
 
   get manufacturers(): string[] {
-    return [...new Set([...this.apiManufacturers, ...MODELS.map((m) => m.manufacturer)].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    return [...new Set(MODELS.map((m) => m.manufacturer))].sort((a, b) => a.localeCompare(b));
   }
 
   get rows(): DeviceModel[] {
@@ -592,17 +426,20 @@ export class DeviceTypeModel implements OnInit, OnDestroy {
 
   approve(m: DeviceModel): void {
     this.menuId = '';
-    this.saveStatus(m, 'Active', (s) => this.showToast(`${s.name} approved and now Active.`));
+    m.status = 'Active';
+    this.version++;
+    this.showToast(`${m.name} approved and now Active.`);
   }
 
   reactivate(m: DeviceModel): void {
     this.menuId = '';
-    this.saveStatus(m, 'Active', (s) => this.showToast(`${s.name} reactivated.`));
+    m.status = 'Active';
+    this.version++;
+    this.showToast(`${m.name} reactivated.`);
   }
 
   askRetire(m: DeviceModel): void {
     this.menuId = '';
-    this.formError = '';
     this.dialog = { kind: 'retire', id: m.id };
   }
 
@@ -610,36 +447,28 @@ export class DeviceTypeModel implements OnInit, OnDestroy {
     const d = this.dlg('retire');
     const m = d ? this.byId(d.id) : undefined;
     if (!m) return;
-    this.saveStatus(m, 'Retired', (s) => {
-      this.dialog = null;
-      this.showToast(`${s.name} retired. ${s.deployed} deployed device${s.deployed === 1 ? '' : 's'} keep working.`);
-    });
+    m.status = 'Retired';
+    this.version++;
+    this.dialog = null;
+    this.showToast(`${m.name} retired. ${m.deployed} deployed device${m.deployed === 1 ? '' : 's'} keep working.`);
   }
 
   askDelete(m: DeviceModel): void {
     this.menuId = '';
     if (m.deployed) return this.showToast(`${m.name} has ${m.deployed} deployed devices. Retire it instead.`);
-    this.formError = '';
     this.dialog = { kind: 'delete', id: m.id };
   }
 
   confirmDelete(): void {
     const d = this.dlg('delete');
-    if (!d || this.saving) return;
-    this.saving = true;
-    this.api.delete(d.id).subscribe({
-      next: () => {
-        this.saving = false;
-        const i = MODELS.findIndex((m) => m.id === d.id);
-        if (i >= 0) MODELS.splice(i, 1);
-        this.version++;
-        this.dialog = null;
-        this.page = Math.min(this.page, this.pageCount - 1);
-        if (this.selectedId === d.id) this.selectedId = this.rows[0]?.id ?? null;
-        this.showToast(`${d.id} deleted.`);
-      },
-      error: (e: Error) => this.failed(e),
-    });
+    const i = d ? MODELS.findIndex((m) => m.id === d.id) : -1;
+    if (i < 0) return;
+    const [m] = MODELS.splice(i, 1);
+    this.version++;
+    this.dialog = null;
+    this.page = Math.min(this.page, this.pageCount - 1);
+    if (this.selectedId === m.id) this.selectedId = this.rows[0]?.id ?? null;
+    this.showToast(`${m.name} deleted.`);
   }
 
   // ===== Add / edit / duplicate =====
@@ -652,19 +481,17 @@ export class DeviceTypeModel implements OnInit, OnDestroy {
     };
   }
 
-  openAdd(): void {
-    this.loadOptions();
+  openAdd(typeId = this.typeFilter || 'env'): void {
     this.menuId = '';
     this.formError = '';
-    const b = blankModel('env');
+    const b = blankModel(TYPES.some((t) => t.id === typeId) ? typeId : 'env');
     this.dialog = {
       kind: 'model', editId: null, title: 'Add Device Model',
-      f: { ...this.formFrom({ ...b, id: '', name: '', manufacturer: '', typeId: '', deployed: 0 }), fwMin: '', fwMax: '', power: '', status: '' },
+      f: { ...this.formFrom({ ...b, id: '', name: '', manufacturer: '', typeId, deployed: 0 }), fwMin: '', fwMax: '' },
     };
   }
 
   openEdit(m: DeviceModel): void {
-    this.loadOptions();
     this.menuId = '';
     this.formError = '';
     this.dialog = { kind: 'model', editId: m.id, title: `Edit ${m.name}`, f: this.formFrom(m) };
@@ -683,7 +510,7 @@ export class DeviceTypeModel implements OnInit, OnDestroy {
     const d = this.dlg('model');
     if (!d || d.editId) return;
     const b = blankModel(d.f.typeId);
-    Object.assign(d.f, { connectivity: [...b.connectivity], protocol: b.protocol, power: normalizePower(b.power), measurements: [...b.measurements], bands: b.bands.join(', '), ipRating: b.ipRating, opTemp: b.opTemp, attributes: [...b.attributes] });
+    Object.assign(d.f, { connectivity: [...b.connectivity], protocol: b.protocol, power: b.power, measurements: [...b.measurements], bands: b.bands.join(', '), ipRating: b.ipRating, opTemp: b.opTemp, attributes: [...b.attributes] });
   }
 
   toggleIn<T>(list: T[], v: T): void {
@@ -699,16 +526,13 @@ export class DeviceTypeModel implements OnInit, OnDestroy {
 
   saveModel(): void {
     const d = this.dlg('model');
-    if (!d || this.saving) return;
+    if (!d) return;
     const f = d.f;
     if (!f.name.trim()) return void (this.formError = 'Enter the model name.');
     if (!f.manufacturer.trim()) return void (this.formError = 'Enter the manufacturer.');
     if (!f.typeId) return void (this.formError = 'Choose a device type.');
     if (this.nameTaken(f.name, d.editId)) return void (this.formError = `A model named "${f.name.trim()}" already exists.`);
-    if (d.editId && f.name.trim() !== d.editId) return void (this.formError = 'The model name cannot be changed. Duplicate the model to use a new name.');
-    if (!f.connectivity.length) return void (this.formError = 'Choose a connectivity option.');
-    if (!f.power) return void (this.formError = 'Choose the power source.');
-    if (!f.status) return void (this.formError = 'Choose the status.');
+    if (!f.connectivity.length) return void (this.formError = 'Choose at least one connectivity option.');
     const data = {
       name: f.name.trim(), manufacturer: f.manufacturer.trim(), typeId: f.typeId, connectivity: CONNECTIVITY.filter((c) => f.connectivity.includes(c)),
       protocol: f.protocol.trim(), power: f.power, measurements: MEASUREMENTS.map((x) => x.name).filter((n) => f.measurements.includes(n)),
@@ -716,31 +540,29 @@ export class DeviceTypeModel implements OnInit, OnDestroy {
       opTemp: f.opTemp.trim(), fwMin: f.fwMin.trim().replace(/^v/i, ''), fwMax: f.fwMax.trim().replace(/^v/i, ''), status: f.status,
       attributes: ATTRIBUTES.filter((a) => f.attributes.includes(a)),
     };
-    const existing = d.editId ? this.byId(d.editId) : undefined;
-    const draft: DeviceModel = existing ? { ...existing, ...data } : { ...data, id: data.name, deployed: 0 };
-    const keepForm = existing && existing.typeId === data.typeId ? existing.form : undefined;
-    const typeName = this.typeName(data.typeId);
-    this.saving = true;
-    (existing ? this.api.update(draft, typeName) : this.api.create(draft, typeName)).subscribe({
-      next: (dto) => {
-        this.saving = false;
-        const m = this.commit(dto, existing?.id, keepForm);
-        this.dialog = null;
-        if (this.typeFilter && this.typeFilter !== m.typeId) this.typeFilter = m.typeId;
-        this.clearFilters();
-        this.selectedId = m.id;
-        this.page = Math.floor(Math.max(0, this.rows.indexOf(m)) / this.pageSize);
-        this.showToast(d.editId ? `${m.name} saved.` : `${m.name} added${m.status === 'Draft' ? ' as Pending Review' : ''}.`);
-      },
-      error: (e: Error) => this.failed(e),
-    });
+    let m = d.editId ? this.byId(d.editId) : undefined;
+    if (m) {
+      const typeChanged = m.typeId !== data.typeId;
+      Object.assign(m, data);
+      if (typeChanged) delete m.form;
+    } else {
+      m = { ...data, id: nextModelId(), deployed: 0 };
+      MODELS.unshift(m);
+    }
+    this.version++;
+    this.dialog = null;
+    if (this.typeFilter && this.typeFilter !== m.typeId) this.typeFilter = m.typeId;
+    this.clearFilters();
+    this.selectedId = m.id;
+    this.page = Math.floor(Math.max(0, this.rows.indexOf(m)) / this.pageSize);
+    this.showToast(d.editId ? `${m.name} saved.` : `${m.name} added${m.status === 'Draft' ? ' as Pending Review' : ''}.`);
   }
 
   // ===== Device types =====
 
   openAddType(): void {
     this.formError = '';
-    this.dialog = { kind: 'type', name: '', icon: 'chip', form: '', description: '' };
+    this.dialog = { kind: 'type', name: '', icon: 'chip', form: 'box', description: '' };
   }
 
   saveType(): void {
@@ -748,15 +570,13 @@ export class DeviceTypeModel implements OnInit, OnDestroy {
     if (!d) return;
     const name = d.name.trim();
     if (!name) return void (this.formError = 'Enter the type name.');
-    if (!d.form) return void (this.formError = 'Choose a thumbnail style.');
     if (TYPES.some((t) => t.name.toLowerCase() === name.toLowerCase())) return void (this.formError = `"${name}" already exists.`);
     let id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     while (TYPES.some((t) => t.id === id)) id += '-2';
     TYPES.push({ id, name, icon: d.icon, form: d.form, description: d.description.trim() });
     this.dialog = null;
     this.selectType(id);
-    // there is no device-type endpoint: the type is stored with its first model
-    this.showToast(`Device type "${name}" added for this session. It is saved with its first model.`);
+    this.showToast(`Device type "${name}" added. Add its first model next.`);
   }
 
   // ===== Import =====
@@ -767,9 +587,12 @@ export class DeviceTypeModel implements OnInit, OnDestroy {
   }
 
   downloadTemplate(csv: boolean): void {
-    const header = ['Model Name', 'Manufacturer', 'Device Type', 'Connectivity', 'Protocol', 'Power', 'Measurements', 'Frequency Bands', 'IP Rating', 'Battery Life', 'Operating Temperature', 'Firmware Min', 'Firmware Max', 'Status'];
+    const sample = [
+      { 'Model Name': 'EM320-TH', Manufacturer: 'Milesight', 'Device Type': 'Environmental Sensor', Connectivity: 'LoRaWAN', Protocol: 'LoRaWAN 1.0.3', Power: 'Battery (replaceable)', Measurements: 'Temperature, Humidity', 'Frequency Bands': 'EU868, US915', 'IP Rating': 'IP67', 'Battery Life': 'Up to 8 years', 'Operating Temperature': '-30 °C to 70 °C', 'Firmware Min': '1.0.0', 'Firmware Max': '1.2.0', Status: 'Draft' },
+      { 'Model Name': 'FMC003', Manufacturer: 'Teltonika', 'Device Type': 'Asset Tracker', Connectivity: 'Cellular, BLE', Protocol: 'LTE Cat-1 / GNSS', Power: 'External 10–30 V DC', Measurements: 'Location, Motion', 'Frequency Bands': 'LTE Cat-1', 'IP Rating': 'IP41', 'Battery Life': '', 'Operating Temperature': '-40 °C to 85 °C', 'Firmware Min': '3.27.0', 'Firmware Max': '3.29.0', Status: 'Active' },
+    ];
     const book = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet([], { header }), 'Device Models');
+    XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(sample), 'Device Models');
     XLSX.writeFile(book, csv ? 'Device_Models_Import_Template.csv' : 'Device_Models_Import_Template.xlsx', csv ? { bookType: 'csv' } : undefined);
   }
 
@@ -829,8 +652,8 @@ export class DeviceTypeModel implements OnInit, OnDestroy {
         const b = blankModel(type.id);
         model = {
           ...b, id: '', name, manufacturer, typeId: type.id, deployed: 0, status, form: undefined,
-          connectivity: CONNECTIVITY.filter((c) => conn.includes(c)).slice(0, 1), measurements: meas.filter((x): x is string => !!x),
-          protocol: get(r, 'protocol') || b.protocol, power: normalizePower(get(r, 'power') || b.power),
+          connectivity: CONNECTIVITY.filter((c) => conn.includes(c)), measurements: meas.filter((x): x is string => !!x),
+          protocol: get(r, 'protocol') || b.protocol, power: get(r, 'power') || b.power,
           bands: get(r, 'frequency bands', 'bands') ? list(get(r, 'frequency bands', 'bands').replace(/\//g, ' ')) : b.bands,
           ipRating: get(r, 'ip rating', 'ip') || b.ipRating, batteryLife: get(r, 'battery life', 'battery life (est.)'),
           opTemp: get(r, 'operating temperature') || b.opTemp, fwMin: get(r, 'firmware min').replace(/^v/i, ''), fwMax: get(r, 'firmware max').replace(/^v/i, ''),
@@ -844,40 +667,17 @@ export class DeviceTypeModel implements OnInit, OnDestroy {
     return this.dlg('import')?.rows.filter((r) => r.model).length ?? 0;
   }
 
-  /** POSTs the valid rows one by one; rows the API rejects are reported with its reason. */
   saveImport(): void {
     const d = this.dlg('import');
-    if (!d || this.saving) return;
+    if (!d) return;
     const ok = d.rows.filter((r) => r.model);
-    this.saving = true;
-    from(ok).pipe(
-      concatMap((r) => this.api.create({ ...r.model!, id: r.name }, this.typeName(r.model!.typeId)).pipe(
-        map((dto) => {
-          this.commit(dto);
-          return '';
-        }),
-        catchError((e: Error) => {
-          r.error = e.message;
-          r.model = null;
-          return of(e.message);
-        }),
-      )),
-      toArray(),
-    ).subscribe((results) => {
-      this.saving = false;
-      const done = results.filter((x) => !x).length;
-      const failed = results.length - done;
-      const skipped = d.rows.length - ok.length;
-      this.typeFilter = '';
-      this.clearFilters();
-      if (failed) {
-        d.error = `${done} imported; ${failed} rejected by the server (see Result).`;
-        d.rows = d.rows.filter((r) => r.error);
-        return;
-      }
-      this.dialog = null;
-      this.showToast(`${done} model${done === 1 ? '' : 's'} imported${skipped ? `, ${skipped} skipped` : ''}.`);
-    });
+    for (const r of ok) MODELS.unshift({ ...r.model!, id: nextModelId() });
+    const skipped = d.rows.length - ok.length;
+    this.version++;
+    this.dialog = null;
+    this.typeFilter = '';
+    this.clearFilters();
+    this.showToast(`${ok.length} model${ok.length === 1 ? '' : 's'} imported${skipped ? `, ${skipped} skipped` : ''}.`);
   }
 
   // ===== Plumbing =====

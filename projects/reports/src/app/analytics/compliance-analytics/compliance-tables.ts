@@ -40,9 +40,9 @@ type FindingKey = 'id' | 'requirement' | 'asset' | 'area' | 'severity' | 'due' |
                 <td>{{ r.asset }} / {{ r.site }}</td>
                 <td>{{ r.area }}</td>
                 <td><span class="pill" [attr.data-tone]="tone(r)"><i></i>{{ r.severity }}</span></td>
-                <td [class.ca-overdue]="r.dueInDays !== null && r.dueInDays < 0">{{ r.due }}</td>
+                <td [class.ca-overdue]="r.dueInDays < 0">{{ r.due }}</td>
                 <td>{{ r.owner }}</td>
-                <td><span class="pill" [attr.data-tone]="r.status === 'Open' || r.status === 'Overdue' ? 'red' : 'blue'">{{ r.status }}</span></td>
+                <td><span class="pill" [attr.data-tone]="r.status === 'Open' ? 'red' : 'blue'">{{ r.status }}</span></td>
                 <td><button type="button" class="btn btn--sm btn--outline" (click)="view.emit(r)">View</button></td>
               </tr>
             }
@@ -109,7 +109,7 @@ export class ComplianceFindingsTable implements OnChanges {
   private applySort(): void {
     const key = this.sortKey;
     const value = (r: ComplianceFinding): string | number =>
-      key === 'severity' ? LEVEL_RANK[r.severity] * 100_000 - (r.dueInDays ?? 99_999) : key === 'due' ? (r.dueInDays ?? 99_999) : key === 'asset' ? `${r.asset} ${r.site}` : r[key];
+      key === 'severity' ? LEVEL_RANK[r.severity] * 1000 - r.dueInDays : key === 'due' ? r.dueInDays : key === 'asset' ? `${r.asset} ${r.site}` : r[key];
     this.sorted = [...this.rows].sort((a, b) => compare(value(a), value(b), this.sortDir));
   }
 }
@@ -141,7 +141,7 @@ const RISK_RANK: Record<string, number> = { High: 3, Medium: 2, Low: 1 };
               <tr>
                 <td class="muted">{{ i + 1 }}</td>
                 <td>{{ r.site }}</td>
-                <td class="num">@if (r.score === null) { <span class="muted">—</span> } @else { <span class="score" [attr.data-tone]="scoreTone(r)">{{ r.score }}%</span> }</td>
+                <td class="num"><span class="score" [attr.data-tone]="scoreTone(r)">{{ r.score }}%</span></td>
                 <td class="num">{{ r.openFindings }}</td>
                 <td class="num">{{ r.expiring }}</td>
                 <td><span class="pill" [attr.data-tone]="riskTone(r)">{{ r.risk }}</span></td>
@@ -170,8 +170,6 @@ export class ComplianceLocationTable implements OnChanges {
   ];
 
   @Input({ required: true }) rows: LocationRow[] = [];
-  /** Compliance score target (%) */
-  @Input() target = SCORE_TARGET;
   @Output() view = new EventEmitter<LocationRow>();
 
   sortKey: LocationKey = 'score';
@@ -197,8 +195,7 @@ export class ComplianceLocationTable implements OnChanges {
   }
 
   scoreTone(r: LocationRow): string {
-    const score = r.score ?? 0;
-    return score >= this.target + 3 ? 'green' : score >= this.target ? 'orange' : 'red';
+    return r.score >= 93 ? 'green' : r.score >= SCORE_TARGET ? 'orange' : 'red';
   }
 
   riskTone(r: LocationRow): string {
@@ -207,7 +204,7 @@ export class ComplianceLocationTable implements OnChanges {
 
   private applySort(): void {
     const key = this.sortKey;
-    const value = (r: LocationRow): string | number => (key === 'risk' ? RISK_RANK[r.risk] : key === 'score' ? (r.score ?? -1) : r[key]);
+    const value = (r: LocationRow): string | number => (key === 'risk' ? RISK_RANK[r.risk] : r[key]);
     this.sorted = [...this.rows].sort((a, b) => compare(value(a), value(b), this.sortDir));
   }
 }

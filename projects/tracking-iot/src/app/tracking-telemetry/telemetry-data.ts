@@ -1,15 +1,15 @@
 /**
- * Tracking & Telemetry types and the mapping from the Tracking service records (IoT devices, device health,
- * telemetry readings, IoT alerts, location events) to the page model. Nothing here is hardcoded demo data.
+ * DEMO MODE: Tracking & Telemetry data. Map geometry (buildings, geofences, gateways, asset positions, the forklift's
+ * patrol route) lives in campus.geo.json; this file holds the tracked assets, their linked devices, thresholds, seeded
+ * telemetry history and recent events. Series are generated from fixed seeds so the page looks the same on every load.
  */
-import { DeviceHealthDto, IotAlertDto, IotDeviceDto, LocationEventDto, TelemetryReadingDto, paramKind, timeOf } from './telemetry-api';
+import CAMPUS from './campus.geo.json';
 
 export type Status = 'online' | 'warning' | 'offline';
 export type MarkerIcon = 'forklift' | 'pump' | 'cold' | 'generator' | 'sensor';
 export type Metric = 'temp' | 'vib' | 'battery';
 export type Severity = 'Info' | 'Warning' | 'Critical';
 export type Range = '1h' | '24h' | '7d';
-export type LiveKey = 'temp' | 'vib' | 'battery' | 'rssi';
 
 export interface CampusFeature {
   type: 'Feature';
@@ -17,11 +17,10 @@ export interface CampusFeature {
   geometry: { type: 'Point' | 'LineString' | 'Polygon'; coordinates: unknown };
 }
 
-export interface AlertItem { id: string; title: string; detail: string; severity: Severity; status: string; at: number; acknowledged: boolean }
-export interface HistoryItem { at: number; text: string; by: string }
+export interface AlertItem { id: string; title: string; detail: string; severity: Severity; minsAgo: number; acknowledged: boolean }
+export interface HistoryItem { minsAgo: number; text: string; by: string }
 
 export interface TrackedAsset {
-  /** Device id (unique per tracked item). */
   id: string;
   name: string;
   type: string;
@@ -29,31 +28,21 @@ export interface TrackedAsset {
   kind: 'asset' | 'device';
   status: Status;
   health: 'Healthy' | 'Attention' | 'Critical';
-  /** Site name ('' when the device has none). */
   building: string;
-  /** Master Data site id ('' when the device has none). */
-  siteId: string;
-  assetCode: string;
-  assetRegistrationId: string;
   device: { id: string; type: string; model: string; firmware: string; protocol: string; gateway: string; serial: string; installed: string };
-  /** Latest values (null when the device has reported nothing). */
-  live: Record<LiveKey, number | null>;
-  /** Alert thresholds; none are stored by the API, so they are only set from this page for the session. */
-  thresholds: Record<Metric, number | null>;
+  /** Latest live values (null when the device sends nothing). */
+  live: { temp: number | null; vib: number | null; battery: number | null; rssi: number | null };
+  thresholds: { temp: number; vib: number; battery: number };
   alerts: AlertItem[];
   history: HistoryItem[];
-  /** Epoch ms of the last payload (NaN when the device never reported). */
-  lastSeen: number;
-  /** Latest zone from the location events, with when it was entered. */
-  zone: { name: string; at: number } | null;
+  /** Minutes since the last payload for offline devices. */
+  silentMins?: number;
 }
 
 export interface TelemetryEvent {
-  /** Epoch ms. */
-  at: number;
-  /** Tracked asset (device) id, or '' when the record matches no known device. */
+  /** Seconds before "now". */
+  secsAgo: number;
   assetId: string;
-  assetName: string;
   deviceId: string;
   icon: 'pin' | 'warn' | 'temp' | 'battery';
   event: string;
@@ -62,9 +51,9 @@ export interface TelemetryEvent {
   configurable: boolean;
 }
 
-/** Site map geometry as GeoJSON. The Tracking API has no endpoint for site geometry or device coordinates yet. */
-export const CAMPUS_GEO: { type: 'FeatureCollection'; name: string; features: CampusFeature[] } = { type: 'FeatureCollection', name: '', features: [] };
-export const CAMPUS_NAME = '';
+export const CAMPUS_GEO = CAMPUS as unknown as { type: 'FeatureCollection'; name: string; features: CampusFeature[] };
+export const CAMPUS_NAME = 'Riverside Industrial Campus';
+export const SITE_OPTIONS = [CAMPUS_NAME];
 
 export const BUILDINGS: { id: string; name: string }[] = CAMPUS_GEO.features
   .filter((f) => f.properties.kind === 'building')
@@ -74,227 +63,178 @@ export function buildingName(id: string): string {
   return BUILDINGS.find((b) => b.id === id)?.name ?? id;
 }
 
-/** KPI card definitions; values are aggregated on the page. */
+export const ASSETS: TrackedAsset[] = [
+  {
+    id: 'FL-008', name: 'Forklift FL-008', type: 'Forklift', icon: 'forklift', kind: 'asset', status: 'online', health: 'Healthy', building: 'WH-B',
+    device: { id: 'BL-20951', type: 'BLE Beacon', model: 'Minew E8', firmware: 'v2.1.0', protocol: 'BLE 5.0', gateway: 'GW-01', serial: 'E8-20951-AC233F', installed: '09 Apr 2025' },
+    live: { temp: 24.6, vib: 1.8, battery: 82, rssi: -61 }, thresholds: { temp: 35, vib: 7.1, battery: 20 },
+    alerts: [{ id: 'AL-5521', title: 'High temperature', detail: '35.8 °C at 02:14 (threshold 35 °C)', severity: 'Warning', minsAgo: 738, acknowledged: false }],
+    history: [
+      { minsAgo: 0.5, text: 'Entered geofence Warehouse Zone B', by: 'System' },
+      { minsAgo: 738, text: 'High temperature alert raised (35.8 °C)', by: 'Rule: High temperature' },
+      { minsAgo: 1980, text: 'Battery replaced on BL-20951 (100%)', by: 'Sarah Ahmed' },
+      { minsAgo: 8700, text: 'Firmware updated v2.0.4 → v2.1.0', by: 'OTA service' },
+    ],
+  },
+  {
+    id: 'PMP-118', name: 'Pump PMP-118', type: 'Centrifugal Pump', icon: 'pump', kind: 'asset', status: 'warning', health: 'Attention', building: 'MFG',
+    device: { id: 'IOT-77521', type: 'Vibration Sensor', model: 'VibeSense VS3', firmware: 'v3.0.4', protocol: 'LoRaWAN', gateway: 'GW-02', serial: 'VS3-77521-0091', installed: '27 Nov 2025' },
+    live: { temp: 41.2, vib: 6.4, battery: 64, rssi: -72 }, thresholds: { temp: 55, vib: 5.0, battery: 20 },
+    alerts: [{ id: 'AL-5530', title: 'Vibration threshold exceeded', detail: '6.4 mm/s (threshold 5.0 mm/s)', severity: 'Critical', minsAgo: 74, acknowledged: false }],
+    history: [
+      { minsAgo: 74, text: 'Vibration threshold exceeded (6.4 mm/s)', by: 'Rule: Vibration > 5.0' },
+      { minsAgo: 2880, text: 'Bearing inspection completed', by: 'Field Services LLC' },
+      { minsAgo: 12960, text: 'Sensor channel re-mapped to Motor DE', by: 'Michael Tan' },
+    ],
+  },
+  {
+    id: 'CR-03', name: 'Cold Room CR-03', type: 'Cold Room', icon: 'cold', kind: 'asset', status: 'online', health: 'Healthy', building: 'WH-A',
+    device: { id: 'TH-99872', type: 'Temperature & Humidity', model: 'Milesight EM300-TH', firmware: 'v1.3.2', protocol: 'LoRaWAN', gateway: 'GW-03', serial: 'EM300-99872-61', installed: '10 Sep 2025' },
+    live: { temp: 4.2, vib: 0.3, battery: 91, rssi: -66 }, thresholds: { temp: 8, vib: 2, battery: 20 },
+    alerts: [],
+    history: [
+      { minsAgo: 105, text: 'Temperature reading 4.2 °C', by: 'TH-99872' },
+      { minsAgo: 4320, text: 'Door-open alert cleared after 3 min', by: 'System' },
+    ],
+  },
+  {
+    id: 'GEN-042', name: 'Generator GEN-042', type: 'Diesel Generator', icon: 'generator', kind: 'asset', status: 'offline', health: 'Critical', building: 'FUEL',
+    device: { id: 'IOT-44109', type: 'Multi-sensor Node', model: 'Teltonika FMC130', firmware: 'v03.27', protocol: 'LTE Cat-M1', gateway: 'Cellular (du)', serial: 'FMC130-44109', installed: '08 Feb 2022' },
+    live: { temp: null, vib: null, battery: null, rssi: null }, thresholds: { temp: 90, vib: 9, battery: 20 }, silentMins: 250,
+    alerts: [{ id: 'AL-5502', title: 'Device offline', detail: 'No uplink from IOT-44109 for 4 hours', severity: 'Critical', minsAgo: 250, acknowledged: false }],
+    history: [
+      { minsAgo: 250, text: 'Device went offline: no uplink from IOT-44109', by: 'System' },
+      { minsAgo: 250, text: 'Location updated: Fuel & Generators (x: 284, y: 118)', by: 'IOT-44109' },
+      { minsAgo: 20160, text: 'Load test completed (85% for 2 h)', by: 'Ahmed Rashid' },
+    ],
+  },
+  {
+    id: 'TS-80214', name: 'Sensor TS-80214', type: 'Temperature Sensor', icon: 'sensor', kind: 'device', status: 'online', health: 'Attention', building: 'ADM',
+    device: { id: 'TS-80214', type: 'Temperature Sensor', model: 'Milesight EM300-TH', firmware: 'v1.4.2', protocol: 'LoRaWAN', gateway: 'GW-01', serial: 'TS300-80214-7765', installed: '12 Nov 2025' },
+    live: { temp: 22.8, vib: 0.1, battery: 18, rssi: -78 }, thresholds: { temp: 30, vib: 2, battery: 20 },
+    alerts: [{ id: 'AL-5490', title: 'Low battery', detail: 'Battery 18% (threshold 20%)', severity: 'Warning', minsAgo: 381, acknowledged: false }],
+    history: [
+      { minsAgo: 381, text: 'Low battery warning (18%)', by: 'Rule: Battery < 20%' },
+      { minsAgo: 52560, text: 'Calibrated (±0.3 °C)', by: 'TempSense Lab' },
+    ],
+  },
+];
+
+export const EVENTS: TelemetryEvent[] = [
+  { secsAgo: 20, assetId: 'FL-008', deviceId: 'BL-20951', icon: 'pin', event: 'Entered geofence', reading: 'Warehouse Zone B', severity: 'Info', configurable: false },
+  { secsAgo: 4436, assetId: 'PMP-118', deviceId: 'IOT-77521', icon: 'warn', event: 'Vibration threshold exceeded', reading: '6.4 mm/s (threshold 5.0)', severity: 'Critical', configurable: true },
+  { secsAgo: 6308, assetId: 'CR-03', deviceId: 'TH-99872', icon: 'temp', event: 'Temperature reading', reading: '4.2 °C', severity: 'Info', configurable: false },
+  { secsAgo: 15004, assetId: 'GEN-042', deviceId: 'IOT-44109', icon: 'pin', event: 'Location updated', reading: 'Fuel & Generators (x: 284, y: 118)', severity: 'Info', configurable: false },
+  { secsAgo: 22872, assetId: 'TS-80214', deviceId: 'TS-80214', icon: 'battery', event: 'Low battery warning', reading: 'Battery 18% (threshold 20%)', severity: 'Warning', configurable: true },
+];
+
 export const KPIS = [
-  { key: 'tracked', label: 'Tracked Assets', color: '#22c55e' },
-  { key: 'online', label: 'Devices Online', color: '#22c55e' },
-  { key: 'alerts', label: 'Active Alerts', color: '#ef4444' },
-  { key: 'points', label: 'Telemetry Points', color: '#6366f1' },
+  { key: 'tracked', label: 'Tracked Assets', value: '486', note: '', delta: '6%', up: true, good: true, color: '#22c55e' },
+  { key: 'online', label: 'Devices Online', value: '442', note: '91% of 486', delta: '3%', up: true, good: true, color: '#22c55e' },
+  { key: 'alerts', label: 'Active Alerts', value: '18', note: '', delta: '2', up: true, good: false, color: '#ef4444' },
+  { key: 'points', label: 'Telemetry Points', value: '12.8M', note: '', delta: '12%', up: true, good: true, color: '#6366f1' },
 ] as const;
 
-export const RANGE_SPEC: Record<Range, { label: string; mins: number; step: number; days: number }> = {
-  // `days` is the API window (whole UTC days ending today) that covers the range
-  '1h': { label: 'Last 1 hour', mins: 60, step: 1, days: 2 },
-  '24h': { label: 'Last 24 hours', mins: 1440, step: 15, days: 2 },
-  '7d': { label: 'Last 7 days', mins: 10080, step: 120, days: 8 },
+// ===== seeded series =====
+
+export function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hash(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+/** Smooth random walk around `base` with amplitude `amp`, clamped to [lo, hi]. */
+export function walk(seed: string, n: number, base: number, amp: number, lo: number, hi: number): number[] {
+  const rng = mulberry32(hash(seed));
+  const out: number[] = [];
+  let v = base;
+  let drift = 0;
+  for (let i = 0; i < n; i++) {
+    drift = drift * 0.82 + (rng() - 0.5) * amp * 0.5;
+    v = v + drift + (base - v) * 0.08;
+    out.push(Math.round(Math.min(hi, Math.max(lo, v)) * 10) / 10);
+  }
+  return out;
+}
+
+export const RANGE_SPEC: Record<Range, { label: string; mins: number; step: number }> = {
+  '1h': { label: 'Last 1 hour', mins: 60, step: 1 },
+  '24h': { label: 'Last 24 hours', mins: 1440, step: 15 },
+  '7d': { label: 'Last 7 days', mins: 10080, step: 120 },
+};
+
+const BASE: Record<string, { temp: number; vib: number; battery: number }> = {
+  'FL-008': { temp: 23.8, vib: 1.8, battery: 84 },
+  'PMP-118': { temp: 40.5, vib: 5.2, battery: 66 },
+  'CR-03': { temp: 4.1, vib: 0.3, battery: 92 },
+  'GEN-042': { temp: 52, vib: 3.1, battery: 40 },
+  'TS-80214': { temp: 22.6, vib: 0.1, battery: 21 },
 };
 
 export interface Series { metric: Metric; mins: number[]; values: (number | null)[] }
 
-/** A device without a payload for longer than this is shown offline (when device health has no connectivity for it). */
-const OFFLINE_AFTER_MIN = 60;
-/** ... and in warning (late heartbeat) after this long. */
-const WARNING_AFTER_MIN = 15;
-
-function iconFor(...texts: (string | null | undefined)[]): MarkerIcon {
-  const t = texts.filter(Boolean).join(' ').toLowerCase();
-  if (/forklift|vehicle|truck|car\b|van\b/.test(t)) return 'forklift';
-  if (/pump|motor/.test(t)) return 'pump';
-  if (/cold|fridge|freez|refrig|chiller/.test(t)) return 'cold';
-  if (/generator|genset/.test(t)) return 'generator';
-  return 'sensor';
-}
-
-function sevOf(s: string | null | undefined): Severity {
-  return s === 'Critical' ? 'Critical' : s === 'Warning' ? 'Warning' : 'Info';
-}
-
-function fmtDay(ms: number): string {
-  if (!Number.isFinite(ms)) return '—';
-  const d = new Date(ms);
-  return `${String(d.getDate()).padStart(2, '0')} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]} ${d.getFullYear()}`;
-}
-
-export function matchesDevice(d: IotDeviceDto, assetId: string | null | undefined): boolean {
-  return !!assetId && (assetId === d.deviceId || assetId === d.assetCode || assetId === d.assetRegistrationId);
-}
-
-export function alertOfDevice(d: IotDeviceDto, a: IotAlertDto): boolean {
-  return (!!a.deviceId && a.deviceId === d.deviceId) || (!!a.assetRegistrationId && a.assetRegistrationId === d.assetRegistrationId);
-}
-
 /**
- * Connectivity of a device: the device-health record's connectivity when there is one, otherwise worked out
- * from how long ago it last reported (never reported = offline).
+ * History for one metric over a range, oldest first. `mins` are minutes before now. The forklift's temperature has a
+ * real spike at the most recent 02:14 (the alert shown on the chart); offline devices have no data after they went silent.
  */
-export function deviceStatus(h: DeviceHealthDto | undefined, lastSeen: number, now: number): Status {
-  if (h?.connectivity) return h.connectivity === 'Online' ? 'online' : h.connectivity === 'Warning' ? 'warning' : 'offline';
-  if (!Number.isFinite(lastSeen)) return 'offline';
-  const mins = (now - lastSeen) / 60000;
-  return mins > OFFLINE_AFTER_MIN ? 'offline' : mins > WARNING_AFTER_MIN ? 'warning' : 'online';
-}
-
-/** Epoch ms of a device's last payload (device, its health record or its latest reading); NaN when it never reported. */
-export function lastSeenOf(d: IotDeviceDto, h: DeviceHealthDto | undefined, latestReading?: TelemetryReadingDto): number {
-  return Math.max(timeOf(d.lastSeenAt) || 0, timeOf(h?.lastSeenAt) || 0, timeOf(latestReading?.recordedAt) || 0) || NaN;
-}
-
-export interface TelemetrySource {
-  devices: IotDeviceDto[];
-  health: DeviceHealthDto[];
-  /** Fleet readings, newest first. */
-  readings: TelemetryReadingDto[];
-  alerts: IotAlertDto[];
-  locationEvents: LocationEventDto[];
-}
-
-/** Maps the API records to tracked assets (one per IoT device). `prev` keeps thresholds set on this page. */
-export function buildAssets(src: TelemetrySource, now: number, prev: TrackedAsset[] = []): TrackedAsset[] {
-  const healthBy = new Map(src.health.map((h) => [h.deviceId, h]));
-  const readingsBy = new Map<string, TelemetryReadingDto[]>();
-  for (const r of src.readings) {
-    const list = readingsBy.get(r.deviceId) ?? [];
-    list.push(r);
-    readingsBy.set(r.deviceId, list);
-  }
-  return src.devices.map((d) => {
-    const h = healthBy.get(d.deviceId);
-    const readings = readingsBy.get(d.deviceId) ?? [];
-    const latest = (k: LiveKey): number | null => {
-      const r = readings.find((x) => paramKind(x.parameter) === k);
-      return r ? Number(r.value) : null;
-    };
-    const lastSeen = lastSeenOf(d, h, readings[0]);
-    const status = deviceStatus(h, lastSeen, now);
-    const healthText = h?.health ?? d.health ?? '';
-    const health: TrackedAsset['health'] = /critical/i.test(healthText) ? 'Critical' : /attention|warning|maintenance/i.test(healthText) ? 'Attention' : 'Healthy';
-
-    const alerts: AlertItem[] = src.alerts.filter((a) => alertOfDevice(d, a)).map((a) => ({
-      id: a.alertId,
-      title: a.eventType,
-      detail: a.message || a.assetName,
-      severity: sevOf(a.severity),
-      status: a.status ?? 'Open',
-      at: timeOf(a.raisedAt),
-      acknowledged: (a.status ?? 'Open') !== 'Open',
-    }));
-    const events = src.locationEvents.filter((e) => matchesDevice(d, e.assetId));
-    const history: HistoryItem[] = [
-      ...events.map((e) => ({ at: timeOf(e.eventTime), text: `${e.eventType}: ${e.zoneName}${e.details ? ' · ' + e.details : ''}`, by: e.createdBy || 'System' })),
-      ...src.alerts.filter((a) => alertOfDevice(d, a)).flatMap((a) => [
-        { at: timeOf(a.raisedAt), text: `Alert raised: ${a.eventType}`, by: a.createdBy || 'System' },
-        ...(a.acknowledgedAt ? [{ at: timeOf(a.acknowledgedAt), text: `Alert acknowledged: ${a.eventType}`, by: a.acknowledgedBy || '—' }] : []),
-        ...(a.resolvedAt ? [{ at: timeOf(a.resolvedAt), text: `Alert resolved: ${a.eventType}`, by: a.resolvedBy || '—' }] : []),
-      ]),
-    ].filter((x) => Number.isFinite(x.at)).sort((x, y) => y.at - x.at).slice(0, 50);
-
-    // events are newest first: the current zone is the latest event unless the asset departed it
-    const last = events[0];
-    const zone = last && last.eventType !== 'Departed Zone' ? { name: last.zoneName, at: timeOf(last.eventTime) } : null;
-    const old = prev.find((p) => p.id === d.deviceId);
-
-    return {
-      id: d.deviceId,
-      name: d.assetName || d.deviceName || d.deviceId,
-      type: d.deviceType,
-      icon: iconFor(d.assetName, d.deviceType, d.deviceName),
-      kind: d.assetCode || d.assetRegistrationId ? 'asset' : 'device',
-      status,
-      health,
-      building: d.siteName ?? h?.siteName ?? '',
-      siteId: d.siteId ?? h?.siteId ?? '',
-      assetCode: d.assetCode ?? '',
-      assetRegistrationId: d.assetRegistrationId ?? '',
-      device: {
-        id: d.deviceId,
-        type: d.deviceType,
-        model: d.model,
-        firmware: d.firmwareVersion || '—',
-        protocol: d.connectivity || '',
-        gateway: d.gateway || h?.gateway || '—',
-        serial: d.serialNumber || '—',
-        installed: fmtDay(timeOf(d.createdAt)),
-      },
-      live: {
-        temp: latest('temp'),
-        vib: latest('vib'),
-        battery: latest('battery') ?? h?.batteryLevel ?? d.batteryLevel ?? null,
-        rssi: latest('rssi') ?? h?.signalStrengthDbm ?? null,
-      },
-      thresholds: old ? old.thresholds : { temp: null, vib: null, battery: null },
-      alerts,
-      history,
-      lastSeen,
-      zone,
-    } satisfies TrackedAsset;
-  });
-}
-
-/** Recent location events and alerts within the last `mins` minutes, newest first. */
-export function buildEvents(src: TelemetrySource, assets: TrackedAsset[], now: number, mins: number): TelemetryEvent[] {
-  const since = now - mins * 60000;
-  const out: TelemetryEvent[] = [];
-  for (const e of src.locationEvents) {
-    const at = timeOf(e.eventTime);
-    if (!(at >= since)) continue;
-    const dev = src.devices.find((d) => matchesDevice(d, e.assetId));
-    out.push({
-      at,
-      assetId: dev?.deviceId ?? '',
-      assetName: e.assetName || e.assetId,
-      deviceId: dev?.deviceId ?? e.assetId,
-      icon: 'pin',
-      event: e.eventType,
-      reading: e.zoneName + (e.details ? ` · ${e.details}` : ''),
-      severity: e.eventType === 'Geofence Alert' || e.eventType === 'Dwell Exceeded' ? 'Warning' : 'Info',
-      configurable: false,
-    });
-  }
-  for (const a of src.alerts) {
-    const at = timeOf(a.raisedAt);
-    if (!(at >= since)) continue;
-    const dev = src.devices.find((d) => alertOfDevice(d, a));
-    const t = a.eventType.toLowerCase();
-    const icon: TelemetryEvent['icon'] = t.includes('batter') ? 'battery' : t.includes('reading') || t.includes('temp') ? 'temp' : 'warn';
-    out.push({
-      at,
-      assetId: dev?.deviceId ?? '',
-      assetName: a.assetName,
-      deviceId: a.deviceId ?? dev?.deviceId ?? '—',
-      icon,
-      event: a.eventType,
-      reading: a.message || (a.status ? `Status: ${a.status}` : ''),
-      severity: sevOf(a.severity),
-      configurable: !!dev && assets.some((x) => x.id === dev.deviceId),
-    });
-  }
-  return out.sort((x, y) => y.at - x.at).slice(0, 100);
-}
-
-/**
- * One metric of a device over a range, oldest first: readings averaged into RANGE_SPEC steps
- * (mins are minutes before `now`; null where the device reported nothing).
- */
-export function seriesFor(readings: TelemetryReadingDto[], metric: Metric, range: Range, now: Date): Series {
+export function seriesFor(asset: TrackedAsset, metric: Metric, range: Range, now: Date): Series {
   const spec = RANGE_SPEC[range];
-  const n = Math.ceil(spec.mins / spec.step);
-  const sums = new Array<number>(n).fill(0);
-  const counts = new Array<number>(n).fill(0);
-  const t = now.getTime();
-  for (const r of readings) {
-    if (paramKind(r.parameter) !== metric) continue;
-    const ago = (t - timeOf(r.recordedAt)) / 60000;
-    if (!(ago >= 0 && ago < spec.mins)) continue;
-    // bucket 0 is the oldest
-    const i = n - 1 - Math.floor(ago / spec.step);
-    sums[i] += Number(r.value);
-    counts[i]++;
+  const n = Math.floor(spec.mins / spec.step) + 1;
+  const mins = Array.from({ length: n }, (_, i) => spec.mins - i * spec.step);
+  const b = BASE[asset.id];
+  const amp = metric === 'temp' ? Math.max(0.6, b.temp * 0.05) : metric === 'vib' ? Math.max(0.08, b.vib * 0.12) : 1.2;
+  const lo = metric === 'battery' ? 0 : 0;
+  const hi = metric === 'battery' ? 100 : 200;
+  let values: (number | null)[] = walk(`${asset.id}|${metric}|${range}`, n, b[metric], amp, lo, hi);
+  if (metric === 'battery') {
+    // batteries drain slowly towards the current level
+    const end = asset.live.battery ?? b.battery;
+    values = (values as number[]).map((v, i) => Math.round(Math.min(100, end + (n - 1 - i) * (spec.mins / 1440) * 0.15 + (v - b.battery) * 0.2) * 10) / 10);
   }
-  const mins: number[] = [];
-  const values: (number | null)[] = [];
-  for (let i = 0; i < n; i++) {
-    mins.push((n - 1 - i) * spec.step + spec.step / 2);
-    values.push(counts[i] ? Math.round((sums[i] / counts[i]) * 10) / 10 : null);
+  if (asset.id === 'FL-008' && metric === 'temp' && range !== '1h') {
+    const spike = spikeMinsAgo(now);
+    const i = mins.reduce((best, m, k) => (Math.abs(m - spike) < Math.abs(mins[best] - spike) ? k : best), 0);
+    mins[i] = spike;
+    values[i] = 35.8;
+    if (i > 0 && values[i - 1] !== null) values[i - 1] = Math.round(((values[i - 1] as number) + 6) * 10) / 10;
+    if (i < n - 1 && values[i + 1] !== null) values[i + 1] = Math.round(((values[i + 1] as number) + 3) * 10) / 10;
   }
+  if (asset.silentMins) values = values.map((v, k) => (mins[k] < asset.silentMins! ? null : v));
+  // the last point is the live value
+  const live = asset.live[metric];
+  if (live !== null && values.length) values[values.length - 1] = live;
   return { metric, mins, values };
+}
+
+/** Minutes since the most recent 02:14 (the forklift's temperature alert). */
+export function spikeMinsAgo(now: Date): number {
+  const t = new Date(now);
+  t.setHours(2, 14, 0, 0);
+  if (t.getTime() > now.getTime()) t.setDate(t.getDate() - 1);
+  return Math.floor((now.getTime() - t.getTime()) / 60000);
+}
+
+/** Short history for the live tiles' sparklines. */
+export function sparkSeed(id: string, metric: 'temp' | 'vib' | 'battery' | 'rssi', current: number, n = 24): number[] {
+  const amp = metric === 'temp' ? Math.max(0.4, Math.abs(current) * 0.03) : metric === 'vib' ? Math.max(0.1, current * 0.15) : metric === 'rssi' ? 2.5 : 0.6;
+  const v = walk(`${id}|spark|${metric}`, n, current, amp, -200, 200);
+  v[n - 1] = current;
+  return v;
+}
+
+/** Seeded sparkline for a KPI card. */
+export function kpiSpark(key: string, rising: boolean): number[] {
+  const v = walk(`kpi|${key}`, 26, 50, 8, 0, 100);
+  return v.map((x, i) => x + (rising ? i * 0.9 : 0));
 }

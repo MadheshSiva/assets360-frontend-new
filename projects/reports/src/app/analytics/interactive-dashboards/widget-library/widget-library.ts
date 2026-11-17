@@ -56,12 +56,11 @@ const TYPE_ICONS: Record<WidgetType, typeof Table> = {
 })
 export class WidgetLibrary {
   @Input() disabled = false;
-  /** Widget types from GET /options */
-  @Input() types: WidgetTypeDef[] = WIDGET_TYPES;
   /** null = open the Add Widget dialog without a preselected type */
   @Output() pick = new EventEmitter<WidgetType | null>();
 
   readonly icons = { GripVertical, Plus };
+  readonly types = WIDGET_TYPES;
 
   iconFor(type: WidgetType): typeof Table {
     return TYPE_ICONS[type];

@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a [routerLink]="basePath">Reports &amp; Analytics</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <strong>Interactive Dashboards</strong>
 </nav>
 
@@ -25,19 +25,15 @@
         <lucide-icon [img]="icons.Pencil" [size]="16" /> Edit Dashboard
       </button>
     }
-    <button type="button" class="btn btn--outline" (click)="openShare()" [disabled]="!current"><lucide-icon [img]="icons.Share2" [size]="16" /> Share</button>
-    <button type="button" class="btn btn--outline" (click)="exportDashboard()" [disabled]="!current || busy"><lucide-icon [img]="icons.Download" [size]="16" /> Export</button>
+    <button type="button" class="btn btn--outline" (click)="openShare()"><lucide-icon [img]="icons.Share2" [size]="16" /> Share</button>
+    <button type="button" class="btn btn--outline" (click)="exportDashboard()"><lucide-icon [img]="icons.Download" [size]="16" /> Export</button>
     <button type="button" class="btn btn--primary" (click)="createOpen = true"><lucide-icon [img]="icons.CirclePlus" [size]="16" /> Create Dashboard</button>
     <div class="row-menu">
       <button type="button" class="icon-btn" (click)="toggleMenu('more', $event)" aria-label="More actions"><lucide-icon [img]="icons.Ellipsis" [size]="18" /></button>
       @if (menu === 'more') {
         <div class="menu" role="menu">
-          <button type="button" (click)="openSaveView()" [disabled]="!current">Save view</button>
-          <button type="button" (click)="copyLink()" [disabled]="!current">Copy dashboard link</button>
-          <button type="button" (click)="duplicateCurrent()" [disabled]="!current">Duplicate dashboard</button>
-          @if (current?.canShare) {
-            <button type="button" class="danger" (click)="deleteCurrent()">Delete dashboard</button>
-          }
+          <button type="button" (click)="openSaveView()">Save view</button>
+          <button type="button" (click)="copyLink()">Copy dashboard link</button>
         </div>
       }
     </div>
@@ -49,14 +45,14 @@
   <div class="row-menu">
     <button type="button" class="idb-picker" (click)="toggleMenu('picker', $event)" aria-haspopup="menu" [attr.aria-expanded]="menu === 'picker'">
       <lucide-icon [img]="icons.ChartColumn" [size]="18" />
-      <span>{{ current?.name ?? (store.loading() ? 'Loading dashboards…' : 'No dashboards yet') }}</span>
+      <span>{{ current.name }}</span>
       <lucide-icon [img]="icons.ChevronDown" [size]="16" />
     </button>
     @if (menu === 'picker') {
       <div class="menu idb-menu" role="menu">
         @for (d of store.dashboards; track d.id) {
           <ng-container *ngTemplateOutlet="dashItem; context: { $implicit: d }"></ng-container>
-        } @empty { <p class="muted idb-menu__empty">No dashboards yet. Use Create Dashboard.</p> }
+        } @empty { <p class="muted idb-menu__empty">No dashboards yet.</p> }
       </div>
     }
   </div>
@@ -98,44 +94,44 @@
 <section class="filters" aria-label="Filters">
   <label class="filter filter--period"><span>Period</span>
     <select [(ngModel)]="period" (ngModelChange)="onFilterChange()">
-      @for (p of datePresets; track p) { <option [value]="p">{{ p }}</option> }
+      <option value="">Select Period</option>
+      @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter"><span>Organization</span>
     <select [(ngModel)]="organization" (ngModelChange)="onFilterChange()">
-      <option value="">All organizations</option>
-      @for (o of orgOptions; track o.value) { <option [value]="o.value">{{ o.label }}</option> }
+      <option value="">Select Organization</option>
+      @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter"><span>Location</span>
     <select [(ngModel)]="location" (ngModelChange)="onFilterChange()">
-      <option value="">All locations</option>
-      @for (l of locationOptions; track l.value) { <option [value]="l.value">{{ l.label }}</option> }
+      <option value="">Select Location</option>
+      @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
     </select>
   </label>
   <label class="filter"><span>Asset Category</span>
     <select [(ngModel)]="category" (ngModelChange)="onFilterChange()">
-      <option value="">All categories</option>
-      @for (c of categoryOptions; track c.value) { <option [value]="c.value">{{ c.label }}</option> }
+      <option value="">Select Asset Category</option>
+      @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>
 </section>
 
-@if (editMode && current) {
+@if (editMode) {
   <div class="idb-editbar" role="status">
     <lucide-icon [img]="icons.GripVertical" [size]="16" />
     Editing “{{ current.name }}”: drag widgets to reorder, use ⋯ to resize or remove, or drop items from the Widget Library.
   </div>
 }
 
-@if (current; as current) {
 <div class="ra-layout">
   <div class="idb-grid" [class.idb-grid--edit]="editMode" (dragover)="onDragOver($event, current.widgets.length)" (drop)="onDrop($event, current.widgets.length)">
     @for (w of current.widgets; track w.id; let i = $index) {
       <div class="idb-cell" [style.--idb-span]="w.span" [attr.draggable]="editMode ? 'true' : null"
         [class.idb-cell--dragging]="dragId === w.id" [class.idb-cell--over]="overIndex === i && dragId !== w.id"
         (dragstart)="onDragStart($event, w)" (dragover)="onDragOver($event, i)" (drop)="onDrop($event, i)" (dragend)="onDragEnd()">
-        <app-idb-widget [config]="w" [widgetData]="dataFor(w)" [compare]="compare" [editMode]="editMode"
+        <app-idb-widget [config]="w" [filters]="filters" [editMode]="editMode"
           (expand)="expanded = w" (exportCsv)="exportWidget(w)" (remove)="removeWidget(w)" (resize)="resizeWidget(w, $event)"
           (viewAsset)="detail = $event" (notice)="onNotice($event)" />
         @if (editMode) {
@@ -145,6 +141,14 @@
         }
       </div>
     } @empty {
+      @if (!hasDashboard) {
+        <div class="idb-blank">
+          <lucide-icon [img]="icons.ChartColumn" [size]="32" />
+          <strong>No dashboards yet</strong>
+          <span class="muted">Create a dashboard, then add widgets from the Widget Library.</span>
+          <button type="button" class="btn btn--primary" (click)="createOpen = true"><lucide-icon [img]="icons.CirclePlus" [size]="16" /> Create Dashboard</button>
+        </div>
+      } @else {
       <div class="idb-blank" [class.idb-cell--over]="overIndex === 0">
         <lucide-icon [img]="icons.ChartColumn" [size]="32" />
         <strong>This dashboard has no widgets yet</strong>
@@ -153,6 +157,7 @@
           <button type="button" class="btn btn--primary" (click)="openAdd(null)"><lucide-icon [img]="icons.CirclePlus" [size]="16" /> Add Widget</button>
         }
       </div>
+      }
     }
     @if (editMode && current.widgets.length) {
       <div class="idb-dropzone" [class.idb-cell--over]="overIndex === current.widgets.length">Drop here to add at the end</div>
@@ -160,7 +165,7 @@
   </div>
 
   <aside class="idb-side">
-    <app-idb-widget-library [types]="store.widgetTypes()" [disabled]="!canEdit" (pick)="openAdd($event)" />
+    <app-idb-widget-library [disabled]="!canEdit" (pick)="openAdd($event)" />
 
     <section class="widget idb-info" aria-label="Dashboard information">
       <div class="widget__head">
@@ -186,24 +191,12 @@
     </section>
   </aside>
 </div>
-} @else {
-  <div class="idb-blank">
-    <lucide-icon [img]="icons.ChartColumn" [size]="32" />
-    @if (store.loading()) {
-      <strong>Loading dashboards…</strong>
-    } @else {
-      <strong>No dashboards yet</strong>
-      <span class="muted">Create a dashboard to start tracking assets, maintenance and inventory.</span>
-      <button type="button" class="btn btn--primary" (click)="createOpen = true"><lucide-icon [img]="icons.CirclePlus" [size]="16" /> Create Dashboard</button>
-    }
-  </div>
-}
 
 <ng-template #dashItem let-d>
-  <div class="idb-menu__item" [class.idb-menu__item--on]="d.id === current?.id">
+  <div class="idb-menu__item" [class.idb-menu__item--on]="d.id === current.id">
     <button type="button" (click)="open(d)">
       <b>{{ d.name }}</b>
-      <small class="muted">{{ d.role === 'Owner' ? 'Owner: you' : 'Owner: ' + d.owner }} · {{ d.widgetCount }} widgets</small>
+      <small class="muted">{{ d.owner === me ? 'Owner: you' : 'Owner: ' + d.owner }} · {{ d.widgets.length }} widgets</small>
     </button>
     <button type="button" class="idb-star" [class.idb-star--on]="d.favorite" (click)="toggleFavorite(d, $event)"
       [attr.aria-label]="d.favorite ? 'Remove ' + d.name + ' from favorites' : 'Add ' + d.name + ' to favorites'" [attr.aria-pressed]="d.favorite">
@@ -215,16 +208,14 @@
 <!-- ===== Dialogs ===== -->
 
 @if (addDialog) {
-  <app-idb-add-widget-dialog [initialType]="addDialog.type" [types]="store.widgetTypes()" [metrics]="store.metrics()" [busy]="busy"
-    (added)="onWidgetAdded($event)" (cancel)="addDialog = null" />
+  <app-idb-add-widget-dialog [initialType]="addDialog.type" (added)="onWidgetAdded($event)" (cancel)="addDialog = null" />
 }
 
 @if (createOpen) {
-  <app-idb-create-dashboard-dialog [currentName]="current?.name ?? ''" [templates]="store.templates()" [nameTaken]="nameTaken" [busy]="busy"
-    (created)="onCreated($event)" (cancel)="createOpen = false" />
+  <app-idb-create-dashboard-dialog [currentName]="current.name" [nameTaken]="nameTaken" (created)="onCreated($event)" (cancel)="createOpen = false" />
 }
 
-@if (shareOpen && current) {
+@if (shareOpen) {
   <app-idb-share-dialog [dashboard]="current" [link]="shareLink" (saved)="onShared($event)" (cancel)="shareOpen = false" />
 }
 
@@ -235,8 +226,8 @@
         <h2>{{ expanded.title }}</h2>
         <button type="button" class="icon-btn" (click)="expanded = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18" /></button>
       </div>
-      <p class="muted">{{ filterSummary }}</p>
-      <app-idb-widget [config]="expanded" [widgetData]="dataFor(expanded)" [compare]="compare" [height]="400" [bare]="true" (viewAsset)="detail = $event" (notice)="onNotice($event)" />
+      <p class="muted">{{ periodLabel }} · {{ organizationLabel }} · {{ locationLabel }} · {{ category || categories[0] }}</p>
+      <app-idb-widget [config]="expanded" [filters]="filters" [height]="400" [bare]="true" (viewAsset)="detail = $event" (notice)="onNotice($event)" />
       <div class="dialog__actions">
         <button type="button" class="btn" (click)="exportWidget(expanded)"><lucide-icon [img]="icons.Download" [size]="16" /> Export CSV</button>
         <button type="button" class="btn btn--primary" (click)="expanded = null">Close</button>
@@ -256,10 +247,12 @@
         <button type="button" class="icon-btn" (click)="detail = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18" /></button>
       </div>
       <dl class="idb-facts idb-facts--grid">
+        <div><dt>Category</dt><dd>{{ detail.category }}</dd></div>
         <div><dt>Location</dt><dd>{{ detail.site }}</dd></div>
-        <div><dt>Health score</dt><dd><span class="score" [attr.data-tone]="scoreTone(detail.score)">{{ detail.score ?? '—' }}</span></dd></div>
-        <div><dt>Health status</dt><dd>{{ detail.status }}</dd></div>
-        <div><dt>Issues</dt><dd>{{ detail.issues.length ? detail.issues.join(', ') : detail.issue }}</dd></div>
+        <div><dt>Health score</dt><dd><span class="score" [attr.data-tone]="scoreTone(detail.score)">{{ detail.score }}</span></dd></div>
+        <div><dt>Issue</dt><dd>{{ detail.issue }}</dd></div>
+        <div><dt>Last inspection</dt><dd>{{ detail.lastInspection }}</dd></div>
+        <div><dt>Open work orders</dt><dd>{{ detail.openWorkOrders }}</dd></div>
       </dl>
       <div class="dialog__actions">
         <button type="button" class="btn" (click)="onNotice('DEMO MODE: work order created for ' + detail.name + '.'); detail = null">Create work order</button>
@@ -273,7 +266,7 @@
   <div class="overlay" (click)="saveViewOpen = false">
     <form class="dialog" (click)="$event.stopPropagation()" (ngSubmit)="confirmSaveView()" novalidate role="dialog" aria-modal="true" aria-label="Save view">
       <h2>Save view</h2>
-      <p>Saves “{{ current?.name }}” with the current period and filters.</p>
+      <p>Saves “{{ current.name }}” with the current period and filters.</p>
       <div class="field" [class.invalid]="viewTried && !viewName.trim()">
         <label for="idb-view-name">View name <span class="req">*</span></label>
         <input id="idb-view-name" name="viewName" [(ngModel)]="viewName" maxlength="80" placeholder="e.g. Executive – Dubai HQ" />

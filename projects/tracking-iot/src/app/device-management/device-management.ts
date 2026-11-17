@@ -1,5 +1,4 @@
-import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
-import { catchError, concatMap, from, map, of, toArray } from 'rxjs';
+import { Component, HostListener, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -41,23 +40,21 @@ import {
   X,
 } from 'lucide-angular';
 import {
-  CONNS, DEVICES, DevEvent, Device, DeviceType, HEALTHS, Health, HealthPoint, HealthRange, LinkedAsset, MODELS_BY_TYPE, Protocol, SITES, TYPES,
-  bucketOf, ensureSite, isCellular, knownAssets,
+  CONNS, DEVICES, DevEvent, Device, DeviceType, HEALTHS, Health, HealthPoint, LinkedAsset, MODEL_FW, NOW, Protocol, SITES, TYPES, TYPE_SPEC,
+  baseEvents, bucketOf, healthSeries, knownAssets, mulberry32, powerFor,
 } from './device-data';
-import { IoTDeviceApiService, connOf } from './iot-device-api.service';
 
 type Kpi = '' | 'online' | 'offline' | 'attention';
 type Tab = 'overview' | 'telemetry' | 'events' | 'settings';
-type Range = HealthRange;
+type Range = '24h' | '7d';
 
 interface DeviceForm { name: string; id: string; type: DeviceType; model: string; serial: string; protocol: Protocol; site: string; gateway: string; asset: string }
-interface ImportRow { line: number; id: string; name: string; type: DeviceType | null; model: string; serial: string; protocol: string; site: string; gateway: string; asset: string; error: string }
+interface ImportRow { line: number; id: string; name: string; type: DeviceType | null; model: string; serial: string; site: string; gateway: string; asset: string; error: string }
 type Dialog =
   | { kind: 'add'; f: DeviceForm }
   | { kind: 'import'; rows: ImportRow[]; fileName: string; error: string }
   | { kind: 'link'; deviceId: string; asset: string }
-  | { kind: 'unlink'; deviceId: string; reason: string }
-  | { kind: 'delete'; deviceId: string };
+  | { kind: 'unlink'; deviceId: string; reason: string };
 
 interface ChartTick { x: number; label: string }
 interface Chart {
@@ -75,15 +72,12 @@ interface Chart {
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-/** Icon for a device type text (the API's types are free text, e.g. "Asset Tracker", "Condition Sensor"). */
-function typeIconOf(type: string): typeof Radio {
-  const t = type.toLowerCase();
-  if (t.includes('gps') || t.includes('cellular') || t.includes('tracker') && !t.includes('ble')) return Satellite;
-  if (t.includes('temp') || t.includes('environment')) return Thermometer;
-  if (t.includes('vibration') || t.includes('condition')) return Activity;
-  if (t.includes('rfid')) return ScanLine;
-  return Radio;
-}
+const PROTOCOLS: Protocol[] = ['BLE 5.0', 'LoRaWAN', 'LTE-M', 'Ethernet'];
+const TYPE_ICON: Record<DeviceType, typeof Radio> = { 'BLE Tracker': Radio, 'GPS / Cellular': Satellite, 'Temperature Sensor': Thermometer, 'Vibration Sensor': Activity, 'RFID Reader': ScanLine };
+const TYPE_ALIASES: Record<string, DeviceType> = {
+  ble: 'BLE Tracker', 'ble tracker': 'BLE Tracker', beacon: 'BLE Tracker', gps: 'GPS / Cellular', 'gps / cellular': 'GPS / Cellular', cellular: 'GPS / Cellular',
+  temperature: 'Temperature Sensor', 'temperature sensor': 'Temperature Sensor', vibration: 'Vibration Sensor', 'vibration sensor': 'Vibration Sensor', rfid: 'RFID Reader', 'rfid reader': 'RFID Reader',
+};
 
 /** Health chart geometry: three stacked bands sharing the time axis. */
 const CW = 640;
@@ -98,19 +92,15 @@ const CH = 236;
   standalone: true,
   imports: [CommonModule, FormsModule, LucideAngularModule],
   templateUrl: './device-management.html',
-  styleUrls: ['./device-management.css', './device-management-sections.css', './device-management-panel.css', '../shared/iot-purple-theme.css'],
+  styleUrls: ['./device-management.css', './device-management-sections.css', './device-management-panel.css'],
 })
-export class DeviceManagement implements OnInit, OnDestroy {
-  private readonly api = inject(IoTDeviceApiService);
+export class DeviceManagement implements OnDestroy {
   readonly icons = { Box, ChevronLeft, ChevronRight, CircleCheck, Download, Ellipsis, ExternalLink, Info, Link2, Plug, Plus, RefreshCw, Search, Settings, Smartphone, TriangleAlert, Unlink, Upload, Wifi, WifiOff, X };
-  readonly types: DeviceType[] = TYPES;
+  readonly types = TYPES;
   readonly conns = CONNS;
   readonly healths = HEALTHS;
   readonly sites = SITES;
-  /** Connectivity options of the Add form (GET /api/iot-devices/connectivities, narrowed to the chosen model). */
-  protocols: string[] = [];
-  /** Connectivity filter options: every connectivity the API offers plus those of loaded devices. */
-  connectivityOptions: string[] = [];
+  readonly protocols = PROTOCOLS;
   readonly pageSizes = [5, 10, 25, 50];
   readonly cw = CW;
   readonly ch = CH;
@@ -130,8 +120,8 @@ export class DeviceManagement implements OnInit, OnDestroy {
   pageSize = 5;
   page = 0;
 
-  /** No device is selected until a row is clicked. */
-  selectedId: string | null = null;
+  /** Wide screens open with a device selected; narrower ones keep the drawer closed until a row is clicked. */
+  selectedId: string | null = typeof window !== 'undefined' && window.innerWidth >= 1200 ? 'VS-30018' : null;
   tab: Tab = 'overview';
   range: Range = '24h';
   hover: number | null = null;
@@ -143,85 +133,10 @@ export class DeviceManagement implements OnInit, OnDestroy {
   settingsDraft = { intervalMin: 10, lowBattery: 20, offlineAfterMin: 30, alerts: true };
   private settingsFor = '';
   toast = '';
-  /** True while the device list is being fetched. */
-  loading = false;
-  /** Why the device list could not be loaded. */
-  loadError = '';
-  /** True while a change is being saved. */
-  saving = false;
   private toastTimer?: ReturnType<typeof setTimeout>;
   private version = 0;
 
   constructor(private router: Router) {}
-
-  ngOnInit(): void {
-    this.load();
-    this.loadOptions();
-  }
-
-  /** GET /api/iot-devices → the device list. */
-  load(): void {
-    this.loading = true;
-    this.loadError = '';
-    this.api.getAll().subscribe({
-      next: (list) => {
-        DEVICES.splice(0, DEVICES.length, ...list);
-        for (const d of list) this.addOptions(d);
-        this.loading = false;
-        this.version++;
-      },
-      error: (e: Error) => {
-        this.loading = false;
-        this.loadError = e.message;
-        this.version++;
-      },
-    });
-  }
-
-  /** Device types, models, connectivities, gateways and sites for the filters and the Add / Import forms. */
-  private loadOptions(): void {
-    this.api.deviceTypes().subscribe((types) => {
-      for (const t of types) if (!TYPES.includes(t)) TYPES.push(t);
-      this.version++;
-    });
-    this.api.models().subscribe((models) => {
-      for (const k of Object.keys(MODELS_BY_TYPE)) delete MODELS_BY_TYPE[k];
-      for (const m of models) {
-        (MODELS_BY_TYPE[m.deviceType] ??= []).push(m.modelNumber);
-        if (!TYPES.includes(m.deviceType)) TYPES.push(m.deviceType);
-      }
-      this.version++;
-    });
-    this.api.connectivities().subscribe((list) => {
-      this.protocols = list;
-      for (const c of list) this.addConnectivity(c);
-      this.version++;
-    });
-    this.api.gateways().subscribe((gws) => {
-      for (const g of gws) ensureSite(g.siteName ?? '', g.siteId, g.deviceId);
-      this.version++;
-    });
-    this.api.sites().subscribe((sites) => {
-      for (const s of sites) ensureSite(s.name, s.id);
-      this.version++;
-    });
-    this.api.registeredAssets().subscribe((assets) => {
-      this.registeredAssets = assets;
-      this.version++;
-    });
-  }
-
-  /** Makes a loaded device's type, site and gateway selectable in the filters. */
-  private addOptions(d: Device): void {
-    if (d.type && !TYPES.includes(d.type)) TYPES.push(d.type);
-    ensureSite(d.site, d.api?.siteId, d.gateway);
-    this.addConnectivity(d.protocol);
-  }
-
-  private addConnectivity(c: string | null | undefined): void {
-    if (!c || this.connectivityOptions.some((o) => o.toLowerCase() === c.toLowerCase())) return;
-    this.connectivityOptions = [...this.connectivityOptions, c].sort((a, b) => a.localeCompare(b));
-  }
 
   ngOnDestroy(): void {
     clearTimeout(this.toastTimer);
@@ -257,7 +172,7 @@ export class DeviceManagement implements OnInit, OnDestroy {
     if (key === this.cache.key) return this.cache.rows;
     const q = this.search.trim().toLowerCase();
     const rows = DEVICES.filter((d) =>
-      (!this.typeFilter || d.type === this.typeFilter) && (!this.connFilter || d.protocol.toLowerCase() === this.connFilter.toLowerCase()) && (!this.siteFilter || d.site === this.siteFilter) &&
+      (!this.typeFilter || d.type === this.typeFilter) && (!this.connFilter || d.conn === this.connFilter) && (!this.siteFilter || d.site === this.siteFilter) &&
       (!this.healthFilter || d.health === this.healthFilter) && (!this.kpi || bucketOf(d) === this.kpi) &&
       (!q || `${d.id} ${d.name} ${d.serial} ${d.imei} ${d.model} ${d.asset ? d.asset.name : ''} ${d.gateway} ${d.site}`.toLowerCase().includes(q)));
     this.cache = { key, rows };
@@ -302,7 +217,7 @@ export class DeviceManagement implements OnInit, OnDestroy {
   }
 
   typeIcon(d: Device) {
-    return typeIconOf(d.type);
+    return TYPE_ICON[d.type];
   }
 
   batteryIcon(d: Device) {
@@ -315,13 +230,11 @@ export class DeviceManagement implements OnInit, OnDestroy {
     return b < 20 ? 'c-red' : b < 30 ? 'c-amber' : 'c-green';
   }
 
-  signalIcon(rssi: number | null) {
-    if (rssi === null) return SignalLow;
+  signalIcon(rssi: number) {
     return rssi >= -65 ? Signal : rssi >= -80 ? SignalHigh : rssi >= -95 ? SignalMedium : SignalLow;
   }
 
-  signalClass(rssi: number | null): string {
-    if (rssi === null) return '';
+  signalClass(rssi: number): string {
     return rssi >= -80 ? 'c-green' : rssi >= -95 ? 'c-amber' : 'c-red';
   }
 
@@ -355,7 +268,7 @@ export class DeviceManagement implements OnInit, OnDestroy {
   }
 
   seenDate(d: Device): string {
-    return d.lastSeenSec === null ? 'No message received yet' : this.fmtAt(Date.now() - d.lastSeenSec * 1000);
+    return d.lastSeenSec === null ? 'No message received yet' : this.fmtAt(NOW.getTime() - d.lastSeenSec * 1000);
   }
 
   // ===== Row menu =====
@@ -419,12 +332,7 @@ export class DeviceManagement implements OnInit, OnDestroy {
 
   get events(): DevEvent[] {
     const d = this.selected;
-    return d ? d.log : [];
-  }
-
-  /** Battery text when there is no level: wired power, or "—" for a battery device that has not reported one. */
-  powerText(d: Device): string {
-    return d.power === 'Battery' ? '—' : d.power === 'PoE' ? 'PoE' : 'External power';
+    return d ? [...d.log, ...baseEvents(d)] : [];
   }
 
   batteryWord(d: Device): { label: string; cls: string } {
@@ -432,50 +340,61 @@ export class DeviceManagement implements OnInit, OnDestroy {
     return b < 20 ? { label: 'Low', cls: 'pill--red' } : b < 30 ? { label: 'Fair', cls: 'pill--amber' } : { label: 'Good', cls: 'pill--green' };
   }
 
-  /** Type-specific values of the latest payload, when reported. */
+  /** Type-specific values of the latest payload (derived for the demo). */
   payload(d: Device): { k: string; v: string }[] {
-    return d.payload ?? [];
+    const rng = mulberry32(d.seed * 7 + 3);
+    const r = (a: number, b: number, dp = 1) => (a + rng() * (b - a)).toFixed(dp);
+    switch (d.type) {
+      case 'Temperature Sensor':
+        return [{ k: 'Temperature', v: `${r(2, 6)} °C` }, { k: 'Humidity', v: `${r(55, 82, 0)} %RH` }];
+      case 'Vibration Sensor':
+        return [{ k: 'Velocity (RMS)', v: `${r(1.2, 6.8)} mm/s` }, { k: 'Surface temperature', v: `${r(38, 64, 0)} °C` }];
+      case 'GPS / Cellular':
+        return [{ k: 'Position', v: `${r(25.0, 25.12, 5)}, ${r(55.1, 55.2, 5)}` }, { k: 'Speed', v: `${r(0, 14, 0)} km/h` }, { k: 'Ignition', v: rng() > 0.4 ? 'On' : 'Off' }];
+      case 'RFID Reader':
+        return [{ k: 'Tag reads / min', v: r(40, 320, 0) }, { k: 'Active antennas', v: '4 / 4' }];
+      default:
+        return [{ k: 'Advertising interval', v: '1,000 ms' }, { k: 'TX power', v: '0 dBm' }];
+    }
   }
 
-  /** Last few messages before the last-seen time, when reported. */
+  /** Last few messages before the last-seen time. */
   recentMessages(d: Device): { at: number; rssi: number }[] {
-    return d.messages ?? [];
+    if (d.lastSeenSec === null) return [];
+    const rng = mulberry32(d.seed + 99);
+    const last = NOW.getTime() - d.lastSeenSec * 1000;
+    return Array.from({ length: 5 }, (_, i) => ({ at: last - i * d.settings.intervalMin * 60_000, rssi: Math.round(d.rssi + (rng() - 0.5) * 6) }));
   }
 
   uptime(d: Device): string {
-    const pts = this.chartFor(d)?.pts ?? [];
-    if (!pts.length) return '—';
+    const pts = this.chartFor(d).pts;
     const live = pts.filter((p) => p.msgs > 0).length;
     return Math.round((live / pts.length) * 100) + '%';
   }
 
   msgCount(d: Device): number {
-    return (this.chartFor(d)?.pts ?? []).reduce((s, p) => s + p.msgs, 0);
+    return this.chartFor(d).pts.reduce((s, p) => s + p.msgs, 0);
   }
 
   // ===== Health chart =====
 
-  /** The chart follows the selected device. */
-  get chartDevice(): Device | null {
-    return this.selected;
+  /** The chart follows the selected device, or VS-30018 when nothing is selected. */
+  get chartDevice(): Device {
+    return this.selected ?? this.byId('VS-30018') ?? DEVICES[0];
   }
 
   private chartCache = { key: '', v: null as Chart | null };
 
-  get chart(): Chart | null {
-    const d = this.chartDevice;
-    return d ? this.chartFor(d) : null;
+  get chart(): Chart {
+    return this.chartFor(this.chartDevice);
   }
 
-  /** Null when the device has fewer than two reported points for the range. */
-  private chartFor(d: Device): Chart | null {
+  private chartFor(d: Device): Chart {
     const key = `${d.id}|${this.range}|${this.version}`;
-    if (this.chartCache.key === key) return this.chartCache.v;
-    const pts = d.healthSeries?.[this.range] ?? [];
-    if (pts.length < 2 || pts[pts.length - 1].at <= pts[0].at) {
-      this.chartCache = { key, v: null };
-      return null;
-    }
+    if (this.chartCache.key === key && this.chartCache.v) return this.chartCache.v;
+    const hours = this.range === '24h' ? 24 : 168;
+    const step = this.range === '24h' ? 1 : 6;
+    const pts = healthSeries(d, hours, step);
     const plotW = CW - CP.l - CP.r;
     const t0 = pts[0].at;
     const span = pts[pts.length - 1].at - t0;
@@ -535,8 +454,7 @@ export class DeviceManagement implements OnInit, OnDestroy {
   }
 
   hoverLabel(i: number): string {
-    const at = this.chart?.pts[i]?.at;
-    if (at === undefined) return '';
+    const at = this.chart.pts[i].at;
     const dt = new Date(at);
     return this.range === '24h' ? this.clock(dt) : `${dt.getDate()} ${MONTHS[dt.getMonth()]}, ${this.clock(dt)}`;
   }
@@ -548,11 +466,10 @@ export class DeviceManagement implements OnInit, OnDestroy {
     if (!d.asset) return;
     this.clearFilters();
     this.search = d.asset.code;
-    this.showToast(`Showing the devices linked to ${d.asset.name}.`);
+    this.showToast(`${d.asset.name} isn't in the demo asset register — showing the devices linked to it.`);
   }
 
   showGateway(d: Device): void {
-    if (!d.gateway) return;
     this.clearFilters();
     this.search = d.gateway;
     this.showToast(`Showing devices reporting through ${d.gateway}.`);
@@ -569,55 +486,17 @@ export class DeviceManagement implements OnInit, OnDestroy {
   }
 
   private log(d: Device, title: string, detail: string, level: DevEvent['level']): void {
-    d.log.unshift({ at: Date.now(), title, detail: detail ? `${detail} · by ${this.api.currentUser()}` : `by ${this.api.currentUser()}`, level });
+    d.log.unshift({ at: Date.now(), title, detail, level });
     this.version++;
-  }
-
-  /** Puts a saved device into the list, keeping the page-only fields (events, settings) of the local copy. */
-  private commit(saved: Device, local?: Device): Device {
-    if (local) {
-      saved.log = [...local.log.filter((e) => !saved.log.some((x) => x.at === e.at && x.title === e.title)), ...saved.log].sort((a, b) => b.at - a.at);
-      saved.settings = local.settings;
-    }
-    const i = DEVICES.findIndex((x) => x.id === saved.id);
-    if (i >= 0) DEVICES[i] = saved;
-    else DEVICES.unshift(saved);
-    this.addOptions(saved);
-    this.version++;
-    return saved;
-  }
-
-  private failed(e: Error): void {
-    this.saving = false;
-    if (this.dialog) this.formError = e.message;
-    else this.showToast(e.message);
   }
 
   // link / unlink
 
-  /** Assets from the asset register (GET api/asset-registrations), name and code. */
-  private registeredAssets: LinkedAsset[] = [];
   private assetCache = { version: -1, list: [] as LinkedAsset[] };
 
-  /** "Link to asset" choices: the registered assets, then any asset already linked on a device that is not in the register. */
   get assetOptions(): LinkedAsset[] {
-    if (this.assetCache.version !== this.version) {
-      const seen = new Set(this.registeredAssets.map((a) => a.code.toUpperCase()));
-      const extra = knownAssets().filter((a) => !seen.has(a.code.toUpperCase()));
-      this.assetCache = { version: this.version, list: [...this.registeredAssets, ...extra] };
-    }
+    if (this.assetCache.version !== this.version) this.assetCache = { version: this.version, list: knownAssets() };
     return this.assetCache.list;
-  }
-
-  /** "Tv - TV12333": asset name and code, as in Tag Management. */
-  assetOptionLabel(a: LinkedAsset): string {
-    return a.name && a.name !== a.code ? `${a.name} - ${a.code}` : a.code;
-  }
-
-  /** The picked code as a linked asset (with its name and registration id when it is registered). */
-  private resolveAsset(code: string): LinkedAsset {
-    const c = code.trim().toUpperCase();
-    return this.assetOptions.find((a) => a.code.toUpperCase() === c) ?? { name: code.trim(), code: code.trim() };
   }
 
   openLink(d: Device): void {
@@ -628,23 +507,17 @@ export class DeviceManagement implements OnInit, OnDestroy {
 
   saveLink(): void {
     const dl = this.dialog;
-    if (dl?.kind !== 'link' || this.saving) return;
+    if (dl?.kind !== 'link') return;
     const d = this.byId(dl.deviceId);
+    const code = dl.asset.trim().toUpperCase();
     if (!d) return;
-    if (!dl.asset.trim()) return void (this.formError = 'Choose the asset to link.');
-    const asset = this.resolveAsset(dl.asset);
-    this.saving = true;
-    this.api.update({ ...d, asset }).subscribe({
-      next: (saved) => {
-        const n = this.commit(saved, d);
-        this.log(n, 'Linked to asset', asset.name, 'purple');
-        this.saving = false;
-        this.dialog = null;
-        this.selectedId = n.id;
-        this.showToast(`${n.id} linked to ${asset.name}.`);
-      },
-      error: (e: Error) => this.failed(e),
-    });
+    if (!code) return void (this.formError = 'Choose the asset to link.');
+    const asset = knownAssets().find((a) => a.code.toUpperCase() === code) ?? { name: code, code };
+    d.asset = asset;
+    this.log(d, 'Linked to asset', asset.name, 'purple');
+    this.dialog = null;
+    this.selectedId = d.id;
+    this.showToast(`${d.id} linked to ${asset.name}.`);
   }
 
   openUnlink(d: Device): void {
@@ -655,51 +528,17 @@ export class DeviceManagement implements OnInit, OnDestroy {
 
   saveUnlink(): void {
     const dl = this.dialog;
-    if (dl?.kind !== 'unlink' || this.saving) return;
+    if (dl?.kind !== 'unlink') return;
     const d = this.byId(dl.deviceId);
     if (!d?.asset) return;
     const from = d.asset;
-    this.saving = true;
-    this.api.update({ ...d, asset: null }).subscribe({
-      next: (saved) => {
-        const n = this.commit(saved, d);
-        this.log(n, 'Unlinked from asset', `${from.name}${dl.reason.trim() ? ' — ' + dl.reason.trim() : ''}`, 'grey');
-        this.saving = false;
-        this.dialog = null;
-        this.showToast(`${n.id} unlinked from ${from.name}.`);
-      },
-      error: (e: Error) => this.failed(e),
-    });
+    d.asset = null;
+    this.log(d, 'Unlinked from asset', `${from.name}${dl.reason.trim() ? ' — ' + dl.reason.trim() : ''}`, 'grey');
+    this.dialog = null;
+    this.showToast(`${d.id} unlinked from ${from.name}. The asset keeps its history.`);
   }
 
-  // delete
-
-  openDelete(d: Device): void {
-    this.menuId = '';
-    this.formError = '';
-    this.dialog = { kind: 'delete', deviceId: d.id };
-  }
-
-  saveDelete(): void {
-    const dl = this.dialog;
-    if (dl?.kind !== 'delete' || this.saving) return;
-    this.saving = true;
-    this.api.delete(dl.deviceId).subscribe({
-      next: () => {
-        const i = DEVICES.findIndex((x) => x.id === dl.deviceId);
-        if (i >= 0) DEVICES.splice(i, 1);
-        if (this.selectedId === dl.deviceId) this.selectedId = null;
-        this.saving = false;
-        this.dialog = null;
-        this.version++;
-        this.page = Math.min(this.page, this.pageCount - 1);
-        this.showToast(`${dl.deviceId} deleted.`);
-      },
-      error: (e: Error) => this.failed(e),
-    });
-  }
-
-  // settings (page-only: the API has no per-device settings here; Configure opens Device Configuration)
+  // settings
 
   resetSettings(): void {
     const d = this.selected;
@@ -718,105 +557,83 @@ export class DeviceManagement implements OnInit, OnDestroy {
     if (!(s.offlineAfterMin >= s.intervalMin * 2)) return void (this.formError = 'Mark offline after at least two missed intervals.');
     this.formError = '';
     d.settings = { ...s };
-    d.conn = connOf(d.lastSeenSec, s.offlineAfterMin);
     this.log(d, 'Settings updated', `Report every ${s.intervalMin} min · offline after ${s.offlineAfterMin} min · low battery ${s.lowBattery}%`, 'purple');
-    this.showToast(`Settings applied to ${d.id} for this session. Use Configure to change the device itself.`);
+    this.showToast(`Settings saved for ${d.id}.`);
   }
 
   // add device
 
   modelsFor(t: DeviceType): string[] {
-    return MODELS_BY_TYPE[t] ?? [];
+    return TYPE_SPEC[t].models;
   }
 
   gatewaysFor(site: string): string[] {
     return SITES.find((s) => s.name === site)?.gateways ?? [];
   }
 
-  cellular(f: DeviceForm): boolean {
-    return isCellular(f.type, f.protocol);
-  }
-
   openAdd(): void {
+    const type: DeviceType = 'BLE Tracker';
+    const site = SITES[0];
     this.formError = '';
-    const f: DeviceForm = { name: '', id: '', type: '', model: '', serial: '', protocol: '', site: '', gateway: '', asset: '' };
-    this.dialog = { kind: 'add', f };
-    this.onAddModel(f, false);
+    this.dialog = { kind: 'add', f: { name: TYPE_SPEC[type].name, id: '', type, model: TYPE_SPEC[type].models[0], serial: '', protocol: TYPE_SPEC[type].protocol, site: site.name, gateway: site.gateways[0], asset: '' } };
   }
 
   onAddType(f: DeviceForm): void {
-    f.model = '';
-    this.onAddModel(f, false);
-  }
-
-  /** GET /api/iot-devices/connectivities?model: once a model is picked, its protocol comes first and is pre-selected. */
-  onAddModel(f: DeviceForm, pick = true): void {
-    this.api.connectivities(f.model || undefined, f.type || undefined).subscribe((list) => {
-      if (!list.length) return;
-      this.protocols = list;
-      if (!pick || !f.model) return;
-      f.protocol = list[0];
-      if (this.cellular(f)) f.gateway = 'Cellular';
-      else if (f.gateway === 'Cellular') f.gateway = '';
-    });
+    const spec = TYPE_SPEC[f.type];
+    f.name = spec.name;
+    f.model = spec.models[0];
+    f.protocol = spec.protocol;
+    f.gateway = f.type === 'GPS / Cellular' ? 'Cellular' : this.gatewaysFor(f.site)[0] ?? '';
   }
 
   onAddSite(f: DeviceForm): void {
-    if (f.gateway !== 'Cellular') f.gateway = '';
+    if (f.gateway !== 'Cellular') f.gateway = this.gatewaysFor(f.site)[0] ?? '';
   }
 
   private validateDevice(id: string, serial: string, type: DeviceType | null, model: string, site: string, gateway: string, ids: Set<string>, serials: Set<string>): string {
-    if (!type) return 'Device type missing';
+    if (!type) return 'Unknown device type';
     if (!/^[A-Z0-9][A-Z0-9-]{2,19}$/.test(id)) return 'Device ID must be 3–20 letters, digits or dashes';
     if (ids.has(id)) return `${id} already exists`;
     if (!serial) return 'Serial number missing';
     if (serials.has(serial)) return 'Serial number already registered';
-    if (!model) return 'Model missing';
-    // catalogue checks apply only once models / sites / gateways are loaded
-    const models = this.modelsFor(type);
-    if (models.length && !models.includes(model)) return `${model} is not a ${type} model`;
-    if (SITES.length && site && !SITES.some((s) => s.name === site)) return 'Unknown site';
-    const gateways = this.gatewaysFor(site);
-    if (gateway && gateway !== 'Cellular' && gateways.length && !gateways.includes(gateway)) return `${gateway} is not at ${site}`;
+    if (!TYPE_SPEC[type].models.includes(model)) return `${model || 'Model'} is not a ${type} model`;
+    if (!SITES.some((s) => s.name === site)) return 'Unknown site';
+    if (type === 'GPS / Cellular' ? gateway !== 'Cellular' : !this.gatewaysFor(site).includes(gateway)) return type === 'GPS / Cellular' ? 'Cellular trackers report over the mobile network' : `${gateway || 'Gateway'} is not at ${site}`;
     return '';
   }
 
   saveAdd(): void {
     const dl = this.dialog;
-    if (dl?.kind !== 'add' || this.saving) return;
+    if (dl?.kind !== 'add') return;
     const f = dl.f;
     const id = f.id.trim().toUpperCase();
     const serial = f.serial.trim().toUpperCase();
     if (!f.name.trim()) return void (this.formError = 'Enter a device name.');
     const err = this.validateDevice(id, serial, f.type, f.model, f.site, f.gateway, new Set(DEVICES.map((d) => d.id)), new Set(DEVICES.map((d) => d.serial)));
     if (err) return void (this.formError = err + '.');
-    if (!f.protocol) return void (this.formError = 'Choose the connectivity.');
-    const draft = this.newDevice(id, f.name.trim(), f.type, f.model, serial, f.protocol, f.site, f.gateway, f.asset);
-    this.saving = true;
-    this.api.create(draft, this.siteIdOf(f.site)).subscribe({
-      next: (saved) => {
-        const d = this.commit(saved);
-        this.saving = false;
-        this.dialog = null;
-        this.clearFilters();
-        this.select(d);
-        this.showToast(`${d.id} registered. It shows as Pending until its first message arrives.`);
-      },
-      error: (e: Error) => this.failed(e),
-    });
+    if (f.type === 'GPS / Cellular' && f.protocol !== 'LTE-M') return void (this.formError = 'GPS / Cellular devices use LTE-M.');
+    const d = this.createDevice(id, f.name.trim(), f.type, f.model, serial, f.protocol, f.site, f.gateway, f.asset);
+    this.dialog = null;
+    this.clearFilters();
+    this.select(d);
+    this.showToast(`${d.id} registered. It shows as Pending until its first message arrives.`);
   }
 
-  private siteIdOf(site: string): string | null {
-    return SITES.find((s) => s.name === site)?.id || null;
-  }
-
-  /** A new device to POST; the API fills in power source, health and who registered it. */
-  private newDevice(id: string, name: string, type: DeviceType, model: string, serial: string, protocol: Protocol, site: string, gateway: string, assetCode: string): Device {
-    const asset = assetCode.trim() ? this.resolveAsset(assetCode) : null;
-    return {
-      id, name, type, model, serial, imei: '', protocol, conn: 'Pending', health: 'Good', asset, site, gateway, power: 'External', battery: null,
-      rssi: null, lastSeenSec: null, firmware: '', installedDaysAgo: 0, settings: { intervalMin: 10, lowBattery: 20, offlineAfterMin: 30, alerts: true }, log: [],
+  private createDevice(id: string, name: string, type: DeviceType, model: string, serial: string, protocol: Protocol, site: string, gateway: string, assetCode: string): Device {
+    const code = assetCode.trim().toUpperCase();
+    const asset = code ? knownAssets().find((a) => a.code.toUpperCase() === code) ?? { name: code, code } : null;
+    const power = powerFor(type, model);
+    const spec = TYPE_SPEC[type];
+    const d: Device = {
+      id, name, type, model, serial, imei: '', protocol, conn: 'Pending', health: 'Good', asset, site, gateway, power, battery: power === 'Battery' ? 100 : null,
+      rssi: -70, lastSeenSec: null, firmware: MODEL_FW[model], installedDaysAgo: 0, settings: { intervalMin: spec.interval, lowBattery: 20, offlineAfterMin: Math.max(15, spec.interval * 3), alerts: true },
+      log: [], seed: Math.floor(Math.random() * 1e9),
     };
+    d.log.push({ at: Date.now(), title: 'Device registered', detail: `${model} · ${serial}`, level: 'grey' });
+    if (asset) d.log.unshift({ at: Date.now(), title: 'Linked to asset', detail: asset.name, level: 'purple' });
+    DEVICES.unshift(d);
+    this.version++;
+    return d;
   }
 
   // import
@@ -826,9 +643,12 @@ export class DeviceManagement implements OnInit, OnDestroy {
   }
 
   downloadTemplate(): void {
-    const header = ['Device ID', 'Name', 'Device Type', 'Model', 'Serial', 'Connectivity', 'Site', 'Gateway', 'Linked Asset'];
+    const sample = [
+      { 'Device ID': 'BL-29901', Name: 'BLE Beacon', 'Device Type': 'BLE Tracker', Model: 'Minew E8', Serial: 'SN-BL-29901', Site: 'Dubai Warehouse', Gateway: 'GW-DXB-04', 'Linked Asset': 'FL-008' },
+      { 'Device ID': 'GPS-19902', Name: 'GPS Tracker', 'Device Type': 'GPS / Cellular', Model: 'Teltonika FMC920', Serial: 'SN-GPS-19902', Site: 'Jebel Ali Yard', Gateway: 'Cellular', 'Linked Asset': '' },
+    ];
     const book = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet([], { header }), 'Devices');
+    XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(sample), 'Devices');
     XLSX.writeFile(book, 'IoT_Devices_Import_Template.xlsx');
   }
 
@@ -865,20 +685,18 @@ export class DeviceManagement implements OnInit, OnDestroy {
     return raw.map((r, i) => {
       const id = get(r, 'device id', 'id').toUpperCase();
       const typeText = get(r, 'device type', 'type');
-      const type = this.types.find((t) => t.toLowerCase() === typeText.toLowerCase()) ?? (this.types.length ? null : typeText || null);
+      const type = TYPE_ALIASES[typeText.toLowerCase()] ?? null;
       const model = get(r, 'model');
       const serial = get(r, 'serial', 'serial number').toUpperCase();
-      const protocol = get(r, 'connectivity', 'protocol');
       const site = SITES.find((s) => s.name.toLowerCase() === get(r, 'site').toLowerCase())?.name ?? get(r, 'site');
       const gateway = get(r, 'gateway').toUpperCase().replace('CELLULAR', 'Cellular');
       let error = this.validateDevice(id, serial, type, model, site, gateway, ids, serials);
       if (!type && typeText) error = `Unknown device type "${typeText}"`;
-      if (!error && !protocol) error = 'Connectivity missing';
       if (!error) {
         ids.add(id);
         serials.add(serial);
       }
-      return { line: i + 2, id, name: get(r, 'name') || id, type, model, serial, protocol, site, gateway, asset: get(r, 'linked asset', 'asset'), error };
+      return { line: i + 2, id, name: get(r, 'name') || (type ? TYPE_SPEC[type].name : ''), type, model, serial, site, gateway, asset: get(r, 'linked asset', 'asset'), error };
     });
   }
 
@@ -887,35 +705,15 @@ export class DeviceManagement implements OnInit, OnDestroy {
     return dl?.kind === 'import' ? dl.rows.filter((r) => !r.error).length : 0;
   }
 
-  /** POSTs the valid rows one by one; rows the API rejects are reported with its reason. */
   saveImport(): void {
     const dl = this.dialog;
-    if (dl?.kind !== 'import' || this.saving) return;
+    if (dl?.kind !== 'import') return;
     const ok = dl.rows.filter((r) => !r.error && r.type);
-    this.saving = true;
-    from(ok).pipe(
-      concatMap((r) => this.api.create(this.newDevice(r.id, r.name, r.type!, r.model, r.serial, r.protocol, r.site, r.gateway, r.asset), this.siteIdOf(r.site)).pipe(
-        map((saved) => {
-          this.commit(saved);
-          return '';
-        }),
-        catchError((e: Error) => of((r.error = e.message))),
-      )),
-      toArray(),
-    ).subscribe((results) => {
-      this.saving = false;
-      const done = results.filter((x) => !x).length;
-      const failed = results.length - done;
-      const skipped = dl.rows.length - ok.length;
-      this.clearFilters();
-      if (failed) {
-        dl.error = `${done} imported; ${failed} rejected by the server (see Result).`;
-        dl.rows = dl.rows.filter((r) => r.error);
-        return;
-      }
-      this.dialog = null;
-      this.showToast(`${done} device${done === 1 ? '' : 's'} imported${skipped ? `, ${skipped} skipped` : ''}.`);
-    });
+    for (const r of ok) this.createDevice(r.id, r.name, r.type!, r.model, r.serial, TYPE_SPEC[r.type!].protocol, r.site, r.gateway, r.asset);
+    const skipped = dl.rows.length - ok.length;
+    this.dialog = null;
+    this.clearFilters();
+    this.showToast(`${ok.length} device${ok.length === 1 ? '' : 's'} imported${skipped ? `, ${skipped} skipped` : ''}.`);
   }
 
   // helpers

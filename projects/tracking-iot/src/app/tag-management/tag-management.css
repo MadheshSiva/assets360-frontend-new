@@ -72,9 +72,6 @@ select.control {
 .kpi > span:last-child { min-width: 0; }
 .kpi strong { display: block; font-size: clamp(19px, 1.5vw, 24px); white-space: nowrap; font-weight: 800; letter-spacing: -0.3px; }
 .kpi-label { font-size: 13px; color: var(--ti-text-2); }
-.kpi-delta { display: block; font-size: 11.5px; font-weight: 600; color: var(--ti-text-2); white-space: nowrap; }
-.kpi-delta.is-up { color: #16a34a; }
-.kpi-delta.is-down { color: #dc2626; }
 .kpi-ic { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: #fff; }
 .kpi.is-on { box-shadow: 0 0 0 2px var(--ti-accent); }
 .kpi--violet { border-color: #e2dcfb; background: #f8f6ff; }

@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, inject } from '@angular/core';
+import { Component, HostListener, OnInit } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -6,17 +6,13 @@ import {
   ArrowDown, ArrowUp, ArrowUpDown, Bookmark, ChartColumn, Download, Ellipsis, GitCompareArrows, GripVertical, Info,
   LucideAngularModule, Maximize2, RadioTower, RefreshCw, Signal, TriangleAlert, Wifi, X
 } from 'lucide-angular';
-import { Observable, Subscription, catchError, forkJoin, map, of, switchMap } from 'rxjs';
-import { AnalyticsPage, downloadCsv, percent } from '../shared/analytics-common';
+import { AnalyticsPage, RA_CATEGORIES, downloadCsv, percent } from '../shared/analytics-common';
 import { CartesianChart, ChartSeries, ChartSlice, DonutChart, GaugeChart, RA_COLORS, Sparkline } from '../shared/charts';
-import { alignTo } from '../asset-performance/kit/api-utils';
 import { IotActionPlanDialog, ActionPlan } from './iot-action-plan/iot-action-plan';
 import { IotSiteMap, MapPoint } from './iot-site-map/iot-site-map';
 import {
-  ALL_CATEGORIES, ALL_DEVICE_TYPES, ALL_LOCATIONS, ALL_ORGANIZATIONS, ALL_STATUSES, CONNECTIVITY, Connectivity, IOT_DEFAULT_PERIOD, IOT_FALLBACK_PERIODS,
-  IotAlert, IotAsset, IotDeviceRow, IotKpiValue, IotSiteRow, IotView, agoText, telemetryTime
+  CONNECTIVITY, Connectivity, DEVICE_TYPES, IOT_ALERTS, IOT_ASSETS, IOT_SITES, IotAlert, IotAsset, agoText, telemetryTime
 } from './iot-utilization.data';
-import { IotFilterLists, IotFilters, IotOptions, IotSavedView, IotUtilizationAnalyticsService } from './iot-utilization-analytics.service';
 
 type KpiKey = 'connected' | 'utilization' | 'availability' | 'alerts';
 export type WidgetKey = 'trend' | 'telemetry' | 'connectivity' | 'category' | 'health' | 'events' | 'map' | 'variance' | 'devices';
@@ -30,28 +26,41 @@ interface Kpi {
   value: string;
   prev: string;
   delta: number;
-  /** "%" for a relative change, " pts" for the difference of two rates */
-  unit: string;
   /** Is the change an improvement? (fewer alerts is good) */
   good: boolean;
   tone: string;
   icon: typeof Wifi;
 }
 
-/** An asset row with the utilization for the selected period (only assets with a utilization figure) */
+/** An asset row with the utilization for the selected period */
 interface UtilRow {
   asset: IotAsset;
   utilization: number;
   variance: number;
 }
 
+interface DeviceRow {
+  type: string;
+  connected: number;
+  availability: number;
+  signal: number;
+  failed: number;
+}
+
 interface Insight {
-  key: string;
+  key: 'alerts' | 'below' | 'vibration' | 'offline';
   tone: string;
   title: string;
   text: string;
   view: string;
-  assetKeys: string[];
+}
+
+interface SiteRow {
+  site: string;
+  connected: number;
+  utilization: number;
+  availability: number;
+  alerts: number;
 }
 
 interface ListDialog {
@@ -67,7 +76,6 @@ const STATUS_TONES: Record<Connectivity, string> = { Online: 'green', Intermitte
 const STATUS_COLORS: Record<Connectivity, string> = {
   Online: RA_COLORS.green, Intermittent: RA_COLORS.orange, Offline: RA_COLORS.red, 'Never Connected': RA_COLORS.grey
 };
-const TELEMETRY_COLORS = [RA_COLORS.purple, RA_COLORS.blue, RA_COLORS.green, RA_COLORS.orange];
 const WIDGET_TITLES: Record<WidgetKey, string> = {
   trend: 'Utilization Trend',
   telemetry: 'Telemetry Overview',
@@ -79,70 +87,50 @@ const WIDGET_TITLES: Record<WidgetKey, string> = {
   variance: 'Top Utilization Variance Assets',
   devices: 'Device & Sensor Performance'
 };
-/** Insight cards by API key: tone and the label of their "View …" button. */
-const INSIGHT_STYLE: Record<string, { tone: string; view: string }> = {
-  alerts: { tone: 'red', view: 'View alerts' },
-  below_target: { tone: 'orange', view: 'Open asset details' },
-  abnormal_vibration: { tone: 'red', view: 'View sensors' },
-  offline_devices: { tone: 'orange', view: 'View devices' }
-};
-const DEFAULT_REFRESH_MS = 30_000;
-const VARIANCE_ROWS = 8;
+const AUTO_REFRESH_MS = 30_000;
 
-const dash = (v: number | null | undefined, suffix = ''): string => (v === null || v === undefined ? '—' : `${v}${suffix}`);
+function avg(values: number[]): number {
+  return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+}
+
+function round1(v: number): number {
+  return Math.round(v * 10) / 10;
+}
 
 /** Reports & Analytics > IoT / Utilization Analytics */
 @Component({
   selector: 'app-ra-iot-utilization-analytics',
   standalone: true,
   imports: [FormsModule, RouterLink, NgTemplateOutlet, LucideAngularModule, CartesianChart, DonutChart, GaugeChart, Sparkline, IotSiteMap, IotActionPlanDialog],
-  providers: [IotUtilizationAnalyticsService],
   templateUrl: './iot-utilization-analytics.html',
   styleUrls: ['../shared/analytics-page.css', './iot-utilization-analytics.css']
 })
 export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit {
-  private readonly api = inject(IotUtilizationAnalyticsService);
   readonly icons = {
     ArrowDown, ArrowUp, ArrowUpDown, Bookmark, ChartColumn, Download, Ellipsis, GitCompareArrows, GripVertical, Info, Maximize2,
     RadioTower, RefreshCw, Signal, TriangleAlert, Wifi, X
   };
   readonly colors = RA_COLORS;
+  readonly categories = ['All categories', ...RA_CATEGORIES];
+  readonly deviceTypes = ['All device types', ...DEVICE_TYPES];
+  readonly statuses = ['All statuses', ...CONNECTIVITY];
   readonly titles = WIDGET_TITLES;
   readonly telemetryTime = telemetryTime;
   readonly agoText = agoText;
   readonly percent = percent;
-  readonly dash = dash;
 
-  // Filter values come from /options and /filters
-  override periods: string[] = IOT_FALLBACK_PERIODS;
-  override organizations: string[] = [ALL_ORGANIZATIONS];
-  override locations: string[] = [ALL_LOCATIONS];
-  override period = IOT_DEFAULT_PERIOD;
-  override organization = ALL_ORGANIZATIONS;
-  override location = ALL_LOCATIONS;
-  categories: string[] = [ALL_CATEGORIES];
-  deviceTypes: string[] = [ALL_DEVICE_TYPES];
-  statuses: string[] = [ALL_STATUSES, ...CONNECTIVITY];
-  owners: string[] = [];
-  priorities = ['Critical', 'High', 'Medium', 'Low'];
-  category = ALL_CATEGORIES;
-  deviceType = ALL_DEVICE_TYPES;
-  connectivity = ALL_STATUSES;
+  category = '';
+  deviceType = '';
+  connectivity = '';
   compare = false;
 
-  // Live data: "Updated n sec ago" ticks every second; auto refresh reloads the overview
+  // Live data: "Updated n sec ago" ticks every second; auto refresh nudges the live numbers every 30 s
   autoRefresh = true;
-  updatedSeconds = 0;
-  private refreshMs = DEFAULT_REFRESH_MS;
-  private lastUpdated = 0;
+  updatedSeconds = 30;
   private secondTimer: ReturnType<typeof setInterval> | null = null;
   private autoTimer: ReturnType<typeof setInterval> | null = null;
-  private loadSub: Subscription | null = null;
-  private historySub: Subscription | null = null;
-  /** Previous period's Production line while Compare Periods is on */
-  private previousProduction: number[] | null = null;
 
-  // View model, rebuilt from each overview
+  // View model, rebuilt when filters change
   assets: IotAsset[] = [];
   alerts: IotAlert[] = [];
   utilRows: UtilRow[] = [];
@@ -156,12 +144,9 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
   connectivitySlices: ChartSlice[] = [];
   healthCounts = { Healthy: 0, Warning: 0, Failed: 0 };
   sensorHealth = 0;
-  sensorHealthKnown = false;
-  sensorHealthTarget = 95;
   mapPoints: MapPoint[] = [];
   mapLegend = { online: 0, intermittent: 0, offline: 0 };
-  deviceRows: IotDeviceRow[] = [];
-  siteRows: IotSiteRow[] = [];
+  deviceRows: DeviceRow[] = [];
   insights: Insight[] = [];
 
   // Tables
@@ -176,150 +161,44 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
   breakdown: Kpi | null = null;
   list: ListDialog | null = null;
   detail: UtilRow | null = null;
-  /** The detail dialog's 12-week utilization (null while loading or without data) */
-  detailSpark: number[] | null = null;
-  actionPlan: { title: string; context: string; key: string; assetKeys: string[] } | null = null;
-  savingPlan = false;
+  actionPlan: { title: string; context: string } | null = null;
   saveViewOpen = false;
   viewName = '';
   viewTried = false;
 
-  get loading(): boolean {
-    return this.api.loading();
-  }
-
-  get loaded(): boolean {
-    return this.api.loaded();
-  }
-
-  get loadError(): string | null {
-    return this.api.error();
-  }
-
-  get view(): IotView {
-    return this.api.view();
-  }
-
   ngOnInit(): void {
-    this.secondTimer = setInterval(() => {
-      if (this.lastUpdated) this.updatedSeconds = Math.floor((Date.now() - this.lastUpdated) / 1000);
-    }, 1000);
-    this.init();
+    this.recompute();
+    this.secondTimer = setInterval(() => this.updatedSeconds++, 1000);
+    this.setAutoRefresh(this.autoRefresh);
   }
 
   override ngOnDestroy(): void {
     super.ngOnDestroy();
     if (this.secondTimer) clearInterval(this.secondTimer);
     if (this.autoTimer) clearInterval(this.autoTimer);
-    this.loadSub?.unsubscribe();
-    this.historySub?.unsubscribe();
   }
 
   override get updatedText(): string {
-    if (!this.lastUpdated) return this.loading ? 'Loading…' : 'Not loaded yet';
     if (this.updatedSeconds < 5) return 'Updated just now';
     if (this.updatedSeconds < 60) return `Updated ${this.updatedSeconds} sec ago`;
     return `Updated ${Math.floor(this.updatedSeconds / 60)} min ago`;
   }
 
-  /** Options, filter values and saved views, then the figures (opening the user's default view if there is one). */
-  private init(): void {
-    const errors: string[] = [];
-    const soft = <T>(fallback: T) => catchError<T, Observable<T>>((err: Error) => {
-      errors.push(err.message);
-      return of(fallback);
-    });
-    forkJoin({
-      options: this.api.loadOptions().pipe(soft<IotOptions | null>(null)),
-      filters: this.api.loadFilters().pipe(soft<IotFilterLists | null>(null)),
-      views: this.api.loadViews().pipe(soft<IotSavedView[]>([]))
-    }).subscribe(({ options, filters, views }) => {
-      if (options) {
-        this.periods = options.periods;
-        this.period = options.defaultPeriod;
-        this.statuses = options.statuses;
-        this.priorities = options.priorities;
-        this.refreshMs = options.autoRefreshSeconds * 1000;
-      }
-      if (filters) {
-        this.organizations = filters.organizations;
-        this.locations = filters.locations;
-        this.categories = filters.categories;
-        this.deviceTypes = filters.deviceTypes;
-        this.owners = filters.owners;
-      }
-      const preferred = views.find((v) => v.isDefault && !v.builtIn);
-      if (preferred) this.restoreFilters(preferred.filters);
-      if (errors.length) this.notify(errors[0]);
-      this.recompute();
-      this.setAutoRefresh(this.autoRefresh);
-    });
-  }
-
-  private filters(): IotFilters {
-    return {
-      period: this.period, organization: this.organization, location: this.location, category: this.category, deviceType: this.deviceType,
-      connectivity: this.connectivity
-    };
-  }
-
-  private restoreFilters(f: IotFilters): void {
-    this.period = this.periods.includes(f.period) ? f.period : IOT_DEFAULT_PERIOD;
-    this.organization = this.keep('organizations', f.organization);
-    this.location = this.keep('locations', f.location);
-    this.category = this.keep('categories', f.category);
-    this.deviceType = this.keep('deviceTypes', f.deviceType);
-    this.connectivity = this.keep('statuses', f.connectivity);
-  }
-
-  /** A saved value no longer offered by /filters stays selectable so the view still opens as saved. */
-  private keep(list: 'organizations' | 'locations' | 'categories' | 'deviceTypes' | 'statuses', value: string): string {
-    if (!this[list].includes(value)) this[list] = [...this[list], value];
-    return value;
-  }
-
-  /** Reloads the page from GET /overview (and the previous period's Production line when comparing). */
-  private recompute(announce?: string): void {
-    this.loadSub?.unsubscribe();
-    this.refreshing = true;
-    const f = this.filters();
-    this.loadSub = this.api.loadOverview(f).pipe(
-      switchMap((v) => {
-        if (!this.compare) return of({ v, previous: null as number[] | null });
-        return this.api.loadPreviousProduction(f).pipe(
-          map((previous) => ({ v, previous: previous as number[] | null })),
-          catchError((err: Error) => {
-            this.notify(err.message);
-            return of({ v, previous: null as number[] | null });
-          })
-        );
-      })
-    ).subscribe({
-      next: ({ v, previous }) => {
-        this.previousProduction = previous;
-        this.build(v);
-        this.refreshing = false;
-        this.lastUpdated = Date.now();
-        this.updatedSeconds = 0;
-        if (announce) this.notify(announce);
-      },
-      error: (err: Error) => {
-        this.refreshing = false;
-        this.notify(err.message);
-      }
-    });
-  }
-
   override refresh(): void {
-    if (!this.refreshing) this.recompute('Data refreshed.');
+    super.refresh();
+    this.liveTick();
   }
 
   setAutoRefresh(on: boolean): void {
     this.autoRefresh = on;
     if (this.autoTimer) clearInterval(this.autoTimer);
-    this.autoTimer = on ? setInterval(() => {
-      if (!this.refreshing) this.recompute();
-    }, this.refreshMs) : null;
+    this.autoTimer = on ? setInterval(() => this.liveTick(), AUTO_REFRESH_MS) : null;
+  }
+
+  // Re-aggregates the view model (live telemetry will come from the IoT API once wired)
+  private liveTick(): void {
+    this.updatedSeconds = 0;
+    this.recompute();
   }
 
   onFilterChange(): void {
@@ -327,12 +206,12 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
   }
 
   resetFilters(): void {
-    this.period = this.periods.includes(IOT_DEFAULT_PERIOD) ? IOT_DEFAULT_PERIOD : this.periods[0];
-    this.organization = ALL_ORGANIZATIONS;
-    this.location = ALL_LOCATIONS;
-    this.category = ALL_CATEGORIES;
-    this.deviceType = ALL_DEVICE_TYPES;
-    this.connectivity = ALL_STATUSES;
+    this.period = '';
+    this.organization = '';
+    this.location = '';
+    this.category = '';
+    this.deviceType = '';
+    this.connectivity = '';
     this.recompute();
   }
 
@@ -341,88 +220,126 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
     this.recompute();
   }
 
-  private build(v: IotView): void {
-    this.assets = v.assets;
-    this.alerts = v.alerts;
-    this.utilRows = v.assets
-      .filter((a) => a.utilization !== null)
-      .map((a) => ({ asset: a, utilization: a.utilization ?? 0, variance: a.variance ?? 0 }));
-
-    const kpi = (key: KpiKey, label: string, k: IotKpiValue, format: (n: number) => string, tone: string, icon: typeof Wifi, lowerIsBetter = false): Kpi => ({
-      key, label, tone, icon,
-      value: k.value === null ? '—' : format(k.value),
-      prev: k.previous === null ? '—' : format(k.previous),
-      delta: k.change,
-      unit: k.unit === 'points' ? ' pts' : '%',
-      good: lowerIsBetter ? k.change <= 0 : k.change >= 0
-    });
-    this.kpis = [
-      kpi('connected', 'Connected Assets', v.connected, (n) => this.num(n), 'green', Wifi),
-      kpi('utilization', 'Average Utilization', v.utilization, (n) => percent(n), 'pink', ChartColumn),
-      kpi('availability', 'Telemetry Availability', v.availability, (n) => percent(n), 'blue', RadioTower),
-      kpi('alerts', 'Active IoT Alerts', v.alertCount, (n) => String(n), 'red', TriangleAlert, true)
-    ];
-
-    this.trendLabels = v.labels;
-    this.trendSeries = [
-      { name: 'Production', values: v.production, color: RA_COLORS.purple },
-      { name: 'Idle', values: v.idle, color: RA_COLORS.blue },
-      { name: 'Maintenance', values: v.maintenance, color: RA_COLORS.orange },
-      { name: 'Offline', values: v.offline, color: RA_COLORS.red }
-    ];
-    if (this.compare && this.previousProduction) {
-      this.trendSeries.push({
-        name: 'Production (previous period)', values: alignTo(this.previousProduction, v.labels.length), color: RA_COLORS.lavender, dashed: true
-      });
-    }
-    this.telemetrySeries = v.telemetry.map((t, i) => ({ name: t.name, values: t.values, color: TELEMETRY_COLORS[i % TELEMETRY_COLORS.length] }));
-    this.eventSeries = [
-      { name: 'Critical', values: v.critical, color: RA_COLORS.red },
-      { name: 'Warning', values: v.warning, color: RA_COLORS.orange },
-      { name: 'Informational', values: v.informational, color: RA_COLORS.blue }
-    ];
-
-    this.connectivitySlices = CONNECTIVITY.map((s) => ({ name: s, value: v.connectivity[s], color: STATUS_COLORS[s] }));
-    this.categoryLabels = v.categories.map((c) => c.category);
-    this.categorySeries = [
-      { name: 'Utilization', values: v.categories.map((c) => c.utilization), color: RA_COLORS.purple, type: 'bar' },
-      { name: 'Target', values: v.categories.map((c) => c.target), color: RA_COLORS.green, type: 'line', dashed: true }
-    ];
-    this.healthCounts = { Healthy: v.health.healthy, Warning: v.health.warning, Failed: v.health.failed };
-    this.sensorHealthKnown = v.health.score !== null;
-    this.sensorHealth = v.health.score ?? 0;
-    this.sensorHealthTarget = v.health.target;
-
-    this.buildMap(v.sites);
-    this.siteRows = v.sites;
-    this.deviceRows = v.devices;
-    this.insights = v.insights.map((i) => ({
-      key: i.key, title: i.title, text: i.message, assetKeys: i.assetKeys,
-      tone: INSIGHT_STYLE[i.key]?.tone ?? (i.severity === 'critical' ? 'red' : 'orange'),
-      view: INSIGHT_STYLE[i.key]?.view ?? 'View details'
-    }));
+  // Asset matches every active filter
+  private matches(a: IotAsset): boolean {
+    return (!this.organization || this.organization === this.organizations[0] || a.org === this.organization)
+      && (!this.location || this.location === this.locations[0] || a.site === this.location)
+      && (!this.category || this.category === this.categories[0] || a.category === this.category)
+      && (!this.deviceType || this.deviceType === this.deviceTypes[0] || a.deviceType === this.deviceType)
+      && (!this.connectivity || this.connectivity === this.statuses[0] || a.status === this.connectivity);
   }
 
-  /** One pin per status cluster at each site with coordinates, nudged apart so they don't overlap. */
-  private buildMap(sites: IotSiteRow[]): void {
+  private recompute(): void {
+    this.assets = IOT_ASSETS.filter((a) => this.matches(a));
+    const inScope = new Set(this.assets);
+    this.alerts = IOT_ALERTS.filter((al) => inScope.has(al.asset));
+    this.utilRows = this.assets
+      .filter((a) => a.utilization !== null)
+      .map((a) => {
+        const utilization = round1(Math.min(100, Math.max(0, a.utilization ?? 0)));
+        return { asset: a, utilization, variance: round1(utilization - a.target) };
+      });
+
+    const avgUtil = round1(avg(this.utilRows.map((r) => r.utilization)));
+    const avgAvail = this.availabilityOf(this.assets);
+    // Period-over-period change needs previous-period figures from the API; none available yet
+    const [dConn, dUtil, dAvail, dAlerts] = [0, 0, 0, 0];
+    const none = this.assets.length === 0;
+    const prev = (v: number, d: number) => v / (1 + d / 100);
+    this.kpis = [
+      { key: 'connected', label: 'Connected Assets', value: this.num(this.assets.length), prev: this.num(Math.round(prev(this.assets.length, dConn))), delta: dConn, good: dConn >= 0, tone: 'green', icon: Wifi },
+      { key: 'utilization', label: 'Average Utilization', value: none ? '—' : percent(avgUtil), prev: percent(prev(avgUtil, dUtil)), delta: dUtil, good: dUtil >= 0, tone: 'pink', icon: ChartColumn },
+      { key: 'availability', label: 'Telemetry Availability', value: none ? '—' : percent(avgAvail), prev: percent(prev(avgAvail, dAvail)), delta: dAvail, good: dAvail >= 0, tone: 'blue', icon: RadioTower },
+      { key: 'alerts', label: 'Active IoT Alerts', value: String(this.alerts.length), prev: String(Math.round(prev(this.alerts.length, dAlerts))), delta: dAlerts, good: dAlerts <= 0, tone: 'red', icon: TriangleAlert }
+    ];
+
+    this.buildTrends();
+    this.buildDistribution();
+    this.buildMap();
+    this.buildDevices();
+    this.buildInsights();
+  }
+
+  private availabilityOf(assets: IotAsset[]): number {
+    const values = assets.filter((a) => a.availability !== null).map((a) => a.availability ?? 0);
+    if (!values.length) return 0;
+    return round1(Math.min(100, avg(values)));
+  }
+
+  /** Utilization, telemetry and event trends: no time-series source yet, so these charts render empty. */
+  private buildTrends(): void {
+    this.trendLabels = [];
+    this.trendSeries = [];
+    this.telemetrySeries = [];
+    this.eventSeries = [];
+  }
+
+  private buildDistribution(): void {
+    this.connectivitySlices = CONNECTIVITY.map((s) => ({ name: s, value: this.assets.filter((a) => a.status === s).length, color: STATUS_COLORS[s] }));
+
+    const cats = RA_CATEGORIES.filter((c) => this.utilRows.some((r) => r.asset.category === c));
+    this.categoryLabels = cats;
+    this.categorySeries = [
+      { name: 'Utilization', values: cats.map((c) => round1(avg(this.utilRows.filter((r) => r.asset.category === c).map((r) => r.utilization)))), color: RA_COLORS.purple, type: 'bar' },
+      { name: 'Target', values: cats.map((c) => this.assets.find((a) => a.category === c)?.target ?? 0), color: RA_COLORS.green, type: 'line', dashed: true }
+    ];
+
+    this.healthCounts = {
+      Healthy: this.assets.filter((a) => a.health === 'Healthy').length,
+      Warning: this.assets.filter((a) => a.health === 'Warning').length,
+      Failed: this.assets.filter((a) => a.health === 'Failed').length
+    };
+    // Sensor health = share of sensors still reporting usable readings (healthy or warning)
+    this.sensorHealth = this.assets.length ? round1(((this.healthCounts.Healthy + this.healthCounts.Warning) / this.assets.length) * 100) : 0;
+  }
+
+  private buildMap(): void {
     const points: MapPoint[] = [];
     const legend = { online: 0, intermittent: 0, offline: 0 };
-    sites.forEach((site) => {
-      legend.online += site.online;
-      legend.intermittent += site.intermittent;
-      legend.offline += site.offline;
-      if (site.lat === null || site.lng === null) return;
-      if (site.online) points.push({ lat: site.lat, lng: site.lng, color: RA_COLORS.green, label: `${site.site}: ${site.online} online` });
-      if (site.intermittent) points.push({ lat: site.lat + 0.09, lng: site.lng + 0.1, color: RA_COLORS.orange, label: `${site.site}: ${site.intermittent} intermittent` });
-      if (site.offline) points.push({ lat: site.lat - 0.08, lng: site.lng + 0.12, color: RA_COLORS.red, label: `${site.site}: ${site.offline} offline` });
+    IOT_SITES.forEach((site) => {
+      const here = this.assets.filter((a) => a.site === site.name);
+      const online = here.filter((a) => a.status === 'Online').length;
+      const intermittent = here.filter((a) => a.status === 'Intermittent').length;
+      const offline = here.filter((a) => a.status === 'Offline').length;
+      legend.online += online;
+      legend.intermittent += intermittent;
+      legend.offline += offline;
+      // One pin per status cluster, nudged apart so they don't overlap
+      if (online) points.push({ lat: site.lat, lng: site.lng, color: RA_COLORS.green, label: `${site.name}: ${online} online` });
+      if (intermittent) points.push({ lat: site.lat + 0.09, lng: site.lng + 0.1, color: RA_COLORS.orange, label: `${site.name}: ${intermittent} intermittent` });
+      if (offline) points.push({ lat: site.lat - 0.08, lng: site.lng + 0.12, color: RA_COLORS.red, label: `${site.name}: ${offline} offline` });
     });
     this.mapPoints = points;
     this.mapLegend = legend;
   }
 
-  /** Sites in scope that have no coordinates in master data (their assets are counted but not pinned). */
-  get unmappedSites(): number {
-    return this.siteRows.filter((s) => s.lat === null || s.lng === null).length;
+  private buildDevices(): void {
+    this.deviceRows = DEVICE_TYPES.map((type) => {
+      const list = this.assets.filter((a) => a.deviceType === type);
+      const signals = list.filter((a) => a.signal !== null).map((a) => a.signal ?? 0);
+      return {
+        type,
+        connected: list.length,
+        availability: this.availabilityOf(list),
+        signal: Math.round(avg(signals)),
+        failed: list.filter((a) => a.health === 'Failed').length
+      };
+    }).filter((r) => r.connected > 0);
+  }
+
+  private buildInsights(): void {
+    const alertAssets = new Set(this.alerts.map((a) => a.asset)).size;
+    const below = this.belowTarget;
+    const belowCats = new Set(below.map((r) => r.asset.category)).size;
+    const vib = this.alerts.filter((a) => a.type === 'Abnormal vibration');
+    const vibAssets = new Set(vib.map((a) => a.asset)).size;
+    const offline = this.offline24h.length;
+    const list: Insight[] = [];
+    if (this.alerts.length) list.push({ key: 'alerts', tone: 'red', view: 'View alerts', title: `${this.alerts.length} active IoT alerts require review`, text: `${this.alerts.length} active alerts across ${alertAssets} assets including critical temperature, vibration and connectivity issues.` });
+    if (below.length) list.push({ key: 'below', tone: 'orange', view: 'Open asset details', title: `${below.length} assets below utilization target`, text: `${below.length} assets are operating below their category utilization target across ${belowCats} asset ${belowCats === 1 ? 'category' : 'categories'}.` });
+    if (vib.length) list.push({ key: 'vibration', tone: 'red', view: 'View sensors', title: `${vib.length} sensors reporting abnormal vibration`, text: `${vib.length} vibration readings across ${vibAssets} assets are above the 7.1 mm/s alarm threshold.` });
+    if (offline) list.push({ key: 'offline', tone: 'orange', view: 'View devices', title: `${offline} devices offline for more than 24 hours`, text: `${offline} IoT devices have been offline for more than 24 hours and may require investigation.` });
+    this.insights = list;
   }
 
   get belowTarget(): UtilRow[] {
@@ -435,9 +352,9 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
 
   // ===== Tables =====
 
-  /** The assets furthest below target, ordered by the chosen column */
+  /** The 8 assets furthest below target, ordered by the chosen column */
   get varianceRows(): UtilRow[] {
-    const top = this.belowTarget.slice(0, VARIANCE_ROWS);
+    const top = this.belowTarget.slice(0, 8);
     const dir = this.varianceAsc ? 1 : -1;
     const key = this.varianceSort;
     const value = (r: UtilRow): string | number => {
@@ -455,17 +372,10 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
     return top.sort((a, b) => (value(a) > value(b) ? dir : value(a) < value(b) ? -dir : 0));
   }
 
-  /** Rows without a value go last either way. */
-  get sortedDevices(): IotDeviceRow[] {
+  get sortedDevices(): DeviceRow[] {
     const dir = this.deviceAsc ? 1 : -1;
     const key = this.deviceSort;
-    return [...this.deviceRows].sort((a, b) => {
-      const x = a[key];
-      const y = b[key];
-      if (x === null) return y === null ? 0 : 1;
-      if (y === null) return -1;
-      return (x > y ? 1 : x < y ? -1 : 0) * dir;
-    });
+    return [...this.deviceRows].sort((a, b) => (a[key] > b[key] ? dir : a[key] < b[key] ? -dir : 0));
   }
 
   sortVariance(key: VarianceSort): void {
@@ -486,9 +396,13 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
     return STATUS_TONES[s];
   }
 
-  signalTone(dbm: number | null): string {
-    if (dbm === null) return 'grey';
+  signalTone(dbm: number): string {
     return dbm >= -70 ? 'green' : dbm >= -75 ? 'orange' : 'red';
+  }
+
+  /** Utilization history for the detail dialog (no history source yet) */
+  sparkFor(_row: UtilRow): number[] {
+    return [];
   }
 
   num(v: number): string {
@@ -517,7 +431,7 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
     this.expanded = null;
     this.breakdown = null;
     this.list = null;
-    this.closeDetail();
+    this.detail = null;
     this.actionPlan = null;
     this.saveViewOpen = false;
   }
@@ -538,95 +452,73 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
     this.breakdown = k;
   }
 
+  get siteRows(): SiteRow[] {
+    return IOT_SITES.map((s) => {
+      const list = this.assets.filter((a) => a.site === s.name);
+      return {
+        site: s.name,
+        connected: list.length,
+        utilization: round1(avg(this.utilRows.filter((r) => r.asset.site === s.name).map((r) => r.utilization))),
+        availability: this.availabilityOf(list),
+        alerts: this.alerts.filter((a) => a.asset.site === s.name).length
+      };
+    }).filter((r) => r.connected > 0);
+  }
+
   exportKpi(k: Kpi): void {
     this.menu = null;
     downloadCsv(`iot-${k.key}-by-location.csv`, ['Location', 'Connected Assets', 'Average Utilization %', 'Telemetry Availability %', 'Active Alerts'],
-      this.siteRows.map((r) => [r.site, r.connected, r.utilization ?? '', r.availability ?? '', r.alerts]));
+      this.siteRows.map((r) => [r.site, r.connected, r.utilization, r.availability, r.alerts]));
   }
 
   // ===== Insights =====
 
   openInsight(i: Insight): void {
     if (i.key === 'alerts') this.openList('alerts', 'Active IoT alerts', `${this.alerts.length} alerts, newest first`);
-    else if (i.key === 'below_target') this.openList('assets', 'Assets below utilization target', `${this.belowTarget.length} assets, largest shortfall first`);
-    else if (i.key === 'abnormal_vibration') this.openList('alerts', 'Abnormal vibration readings', 'Vibration sensors beyond their alarm threshold', 'vibration');
+    else if (i.key === 'below') this.openList('assets', 'Assets below utilization target', `${this.belowTarget.length} assets, largest shortfall first`);
+    else if (i.key === 'vibration') this.openList('alerts', 'Abnormal vibration readings', 'Vibration sensors above the 7.1 mm/s alarm threshold', 'Abnormal vibration');
     else this.openList('devices', 'Devices offline for more than 24 hours', `${this.offline24h.length} devices, longest offline first`);
   }
 
-  /** sensorType narrows the alerts list (e.g. vibration). */
-  openList(kind: ListKind, title: string, subtitle: string, sensorType = ''): void {
+  openList(kind: ListKind, title: string, subtitle: string, alertType = ''): void {
     this.list = {
       kind, title, subtitle,
-      alerts: kind === 'alerts' ? this.alerts.filter((a) => !sensorType || (a.sensorType ?? '').toLowerCase().includes(sensorType)) : [],
+      alerts: kind === 'alerts' ? this.alerts.filter((a) => !alertType || a.type === alertType) : [],
       rows: kind === 'assets' ? this.belowTarget : [],
       assets: kind === 'devices' ? this.offline24h : []
     };
   }
 
   planFor(i: Insight): void {
-    this.actionPlan = { title: `Resolve: ${i.title}`, context: i.text, key: i.key, assetKeys: i.assetKeys };
+    this.actionPlan = { title: `Resolve: ${i.title}`, context: i.text };
   }
 
-  /** POST /action-plans with the devices the insight named. */
   onPlanSaved(plan: ActionPlan): void {
-    const source = this.actionPlan;
-    if (!source || this.savingPlan) return;
-    const deviceIds = source.assetKeys
-      .map((key) => this.assets.find((a) => a.key === key)?.deviceId)
-      .filter((id): id is string => !!id && id !== '—');
-    this.savingPlan = true;
-    this.api.createActionPlan({
-      title: plan.title, owner: plan.owner, dueDate: plan.due, priority: plan.priority, notes: plan.notes,
-      insightKey: source.key, context: source.context, deviceIds
-    }).subscribe({
-      next: (saved) => {
-        this.savingPlan = false;
-        this.actionPlan = null;
-        this.notify(`Action plan ${saved.planId} “${saved.title}” created and assigned to ${saved.owner} (due ${saved.dueDate}).`);
-      },
-      error: (err: Error) => {
-        this.savingPlan = false;
-        this.notify(err.message);
-      }
-    });
+    this.actionPlan = null;
+    this.notify(`Action plan “${plan.title}” created and assigned to ${plan.owner} (due ${plan.due}).`);
   }
 
   openDetailFor(asset: IotAsset): void {
-    const row = this.utilRows.find((r) => r.asset.key === asset.key);
+    const row = this.utilRows.find((r) => r.asset === asset);
     this.list = null;
     this.detail = row ?? { asset, utilization: 0, variance: 0 };
-    this.detailSpark = null;
-    this.historySub?.unsubscribe();
-    if (asset.utilization === null) return;
-    this.historySub = this.api.loadHistory(this.filters(), asset.key).subscribe({
-      next: (values) => (this.detailSpark = values.length ? values : null),
-      error: () => (this.detailSpark = null)
-    });
-  }
-
-  openDetailByKey(key: string): void {
-    const asset = this.assets.find((a) => a.key === key);
-    if (asset) this.openDetailFor(asset);
-  }
-
-  closeDetail(): void {
-    this.detail = null;
-    this.detailSpark = null;
-    this.historySub?.unsubscribe();
   }
 
   alertsFor(asset: IotAsset): IotAlert[] {
-    return this.alerts.filter((a) => a.assetKey === asset.key);
+    return this.alerts.filter((a) => a.asset === asset);
   }
 
   // ===== Export / save view =====
 
-  /** GET /export?format=csv: every connected asset for the filters. */
   exportAll(): void {
-    this.api.exportAssets(this.filters()).subscribe({
-      next: () => this.notify(`Exported ${this.num(this.view.assetTotal)} assets to CSV.`),
-      error: (err: Error) => this.notify(err.message)
-    });
+    downloadCsv('iot-utilization-assets.csv',
+      ['Asset ID', 'Asset Name', 'Category', 'Location', 'Device Type', 'Device ID', 'Connectivity', 'Sensor Health', 'Utilization %', 'Target %', 'Variance (pts)', 'Telemetry Availability %', 'Avg Signal (dBm)', 'Last Telemetry'],
+      this.assets.map((a) => {
+        const r = this.utilRows.find((u) => u.asset === a);
+        return [a.id, a.name, a.category, a.site, a.deviceType, a.deviceId, a.status, a.health, r ? r.utilization : '', a.target, r ? r.variance : '',
+          a.availability ?? '', a.signal ?? '', telemetryTime(a.lastSeenMin)];
+      }));
+    this.notify(`Exported ${this.num(this.assets.length)} assets to CSV.`);
   }
 
   exportWidget(key: WidgetKey): void {
@@ -641,12 +533,11 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
       case 'category': return series(this.categoryLabels, this.categorySeries);
       case 'connectivity': return downloadCsv(file, ['Status', 'Assets'], this.connectivitySlices.map((s) => [s.name, s.value]));
       case 'health': return downloadCsv(file, ['Sensor Health', 'Sensors'], [['Healthy', this.healthCounts.Healthy], ['Warning', this.healthCounts.Warning], ['Failed', this.healthCounts.Failed]]);
-      case 'map': return downloadCsv(file, ['Location', 'Connected', 'Avg Utilization %', 'Availability %', 'Active Alerts'],
-        this.siteRows.map((r) => [r.site, r.connected, r.utilization ?? '', r.availability ?? '', r.alerts]));
+      case 'map': return downloadCsv(file, ['Location', 'Connected', 'Avg Utilization %', 'Availability %', 'Active Alerts'], this.siteRows.map((r) => [r.site, r.connected, r.utilization, r.availability, r.alerts]));
       case 'variance': return downloadCsv(file, ['Asset ID', 'Asset Name', 'Location', 'Utilization %', 'Target %', 'Variance (pts)', 'Last Telemetry', 'Status'],
-        this.belowTarget.map((r) => [r.asset.id, r.asset.name, r.asset.site, r.utilization, r.asset.target, r.variance, telemetryTime(r.asset.lastSeen), r.asset.status]));
+        this.belowTarget.map((r) => [r.asset.id, r.asset.name, r.asset.site, r.utilization, r.asset.target, r.variance, telemetryTime(r.asset.lastSeenMin), r.asset.status]));
       case 'devices': return downloadCsv(file, ['Device Type', 'Connected', 'Availability %', 'Avg Signal (dBm)', 'Failed Sensors'],
-        this.deviceRows.map((r) => [r.type, r.connected, r.availability ?? '', r.signal ?? '', r.failed]));
+        this.deviceRows.map((r) => [r.type, r.connected, r.availability, r.signal, r.failed]));
     }
   }
 
@@ -656,14 +547,10 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
     this.saveViewOpen = true;
   }
 
-  /** POST /views with the current filters. */
   confirmSaveView(): void {
     this.viewTried = true;
     if (!this.viewName.trim()) return;
     this.saveViewOpen = false;
-    this.api.createView(this.viewName.trim(), this.filters()).subscribe({
-      next: (saved) => this.notify(`View “${saved.name}” saved with the current filters.`),
-      error: (err: Error) => this.notify(err.message)
-    });
+    this.saveView(this.viewName.trim());
   }
 }

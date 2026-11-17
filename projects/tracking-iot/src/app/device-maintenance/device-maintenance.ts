@@ -1,8 +1,7 @@
-import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, HostListener, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { Subscription, catchError, forkJoin, of } from 'rxjs';
 import * as XLSX from 'xlsx';
 import {
   LucideAngularModule,
@@ -31,7 +30,6 @@ import {
   Pencil,
   Phone,
   Plus,
-  RotateCcw,
   Router as RouterIcon,
   Search,
   ShieldCheck,
@@ -43,12 +41,10 @@ import {
   Wrench,
   X,
 } from 'lucide-angular';
-import { apiErrorMessage } from '../shared/tracking-api';
 import {
-  DEVICES, Device, DeviceKind, HISTORY, HistoryEntry, KIND_LABELS, MAINT_TYPES, MaintType, PLANS, PRIORITIES, Plan, Priority, REQUESTS, ReqStatus,
-  SITES, SITE_AREAS, ServiceRequest, TASKS, TECHNICIANS, Task, TaskStatus, VENDORS, Vendor, daysFromToday, kindOf, rel, telemetry, titleOf, toIso, todayIso,
+  DEVICES, Device, DeviceKind, HISTORY, HistoryEntry, KIND_LABELS, MAINT_TYPES, MaintType, PLANS, PREVIOUS, PRIORITIES, Plan, Priority, REQUESTS, ReqStatus,
+  SITES, SITE_AREAS, ServiceRequest, TASKS, TECHNICIANS, Task, TaskStatus, VENDORS, Vendor, daysFromToday, rel, telemetry, titleOf, toIso, todayIso,
 } from './maintenance-data';
-import { Assignee, MaintenanceApiService, MaintenanceDeviceDto, MaintenanceJobDto, MaintenanceJobRequest, requestOf, toTechnician, toVendor } from './maintenance-api.service';
 
 type Tab = 'overview' | 'requests' | 'plans' | 'history' | 'vendors';
 type PanelTab = 'details' | 'maintenance' | 'telemetry';
@@ -60,26 +56,25 @@ interface Chart { line: string; area: string; min: number; max: number; last: nu
 type Dialog =
   | { kind: 'assign'; task: Task | null; req: ServiceRequest | null; value: string }
   | { kind: 'reschedule'; task: Task; value: string }
-  | { kind: 'request'; deviceId: string; type: MaintType | null; priority: Priority | null; due: string; assignee: string; site: string; description: string; error: string }
-  | { kind: 'plan'; plan: Plan | null; name: string; deviceKind: DeviceKind | null; interval: number; type: MaintType | null; checklist: string; error: string };
+  | { kind: 'request'; deviceId: string; type: MaintType; priority: Priority; due: string; assignee: string; description: string; error: string }
+  | { kind: 'plan'; plan: Plan | null; name: string; deviceKind: DeviceKind; interval: number; type: MaintType; checklist: string; error: string };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const KIND_ICONS = { gateway: RouterIcon, vibration: Activity, temp: Thermometer, beacon: Bluetooth, tracker: Truck, meter: Gauge, other: Cpu };
+const KIND_ICONS = { gateway: RouterIcon, vibration: Activity, temp: Thermometer, beacon: Bluetooth, tracker: Truck, meter: Gauge };
 const CW = 300;
 const CH = 92;
 const CP = { l: 34, r: 6, t: 6, b: 16 };
 const OPEN_REQ: ReqStatus[] = ['Open', 'Assigned', 'In Progress', 'On Hold'];
-const UNASSIGNED = 'Unassigned';
 
 @Component({
   selector: 'app-device-maintenance',
   standalone: true,
   imports: [CommonModule, FormsModule, LucideAngularModule],
   templateUrl: './device-maintenance.html',
-  styleUrls: ['./device-maintenance.css', './device-maintenance-panel.css', './device-maintenance-tabs.css', '../shared/iot-purple-theme.css'],
+  styleUrls: ['./device-maintenance.css', './device-maintenance-panel.css', './device-maintenance-tabs.css'],
 })
-export class DeviceMaintenance implements OnInit, OnDestroy {
-  readonly icons = { ArrowDown, ArrowRight, ArrowUp, Building2, Calendar, CalendarClock, Check, ChevronLeft, ChevronRight, ClipboardList, Clock, Cpu, Download, Ellipsis, Info, Link, ListChecks, Mail, MapPin, Pencil, Phone, Plus, RotateCcw, Search, ShieldCheck, Signal, TriangleAlert, Users, Wrench, X };
+export class DeviceMaintenance implements OnDestroy {
+  readonly icons = { ArrowDown, ArrowRight, ArrowUp, Building2, Calendar, CalendarClock, Check, ChevronLeft, ChevronRight, ClipboardList, Clock, Cpu, Download, Ellipsis, Info, Link, ListChecks, Mail, MapPin, Pencil, Phone, Plus, Search, ShieldCheck, Signal, TriangleAlert, Users, Wrench, X };
   readonly devices = DEVICES;
   readonly tasks = TASKS;
   readonly requests = REQUESTS;
@@ -92,8 +87,7 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
   readonly kinds = Object.keys(KIND_LABELS) as DeviceKind[];
   readonly kindLabels = KIND_LABELS;
   readonly statuses: TaskStatus[] = ['Scheduled', 'In Progress', 'Due Soon', 'Overdue', 'Completed'];
-  /** "On Hold" has no API status, so it is not offered. */
-  readonly reqStatuses: ReqStatus[] = ['Open', 'Assigned', 'In Progress', 'Completed', 'Cancelled'];
+  readonly reqStatuses: ReqStatus[] = ['Open', 'Assigned', 'In Progress', 'On Hold', 'Completed', 'Cancelled'];
   readonly weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   readonly pageSizes = [8, 15, 30];
   readonly cw = CW;
@@ -101,13 +95,11 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
   readonly cp = CP;
 
   private readonly router = inject(Router);
-  private readonly api = inject(MaintenanceApiService);
-  private subs = new Subscription();
 
   tab: Tab = 'overview';
   panelTab: PanelTab = 'details';
-  /** No device is selected until a row is clicked. */
-  selectedId: string | null = null;
+  /** Wide screens open with a device selected; narrower ones keep the drawer closed until a row is clicked. */
+  selectedId: string | null = typeof window !== 'undefined' && window.innerWidth >= 1200 ? 'GW-DXB-02' : null;
 
   // overview filters
   search = '';
@@ -126,7 +118,7 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
 
   // requests tab
   rSearch = '';
-  rStatus = '';
+  rStatus = 'active';
   rPriority = '';
   rPage = 0;
 
@@ -134,185 +126,23 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
   hSearch = '';
   hDevice = '';
   hType = '';
-  hRange: '' | 'month' | '90' | '365' | 'all' = '';
+  hRange: 'month' | '90' | '365' | 'all' = 'all';
   hPage = 0;
 
   menuOpen = '';
   dialog: Dialog | null = null;
   toast = '';
-  loading = false;
-  loadError = '';
-  /** A create / update / delete is in flight. */
-  busy = false;
   private toastTimer?: ReturnType<typeof setTimeout>;
-
-  /** API records and the device dropdown, the source every list above is built from. */
-  private jobs: MaintenanceJobDto[] = [];
-  private deviceOpts: MaintenanceDeviceDto[] = [];
-  private assignees: Assignee[] = [];
-  private defaultType = '';
-  private defaultPriority = '';
-
-  ngOnInit(): void {
-    this.loadOptions();
-    this.loadAssignees();
-    this.load();
-  }
+  private seq = 2200;
 
   ngOnDestroy(): void {
     clearTimeout(this.toastTimer);
-    this.subs.unsubscribe();
-  }
-
-  // ===== Loading =====
-
-  private loadOptions(): void {
-    this.subs.add(this.api.options().subscribe({
-      next: (o) => {
-        MAINT_TYPES.splice(0, MAINT_TYPES.length, ...o.maintenanceTypes);
-        PRIORITIES.splice(0, PRIORITIES.length, ...o.priorities);
-        this.defaultType = o.defaultMaintenanceType;
-        this.defaultPriority = o.defaultPriority;
-      },
-      error: (e: unknown) => this.showToast(apiErrorMessage(e, 'Could not load the maintenance options.')),
-    }));
-  }
-
-  /** Technicians and AMC vendors from Master Data; when unavailable, only names already on jobs are offered. */
-  private loadAssignees(): void {
-    this.subs.add(forkJoin({
-      techs: this.api.technicians().pipe(catchError(() => of([]))),
-      vendors: this.api.vendors().pipe(catchError(() => of([]))),
-    }).subscribe(({ techs, vendors }) => {
-      this.assignees = [...techs.filter((t) => !t.isDeleted).map(toTechnician), ...vendors.filter((v) => !v.isDeleted).map(toVendor)];
-      VENDORS.splice(0, VENDORS.length, ...this.assignees.map((a): Vendor => ({
-        id: a.id, name: a.name, internal: a.type === 'Technician', services: a.skill ? [a.skill] : [], sla: '', contact: a.contact, phone: a.phone, email: a.email, rating: null,
-      })));
-      this.rebuild();
-    }));
-  }
-
-  /** Jobs (GET /api/device-maintenance) and the device list (GET /api/device-maintenance/devices). */
-  load(): void {
-    this.loading = true;
-    this.loadError = '';
-    this.subs.add(forkJoin({
-      jobs: this.api.list(),
-      devices: this.api.devices('', 100).pipe(catchError((e: unknown) => {
-        this.showToast(apiErrorMessage(e, 'Could not load devices.'));
-        return of([] as MaintenanceDeviceDto[]);
-      })),
-    }).subscribe({
-      next: ({ jobs, devices }) => {
-        this.jobs = jobs;
-        this.deviceOpts = devices;
-        this.loading = false;
-        this.rebuild();
-      },
-      error: (e: unknown) => {
-        this.loading = false;
-        this.loadError = apiErrorMessage(e, 'Could not load maintenance jobs.');
-      },
-    }));
-  }
-
-  /** Rebuilds devices, tasks, requests and history from the API records (checklist ticks are kept per job). */
-  private rebuild(): void {
-    const devices = new Map<string, Device>();
-    const put = (d: Device) => {
-      const old = devices.get(d.id);
-      devices.set(d.id, old ? { ...old, ...Object.fromEntries(Object.entries(d).filter(([, v]) => v !== '' && v !== null)) } as Device : d);
-    };
-    for (const o of this.deviceOpts) {
-      put({
-        id: o.deviceId, name: o.deviceName || o.deviceType, kind: kindOf(`${o.deviceType} ${o.deviceName}`), model: o.model,
-        asset: o.assetName ? { id: o.assetRegistrationId ?? '', name: o.assetName } : null, infra: '', site: o.siteName ?? '', siteId: o.siteId ?? '',
-        health: null, uptime: null, firmware: '', warranty: '',
-      });
-    }
-    // jobs are newest first, so the latest job's device details win over older ones
-    for (const j of [...this.jobs].reverse()) {
-      const known = devices.get(j.deviceId);
-      put({
-        id: j.deviceId, name: j.deviceName ?? known?.name ?? '', kind: known?.kind ?? kindOf(j.deviceName ?? ''), model: j.model,
-        asset: j.assetName ? { id: j.assetRegistrationId ?? '', name: j.assetName } : known?.asset ?? null, infra: '', site: j.siteName, siteId: j.siteId ?? '',
-        health: null, uptime: null, firmware: '', warranty: '',
-      });
-    }
-    DEVICES.splice(0, DEVICES.length, ...[...devices.values()].sort((a, b) => a.id.localeCompare(b.id)));
-
-    const ticks = new Map(TASKS.map((t) => [t.id, t.checklist]));
-    TASKS.splice(0, TASKS.length, ...this.jobs.filter((j) => j.status !== 'Cancelled').map((j) => this.taskOf(j, ticks.get(j.maintenanceId))));
-    REQUESTS.splice(0, REQUESTS.length, ...this.jobs.map((j) => this.requestOfJob(j)));
-    HISTORY.splice(0, HISTORY.length, ...this.jobs.filter((j) => j.status === 'Completed').map((j): HistoryEntry => ({
-      id: j.maintenanceId, deviceId: j.deviceId, date: this.completedOn(j), by: j.assignedTo || j.updatedBy || '—', title: titleOf(j.maintenanceType), note: j.description || '—',
-    })));
-    SITES.splice(0, SITES.length, ...[...new Set(DEVICES.map((d) => d.site).filter((s) => !!s))].sort());
-    const names = [...this.assignees.map((a) => a.name), ...this.jobs.map((j) => j.assignedTo ?? '')].filter((n) => !!n);
-    TECHNICIANS.splice(0, TECHNICIANS.length, UNASSIGNED, ...[...new Set(names)].sort((a, b) => a.localeCompare(b)));
-    if (this.selectedId && !DEVICES.some((d) => d.id === this.selectedId)) this.selectedId = null;
-    this.chartCache.clear();
-  }
-
-  private completedOn(j: MaintenanceJobDto): string {
-    return (j.updatedAt ?? j.dueDate).slice(0, 10);
-  }
-
-  private taskOf(j: MaintenanceJobDto, checklist?: boolean[]): Task {
-    const stage = j.status === 'Completed' ? 'completed' : j.status === 'In Progress' ? 'in-progress' : 'planned';
-    const items = this.planOf(this.device(j.deviceId).kind)?.checklist.length ?? 0;
-    return {
-      id: j.maintenanceId, deviceId: j.deviceId, type: j.maintenanceType, due: j.dueDate.slice(0, 10), assignee: j.assignedTo || UNASSIGNED,
-      booked: !!j.assignedTo, stage, checklist: checklist && checklist.length === items ? checklist : new Array(items).fill(false),
-      completedOn: stage === 'completed' ? this.completedOn(j) : undefined, job: j,
-    };
-  }
-
-  private requestOfJob(j: MaintenanceJobDto): ServiceRequest {
-    const status: ReqStatus = j.status === 'Completed' ? 'Completed' : j.status === 'Cancelled' ? 'Cancelled' : j.status === 'In Progress' ? 'In Progress' : j.assignedTo ? 'Assigned' : 'Open';
-    return {
-      id: j.maintenanceId, deviceId: j.deviceId, type: j.maintenanceType, priority: j.priority, status, created: (j.createdAt ?? '').slice(0, 10),
-      due: j.dueDate.slice(0, 10), assignee: j.assignedTo || UNASSIGNED, description: j.description || '—', job: j,
-    };
-  }
-
-  /** Date-driven status the API keeps for open jobs (Scheduled / Due Soon / Overdue). */
-  private dateStatus(due: string, assigned: boolean): string {
-    const n = daysFromToday(due);
-    if (n < 0) return 'Overdue';
-    return assigned || n > 30 ? 'Scheduled' : 'Due Soon';
-  }
-
-  /** PUT a job with some fields changed; the list is rebuilt from the server copy. */
-  private saveJob(job: MaintenanceJobDto, change: Partial<MaintenanceJobRequest>, done: (saved: MaintenanceJobDto) => void): void {
-    if (this.busy) return;
-    const body = { ...requestOf(job), ...change };
-    if (!change.status && body.status && ['Scheduled', 'Due Soon', 'Overdue'].includes(body.status)) body.status = this.dateStatus(body.dueDate, !!body.assignedTo);
-    this.busy = true;
-    this.subs.add(this.api.update(job.maintenanceId, body).subscribe({
-      next: (saved) => {
-        this.busy = false;
-        this.jobs = this.jobs.map((j) => (j.maintenanceId === saved.maintenanceId ? saved : j));
-        this.rebuild();
-        done(saved);
-      },
-      error: (e: unknown) => {
-        this.busy = false;
-        this.showToast(apiErrorMessage(e, `Could not update ${job.maintenanceId}.`));
-      },
-    }));
-  }
-
-  private assigneeFields(name: string): Pick<MaintenanceJobRequest, 'assignedTo' | 'assignedToId' | 'assignedToType'> {
-    if (!name || name === UNASSIGNED) return { assignedTo: null, assignedToId: null, assignedToType: null };
-    const a = this.assignees.find((x) => x.name === name);
-    return { assignedTo: name, assignedToId: a?.id ?? null, assignedToType: a?.type ?? null };
   }
 
   // ===== Lookups & formatting =====
 
   device(id: string): Device {
-    return DEVICES.find((d) => d.id === id) ?? { id, name: '', kind: 'other', model: '', asset: null, infra: '', site: '', siteId: '', health: null, uptime: null, firmware: '', warranty: '' };
+    return DEVICES.find((d) => d.id === id) ?? DEVICES[0];
   }
 
   kindIcon(id: string) {
@@ -328,12 +158,12 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
   }
 
   fmt(iso: string): string {
-    if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return '—';
+    if (!iso) return '—';
     return `${iso.slice(8, 10)} ${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
   }
 
   isPast(iso: string): boolean {
-    return !!iso && daysFromToday(iso) < 0;
+    return daysFromToday(iso) < 0;
   }
 
   goPage(which: string, p: number): void {
@@ -373,10 +203,6 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
     return 'rs--' + s.toLowerCase().replace(' ', '-');
   }
 
-  priorityClass(p: string): string {
-    return 'pr--' + p.toLowerCase();
-  }
-
   isOpenReq(r: ServiceRequest): boolean {
     return OPEN_REQ.includes(r.status);
   }
@@ -390,14 +216,6 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
     return TASKS.filter((t) => t.stage !== 'completed');
   }
 
-  /** Text of the overview table's empty row while loading or after a failed load. */
-  get emptyText(): string {
-    if (this.loading) return 'Loading maintenance jobs…';
-    if (this.loadError) return 'Maintenance jobs could not be loaded.';
-    if (!TASKS.length) return 'No maintenance jobs yet.';
-    return '';
-  }
-
   // ===== KPIs =====
 
   get kpis() {
@@ -407,7 +225,17 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
     const overdue = open.filter((t) => this.status(t) === 'Overdue').length;
     const month = todayIso().slice(0, 7);
     const completed = HISTORY.filter((h) => h.date.startsWith(month)).length;
-    return { due, open: openReq, overdue, completed };
+    const pct = (a: number, b: number) => Math.round(((a - b) / b) * 100);
+    return {
+      due, dueChange: pct(due, PREVIOUS.due),
+      open: openReq, openChange: pct(openReq, PREVIOUS.open),
+      overdue, overdueChange: pct(overdue, PREVIOUS.overdue),
+      completed, completedChange: pct(completed, PREVIOUS.completed),
+    };
+  }
+
+  abs(n: number): number {
+    return Math.abs(n);
   }
 
   kpiGo(which: 'due' | 'open' | 'overdue' | 'completed'): void {
@@ -429,7 +257,7 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
     const q = this.search.trim().toLowerCase();
     const rows = TASKS.filter((t) => {
       const d = this.device(t.deviceId);
-      if (q && !`${t.id} ${d.id} ${d.name} ${d.model} ${d.asset?.id ?? ''} ${d.asset?.name ?? ''} ${t.assignee}`.toLowerCase().includes(q)) return false;
+      if (q && !`${d.id} ${d.name} ${d.model} ${d.asset?.id ?? ''} ${d.asset?.name ?? ''} ${t.assignee}`.toLowerCase().includes(q)) return false;
       if (this.fSite && d.site !== this.fSite) return false;
       if (this.fKind && d.kind !== this.fKind) return false;
       if (this.fType && t.type !== this.fType) return false;
@@ -580,7 +408,6 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
     return t.checklist.filter((c) => c).length;
   }
 
-  /** Checklists come from session plans (no API), so ticks are kept on the page only. */
   toggleCheck(t: Task, i: number): void {
     t.checklist[i] = !t.checklist[i];
   }
@@ -592,7 +419,7 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
   }
 
   primaryDisabled(t: Task): boolean {
-    return this.busy || t.stage === 'completed' || (t.stage === 'in-progress' && this.doneCount(t) < t.checklist.length);
+    return t.stage === 'completed' || (t.stage === 'in-progress' && this.doneCount(t) < t.checklist.length);
   }
 
   primaryAction(t: Task): void {
@@ -603,35 +430,31 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
   startService(t: Task): void {
     this.menuOpen = '';
     if (t.stage !== 'planned') return;
-    this.saveJob(t.job, { status: 'In Progress' }, () =>
-      this.showToast(`Service started on ${t.deviceId}${t.assignee === UNASSIGNED ? ' – remember to assign a technician' : ` by ${t.assignee}`}.`));
+    t.stage = 'in-progress';
+    t.booked = true;
+    for (const r of this.requestsOf(t.deviceId)) if (r.status !== 'On Hold') r.status = 'In Progress';
+    this.showToast(`Service started on ${t.deviceId}${t.assignee === 'Unassigned' ? ' – remember to assign a technician' : ` by ${t.assignee}`}.`);
   }
 
-  /** Marks the job completed; when the device type has a plan, the next service is created from its interval. */
+  /** Marks the job completed, writes a history entry and schedules the next service from the plan interval. */
   completeTask(t: Task): void {
     this.menuOpen = '';
     if (t.stage === 'completed') return;
     const d = this.device(t.deviceId);
     const plan = this.planOf(d.kind);
+    const today = todayIso();
     const done = this.doneCount(t);
-    const note = done ? `Checklist completed (${done}/${t.checklist.length}).` : '';
-    const description = [t.job.description, note].filter((x) => !!x).join(' ') || null;
-    this.saveJob(t.job, { status: 'Completed', description }, (saved) => {
-      if (!plan) return this.showToast(`${titleOf(t.type)} on ${d.id} completed.`);
-      const next = rel(plan.interval);
-      const body: MaintenanceJobRequest = {
-        ...requestOf(saved), maintenanceType: plan.type, dueDate: next, priority: null, status: null,
-        description: `${plan.name} (every ${plan.interval} days).`,
-      };
-      this.subs.add(this.api.create(body).subscribe({
-        next: (job) => {
-          this.jobs = [job, ...this.jobs];
-          this.rebuild();
-          this.showToast(`${titleOf(t.type)} on ${d.id} completed. Next service ${job.maintenanceId} scheduled for ${this.fmt(next)}.`);
-        },
-        error: (e: unknown) => this.showToast(`${titleOf(t.type)} on ${d.id} completed, but the next service could not be scheduled: ${apiErrorMessage(e, 'request failed')}`),
-      }));
-    });
+    t.stage = 'completed';
+    t.completedOn = today;
+    const by = t.assignee === 'Unassigned' ? 'Internal IoT Team' : t.assignee;
+    HISTORY.unshift({ id: `H-${Date.now()}`, deviceId: d.id, date: today, by, title: titleOf(t.type), note: done ? `Checklist completed (${done}/${t.checklist.length}). Device verified online.` : 'Marked complete by maintenance planner.' });
+    for (const r of this.requestsOf(d.id)) r.status = 'Completed';
+    let next = '';
+    if (plan) {
+      next = rel(plan.interval);
+      TASKS.push({ id: `MT-${++this.seq}`, deviceId: d.id, type: plan.type, due: next, assignee: t.assignee, booked: t.assignee !== 'Unassigned', stage: 'planned', checklist: plan.checklist.map(() => false) });
+    }
+    this.showToast(`${titleOf(t.type)} on ${d.id} completed.${next ? ` Next service scheduled for ${this.fmt(next)}.` : ''}`);
   }
 
   // ===== Navigation =====
@@ -642,7 +465,7 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
   }
 
   viewAsset(d: Device): void {
-    this.router.navigate(['/assets/list'], { queryParams: { search: d.asset ? d.asset.id || d.asset.name : d.id } });
+    this.router.navigate(['/assets/list'], { queryParams: { search: d.asset ? d.asset.id : d.id } });
   }
 
   viewOnMap(d: Device): void {
@@ -650,7 +473,7 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
   }
 
   siteArea(site: string): string {
-    return SITE_AREAS[site] ?? '';
+    return SITE_AREAS[site] ?? site;
   }
 
   viewAllHistory(id: string): void {
@@ -662,14 +485,13 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
 
   // ===== Telemetry =====
 
-  private chartCache = new Map<string, { up: Chart; rssi: Chart } | null>();
+  private chartCache = new Map<string, { up: Chart; rssi: Chart }>();
 
-  /** Null when no telemetry has been reported for the device. */
-  charts(d: Device): { up: Chart; rssi: Chart } | null {
+  charts(d: Device): { up: Chart; rssi: Chart } {
     let c = this.chartCache.get(d.id);
-    if (c === undefined) {
-      const t = telemetry(d.id, d.uptime ?? 0);
-      c = t.uptime.length >= 2 && t.rssi.length >= 2 ? { up: this.chart(t.uptime, 1, '%'), rssi: this.chart(t.rssi, 0, ' dBm') } : null;
+    if (!c) {
+      const t = telemetry(d.id, d.uptime);
+      c = { up: this.chart(t.uptime, 1, '%'), rssi: this.chart(t.rssi, 0, ' dBm') };
       this.chartCache.set(d.id, c);
     }
     return c;
@@ -696,7 +518,7 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
     const q = this.rSearch.trim().toLowerCase();
     return REQUESTS.filter((r) => {
       if (this.rStatus === 'active' && !this.isOpenReq(r)) return false;
-      if (this.rStatus && this.rStatus !== 'active' && this.rStatus !== 'all' && r.status !== this.rStatus) return false;
+      if (this.rStatus !== 'active' && this.rStatus !== 'all' && r.status !== this.rStatus) return false;
       if (this.rPriority && r.priority !== this.rPriority) return false;
       const d = this.device(r.deviceId);
       return !q || `${r.id} ${d.id} ${d.name} ${r.assignee} ${r.description}`.toLowerCase().includes(q);
@@ -709,31 +531,18 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
     return rows.slice(this.rPage * 10, this.rPage * 10 + 10);
   }
 
-  /** Request status → job status: Open (reopen) → Scheduled / Due Soon / Overdue by date; On Hold has no API status. */
   setReq(r: ServiceRequest, s: ReqStatus): void {
     this.menuOpen = '';
-    if (s === 'On Hold') return;
     if (s === 'Cancelled' && !confirm(`Cancel ${r.id}?`)) return;
-    const status = s === 'Open' || s === 'Assigned' ? this.dateStatus(r.due, !!r.job.assignedTo) : s;
-    this.saveJob(r.job, { status }, () => this.showToast(`${r.id} ${s === 'In Progress' ? 'started' : s === 'Open' ? 'reopened' : s.toLowerCase()}.`));
-  }
-
-  deleteRequest(r: ServiceRequest): void {
-    this.menuOpen = '';
-    if (this.busy || !confirm(`Delete ${r.id}? This removes the job permanently.`)) return;
-    this.busy = true;
-    this.subs.add(this.api.remove(r.id).subscribe({
-      next: () => {
-        this.busy = false;
-        this.jobs = this.jobs.filter((j) => j.maintenanceId !== r.id);
-        this.rebuild();
-        this.showToast(`${r.id} deleted.`);
-      },
-      error: (e: unknown) => {
-        this.busy = false;
-        this.showToast(apiErrorMessage(e, `Could not delete ${r.id}.`));
-      },
-    }));
+    r.status = s;
+    if (s === 'In Progress') {
+      const t = this.openTasksOf(r.deviceId)[0];
+      if (t && t.stage === 'planned') {
+        t.stage = 'in-progress';
+        t.booked = true;
+      }
+    }
+    this.showToast(`${r.id} ${s === 'In Progress' ? 'started' : s === 'On Hold' ? 'put on hold' : s.toLowerCase()}.`);
   }
 
   viewDevice(id: string): void {
@@ -758,6 +567,7 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
     this.clearFilters();
     this.fKind = p.kind;
   }
+
 
   // ===== Service history tab =====
 
@@ -787,7 +597,7 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
   exportHistory(): void {
     const rows = this.historyRows.map((h) => {
       const d = this.device(h.deviceId);
-      return { Date: h.date, Job: h.id, Device: d.id, 'Device Type': d.name, Model: d.model, Site: d.site, 'Linked Asset': d.asset ? d.asset.name : '', Service: h.title, 'Performed By': h.by, Notes: h.note, Result: 'Completed' };
+      return { Date: h.date, Device: d.id, 'Device Type': d.name, Model: d.model, Site: d.site, 'Linked Asset': d.asset ? d.asset.name : '', Service: h.title, 'Performed By': h.by, Notes: h.note, Result: 'Completed' };
     });
     if (!rows.length) return this.showToast('Nothing to export for these filters.');
     const book = XLSX.utils.book_new();
@@ -799,7 +609,7 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
   // ===== Vendors tab =====
 
   openJobs(v: Vendor): number {
-    return this.openTasks.filter((t) => t.assignee === v.name).length;
+    return this.openTasks.filter((t) => t.assignee === v.name).length + REQUESTS.filter((r) => r.assignee === v.name && this.isOpenReq(r)).length;
   }
 
   showVendorJobs(v: Vendor): void {
@@ -812,8 +622,7 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
 
   openAssign(task: Task | null, req: ServiceRequest | null = null): void {
     this.menuOpen = '';
-    const current = (task ?? req)?.assignee;
-    this.dialog = { kind: 'assign', task, req, value: current && current !== UNASSIGNED ? current : '' };
+    this.dialog = { kind: 'assign', task, req, value: (task ?? req)?.assignee ?? 'Unassigned' };
   }
 
   openReschedule(task: Task): void {
@@ -823,24 +632,14 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
 
   openRequest(deviceId = ''): void {
     this.menuOpen = '';
-    const id = deviceId || this.selectedId || '';
-    this.dialog = {
-      kind: 'request', deviceId: id, type: null, priority: null, due: rel(7),
-      assignee: '', site: id ? this.device(id).site : '', description: '', error: '',
-    };
-  }
-
-  /** Device picked in the request form: its known site fills the Site field. */
-  onRequestDevice(): void {
-    const g = this.requestDialog;
-    if (g && g.deviceId) g.site = this.device(g.deviceId).site || g.site;
+    this.dialog = { kind: 'request', deviceId: deviceId || this.selectedId || '', type: 'Corrective repair', priority: 'Medium', due: rel(7), assignee: 'Unassigned', description: '', error: '' };
   }
 
   openPlan(plan: Plan | null): void {
-    const kind: DeviceKind | null = plan ? plan.kind : this.selected ? this.selected.kind : null;
+    const kind: DeviceKind = plan ? plan.kind : this.selected ? this.selected.kind : 'gateway';
     this.dialog = {
-      kind: 'plan', plan, error: '', name: plan ? plan.name : kind ? `${KIND_LABELS[kind]} service` : '', deviceKind: kind,
-      interval: plan ? plan.interval : 90, type: plan ? plan.type : null, checklist: plan ? plan.checklist.join('\n') : '',
+      kind: 'plan', plan, error: '', name: plan ? plan.name : `${KIND_LABELS[kind]} service`, deviceKind: kind,
+      interval: plan ? plan.interval : 90, type: plan ? plan.type : 'Preventive', checklist: plan ? plan.checklist.join('\n') : '',
     };
   }
 
@@ -863,65 +662,53 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
   saveAssign(): void {
     const g = this.assignDialog;
     if (!g) return;
-    const job = (g.task ?? g.req)?.job;
-    if (!job || !g.value) return;
-    const label = g.task ? g.task.deviceId : g.req ? g.req.id : '';
-    this.saveJob(job, this.assigneeFields(g.value), () => {
-      this.dialog = null;
-      this.showToast(g.value === UNASSIGNED ? `${label} unassigned.` : `${label} assigned to ${g.value}.`);
-    });
+    if (g.task) {
+      g.task.assignee = g.value;
+      g.task.booked = g.value !== 'Unassigned';
+    }
+    if (g.req) {
+      g.req.assignee = g.value;
+      if (g.req.status === 'Open' && g.value !== 'Unassigned') g.req.status = 'Assigned';
+    }
+    const id = g.task ? g.task.deviceId : g.req ? g.req.id : '';
+    this.dialog = null;
+    this.showToast(`${id} assigned to ${g.value}.`);
   }
 
   saveReschedule(): void {
     const g = this.rescheduleDialog;
     if (!g || !g.value) return;
-    this.saveJob(g.task.job, { dueDate: g.value }, () => {
-      this.dialog = null;
-      this.showToast(`${g.task.deviceId} rescheduled to ${this.fmt(g.value)}.`);
-    });
+    g.task.due = g.value;
+    g.task.booked = true;
+    this.dialog = null;
+    this.showToast(`${g.task.deviceId} rescheduled to ${this.fmt(g.value)}.`);
   }
 
   saveRequest(): void {
     const g = this.requestDialog;
-    if (!g || this.busy) return;
+    if (!g) return;
     if (!g.deviceId) return void (g.error = 'Choose a device.');
-    if (!g.type) return void (g.error = 'Choose a maintenance type.');
     if (!g.due) return void (g.error = 'Choose a due date.');
-    if (!g.site.trim()) return void (g.error = 'Enter the site.');
     const d = this.device(g.deviceId);
-    const site = g.site.trim();
-    const body: MaintenanceJobRequest = {
-      deviceId: d.id, deviceName: d.name || null, model: d.model || null, assetRegistrationId: d.asset?.id || null, assetName: d.asset?.name || null,
-      siteId: site === d.site ? d.siteId || null : DEVICES.find((x) => x.site === site && x.siteId)?.siteId ?? null, siteName: site,
-      maintenanceType: g.type, dueDate: g.due, ...this.assigneeFields(g.assignee), priority: g.priority || null,
-      description: g.description.trim() || null, status: this.dateStatus(g.due, !!g.assignee && g.assignee !== UNASSIGNED),
+    const n = Math.max(...REQUESTS.map((r) => Number(r.id.slice(3)))) + 1;
+    const assigned = g.assignee !== 'Unassigned';
+    const req: ServiceRequest = {
+      id: `SR-${n}`, deviceId: d.id, type: g.type, priority: g.priority, status: assigned ? 'Assigned' : 'Open', created: todayIso(), due: g.due,
+      assignee: g.assignee, description: g.description.trim() || `${g.type} requested for ${d.name}.`,
     };
-    this.busy = true;
-    g.error = '';
-    this.subs.add(this.api.create(body).subscribe({
-      next: (job) => {
-        this.busy = false;
-        this.jobs = [job, ...this.jobs];
-        this.rebuild();
-        this.dialog = null;
-        this.select(job.deviceId, 'maintenance');
-        this.showToast(`${job.maintenanceId} created for ${job.deviceId} and added to the maintenance schedule.`);
-      },
-      error: (e: unknown) => {
-        this.busy = false;
-        g.error = apiErrorMessage(e, 'Could not create the service request.');
-      },
-    }));
+    REQUESTS.unshift(req);
+    const items = this.planOf(d.kind)?.checklist.length ?? 3;
+    TASKS.unshift({ id: `MT-${++this.seq}`, deviceId: d.id, type: g.type, due: g.due, assignee: g.assignee, booked: assigned, stage: 'planned', checklist: new Array(items).fill(false) });
+    this.dialog = null;
+    this.select(d.id, 'maintenance');
+    this.showToast(`${req.id} created for ${d.id} and added to the maintenance schedule.`);
   }
 
-  /** Plans have no API endpoint: they are kept for this session only. */
   savePlan(): void {
     const g = this.planDialog;
     if (!g) return;
     const items = g.checklist.split('\n').map((s) => s.trim()).filter((s) => s);
     if (!g.name.trim()) return void (g.error = 'Enter a plan name.');
-    if (!g.deviceKind) return void (g.error = 'Choose a device type.');
-    if (!g.type) return void (g.error = 'Choose a maintenance type.');
     if (!g.interval || g.interval < 1) return void (g.error = 'Interval must be at least 1 day.');
     if (!items.length) return void (g.error = 'Add at least one checklist item.');
     const data = { name: g.name.trim(), kind: g.deviceKind, interval: Math.round(g.interval), type: g.type, checklist: items };
@@ -935,7 +722,7 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
       t.checklist = items.map((_, i) => !!t.checklist[i]);
     }
     this.dialog = null;
-    this.showToast(`Plan "${data.name}" saved for this session (plans are not stored on the server yet).`);
+    this.showToast(`Plan "${data.name}" saved.`);
   }
 
   // ===== Menus =====
@@ -964,4 +751,3 @@ export class DeviceMaintenance implements OnInit, OnDestroy {
     this.toastTimer = setTimeout(() => (this.toast = ''), 3800);
   }
 }
-

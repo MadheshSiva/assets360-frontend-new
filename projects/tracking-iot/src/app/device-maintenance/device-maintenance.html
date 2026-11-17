@@ -1,7 +1,7 @@
 <section class="dm-page">
   <div class="dm-layout" [class.no-panel]="!selected">
     <div class="dm-main">
-      <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep" aria-hidden="true">›</span><strong>Device Maintenance</strong></nav>
+      <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep">/</span><strong>Device Maintenance</strong></nav>
 
       <header class="dm-head">
         <div class="grow">
@@ -17,22 +17,22 @@
         <button type="button" class="card kpi" (click)="kpiGo('due')">
           <span class="kpi-ic kpi-ic--blue"><lucide-icon [img]="icons.Wrench" [size]="26"></lucide-icon></span>
           <span class="kpi-body"><span class="kpi-label">Devices Due for Service</span><strong class="kpi-val">{{ k.due }}</strong>
-            </span>
+            <span class="kpi-trend"><span class="delta" [class.good]="k.dueChange >= 0" [class.bad]="k.dueChange < 0"><lucide-icon [img]="k.dueChange >= 0 ? icons.ArrowUp : icons.ArrowDown" [size]="13"></lucide-icon>{{ k.dueChange >= 0 ? '+' : '−' }}{{ abs(k.dueChange) }}%</span> from last month</span></span>
         </button>
         <button type="button" class="card kpi" (click)="kpiGo('open')">
           <span class="kpi-ic kpi-ic--violet"><lucide-icon [img]="icons.ClipboardList" [size]="26"></lucide-icon></span>
           <span class="kpi-body"><span class="kpi-label">Open Service Requests</span><strong class="kpi-val">{{ k.open }}</strong>
-            </span>
+            <span class="kpi-trend"><span class="delta" [class.bad]="k.openChange > 0" [class.good]="k.openChange <= 0"><lucide-icon [img]="k.openChange >= 0 ? icons.ArrowUp : icons.ArrowDown" [size]="13"></lucide-icon>{{ k.openChange >= 0 ? '+' : '−' }}{{ abs(k.openChange) }}%</span> from last month</span></span>
         </button>
         <button type="button" class="card kpi" (click)="kpiGo('overdue')">
           <span class="kpi-ic kpi-ic--red"><lucide-icon [img]="icons.TriangleAlert" [size]="26"></lucide-icon></span>
           <span class="kpi-body"><span class="kpi-label">Overdue</span><strong class="kpi-val kpi-val--red">{{ k.overdue }}</strong>
-            </span>
+            <span class="kpi-trend"><span class="delta" [class.bad]="k.overdueChange > 0" [class.good]="k.overdueChange <= 0"><lucide-icon [img]="k.overdueChange > 0 ? icons.ArrowUp : icons.ArrowDown" [size]="13"></lucide-icon>{{ k.overdueChange > 0 ? '+' : '−' }}{{ abs(k.overdueChange) }}%</span> from last month</span></span>
         </button>
         <button type="button" class="card kpi" (click)="kpiGo('completed')">
           <span class="kpi-ic kpi-ic--green"><lucide-icon [img]="icons.Check" [size]="26"></lucide-icon></span>
           <span class="kpi-body"><span class="kpi-label">Completed This Month</span><strong class="kpi-val">{{ k.completed }}</strong>
-            </span>
+            <span class="kpi-trend"><span class="delta" [class.good]="k.completedChange >= 0" [class.bad]="k.completedChange < 0"><lucide-icon [img]="k.completedChange >= 0 ? icons.ArrowUp : icons.ArrowDown" [size]="13"></lucide-icon>{{ k.completedChange >= 0 ? '+' : '−' }}{{ abs(k.completedChange) }}%</span> from last month</span></span>
         </button>
       </div>
 
@@ -44,17 +44,15 @@
         <button type="button" role="tab" [class.is-active]="tab === 'vendors'" [attr.aria-selected]="tab === 'vendors'" (click)="tab = 'vendors'">Vendors</button>
       </nav>
 
-      <p *ngIf="loadError" class="form-error load-error" role="alert">{{ loadError }} <button type="button" class="link-btn" (click)="load()"><lucide-icon [img]="icons.RotateCcw" [size]="13"></lucide-icon>Retry</button></p>
-
       <!-- ================= Overview ================= -->
       <ng-container *ngIf="tab === 'overview'">
         <section class="card">
           <div class="filters">
             <label class="search"><lucide-icon [img]="icons.Search" [size]="15"></lucide-icon><input type="search" [(ngModel)]="search" (ngModelChange)="onFilter()" placeholder="Search devices or assets..." aria-label="Search devices or assets" /></label>
-            <select class="control" [(ngModel)]="fSite" (ngModelChange)="onFilter()" aria-label="Site"><option value="">Select Site</option><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select>
-            <select class="control" [(ngModel)]="fKind" (ngModelChange)="onFilter()" aria-label="Device type"><option value="">Select Device Type</option><option *ngFor="let k of kinds" [value]="k">{{ kindLabels[k] }}</option></select>
-            <select class="control" [(ngModel)]="fType" (ngModelChange)="onFilter()" aria-label="Maintenance type"><option value="">Select Maintenance Type</option><option *ngFor="let m of maintTypes" [value]="m">{{ m }}</option></select>
-            <select class="control" [(ngModel)]="fStatus" (ngModelChange)="onFilter()" aria-label="Status"><option value="">Select Status</option><option *ngFor="let s of statuses" [value]="s">{{ s }}</option></select>
+            <select class="control" [(ngModel)]="fSite" (ngModelChange)="onFilter()" aria-label="Site"><option value="">All Sites</option><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select>
+            <select class="control" [(ngModel)]="fKind" (ngModelChange)="onFilter()" aria-label="Device type"><option value="">All Device Types</option><option *ngFor="let k of kinds" [value]="k">{{ kindLabels[k] }}</option></select>
+            <select class="control" [(ngModel)]="fType" (ngModelChange)="onFilter()" aria-label="Maintenance type"><option value="">All Maintenance Types</option><option *ngFor="let m of maintTypes" [value]="m">{{ m }}</option></select>
+            <select class="control" [(ngModel)]="fStatus" (ngModelChange)="onFilter()" aria-label="Status"><option value="">All Statuses</option><option *ngFor="let s of statuses" [value]="s">{{ s }}</option></select>
           </div>
           <div class="chips-row" *ngIf="hasFilters">
             <span class="chip" *ngIf="dayFilter"><lucide-icon [img]="icons.Calendar" [size]="13"></lucide-icon>Due {{ fmt(dayFilter) }}<button type="button" (click)="dayFilter = ''; onFilter()" aria-label="Clear date filter"><lucide-icon [img]="icons.X" [size]="13"></lucide-icon></button></span>
@@ -71,10 +69,10 @@
               <tbody>
                 <tr *ngFor="let t of pageRows" [class.is-selected]="t.deviceId === selectedId" (click)="select(t.deviceId)" (keydown.enter)="select(t.deviceId)" tabindex="0">
                   <td><span class="dev"><span class="dev-ic" [ngClass]="'dk--' + device(t.deviceId).kind"><lucide-icon [img]="kindIcon(t.deviceId)" [size]="16"></lucide-icon></span>
-                    <span class="dev-txt"><button type="button" class="id-link" (click)="select(t.deviceId); $event.stopPropagation()">{{ t.deviceId }}</button><small>{{ device(t.deviceId).name || '—' }}</small></span></span></td>
-                  <td class="nowrap">{{ device(t.deviceId).model || '—' }}</td>
+                    <span class="dev-txt"><button type="button" class="id-link" (click)="select(t.deviceId); $event.stopPropagation()">{{ t.deviceId }}</button><small>{{ device(t.deviceId).name }}</small></span></span></td>
+                  <td class="nowrap">{{ device(t.deviceId).model }}</td>
                   <td><button *ngIf="device(t.deviceId).asset; else noAsset" type="button" class="asset-link" (click)="viewAsset(device(t.deviceId)); $event.stopPropagation()">{{ device(t.deviceId).asset?.name }}</button><ng-template #noAsset><span class="muted">—</span></ng-template></td>
-                  <td class="nowrap">{{ device(t.deviceId).site || '—' }}</td>
+                  <td class="nowrap">{{ device(t.deviceId).site }}</td>
                   <td>{{ t.type }}</td>
                   <td class="nowrap"><span [ngClass]="dueClass(t)">{{ fmt(t.due) }}</span></td>
                   <td [class.muted]="t.assignee === 'Unassigned'">{{ t.assignee }}</td>
@@ -83,14 +81,14 @@
                     <button type="button" class="icon-btn" (click)="toggleMenu('t-' + t.id, $event)" aria-haspopup="menu" [attr.aria-label]="'Actions for ' + t.deviceId"><lucide-icon [img]="icons.Ellipsis" [size]="18"></lucide-icon></button>
                     <span *ngIf="menuOpen === 't-' + t.id" class="menu" role="menu" (click)="$event.stopPropagation()">
                       <button type="button" role="menuitem" (click)="select(t.deviceId)">View</button>
-                      <button *ngIf="t.stage === 'planned'" type="button" role="menuitem" [disabled]="busy" (click)="startService(t)">Start service</button>
+                      <button *ngIf="t.stage === 'planned'" type="button" role="menuitem" (click)="startService(t)">Start service</button>
                       <button *ngIf="t.stage !== 'completed'" type="button" role="menuitem" (click)="openAssign(t)">Assign technician</button>
                       <button *ngIf="t.stage !== 'completed'" type="button" role="menuitem" (click)="openReschedule(t)">Reschedule</button>
                       <button type="button" role="menuitem" (click)="createReplacement(t.deviceId)">Create replacement request</button>
-                      <button *ngIf="t.stage !== 'completed'" type="button" role="menuitem" [disabled]="busy" (click)="completeTask(t)">Mark complete</button>
+                      <button *ngIf="t.stage !== 'completed'" type="button" role="menuitem" (click)="completeTask(t)">Mark complete</button>
                     </span></span></td>
                 </tr>
-                <tr *ngIf="!pageRows.length"><td colspan="9" class="empty"><ng-container *ngIf="emptyText; else noMatch">{{ emptyText }}</ng-container><ng-template #noMatch>No maintenance jobs match these filters. <button type="button" class="link-btn" (click)="clearFilters()">Clear filters</button></ng-template></td></tr>
+                <tr *ngIf="!pageRows.length"><td colspan="9" class="empty">No maintenance jobs match these filters. <button type="button" class="link-btn" (click)="clearFilters()">Clear filters</button></td></tr>
               </tbody>
             </table>
           </div>
@@ -129,7 +127,7 @@
             <div class="ctx">
               <lucide-icon [img]="icons.Info" [size]="18"></lucide-icon>
               <div class="grow"><strong>Linked Asset Context</strong>
-                <p>This device service record is linked to asset {{ sd.asset ? (sd.asset.name || sd.asset.id) : '—' }} for context. Note: Device maintenance does not overwrite the linked asset's maintenance history.</p></div>
+                <p>This device service record is linked to asset {{ sd.asset ? sd.asset.id : sd.id }} for context. Note: Device maintenance does not overwrite the linked asset's maintenance history.</p></div>
               <button type="button" class="btn btn-outline btn-sm" (click)="viewAsset(sd)">View Linked Asset<lucide-icon [img]="icons.ArrowRight" [size]="14"></lucide-icon></button>
             </div>
           </section>
@@ -141,8 +139,8 @@
       <section class="card" *ngIf="tab === 'requests'">
         <div class="sec-head"><h2 class="grow">Service Requests</h2>
           <label class="search search--sm"><lucide-icon [img]="icons.Search" [size]="15"></lucide-icon><input type="search" [(ngModel)]="rSearch" placeholder="Search requests..." aria-label="Search requests" /></label>
-          <select class="control control-sm" [(ngModel)]="rStatus" aria-label="Request status"><option value="">Select Request Status</option><option value="active">Open requests</option><option value="all">All statuses</option><option *ngFor="let s of reqStatuses" [value]="s">{{ s }}</option></select>
-          <select class="control control-sm" [(ngModel)]="rPriority" aria-label="Priority"><option value="">Select Priority</option><option *ngFor="let p of priorities" [value]="p">{{ p }}</option></select>
+          <select class="control control-sm" [(ngModel)]="rStatus" aria-label="Request status"><option value="active">Open requests</option><option value="all">All statuses</option><option *ngFor="let s of reqStatuses" [value]="s">{{ s }}</option></select>
+          <select class="control control-sm" [(ngModel)]="rPriority" aria-label="Priority"><option value="">All priorities</option><option *ngFor="let p of priorities" [value]="p">{{ p }}</option></select>
           <button type="button" class="btn btn-primary btn-sm" (click)="openRequest()"><lucide-icon [img]="icons.Plus" [size]="15"></lucide-icon>New Request</button>
         </div>
         <div class="table-wrap">
@@ -151,9 +149,9 @@
             <tbody>
               <tr *ngFor="let r of requestPage" (click)="select(r.deviceId, 'maintenance')" [class.is-selected]="r.deviceId === selectedId">
                 <td><strong>{{ r.id }}</strong><small class="block muted desc">{{ r.description }}</small></td>
-                <td class="nowrap"><button type="button" class="id-link" (click)="viewDevice(r.deviceId); $event.stopPropagation()">{{ r.deviceId }}</button><small class="block muted">{{ device(r.deviceId).site || '—' }}</small></td>
+                <td class="nowrap"><button type="button" class="id-link" (click)="viewDevice(r.deviceId); $event.stopPropagation()">{{ r.deviceId }}</button><small class="block muted">{{ device(r.deviceId).site }}</small></td>
                 <td>{{ r.type }}</td>
-                <td><span class="pr" [ngClass]="priorityClass(r.priority)">{{ r.priority }}</span></td>
+                <td><span class="pr" [ngClass]="'pr--' + r.priority.toLowerCase()">{{ r.priority }}</span></td>
                 <td><span class="ps" [ngClass]="reqClass(r.status)"><i></i>{{ r.status }}</span></td>
                 <td class="nowrap">{{ fmt(r.created) }}</td>
                 <td class="nowrap"><span [class.due--bad]="isOpenReq(r) && isPast(r.due)">{{ fmt(r.due) }}</span></td>
@@ -164,15 +162,15 @@
                     <button type="button" role="menuitem" (click)="viewDevice(r.deviceId)">View device</button>
                     <ng-container *ngIf="isOpenReq(r)">
                       <button type="button" role="menuitem" (click)="openAssign(null, r)">Assign</button>
-                      <button *ngIf="r.status !== 'In Progress'" type="button" role="menuitem" [disabled]="busy" (click)="setReq(r, 'In Progress')">Start work</button>
-                      <button type="button" role="menuitem" [disabled]="busy" (click)="setReq(r, 'Completed')">Mark completed</button>
-                      <button type="button" role="menuitem" class="danger" [disabled]="busy" (click)="setReq(r, 'Cancelled')">Cancel request</button>
+                      <button *ngIf="r.status !== 'In Progress'" type="button" role="menuitem" (click)="setReq(r, 'In Progress')">{{ r.status === 'On Hold' ? 'Resume' : 'Start work' }}</button>
+                      <button *ngIf="r.status !== 'On Hold'" type="button" role="menuitem" (click)="setReq(r, 'On Hold')">Put on hold</button>
+                      <button type="button" role="menuitem" (click)="setReq(r, 'Completed')">Mark completed</button>
+                      <button type="button" role="menuitem" class="danger" (click)="setReq(r, 'Cancelled')">Cancel request</button>
                     </ng-container>
-                    <button *ngIf="!isOpenReq(r)" type="button" role="menuitem" [disabled]="busy" (click)="setReq(r, 'Open')">Reopen</button>
-                    <button type="button" role="menuitem" class="danger" [disabled]="busy" (click)="deleteRequest(r)">Delete</button>
+                    <button *ngIf="!isOpenReq(r)" type="button" role="menuitem" (click)="setReq(r, 'Open')">Reopen</button>
                   </span></span></td>
               </tr>
-              <tr *ngIf="!requestPage.length"><td colspan="9" class="empty">{{ loading ? 'Loading service requests…' : 'No service requests match.' }}</td></tr>
+              <tr *ngIf="!requestPage.length"><td colspan="9" class="empty">No service requests match.</td></tr>
             </tbody>
           </table>
         </div>
@@ -198,7 +196,6 @@
             <ul class="plan-list"><li *ngFor="let c of p.checklist">{{ c }}</li></ul>
             <button type="button" class="link-btn" (click)="showPlanDevices(p)">View {{ devicesCovered(p) }} devices<lucide-icon [img]="icons.ArrowRight" [size]="14"></lucide-icon></button>
           </section>
-          <section *ngIf="!plans.length" class="card plan"><p class="muted small">No maintenance plans found. Plans added here are kept for this session only.</p></section>
         </div>
       </ng-container>
 
@@ -206,9 +203,9 @@
       <section class="card" *ngIf="tab === 'history'">
         <div class="sec-head"><h2 class="grow">Service History</h2>
           <label class="search search--sm"><lucide-icon [img]="icons.Search" [size]="15"></lucide-icon><input type="search" [(ngModel)]="hSearch" (ngModelChange)="hPage = 0" placeholder="Search history..." aria-label="Search history" /></label>
-          <select class="control control-sm" [(ngModel)]="hDevice" (ngModelChange)="hPage = 0" aria-label="Device"><option value="">Select Device</option><option *ngFor="let d of devices" [value]="d.id">{{ d.id }}</option></select>
-          <select class="control control-sm" [(ngModel)]="hType" (ngModelChange)="hPage = 0" aria-label="Service type"><option value="">Select Service Type</option><option *ngFor="let s of historyTitles" [value]="s">{{ s }}</option></select>
-          <select class="control control-sm" [(ngModel)]="hRange" (ngModelChange)="hPage = 0" aria-label="Period"><option value="">Select Period</option><option value="month">This month</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option><option value="all">All time</option></select>
+          <select class="control control-sm" [(ngModel)]="hDevice" (ngModelChange)="hPage = 0" aria-label="Device"><option value="">All devices</option><option *ngFor="let d of devices" [value]="d.id">{{ d.id }}</option></select>
+          <select class="control control-sm" [(ngModel)]="hType" (ngModelChange)="hPage = 0" aria-label="Service type"><option value="">All service types</option><option *ngFor="let s of historyTitles" [value]="s">{{ s }}</option></select>
+          <select class="control control-sm" [(ngModel)]="hRange" (ngModelChange)="hPage = 0" aria-label="Period"><option value="month">This month</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option><option value="all">All time</option></select>
           <button type="button" class="btn btn-outline btn-sm" (click)="exportHistory()"><lucide-icon [img]="icons.Download" [size]="15"></lucide-icon>Export Excel</button>
         </div>
         <div class="table-wrap">
@@ -217,8 +214,8 @@
             <tbody>
               <tr *ngFor="let h of historyPage" (click)="select(h.deviceId)" [class.is-selected]="h.deviceId === selectedId">
                 <td class="nowrap">{{ fmt(h.date) }}</td>
-                <td class="nowrap"><button type="button" class="id-link" (click)="viewDevice(h.deviceId); $event.stopPropagation()">{{ h.deviceId }}</button><small class="block muted">{{ device(h.deviceId).name || '—' }}</small></td>
-                <td class="nowrap">{{ device(h.deviceId).site || '—' }}</td>
+                <td class="nowrap"><button type="button" class="id-link" (click)="viewDevice(h.deviceId); $event.stopPropagation()">{{ h.deviceId }}</button><small class="block muted">{{ device(h.deviceId).name }}</small></td>
+                <td class="nowrap">{{ device(h.deviceId).site }}</td>
                 <td>{{ h.title }}</td>
                 <td>{{ h.by }}</td>
                 <td class="note">{{ h.note }}</td>
@@ -242,15 +239,14 @@
                 <td><span class="dev"><span class="dev-ic" [class.dk--gateway]="v.internal" [class.dk--meter]="!v.internal"><lucide-icon [img]="v.internal ? icons.Users : icons.Building2" [size]="16"></lucide-icon></span>
                   <span class="dev-txt"><strong>{{ v.name }}</strong><small>{{ v.internal ? 'Internal' : 'External vendor' }}</small></span></span></td>
                 <td><span class="tags"><span *ngFor="let s of v.services" class="tag">{{ s }}</span></span></td>
-                <td class="nowrap">{{ v.sla || '—' }}</td>
+                <td class="nowrap">{{ v.sla }}</td>
                 <td><button type="button" class="link-btn" (click)="showVendorJobs(v)">{{ openJobs(v) }} open</button></td>
-                <td class="nowrap">{{ v.rating !== null ? v.rating + ' / 5' : '—' }}</td>
-                <td class="contact"><strong>{{ v.contact || '—' }}</strong>
-                  <a *ngIf="v.phone" [href]="'tel:' + v.phone"><lucide-icon [img]="icons.Phone" [size]="13"></lucide-icon>{{ v.phone }}</a>
-                  <a *ngIf="v.email" [href]="'mailto:' + v.email"><lucide-icon [img]="icons.Mail" [size]="13"></lucide-icon>{{ v.email }}</a></td>
+                <td class="nowrap">{{ v.rating }} / 5</td>
+                <td class="contact"><strong>{{ v.contact }}</strong>
+                  <a [href]="'tel:' + v.phone"><lucide-icon [img]="icons.Phone" [size]="13"></lucide-icon>{{ v.phone }}</a>
+                  <a [href]="'mailto:' + v.email"><lucide-icon [img]="icons.Mail" [size]="13"></lucide-icon>{{ v.email }}</a></td>
                 <td class="col-act"><button type="button" class="btn btn-outline btn-sm" (click)="showVendorJobs(v)">View jobs</button></td>
               </tr>
-              <tr *ngIf="!vendors.length"><td colspan="7" class="empty">No vendors found.</td></tr>
             </tbody>
           </table>
         </div>
@@ -262,7 +258,7 @@
       <button type="button" class="icon-btn panel-close" (click)="selectedId = null" aria-label="Close details"><lucide-icon [img]="icons.X" [size]="20"></lucide-icon></button>
       <div class="p-title">
         <span class="p-ic" [ngClass]="'dk--' + d.kind"><lucide-icon [img]="kindIcon(d.id)" [size]="22"></lucide-icon></span>
-        <div class="grow"><h2 id="dm-sel">{{ d.id }}</h2><p>{{ d.name || '—' }} • {{ d.model || '—' }}</p></div>
+        <div class="grow"><h2 id="dm-sel">{{ d.id }}</h2><p>{{ d.name }} • {{ d.model }}</p></div>
       </div>
       <nav class="p-tabs" role="tablist" aria-label="Device sections">
         <button type="button" role="tab" [class.is-active]="panelTab === 'details'" [attr.aria-selected]="panelTab === 'details'" (click)="panelTab = 'details'">Details</button>
@@ -274,14 +270,14 @@
         <!-- Details -->
         <ng-container *ngIf="panelTab === 'details'">
           <div class="health-row"><span>Device Health</span>
-            <span *ngIf="d.health; else noHealth" class="hl" [ngClass]="'hl--' + d.health.toLowerCase()">{{ d.health }}<lucide-icon [img]="icons.Signal" [size]="16"></lucide-icon></span><ng-template #noHealth><span class="muted">—</span></ng-template></div>
+            <span class="hl" [ngClass]="'hl--' + d.health.toLowerCase()">{{ d.health }}<lucide-icon [img]="icons.Signal" [size]="16"></lucide-icon></span></div>
           <dl class="kv">
-            <dt><lucide-icon [img]="icons.Clock" [size]="15"></lucide-icon>Uptime</dt><dd><ng-container *ngIf="d.uptime !== null; else noUptime"><strong>{{ d.uptime }}%</strong> <small class="muted">(Last 30 days)</small></ng-container><ng-template #noUptime>—</ng-template></dd>
+            <dt><lucide-icon [img]="icons.Clock" [size]="15"></lucide-icon>Uptime</dt><dd><strong>{{ d.uptime }}%</strong> <small class="muted">(Last 30 days)</small></dd>
             <dt><lucide-icon [img]="icons.Wrench" [size]="15"></lucide-icon>Last Service</dt><dd>{{ fmt(lastService(d.id)) }}</dd>
             <dt><lucide-icon [img]="icons.CalendarClock" [size]="15"></lucide-icon>Next Service</dt>
             <dd *ngIf="t.stage !== 'completed'; else noNext"><span [ngClass]="dueClass(t)">{{ fmt(t.due) }} ({{ relLabel(t.due) }})</span></dd>
             <ng-template #noNext><dd class="muted">Not scheduled</dd></ng-template>
-            <dt><lucide-icon [img]="icons.Cpu" [size]="15"></lucide-icon>Firmware Version</dt><dd>{{ d.firmware || '—' }}</dd>
+            <dt><lucide-icon [img]="icons.Cpu" [size]="15"></lucide-icon>Firmware Version</dt><dd>{{ d.firmware }}</dd>
             <dt><lucide-icon [img]="icons.ShieldCheck" [size]="15"></lucide-icon>Warranty Expiry</dt><dd [class.due--bad]="isPast(d.warranty)">{{ fmt(d.warranty) }}</dd>
           </dl>
 
@@ -299,18 +295,18 @@
           <div class="p-actions">
             <button type="button" class="btn btn-primary btn-block" [disabled]="primaryDisabled(t)" (click)="primaryAction(t)"><lucide-icon [img]="t.stage === 'in-progress' ? icons.Check : icons.Wrench" [size]="16"></lucide-icon>{{ primaryLabel(t) }}</button>
             <div class="p-two">
-              <button type="button" class="btn btn-outline btn-sm" [disabled]="t.stage === 'completed' || busy" (click)="openAssign(t)"><lucide-icon [img]="icons.Users" [size]="15"></lucide-icon>Assign Technician</button>
+              <button type="button" class="btn btn-outline btn-sm" [disabled]="t.stage === 'completed'" (click)="openAssign(t)"><lucide-icon [img]="icons.Users" [size]="15"></lucide-icon>Assign Technician</button>
               <button type="button" class="btn btn-outline btn-sm" (click)="createReplacement(d.id)">Create Replacement Request</button>
             </div>
           </div>
 
           <h3 class="mini-title"><lucide-icon [img]="icons.Link" [size]="16"></lucide-icon>Linked Asset</h3>
           <div class="mini-card"><span class="mini-ic"><lucide-icon [img]="icons.Building2" [size]="16"></lucide-icon></span>
-            <div class="grow"><strong>{{ d.asset ? d.asset.name : (d.infra || '—') }}</strong></div>
+            <div class="grow"><strong>{{ d.asset ? d.asset.name : d.infra }}</strong></div>
             <button type="button" class="link-btn" (click)="viewAsset(d)">View Asset<lucide-icon [img]="icons.ArrowRight" [size]="13"></lucide-icon></button></div>
           <h3 class="mini-title"><lucide-icon [img]="icons.MapPin" [size]="16"></lucide-icon>Location</h3>
           <div class="mini-card"><span class="mini-ic"><lucide-icon [img]="icons.MapPin" [size]="16"></lucide-icon></span>
-            <div class="grow"><strong>{{ d.site || '—' }}</strong><small *ngIf="siteArea(d.site)">{{ siteArea(d.site) }}</small></div>
+            <div class="grow"><strong>{{ d.site }}</strong><small>{{ siteArea(d.site) }}</small></div>
             <button type="button" class="link-btn" (click)="viewOnMap(d)">View on Map<lucide-icon [img]="icons.ArrowRight" [size]="13"></lucide-icon></button></div>
         </ng-container>
 
@@ -336,7 +332,7 @@
           <h3 class="p-h3">Open Service Requests</h3>
           <ul class="p-list">
             <li *ngFor="let r of requestsOf(d.id)"><div class="grow"><strong>{{ r.id }} · {{ r.type }}</strong><small>{{ r.description }}</small></div>
-              <span class="pr" [ngClass]="priorityClass(r.priority)">{{ r.priority }}</span></li>
+              <span class="pr" [ngClass]="'pr--' + r.priority.toLowerCase()">{{ r.priority }}</span></li>
             <li *ngIf="!requestsOf(d.id).length" class="muted small">No open requests.</li>
           </ul>
           <button type="button" class="btn btn-outline btn-sm btn-block" (click)="openRequest(d.id)"><lucide-icon [img]="icons.Plus" [size]="15"></lucide-icon>New Service Request</button>
@@ -344,8 +340,7 @@
 
         <!-- Telemetry -->
         <ng-container *ngIf="panelTab === 'telemetry'">
-          <ng-template #noTelemetry><p class="muted small">No telemetry reported for this device in the last 30 days.</p></ng-template>
-          <ng-container *ngIf="charts(d) as c; else noTelemetry">
+          <ng-container *ngIf="charts(d) as c">
             <div class="tm">
               <div class="tm-head"><strong>Uptime (30 days)</strong><span>{{ c.up.last }}%</span></div>
               <svg class="tm-chart" [attr.viewBox]="'0 0 ' + cw + ' ' + ch" role="img" [attr.aria-label]="'Uptime last 30 days, min ' + c.up.min + '%, max ' + c.up.max + '%'">
@@ -393,8 +388,8 @@
       <div class="modal-body">
         <p class="muted">{{ g.task ? g.task.deviceId + ' · ' + g.task.type + ' due ' + fmt(g.task.due) : g.req ? g.req.id + ' · ' + g.req.deviceId : '' }}</p>
         <label class="field"><span class="field-label">Technician / vendor</span>
-          <select class="control" [(ngModel)]="g.value"><option value="" disabled>Select Technician / Vendor</option><option *ngFor="let n of technicians" [value]="n">{{ n }}</option></select></label>
-        <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-primary" [disabled]="!g.value || busy" (click)="saveAssign()">{{ busy ? 'Saving…' : 'Assign' }}</button></div>
+          <select class="control" [(ngModel)]="g.value"><option *ngFor="let n of technicians" [value]="n">{{ n }}</option></select></label>
+        <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-primary" (click)="saveAssign()">Assign</button></div>
       </div>
     </div>
   </div>
@@ -405,7 +400,7 @@
       <div class="modal-body">
         <p class="muted">{{ g.task.type }} · currently due {{ fmt(g.task.due) }}</p>
         <label class="field"><span class="field-label">New due date</span><input type="date" class="control" [(ngModel)]="g.value" /></label>
-        <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-primary" [disabled]="!g.value || busy" (click)="saveReschedule()">{{ busy ? 'Saving…' : 'Reschedule' }}</button></div>
+        <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-primary" [disabled]="!g.value" (click)="saveReschedule()">Reschedule</button></div>
       </div>
     </div>
   </div>
@@ -415,18 +410,16 @@
       <div class="modal-head"><h2 id="dm-req">Create Service Request</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
       <div class="modal-body">
         <label class="field"><span class="field-label">Device <em>*</em></span>
-          <select class="control" [(ngModel)]="g.deviceId" (ngModelChange)="onRequestDevice()"><option value="">Select Device</option><option *ngFor="let d of devices" [value]="d.id">{{ d.id }}{{ d.name ? ' – ' + d.name : '' }}{{ d.site ? ' (' + d.site + ')' : '' }}</option></select></label>
+          <select class="control" [(ngModel)]="g.deviceId"><option value="">Select a device…</option><option *ngFor="let d of devices" [value]="d.id">{{ d.id }} – {{ d.name }} ({{ d.site }})</option></select></label>
         <div class="two">
-          <label class="field"><span class="field-label">Maintenance type</span><select class="control" [(ngModel)]="g.type"><option [ngValue]="null" disabled>Select Maintenance Type</option><option *ngFor="let m of maintTypes" [ngValue]="m">{{ m }}</option></select></label>
-          <label class="field"><span class="field-label">Priority</span><select class="control" [(ngModel)]="g.priority"><option [ngValue]="null" disabled>Select Priority</option><option *ngFor="let p of priorities" [ngValue]="p">{{ p }}</option></select></label>
+          <label class="field"><span class="field-label">Maintenance type</span><select class="control" [(ngModel)]="g.type"><option *ngFor="let m of maintTypes" [ngValue]="m">{{ m }}</option></select></label>
+          <label class="field"><span class="field-label">Priority</span><select class="control" [(ngModel)]="g.priority"><option *ngFor="let p of priorities" [ngValue]="p">{{ p }}</option></select></label>
           <label class="field"><span class="field-label">Due date <em>*</em></span><input type="date" class="control" [(ngModel)]="g.due" /></label>
-          <label class="field"><span class="field-label">Technician / vendor</span><select class="control" [(ngModel)]="g.assignee"><option value="" disabled>Select Technician / Vendor</option><option *ngFor="let n of technicians" [value]="n">{{ n }}</option></select></label>
-          <label class="field"><span class="field-label">Site <em>*</em></span><input class="control" [(ngModel)]="g.site" list="dm-sites" autocomplete="off" placeholder="Site of the device" /></label>
+          <label class="field"><span class="field-label">Technician / vendor</span><select class="control" [(ngModel)]="g.assignee"><option *ngFor="let n of technicians" [value]="n">{{ n }}</option></select></label>
         </div>
-        <datalist id="dm-sites"><option *ngFor="let s of sites" [value]="s"></option></datalist>
         <label class="field"><span class="field-label">Description</span><textarea class="control control-area" rows="3" [(ngModel)]="g.description" placeholder="Describe the issue or work required"></textarea></label>
         <p *ngIf="g.error" class="form-error">{{ g.error }}</p>
-        <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-primary" [disabled]="busy" (click)="saveRequest()">{{ busy ? 'Creating…' : 'Create Request' }}</button></div>
+        <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-primary" (click)="saveRequest()">Create Request</button></div>
       </div>
     </div>
   </div>
@@ -439,9 +432,8 @@
         <div class="two">
           <label class="field"><span class="field-label">Device type</span>
             <select class="control" [(ngModel)]="g.deviceKind" [disabled]="!!g.plan">
-              <option [ngValue]="null" disabled>Select Device Type</option>
               <option *ngFor="let k of kinds" [ngValue]="k">{{ kindLabels[k] }}</option></select></label>
-          <label class="field"><span class="field-label">Maintenance type</span><select class="control" [(ngModel)]="g.type"><option [ngValue]="null" disabled>Select Maintenance Type</option><option *ngFor="let m of maintTypes" [ngValue]="m">{{ m }}</option></select></label>
+          <label class="field"><span class="field-label">Maintenance type</span><select class="control" [(ngModel)]="g.type"><option *ngFor="let m of maintTypes" [ngValue]="m">{{ m }}</option></select></label>
           <label class="field"><span class="field-label">Interval (days) <em>*</em></span><input type="number" min="1" class="control" [(ngModel)]="g.interval" /></label>
         </div>
         <label class="field"><span class="field-label">Checklist template <em>*</em></span><textarea class="control control-area" rows="5" [(ngModel)]="g.checklist" placeholder="One item per line"></textarea><small class="muted">One item per line. Open jobs of this device type pick up the new checklist.</small></label>

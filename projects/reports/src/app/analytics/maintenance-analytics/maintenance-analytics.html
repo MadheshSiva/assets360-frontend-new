@@ -1,9 +1,9 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <lucide-icon [img]="icons.House" [size]="15" />
   <a routerLink="/dashboard">Asset360</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <a [routerLink]="basePath">Reports &amp; Analytics</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <strong>Maintenance Analytics</strong>
 </nav>
 
@@ -31,38 +31,43 @@
   <label class="filter filter--period">
     <span>Period</span>
     <select [(ngModel)]="period" (ngModelChange)="recompute()">
+      <option value="">Select Period</option>
       @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Organization</span>
     <select [(ngModel)]="organization" (ngModelChange)="recompute()">
+      <option value="">Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Location</span>
     <select [(ngModel)]="location" (ngModelChange)="recompute()">
+      <option value="">Select Location</option>
       @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Asset Category</span>
     <select [(ngModel)]="category" (ngModelChange)="recompute()">
+      <option value="">Select Asset Category</option>
       @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Maintenance Type</span>
     <select [(ngModel)]="maintenanceType" (ngModelChange)="recompute()">
+      <option value="">Select Maintenance Type</option>
       @for (t of maintenanceTypes; track t) { <option [value]="t">{{ t }}</option> }
     </select>
   </label>
 </div>
 
-@if (empty) {
+@if (!view.assets.length) {
   <div class="ra-notice">
-    No maintenance records match the selected filters.
+    No assets match the selected filters.
     <button type="button" class="btn btn--link" (click)="resetFilters()">Reset filters</button>
   </div>
 }
@@ -79,20 +84,20 @@
     <section class="widget span-2" id="ma-cost">
       <header class="widget__head">
         <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
-        <h2>Maintenance Cost Trend <span class="widget__info" title="Monthly maintenance cost in AED from cost records: planned (preventive + inspection), corrective and emergency."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <h2>Maintenance Cost Trend <span class="widget__info" title="Monthly work order cost in AED: planned (preventive + inspection), corrective and emergency."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
         <ra-menu label="Maintenance Cost Trend actions" (select)="widgetAction($event, 'cost', 'Maintenance Cost Trend', costTpl)" />
       </header>
       <div class="widget__body"><ng-container [ngTemplateOutlet]="costTpl" /></div>
     </section>
     <ng-template #costTpl>
-      <ra-cartesian-chart kind="bar" [stacked]="true" [labels]="view.labels" [series]="costSeries" [format]="costFormat" [height]="240" ariaLabel="Maintenance cost trend" />
+      <ra-cartesian-chart kind="bar" [stacked]="true" [labels]="view.labels" [series]="view.costTrend" [format]="costFormat" [height]="240" ariaLabel="Maintenance cost trend" />
     </ng-template>
 
     <!-- Work Orders by Type -->
     <section class="widget span-2" id="ma-types">
       <header class="widget__head">
         <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
-        <h2>Work Orders by Type <span class="widget__info" title="Work orders scheduled in the period by type; the columns add up to the total in Work Order Status."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <h2>Work Orders by Type <span class="widget__info" title="Work orders raised in the period; the columns add up to the total in Work Order Status."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
         <ra-menu label="Work Orders by Type actions" (select)="widgetAction($event, 'types', 'Work Orders by Type', typesTpl)" />
       </header>
       <div class="widget__body"><ng-container [ngTemplateOutlet]="typesTpl" /></div>
@@ -105,7 +110,7 @@
     <section class="widget span-2" id="ma-status">
       <header class="widget__head">
         <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
-        <h2>Work Order Status <span class="widget__info" title="Current status of the work orders scheduled in the period; unfinished work past its scheduled date is Overdue."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <h2>Work Order Status <span class="widget__info" title="Current status of the work orders raised in the period."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
         <ra-menu label="Work Order Status actions" (select)="widgetAction($event, 'status', 'Work Order Status', statusTpl)" />
       </header>
       <div class="widget__body"><ng-container [ngTemplateOutlet]="statusTpl" /></div>
@@ -118,24 +123,24 @@
     <section class="widget span-2" id="ma-pm">
       <header class="widget__head">
         <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
-        <h2>Preventive Maintenance Compliance <span class="widget__info" title="Completed ÷ due preventive work orders in the period, against a {{ pmTarget }}% target."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <h2>Preventive Maintenance Compliance <span class="widget__info" title="Preventive work orders completed on schedule, against a {{ pmTarget }}% target."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
         <ra-menu label="Preventive Maintenance Compliance actions" (select)="widgetAction($event, 'pm', 'Preventive Maintenance Compliance', pmTpl)" />
       </header>
       <div class="widget__body"><ng-container [ngTemplateOutlet]="pmTpl" /></div>
     </section>
     <ng-template #pmTpl>
       <div class="ma-gauge">
-        <ra-gauge-chart [value]="view.pmCompliance.value ?? 0" [target]="pmTarget" [display]="dash(view.pmCompliance.value, '%')" [caption]="'Target ' + pmTarget + '%'" [color]="colors.green" [size]="190" />
-        <span class="kpi__delta" [class.kpi__delta--bad]="view.pmCompliance.change < 0"><lucide-icon [img]="view.pmCompliance.change < 0 ? icons.ArrowDown : icons.ArrowUp" [size]="13" /> {{ pmDeltaText }} <small>vs. previous period</small></span>
+        <ra-gauge-chart [value]="view.pmCompliance" [target]="pmTarget" [display]="view.pmCompliance + '%'" [caption]="'Target ' + pmTarget + '%'" [color]="colors.green" [size]="190" />
+        <span class="kpi__delta"><lucide-icon [img]="icons.ArrowUp" [size]="13" /> +{{ deltas.pm }}% <small>vs. previous period</small></span>
       </div>
-      <ra-cartesian-chart [labels]="view.labels" [series]="pmSeries" [min]="60" [max]="100" [format]="percentFormat" [height]="150" [legend]="false" ariaLabel="PM compliance trend" />
+      <ra-cartesian-chart [labels]="view.labels" [series]="view.pmTrend" [min]="60" [max]="100" [format]="percentFormat" [height]="150" [legend]="false" ariaLabel="PM compliance trend" />
     </ng-template>
 
     <!-- MTTR vs MTBF -->
     <section class="widget span-2" id="ma-reliability">
       <header class="widget__head">
         <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
-        <h2>MTTR vs MTBF <span class="widget__info" title="Mean time to repair (left axis, unplanned downtime that ended) and mean time between failures (right axis, up hours ÷ unplanned failures)."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <h2>MTTR vs MTBF <span class="widget__info" title="Mean time to repair (left axis) from breakdown work orders, mean time between failures (right axis) from the asset register."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
         <ra-menu label="MTTR vs MTBF actions" (select)="widgetAction($event, 'reliability', 'MTTR vs MTBF', reliabilityTpl)" />
       </header>
       <div class="widget__body"><ng-container [ngTemplateOutlet]="reliabilityTpl" /></div>
@@ -148,7 +153,7 @@
     <section class="widget span-2" id="ma-downtime">
       <header class="widget__head">
         <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
-        <h2>Downtime by Cause <span class="widget__info" title="Downtime hours from downtime records, by root cause."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <h2>Downtime by Cause <span class="widget__info" title="Downtime hours from work orders, by root cause."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
         <ra-menu label="Downtime by Cause actions" (select)="widgetAction($event, 'downtime', 'Downtime by Cause', downtimeTpl)" />
       </header>
       <div class="widget__body"><ng-container [ngTemplateOutlet]="downtimeTpl" /></div>
@@ -183,14 +188,14 @@
             </tr>
           </thead>
           <tbody>
-            @for (o of backlogRows; track o.key; let i = $index) {
+            @for (o of backlogRows; track o.id; let i = $index) {
               <tr>
                 <td>{{ i + 1 }}</td>
                 <td><span class="pill" [attr.data-tone]="priorityTone(o.priority)"><i></i>{{ o.priority }}</span></td>
                 <td><button type="button" class="link" (click)="showOrder(o)">{{ o.id }}</button></td>
-                <td>{{ o.asset }}</td>
-                <td>{{ o.location }}</td>
-                <td class="num"><span class="score" [attr.data-tone]="ageTone(o.ageDays)">{{ dash(o.ageDays) }}</span></td>
+                <td>{{ o.asset.name }}</td>
+                <td>{{ o.asset.site.name }}</td>
+                <td class="num"><span class="score" [attr.data-tone]="ageTone(o.ageDays)">{{ o.ageDays }}</span></td>
                 <td>{{ o.technician }}</td>
                 <td><span class="ra-status" [attr.data-tone]="statusTone(o.status)"><i></i>{{ o.status }}</span></td>
                 <td>
@@ -206,9 +211,9 @@
           </tbody>
         </table>
       </div>
-      @if (view.backlogTotal > 5) {
+      @if (view.backlog.length > 5) {
         <div class="ra-widget-foot">
-          <button type="button" class="btn btn--link" (click)="openBacklog()">View all {{ view.backlogTotal }} work orders</button>
+          <button type="button" class="btn btn--link" (click)="openBacklog()">View all {{ view.backlog.length }} work orders</button>
         </div>
       }
     </ng-template>
@@ -217,7 +222,7 @@
     <section class="widget span-3" id="ma-technicians">
       <header class="widget__head">
         <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
-        <h2>Technician Performance <span class="widget__info" title="Work orders in the period per assignee: completed jobs, first-time fixes, response and SLA compliance."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+        <h2>Technician Performance <span class="widget__info" title="Completed work orders in the period per technician."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
         <ra-menu label="Technician Performance actions" (select)="widgetAction($event, 'technicians', 'Technician Performance', techniciansTpl)" />
       </header>
       <div class="widget__body"><ng-container [ngTemplateOutlet]="techniciansTpl" /></div>
@@ -243,15 +248,15 @@
                 <td class="num">{{ t.completed }}</td>
                 <td>
                   <span class="ra-meter-cell">
-                    <span>{{ dash(t.firstTimeFix, '%') }}</span>
-                    <span class="meter"><i [style.width.%]="t.firstTimeFix ?? 0" [style.background]="rateColor(t.firstTimeFix)"></i></span>
+                    <span>{{ t.firstTimeFix }}%</span>
+                    <span class="meter"><i [style.width.%]="t.firstTimeFix" [style.background]="rateColor(t.firstTimeFix)"></i></span>
                   </span>
                 </td>
-                <td class="num">{{ dash(t.response, ' hrs') }}</td>
-                <td class="num"><span class="ra-status" [attr.data-tone]="t.sla === null ? 'grey' : t.sla >= 90 ? 'green' : 'orange'"><i></i>{{ dash(t.sla, '%') }}</span></td>
+                <td class="num">{{ t.response }} hrs</td>
+                <td class="num"><span class="ra-status" [attr.data-tone]="t.sla >= 90 ? 'green' : 'orange'"><i></i>{{ t.sla }}%</span></td>
               </tr>
             } @empty {
-              <tr><td colspan="6" class="empty">No assigned work orders for the current filters.</td></tr>
+              <tr><td colspan="6" class="empty">No completed work orders for the current filters.</td></tr>
             }
           </tbody>
         </table>

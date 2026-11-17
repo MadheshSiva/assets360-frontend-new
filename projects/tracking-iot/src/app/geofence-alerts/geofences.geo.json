@@ -1,0 +1,1166 @@
+{
+ "type": "FeatureCollection",
+ "name": "Asset360 geofences (demo)",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "site",
+    "site": "Dubai Plant",
+    "area": "Jebel Ali Industrial Area 1, Dubai"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.11965,
+       25.001805
+      ],
+      [
+       55.125745,
+       25.001805
+      ],
+      [
+       55.125745,
+       24.998414
+      ],
+      [
+       55.11965,
+       24.998414
+      ],
+      [
+       55.11965,
+       25.001805
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "site",
+    "site": "Abu Dhabi DC",
+    "area": "Mussafah Industrial Area, Abu Dhabi"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       54.498249,
+       24.346055
+      ],
+      [
+       54.504313,
+       24.346055
+      ],
+      [
+       54.504313,
+       24.342664
+      ],
+      [
+       54.498249,
+       24.342664
+      ],
+      [
+       54.498249,
+       24.346055
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "site",
+    "site": "Sharjah Warehouse",
+    "area": "Industrial Area 13, Sharjah"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.41265,
+       25.317155
+      ],
+      [
+       55.418761,
+       25.317155
+      ],
+      [
+       55.418761,
+       25.313764
+      ],
+      [
+       55.41265,
+       25.313764
+      ],
+      [
+       55.41265,
+       25.317155
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-01",
+    "name": "Restricted Zone",
+    "site": "Dubai Plant",
+    "type": "Restricted"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.124197,
+       25.000907
+      ],
+      [
+       55.125052,
+       25.001008
+      ],
+      [
+       55.125498,
+       25.000649
+      ],
+      [
+       55.125498,
+       24.999997
+      ],
+      [
+       55.125126,
+       24.999593
+      ],
+      [
+       55.124321,
+       24.999593
+      ],
+      [
+       55.124036,
+       24.999975
+      ],
+      [
+       55.124036,
+       25.000547
+      ],
+      [
+       55.124197,
+       25.000907
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-02",
+    "name": "Warehouse A",
+    "site": "Dubai Plant",
+    "type": "Allowed"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.11991,
+       25.001625
+      ],
+      [
+       55.122152,
+       25.001625
+      ],
+      [
+       55.122152,
+       25.001311
+      ],
+      [
+       55.122326,
+       25.001311
+      ],
+      [
+       55.122326,
+       25.000166
+      ],
+      [
+       55.11991,
+       25.000166
+      ],
+      [
+       55.11991,
+       25.001625
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-03",
+    "name": "Loading Bay",
+    "site": "Dubai Plant",
+    "type": "Warning"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.122524,
+       25.001625
+      ],
+      [
+       55.123974,
+       25.001625
+      ],
+      [
+       55.123974,
+       25.000693
+      ],
+      [
+       55.123255,
+       25.000604
+      ],
+      [
+       55.122524,
+       25.000693
+      ],
+      [
+       55.122524,
+       25.001625
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-04",
+    "name": "Maintenance Yard",
+    "site": "Dubai Plant",
+    "type": "Warning"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.123106,
+       24.999425
+      ],
+      [
+       55.125535,
+       24.999425
+      ],
+      [
+       55.125535,
+       24.998571
+      ],
+      [
+       55.123478,
+       24.998571
+      ],
+      [
+       55.123106,
+       24.998874
+      ],
+      [
+       55.123106,
+       24.999425
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-05",
+    "name": "Cold Storage",
+    "site": "Dubai Plant",
+    "type": "Allowed"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.11991,
+       24.999919
+      ],
+      [
+       55.121496,
+       24.999919
+      ],
+      [
+       55.121496,
+       24.998571
+      ],
+      [
+       55.11991,
+       24.998571
+      ],
+      [
+       55.11991,
+       24.999919
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-06",
+    "name": "Main Gate",
+    "site": "Dubai Plant",
+    "type": "Allowed"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.122561,
+       25.000491
+      ],
+      [
+       55.123775,
+       25.000491
+      ],
+      [
+       55.123775,
+       25.000121
+      ],
+      [
+       55.122561,
+       25.000121
+      ],
+      [
+       55.122561,
+       25.000491
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-07",
+    "name": "Fuel Station",
+    "site": "Dubai Plant",
+    "type": "Restricted"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.122561,
+       25.00002
+      ],
+      [
+       55.123775,
+       25.00002
+      ],
+      [
+       55.123775,
+       24.999649
+      ],
+      [
+       55.122561,
+       24.999649
+      ],
+      [
+       55.122561,
+       25.00002
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-08",
+    "name": "Staff Parking",
+    "site": "Dubai Plant",
+    "type": "Warning"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.124197,
+       25.001625
+      ],
+      [
+       55.125522,
+       25.001625
+      ],
+      [
+       55.125522,
+       25.001143
+      ],
+      [
+       55.124197,
+       25.001143
+      ],
+      [
+       55.124197,
+       25.001625
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-09",
+    "name": "Inbound Dock",
+    "site": "Abu Dhabi DC",
+    "type": "Allowed"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       54.498446,
+       24.345909
+      ],
+      [
+       54.499704,
+       24.345909
+      ],
+      [
+       54.499704,
+       24.345067
+      ],
+      [
+       54.498446,
+       24.345067
+      ],
+      [
+       54.498446,
+       24.345909
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-10",
+    "name": "Outbound Dock",
+    "site": "Abu Dhabi DC",
+    "type": "Allowed"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       54.499913,
+       24.345909
+      ],
+      [
+       54.50117,
+       24.345909
+      ],
+      [
+       54.50117,
+       24.345067
+      ],
+      [
+       54.499913,
+       24.345067
+      ],
+      [
+       54.499913,
+       24.345909
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-11",
+    "name": "High-Value Cage",
+    "site": "Abu Dhabi DC",
+    "type": "Restricted"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       54.50138,
+       24.345909
+      ],
+      [
+       54.502637,
+       24.345909
+      ],
+      [
+       54.502637,
+       24.345067
+      ],
+      [
+       54.50138,
+       24.345067
+      ],
+      [
+       54.50138,
+       24.345909
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-12",
+    "name": "Racking Aisles 1–4",
+    "site": "Abu Dhabi DC",
+    "type": "Allowed"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       54.502846,
+       24.345909
+      ],
+      [
+       54.504104,
+       24.345909
+      ],
+      [
+       54.504104,
+       24.345067
+      ],
+      [
+       54.502846,
+       24.345067
+      ],
+      [
+       54.502846,
+       24.345909
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-13",
+    "name": "Charging Station",
+    "site": "Abu Dhabi DC",
+    "type": "Warning"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       54.498446,
+       24.344809
+      ],
+      [
+       54.499704,
+       24.344809
+      ],
+      [
+       54.499704,
+       24.343967
+      ],
+      [
+       54.498446,
+       24.343967
+      ],
+      [
+       54.498446,
+       24.344809
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-14",
+    "name": "Yard Perimeter",
+    "site": "Abu Dhabi DC",
+    "type": "Allowed"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       54.499913,
+       24.344809
+      ],
+      [
+       54.50117,
+       24.344809
+      ],
+      [
+       54.50117,
+       24.343967
+      ],
+      [
+       54.499913,
+       24.343967
+      ],
+      [
+       54.499913,
+       24.344809
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-15",
+    "name": "Hazmat Store",
+    "site": "Abu Dhabi DC",
+    "type": "Restricted"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       54.50138,
+       24.344809
+      ],
+      [
+       54.502637,
+       24.344809
+      ],
+      [
+       54.502637,
+       24.343967
+      ],
+      [
+       54.50138,
+       24.343967
+      ],
+      [
+       54.50138,
+       24.344809
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-16",
+    "name": "Returns Area",
+    "site": "Abu Dhabi DC",
+    "type": "Warning"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       54.502846,
+       24.344809
+      ],
+      [
+       54.504104,
+       24.344809
+      ],
+      [
+       54.504104,
+       24.343967
+      ],
+      [
+       54.502846,
+       24.343967
+      ],
+      [
+       54.502846,
+       24.344809
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-17",
+    "name": "Receiving Area",
+    "site": "Sharjah Warehouse",
+    "type": "Allowed"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.412848,
+       25.317009
+      ],
+      [
+       55.414115,
+       25.317009
+      ],
+      [
+       55.414115,
+       25.316167
+      ],
+      [
+       55.412848,
+       25.316167
+      ],
+      [
+       55.412848,
+       25.317009
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-18",
+    "name": "Dispatch Bay",
+    "site": "Sharjah Warehouse",
+    "type": "Warning"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.414327,
+       25.317009
+      ],
+      [
+       55.415594,
+       25.317009
+      ],
+      [
+       55.415594,
+       25.316167
+      ],
+      [
+       55.414327,
+       25.316167
+      ],
+      [
+       55.414327,
+       25.317009
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-19",
+    "name": "Bulk Storage",
+    "site": "Sharjah Warehouse",
+    "type": "Allowed"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.415805,
+       25.317009
+      ],
+      [
+       55.417072,
+       25.317009
+      ],
+      [
+       55.417072,
+       25.316167
+      ],
+      [
+       55.415805,
+       25.316167
+      ],
+      [
+       55.415805,
+       25.317009
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-20",
+    "name": "Mezzanine",
+    "site": "Sharjah Warehouse",
+    "type": "Warning"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.417283,
+       25.317009
+      ],
+      [
+       55.41855,
+       25.317009
+      ],
+      [
+       55.41855,
+       25.316167
+      ],
+      [
+       55.417283,
+       25.316167
+      ],
+      [
+       55.417283,
+       25.317009
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-21",
+    "name": "Server Room",
+    "site": "Sharjah Warehouse",
+    "type": "Restricted"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.412848,
+       25.315909
+      ],
+      [
+       55.414115,
+       25.315909
+      ],
+      [
+       55.414115,
+       25.315067
+      ],
+      [
+       55.412848,
+       25.315067
+      ],
+      [
+       55.412848,
+       25.315909
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-22",
+    "name": "Workshop",
+    "site": "Sharjah Warehouse",
+    "type": "Warning"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.414327,
+       25.315909
+      ],
+      [
+       55.415594,
+       25.315909
+      ],
+      [
+       55.415594,
+       25.315067
+      ],
+      [
+       55.414327,
+       25.315067
+      ],
+      [
+       55.414327,
+       25.315909
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-23",
+    "name": "Container Yard",
+    "site": "Sharjah Warehouse",
+    "type": "Allowed"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.415805,
+       25.315909
+      ],
+      [
+       55.417072,
+       25.315909
+      ],
+      [
+       55.417072,
+       25.315067
+      ],
+      [
+       55.415805,
+       25.315067
+      ],
+      [
+       55.415805,
+       25.315909
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "zone",
+    "id": "gz-24",
+    "name": "Security Gate",
+    "site": "Sharjah Warehouse",
+    "type": "Restricted"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       55.417283,
+       25.315909
+      ],
+      [
+       55.41855,
+       25.315909
+      ],
+      [
+       55.41855,
+       25.315067
+      ],
+      [
+       55.417283,
+       25.315067
+      ],
+      [
+       55.417283,
+       25.315909
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "gateway",
+    "name": "GW-DXB-01",
+    "site": "Dubai Plant"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     55.122425,
+     25.001682
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "gateway",
+    "name": "GW-DXB-02",
+    "site": "Dubai Plant"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     55.123936,
+     25.000065
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "gateway",
+    "name": "GW-DXB-03",
+    "site": "Dubai Plant"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     55.121607,
+     24.998504
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "gateway",
+    "name": "GW-DXB-04",
+    "site": "Dubai Plant"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     55.125597,
+     24.999492
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "gateway",
+    "name": "GW-AUH-01",
+    "site": "Abu Dhabi DC"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     54.499815,
+     24.344977
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "gateway",
+    "name": "GW-AUH-02",
+    "site": "Abu Dhabi DC"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     54.502748,
+     24.343877
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "gateway",
+    "name": "GW-AUH-03",
+    "site": "Abu Dhabi DC"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     54.501281,
+     24.342754
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "gateway",
+    "name": "GW-SHJ-01",
+    "site": "Sharjah Warehouse"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     55.414227,
+     25.314977
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "gateway",
+    "name": "GW-SHJ-02",
+    "site": "Sharjah Warehouse"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     55.417184,
+     25.316077
+    ]
+   }
+  }
+ ]
+}

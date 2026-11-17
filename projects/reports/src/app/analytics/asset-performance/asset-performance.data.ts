@@ -1,244 +1,194 @@
-import { RA_CATEGORIES, assetId } from '../shared/analytics-common';
-import { ChartSeries, HBarRow } from '../shared/charts';
-import { RA_ASSET_TYPES } from './kit/asset-universe';
-import { DEMO_PERIODS, DEMO_SITES, DemoSite, rnd, rndInt, round1 } from './kit/demo-data';
+import { RA_MONTH_LABELS } from '../shared/analytics-common';
+import { ChartSeries, HBarRow, RA_COLORS } from '../shared/charts';
+import { RA_ASSETS, RA_WORK_ORDERS, RaAsset, RaScope, RaSite, inScope, mean, periodMonths, round1 } from './kit/asset-universe';
 
-// View models and the DEMO MODE asset register behind the Asset Performance page (aggregated in asset-performance.service.ts).
+// Asset Performance figures are aggregated from the asset register in ./kit/asset-universe (empty until the API exists).
 
-export const ALL_ORGANIZATIONS = 'All organizations';
-export const ALL_LOCATIONS = 'All locations';
-export const ALL_ASSETS_VIEW = 'All Assets';
+/** Average utilization each site is expected to reach. */
+export const UTILIZATION_TARGET = 75;
 
-/** Period presets offered by the filter bar. */
-export const AP_FALLBACK_PERIODS = DEMO_PERIODS;
-export const AP_DEFAULT_PERIOD = 'This year';
-
-/** Health score below which an asset is flagged, and the utilization each site is expected to reach. */
-export const AP_DEFAULT_HEALTH_THRESHOLD = 60;
-export const AP_DEFAULT_UTILIZATION_TARGET = 60;
-
-/** One asset's figures over the period. Missing measurements are null. */
-export interface ApAssetRow {
-  /** Record id */
-  key: string;
-  /** Asset ID shown to users (falls back to the record id) */
-  id: string;
-  name: string;
-  category: string;
-  type: string;
-  location: string;
-  health: number | null;
-  utilization: number | null;
-  availability: number | null;
-  mtbf: number | null;
-  mttr: number | null;
-  downtime: number;
-  failures: number;
-  score: number | null;
-  band: string | null;
-  /** Top Performer, On Track, Underperforming or Not rated */
-  status: string;
-}
+/** Change vs the previous period shown on the KPI cards (%). */
+export const AP_DELTAS = { total: 0, health: 0, utilization: 0, availability: 0, mtbf: 0, mttr: 0 };
 
 export interface ApLocationRow {
+  site: RaSite;
   name: string;
   assets: number;
-  health: number | null;
-  utilization: number | null;
-  availability: number | null;
-  score: number | null;
-  status: string;
+  health: number;
+  utilization: number;
+  availability: number;
 }
 
-/** An asset named on an insight card. */
-export interface ApInsightAsset {
-  key: string;
+export interface ApAssetRow {
+  asset: RaAsset;
   id: string;
   name: string;
   location: string;
-  health: number | null;
-  reasons: string[];
+  health: number;
+  utilization: number;
+  availability: number;
+  status: 'Top Performer' | 'Underperforming';
 }
 
-export interface ApInsight {
-  key: string;
-  severity: string;
-  title: string;
-  message: string;
-  count: number;
-  assets: ApInsightAsset[];
-  locations: string[];
-  actions: string[];
-  /** Filter behind "View assets" / "View locations", e.g. healthBelow=60 */
-  query: string;
-}
-
-/** A KPI value with its change against the previous period (0 when there is nothing to compare). */
-export interface ApKpiValue {
-  value: number | null;
-  change: number;
+export interface ApBands {
+  excellent: number;
+  good: number;
+  watch: number;
+  critical: number;
 }
 
 export interface AssetPerformanceView {
-  generatedAt: string | null;
-  /** Previous period (UTC, end exclusive), used by Compare Periods */
-  previousFromUtc: string | null;
-  previousToUtc: string | null;
-  healthThreshold: number;
-  utilizationTarget: number;
+  assets: RaAsset[];
   total: number;
-  totalChange: number;
-  health: ApKpiValue;
-  utilization: ApKpiValue;
-  availability: ApKpiValue;
-  mtbf: ApKpiValue;
-  mttr: ApKpiValue;
+  health: number;
+  utilization: number;
+  availability: number;
+  mtbf: number;
+  mttr: number;
   labels: string[];
   healthTrend: ChartSeries[];
   categoryLabels: string[];
   categoryUtilization: ChartSeries[];
+  bands: ApBands;
   distribution: HBarRow[];
-  ratedAssets: number;
-  notRated: number;
   reliability: ChartSeries[];
   downtime: ChartSeries[];
   downtimeHours: number;
   topBottom: ApAssetRow[];
   locations: ApLocationRow[];
-  insights: ApInsight[];
+  /** Assets with health < 40 */
+  critical: RaAsset[];
+  /** Watch-band assets running hard: maintenance is recommended before they degrade further */
+  intervention: RaAsset[];
+  lowUtilization: ApLocationRow[];
 }
 
-const none = (): ApKpiValue => ({ value: null, change: 0 });
+function avg(assets: RaAsset[], get: (a: RaAsset) => number): number {
+  return assets.length ? mean(assets.map(get)) : 0;
+}
 
-/** What the page shows before the first load. */
-export function emptyAssetPerformance(): AssetPerformanceView {
+function share(count: number, total: number): number {
+  return total ? Math.round((count / total) * 100) : 0;
+}
+
+/** Recomputes every widget for the current filters. */
+export function buildAssetPerformance(scope: RaScope, period: string, compare: boolean): AssetPerformanceView {
+  const assets = RA_ASSETS.filter((a) => inScope(a, scope));
+  const months = periodMonths(period);
+  const ids = new Set(assets.map((a) => a.id));
+  const orders = RA_WORK_ORDERS.filter((o) => ids.has(o.asset.id) && months.includes(o.month));
+  const total = assets.length;
+
+  const bands: ApBands = {
+    excellent: assets.filter((a) => a.health >= 80).length,
+    good: assets.filter((a) => a.health >= 60 && a.health < 80).length,
+    watch: assets.filter((a) => a.health >= 40 && a.health < 60).length,
+    critical: assets.filter((a) => a.health < 40).length
+  };
+
+  // Health trend: share of assets per health state; the latest month is today's register
+  const healthyNow = share(bands.excellent + bands.good, total);
+  const criticalNow = share(bands.critical, total);
+  const healthy = months.map((m) => (total ? Math.max(0, healthyNow - (9 - m) * 1.1 - (m % 3 === 1 ? 0.8 : 0)) : 0));
+  const critical = months.map((m) => (total ? round1(criticalNow + (9 - m) * 0.25) : 0));
+  const atRisk = months.map((_, i) => (total ? round1(100 - healthy[i] - critical[i]) : 0));
+  const healthTrend: ChartSeries[] = [
+    { name: 'Healthy', values: healthy.map(round1), color: RA_COLORS.green, area: true },
+    { name: 'At Risk', values: atRisk, color: RA_COLORS.orange },
+    { name: 'Critical', values: critical, color: RA_COLORS.red }
+  ];
+  if (compare) healthTrend.push({ name: 'Healthy (previous period)', values: healthy.map((v) => round1(v / (1 + AP_DELTAS.health / 100))), color: RA_COLORS.green, dashed: true });
+
+  // Utilization split per category: in use, out for maintenance (unavailable hours) and idle
+  const categories = [...new Set(assets.map((a) => a.category))];
+  const catAssets = categories.map((c) => assets.filter((a) => a.category === c));
+  const active = catAssets.map((list) => Math.round(avg(list, (a) => a.utilization)));
+  const maintenance = catAssets.map((list) => Math.round(100 - avg(list, (a) => a.availability)));
+  const categoryUtilization: ChartSeries[] = [
+    { name: 'Active', values: active, color: RA_COLORS.purple },
+    { name: 'Idle', values: active.map((v, i) => Math.max(0, 100 - v - maintenance[i])), color: RA_COLORS.sky },
+    { name: 'Maintenance', values: maintenance, color: RA_COLORS.orange }
+  ];
+
+  const distribution: HBarRow[] = [
+    { label: 'Excellent (80–100)', value: bands.excellent, display: `${bands.excellent} (${share(bands.excellent, total)}%)`, color: RA_COLORS.green },
+    { label: 'Good (60–79)', value: bands.good, display: `${bands.good} (${share(bands.good, total)}%)`, color: RA_COLORS.blue },
+    { label: 'Watch (40–59)', value: bands.watch, display: `${bands.watch} (${share(bands.watch, total)}%)`, color: RA_COLORS.orange },
+    { label: 'Critical (0–39)', value: bands.critical, display: `${bands.critical} (${share(bands.critical, total)}%)`, color: RA_COLORS.red }
+  ];
+
+  // Reliability: MTBF improves through the year; MTTR is the mean repair time of that month's breakdowns
+  const mtbf = Math.round(avg(assets, (a) => a.mtbf));
+  const repairs = orders.filter((o) => o.type === 'Corrective' || o.type === 'Emergency');
+  const mttr = round1(repairs.length ? mean(repairs.map((o) => o.repairHours)) : 0);
+  const mtbfShape = months.map((m) => 0.8 + m * 0.045);
+  const shapeMean = mean([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((m) => 0.8 + m * 0.045));
+  const mttrByMonth = months.map((m) => {
+    const list = repairs.filter((o) => o.month === m);
+    return list.length ? round1(mean(list.map((o) => o.repairHours))) : 0;
+  });
+  const reliability: ChartSeries[] = [
+    { name: 'MTBF (hrs)', values: mtbfShape.map((s) => Math.round((mtbf * s) / shapeMean)), color: RA_COLORS.purple, area: true },
+    { name: 'MTTR (hrs)', values: mttrByMonth, color: RA_COLORS.blue, axis: 'right' }
+  ];
+  if (compare) reliability.push({ name: 'MTBF (previous period)', values: reliability[0].values.map((v) => Math.round(v / (1 + AP_DELTAS.mtbf / 100))), color: RA_COLORS.purple, dashed: true });
+
+  const planned = months.map((m) => round1(orders.filter((o) => o.month === m && (o.type === 'Preventive' || o.type === 'Inspection')).reduce((s, o) => s + o.downtimeHours, 0)));
+  const unplanned = months.map((m) => round1(orders.filter((o) => o.month === m && (o.type === 'Corrective' || o.type === 'Emergency')).reduce((s, o) => s + o.downtimeHours, 0)));
+  const downtime: ChartSeries[] = [
+    { name: 'Planned', values: planned, color: RA_COLORS.blue },
+    { name: 'Unplanned', values: unplanned, color: RA_COLORS.pink }
+  ];
+
+  // Three best and two worst assets by health score
+  const ranked = [...assets].sort((a, b) => b.health - a.health || b.utilization - a.utilization);
+  const picks = ranked.length > 5 ? [...ranked.slice(0, 3), ...ranked.slice(-2)] : ranked;
+  const topBottom: ApAssetRow[] = picks.map((a, i) => ({
+    asset: a,
+    id: a.id,
+    name: a.name,
+    location: a.site.name,
+    health: a.health,
+    utilization: a.utilization,
+    availability: a.availability,
+    status: i < 3 && a.health >= 60 ? 'Top Performer' : 'Underperforming'
+  }));
+
+  const sites = [...new Set(assets.map((a) => a.site))];
+  const locations: ApLocationRow[] = sites.map((site) => {
+    const list = assets.filter((a) => a.site === site);
+    return {
+      site,
+      name: site.name,
+      assets: list.length,
+      health: Math.round(avg(list, (a) => a.health)),
+      utilization: Math.round(avg(list, (a) => a.utilization)),
+      availability: round1(avg(list, (a) => a.availability))
+    };
+  });
+
+  const utilization = avg(assets, (a) => a.utilization);
   return {
-    generatedAt: null,
-    previousFromUtc: null,
-    previousToUtc: null,
-    healthThreshold: AP_DEFAULT_HEALTH_THRESHOLD,
-    utilizationTarget: AP_DEFAULT_UTILIZATION_TARGET,
-    total: 0,
-    totalChange: 0,
-    health: none(),
-    utilization: none(),
-    availability: none(),
-    mtbf: none(),
-    mttr: none(),
-    labels: [],
-    healthTrend: [],
-    categoryLabels: [],
-    categoryUtilization: [],
-    distribution: [],
-    ratedAssets: 0,
-    notRated: 0,
-    reliability: [],
-    downtime: [],
-    downtimeHours: 0,
-    topBottom: [],
-    locations: [],
-    insights: []
+    assets,
+    total,
+    health: Math.round(avg(assets, (a) => a.health)),
+    utilization: Math.round(utilization),
+    availability: round1(avg(assets, (a) => a.availability)),
+    mtbf,
+    mttr,
+    labels: total ? months.map((m) => RA_MONTH_LABELS[m]).filter((l) => l !== undefined) : [],
+    healthTrend,
+    categoryLabels: categories.map((c, i) => `${c}\n${active[i]}%`),
+    categoryUtilization,
+    bands,
+    distribution,
+    reliability,
+    downtime,
+    downtimeHours: Math.round(planned.reduce((a, b) => a + b, 0) + unplanned.reduce((a, b) => a + b, 0)),
+    topBottom,
+    locations,
+    critical: assets.filter((a) => a.health < 40).sort((a, b) => a.health - b.health),
+    intervention: assets.filter((a) => a.health >= 40 && a.health < 50 && a.utilization >= 80).sort((a, b) => a.health - b.health),
+    lowUtilization: locations.filter((l) => l.utilization < UTILIZATION_TARGET)
   };
 }
-
-// ----- DEMO MODE asset register -----
-
-/** An asset in the register with its 12-month figures. Unrated assets have no health assessment yet. */
-export interface ApRegisterAsset {
-  key: string;
-  id: string;
-  name: string;
-  category: string;
-  type: string;
-  site: DemoSite;
-  health: number | null;
-  utilization: number;
-  availability: number;
-  mtbf: number | null;
-  mttr: number | null;
-  /** Breakdowns over the last 12 months */
-  failuresYear: number;
-  /** Planned (preventive) downtime over the last 12 months */
-  plannedHoursYear: number;
-}
-
-const MODELS: Record<string, string[]> = {
-  Vehicles: ['Toyota Hilux Pickup', 'Nissan Urvan Van', 'Mitsubishi Fuso Truck', 'Toyota Land Cruiser', 'Isuzu NPR Truck'],
-  Machinery: ['Caterpillar Forklift', 'Atlas Copco Compressor', 'Toyota Reach Truck', 'Grundfos Pump Set', 'Kaeser Air Compressor', 'Hyster Forklift'],
-  Facilities: ['Otis Passenger Lift', 'KONE Service Elevator', 'Fire Pump Set', 'Loading Dock Leveller', 'Water Treatment Unit'],
-  'IT Equipment': ['Dell PowerEdge Server', 'Cisco Core Switch', 'HP LaserJet Printer', 'APC Smart-UPS', 'NetApp Storage Array'],
-  HVAC: ['Carrier Chiller', 'Daikin Air Handling Unit', 'Trane Rooftop Unit', 'York Cooling Tower', 'Daikin VRF Outdoor Unit'],
-  'Power & Electrical': ['Cummins Diesel Generator', 'ABB Transformer', 'Schneider LV Panel', 'Eaton UPS System', 'Huawei Solar Inverter'],
-  'Safety & PPE': ['Draeger SCBA Set', 'Honeywell Gas Detector', 'Notifier Fire Alarm Panel', 'MSA Fall Arrest System']
-};
-
-const TYPE_OF: Record<string, string> = {
-  Vehicles: RA_ASSET_TYPES[2],
-  Machinery: RA_ASSET_TYPES[0],
-  Facilities: RA_ASSET_TYPES[1],
-  'IT Equipment': RA_ASSET_TYPES[4],
-  HVAC: RA_ASSET_TYPES[0],
-  'Power & Electrical': RA_ASSET_TYPES[3],
-  'Safety & PPE': RA_ASSET_TYPES[1]
-};
-
-/** Typical utilization per category (%). */
-const UTILIZATION_BASE: Record<string, number> = {
-  Vehicles: 72, Machinery: 70, Facilities: 63, 'IT Equipment': 79, HVAC: 75, 'Power & Electrical': 58, 'Safety & PPE': 52
-};
-
-/** Assets per site, and how the site's health and utilization differ from the group. */
-const SITE_PROFILE: Record<string, { assets: number; health: number; utilization: number }> = {
-  DXB: { assets: 34, health: 4, utilization: 4 },
-  AUH: { assets: 24, health: 2, utilization: 2 },
-  SHJ: { assets: 22, health: -3, utilization: -10 },
-  JAW: { assets: 28, health: 0, utilization: 6 },
-  AAN: { assets: 14, health: -7, utilization: -14 },
-  RUH: { assets: 20, health: 1, utilization: 0 },
-  DOH: { assets: 10, health: 3, utilization: -2 },
-  LON: { assets: 12, health: 5, utilization: 1 },
-  SIN: { assets: 12, health: 3, utilization: 3 }
-};
-
-const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
-
-function buildRegister(): ApRegisterAsset[] {
-  const list: ApRegisterAsset[] = [];
-  let k = 0;
-  for (const site of DEMO_SITES) {
-    const profile = SITE_PROFILE[site.code];
-    for (let n = 1; n <= profile.assets; n++, k++) {
-      const category = RA_CATEGORIES[(k * 3 + n) % RA_CATEGORIES.length];
-      const models = MODELS[category];
-      const model = models[(k + n * 2) % models.length];
-      const r = rnd(k, 1);
-      const rated = k % 29 !== 7;
-      const band = r < 0.05 ? rndInt(k, 2, 22, 39) : r < 0.16 ? rndInt(k, 2, 40, 59) : r < 0.56 ? rndInt(k, 2, 60, 79) : rndInt(k, 2, 80, 97);
-      const health = rated ? clamp(band + profile.health, 15, 99) : null;
-      const h = health ?? 70;
-      const utilization = round1(clamp(UTILIZATION_BASE[category] + profile.utilization + (rnd(k, 3) - 0.5) * 30, 6, 98));
-      const availability = round1(clamp(88 + h * 0.105 + (rnd(k, 4) - 0.5) * 2, 82, 99.8));
-      const mtbf = rated ? Math.round(260 + h * 7 + (rnd(k, 5) - 0.5) * 160) : null;
-      const mttr = rated ? round1(1.8 + (100 - h) * 0.07 + rnd(k, 6) * 1.4) : null;
-      const runHours = 8760 * (utilization / 100);
-      list.push({
-        key: `ast-${site.code.toLowerCase()}-${n}`,
-        id: assetId(site.code, 100 + n * 7 + (k % 5)),
-        name: `${model} ${String(n).padStart(2, '0')}`,
-        category,
-        type: TYPE_OF[category],
-        site,
-        health,
-        utilization,
-        availability,
-        mtbf,
-        mttr,
-        failuresYear: mtbf ? Math.max(1, Math.round(runHours / mtbf / 2)) : 0,
-        plannedHoursYear: Math.round(10 + rnd(k, 7) * 18)
-      });
-    }
-  }
-  return list;
-}
-
-export const AP_REGISTER: ApRegisterAsset[] = buildRegister();

@@ -3,7 +3,7 @@ import { ArrowUpDown, Ellipsis, LucideAngularModule } from 'lucide-angular';
 import { SortState, sortBy, toggleSort } from '../inventory-analytics/parts/ra-parts';
 import { CostAsset, CostCenterRow, Currency, moneyIn, toCurrency } from './financial-analytics.data';
 
-const STATUS_TONES: Record<string, string> = { 'Over Budget': 'red', 'At Risk': 'orange', 'On Track': 'green', 'No Budget': 'grey' };
+const STATUS_TONES: Record<string, string> = { 'Over Budget': 'red', 'At Risk': 'orange', 'On Track': 'green' };
 
 /** Highest Cost Assets: top assets by total cost of ownership, sortable, with View and a row menu. */
 @Component({
@@ -26,7 +26,7 @@ const STATUS_TONES: Record<string, string> = { 'Over Budget': 'red', 'At Risk': 
           </tr>
         </thead>
         <tbody>
-          @for (a of visible; track a.key; let i = $index) {
+          @for (a of visible; track a.id; let i = $index) {
             <tr>
               <td class="muted">{{ i + 1 }}</td>
               <td><button type="button" class="link" (click)="view.emit(a)">{{ a.id }}</button></td>
@@ -101,7 +101,7 @@ export class CostAssetTable implements OnChanges {
   }
 
   perHour(a: CostAsset): string {
-    return a.costPerHour === null ? '—' : `${this.currency} ${toCurrency(a.costPerHour, this.currency).toFixed(2)}`;
+    return `${this.currency} ${toCurrency(a.costPerHour, this.currency).toFixed(2)}`;
   }
 
   toggleMenu(i: number): void {
@@ -153,7 +153,7 @@ export class CostAssetTable implements OnChanges {
               <td class="num">{{ fmt(r.budget) }}</td>
               <td class="num">{{ fmt(r.actual) }}</td>
               <td class="num" [class.raf-over]="r.variance > 0" [class.raf-under]="r.variance <= 0">{{ variance(r) }}</td>
-              <td class="num">{{ r.utilization === null ? '—' : r.utilization.toFixed(0) + '%' }}</td>
+              <td class="num">{{ r.utilization.toFixed(0) }}%</td>
               <td><span class="pill" [attr.data-tone]="tone(r.status)">{{ r.status }}</span></td>
             </tr>
           } @empty {

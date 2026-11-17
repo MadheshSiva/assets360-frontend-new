@@ -14,48 +14,46 @@
   <label class="filter filter--period">
     <span>Period</span>
     <select [(ngModel)]="period" (ngModelChange)="apply()">
+      <option value="">Select Period</option>
       @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Organization</span>
     <select [(ngModel)]="organization" (ngModelChange)="apply()">
+      <option value="">Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Location</span>
     <select [(ngModel)]="location" (ngModelChange)="apply()">
+      <option value="">Select Location</option>
       @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Asset Category</span>
     <select [(ngModel)]="category" (ngModelChange)="apply()">
+      <option value="">Select Asset Category</option>
       @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Cost Center</span>
     <select [(ngModel)]="costCenter" (ngModelChange)="apply()">
+      <option value="">Select Cost Center</option>
       @for (c of costCenterOptions; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Currency</span>
-    <select [(ngModel)]="currency" (ngModelChange)="setCurrency()">
+    <select [(ngModel)]="currency" (ngModelChange)="apply()">
+      <option value="" disabled>Select Currency</option>
       @for (c of currencies; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>
 </section>
-
-@if (error) {
-  <p class="empty" role="alert">{{ error }}</p>
-} @else if (!loaded) {
-  <p class="empty" role="status">Loading financial figures…</p>
-} @else if (empty) {
-  <p class="empty" role="status">No assets, costs or budgets are recorded for the current filters.</p>
-}
 
 <section class="kpis" aria-label="Key figures">
   @for (k of kpis; track k.id) {
@@ -65,35 +63,35 @@
 
 <div class="ra-layout">
   <div class="widgets">
-    <ra-c-widget class="span-2" title="Total Cost of Ownership Trend" info="Monthly acquisition (CAPEX) and maintenance cost; the line is the running total for the period" (exportCsv)="exportTco()">
-      <ra-cartesian-chart [labels]="view.labels" [series]="tcoSeries" kind="bar" [stacked]="true" [height]="240" [yTitle]="costAxisTitle" ariaLabel="Total cost of ownership trend" />
+    <ra-c-widget class="span-2" title="Total Cost of Ownership Trend" info="Monthly cost of ownership by component; the line is the running total for the period" (exportCsv)="exportTco()">
+      <ra-cartesian-chart [labels]="view.window.labels" [series]="tcoSeries" kind="bar" [stacked]="true" [height]="240" [yTitle]="costAxisTitle" ariaLabel="Total cost of ownership trend" />
     </ra-c-widget>
 
-    <ra-c-widget class="span-2" title="Budget vs Actual Spend" info="Department budget phased to the elapsed period vs actual spend (maintenance + CAPEX) per cost center; the line is the variance in %" (exportCsv)="exportBudget()">
+    <ra-c-widget class="span-2" title="Budget vs Actual Spend" info="Budget phased to the period vs actual spend per cost center; the line is the variance in %" (exportCsv)="exportBudget()">
       @if (budgetLabels.length) {
         <ra-cartesian-chart [labels]="budgetLabels" [series]="budgetSeries" kind="bar" [height]="240" [yTitle]="costAxisTitle"
-          [rightMin]="budgetRightMin" [rightMax]="budgetRightMax" [rightFormat]="pctFormat" ariaLabel="Budget vs actual spend" />
+          [rightMin]="-40" [rightMax]="20" [rightFormat]="pctFormat" ariaLabel="Budget vs actual spend" />
       } @else {
         <p class="empty">No cost centers for the current filters.</p>
       }
     </ra-c-widget>
 
-    <ra-c-widget class="span-2" title="Cost by Asset Category" info="Acquisition and maintenance cost in the period by asset category" (exportCsv)="exportCategories()">
-      @if (view.tcoTotal > 0 && categorySlices.length) {
-        <ra-donut-chart [slices]="categorySlices" [centerValue]="tcoCenter" [centerLabel]="'Total Costs · ' + view.caption" legend="bottom"
+    <ra-c-widget class="span-2" title="Cost by Asset Category" info="Total cost of ownership in the period by asset category" (exportCsv)="exportCategories()">
+      @if (view.tcoTotal > 0) {
+        <ra-donut-chart [slices]="categorySlices" [centerValue]="tcoCenter" [centerLabel]="'Total Costs · ' + view.window.caption" legend="bottom"
           [size]="160" [format]="sliceFormat" ariaLabel="Cost by asset category" />
       } @else {
         <p class="empty">No costs for the current filters.</p>
       }
     </ra-c-widget>
 
-    <ra-c-widget class="span-2" title="Depreciation Analysis" info="Straight-line monthly depreciation (bars) and accumulated depreciation (line, right axis)" (exportCsv)="exportDepreciation()">
-      <ra-cartesian-chart [labels]="view.labels" [series]="depreciationSeries" kind="bar" [height]="220" [yTitle]="valueAxisTitle" ariaLabel="Depreciation analysis" />
+    <ra-c-widget class="span-2" title="Depreciation Analysis" info="Monthly depreciation (bars) and accumulated depreciation (line, right axis)" (exportCsv)="exportDepreciation()">
+      <ra-cartesian-chart [labels]="view.window.labels" [series]="depreciationSeries" kind="bar" [height]="220" [yTitle]="valueAxisTitle" ariaLabel="Depreciation analysis" />
     </ra-c-widget>
 
     <ra-c-widget class="span-2" title="Budget Utilization" info="Actual spend as a share of budget for the selected cost centers" (exportCsv)="exportUtilization()">
       <div class="raf-budget">
-        <ra-gauge-chart [value]="budgetUtilization" [display]="gaugeDisplay" caption="Budget Utilization" [target]="budgetTarget"
+        <ra-gauge-chart [value]="budgetUtilization" [display]="budgetUtilization + '%'" caption="Budget Utilization" [target]="budgetTarget"
           [color]="gaugeColor" [size]="190" />
         <div class="mini-stats raf-budget__stats">
           <div class="mini-stat">
@@ -120,7 +118,7 @@
       }
     </ra-c-widget>
 
-    <ra-c-widget class="span-3" title="Highest Cost Assets" info="Assets with the highest total cost of ownership to date (acquisition + maintenance); depreciation is shown for reference" (exportCsv)="exportAssets()">
+    <ra-c-widget class="span-3" title="Highest Cost Assets" info="Assets with the highest total cost of ownership (acquisition + maintenance + depreciation)" (exportCsv)="exportAssets()">
       <app-ra-fin-asset-table [rows]="view.assets" [currency]="currency" (view)="viewAsset($event)" (plan)="planAsset($event)" />
     </ra-c-widget>
 

@@ -6,17 +6,14 @@ import {
   HeartPulse, LucideAngularModule, LucideIconData, Package, RefreshCw, Settings, Share2, Shield, ShieldCheck, Target, TriangleAlert,
   Upload, Users, Wrench
 } from 'lucide-angular';
-import { Observable, Subscription, catchError, forkJoin, of } from 'rxjs';
-import { AnalyticsPage, downloadCsv } from '../shared/analytics-common';
+import { AnalyticsPage, RA_MONTH_LABELS, downloadCsv, money } from '../shared/analytics-common';
 import { CartesianChart, ChartSeries, HBarChart, HBarRow, RA_COLORS } from '../shared/charts';
 import {
   ActionPlan, DetailField, RaActionPlanDialog, RaDetailDialog, RaListDialog, RaSaveViewDialog, RaShareDialog, RaWidget
 } from '../inspection-analytics/kit';
 import {
-  ALL_CATEGORIES, ALL_LOCATIONS, ALL_ORGANIZATIONS, KD_DEFAULT_PERIOD, KD_DEFAULT_VIEW, KD_FALLBACK_PERIODS, KpiDashboardVm, KpiDef, KpiInsightVm,
-  KpiMetric, KpiModule, KpiState, KpiViewDef
+  BUSINESS_UNITS, KPI_CATALOG, KPI_MODULES, KPI_VIEWS, KpiDef, KpiModule, KpiState, KpiViewDef, attainment, evaluateKpi, kpiScope
 } from './kpi-dashboard.data';
-import { KdFilterLists, KdFilters, KdOptions, KpiDashboardService, SaveKpiBody } from './kpi-dashboard.service';
 import { KpiTile } from './kpi-tile';
 import { KpiLayoutDialog, LayoutItem } from './kpi-layout-dialog';
 import { KpiFormDialog, KpiFormValue } from './kpi-form-dialog';
@@ -28,8 +25,14 @@ interface TileVm {
   tone: string;
 }
 
-interface Insight extends KpiInsightVm {
+type InsightAction = 'exceptions' | 'plan' | 'settings' | 'due-week';
+
+interface Insight {
+  tone: string;
   icon: LucideIconData;
+  title: string;
+  text: string;
+  action: { label: string; key: InsightAction };
   kpi: KpiState | null;
 }
 
@@ -43,9 +46,8 @@ interface ListSpec {
 
 const KPI_ICONS: Record<string, LucideIconData> = {
   health: HeartPulse, pm: ShieldCheck, utilization: ChartColumn, cost: Database, openWo: FileText, inspection: ClipboardCheck,
-  turnover: Box, oee: Cog, compliance: ShieldCheck, onTime: Factory, capa: ClipboardList, availability: Gauge, mtbf: Target,
-  mttr: Wrench, overdueWo: TriangleAlert, inventoryValue: Package, wip: Factory, reorder: Package, openFindings: ClipboardList,
-  criticalFindings: TriangleAlert, overdueCapa: TriangleAlert, missing: Box
+  turnover: Box, oee: Cog, compliance: ShieldCheck, onTime: Factory, prediction: Target, capa: ClipboardList, availability: Gauge,
+  mttr: Wrench, overdueWo: TriangleAlert, capex: Banknote, opex: Banknote, inventoryValue: Package, wip: Factory
 };
 const MODULE_ICONS: Record<KpiModule, LucideIconData> = {
   Asset: Box, Maintenance: Wrench, Inspection: ClipboardCheck, Inventory: Package, Operations: Factory, Compliance: Shield, Financial: Banknote
@@ -53,41 +55,34 @@ const MODULE_ICONS: Record<KpiModule, LucideIconData> = {
 const MODULE_TONES: Record<KpiModule, string> = {
   Asset: 'green', Maintenance: 'blue', Inspection: 'purple', Inventory: 'blue', Operations: 'purple', Compliance: 'green', Financial: 'red'
 };
-const INSIGHT_ICONS: Record<string, LucideIconData> = { red: TriangleAlert, orange: TriangleAlert, green: ShieldCheck, blue: Users };
 const EXCEPTION_STATUSES = ['All Statuses', 'Watch', 'At Risk', 'Over Budget'];
 const EXPORT_HEADER = ['KPI', 'Module', 'Current', 'Target', 'Variance', 'Change vs previous period', 'Status', 'Owner', 'Due Date'];
 
-/** Reports & Analytics > KPI Dashboard. Figures, KPIs and views come from /api/kpi-dashboard. */
+/** Reports & Analytics > KPI Dashboard */
 @Component({
   selector: 'app-ra-kpi-dashboard',
   imports: [
     FormsModule, RouterLink, LucideAngularModule, CartesianChart, HBarChart, RaWidget, RaListDialog, RaDetailDialog, RaActionPlanDialog,
     RaSaveViewDialog, RaShareDialog, KpiTile, KpiLayoutDialog, KpiFormDialog, KpiExceptionsTable
   ],
-  providers: [KpiDashboardService],
   templateUrl: './kpi-dashboard.html',
   styleUrls: ['../shared/analytics-page.css', './kpi-dashboard.css']
 })
 export class KpiDashboardPage extends AnalyticsPage {
   private readonly host = inject(ElementRef<HTMLElement>);
-  private readonly api = inject(KpiDashboardService);
   readonly icons = { ChartColumn, ChevronDown, CirclePlus, RefreshCw, Settings, Share2, Upload };
   readonly moduleIcons = MODULE_ICONS;
+  readonly businessUnits = BUSINESS_UNITS;
   readonly exceptionStatuses = EXCEPTION_STATUSES;
   readonly granularities = ['Monthly', 'Quarterly'];
   readonly percentFormat = (v: number) => `${Math.round(v)}%`;
 
-  override periods: string[] = KD_FALLBACK_PERIODS;
-  override period = KD_DEFAULT_PERIOD;
-  override organizations: string[] = [ALL_ORGANIZATIONS];
-  override locations: string[] = [ALL_LOCATIONS];
-  categories: string[] = [ALL_CATEGORIES];
-  category = ALL_CATEGORIES;
-  metrics: KpiMetric[] = [];
-  owners: string[] = [];
-
-  views: KpiViewDef[] = [];
-  activeKey = KD_DEFAULT_VIEW;
+  /** Session copies so created / edited KPIs and custom views survive filter changes */
+  catalog: KpiDef[] = KPI_CATALOG.map((k) => ({ ...k }));
+  views: KpiViewDef[] = KPI_VIEWS.map((v) => ({ ...v, ids: [...v.ids] }));
+  layouts: Record<string, { id: string; visible: boolean }[]> = {};
+  activeKey = 'executive';
+  businessUnit = '';
   granularity = 'Monthly';
   exceptionStatus = EXCEPTION_STATUSES[0];
 
@@ -95,17 +90,12 @@ export class KpiDashboardPage extends AnalyticsPage {
   tiles: TileVm[] = [];
   trendLabels: string[] = [];
   trendSeries: ChartSeries[] = [];
-  trendMin = 80;
   targetRows: HBarRow[] = [];
   viewExceptions: KpiState[] = [];
   exceptions: KpiState[] = [];
   insights: Insight[] = [];
   library: { module: KpiModule; count: number }[] = [];
-  monthLabels: string[] = [];
 
-  /** Message when the last load failed */
-  loadError: string | null = null;
-  saving = false;
   customMenuOpen = false;
   layoutOpen = false;
   shareOpen = false;
@@ -116,30 +106,16 @@ export class KpiDashboardPage extends AnalyticsPage {
   detail: { title: string; subtitle: string; fields: DetailField[]; kpi: KpiState | null } | null = null;
   plan: { context: string; title: string; owner: string } | null = null;
 
-  private loadSub: Subscription | null = null;
-  private lastUpdated = 0;
-  private readonly clock = setInterval(() => this.tick(), 60_000);
-
   constructor() {
     super();
-    this.updatedMinutes = 0;
-    // Share links open a view: ?view=<key>
-    const view = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('view');
-    if (view) this.activeKey = view;
-    this.init();
-  }
-
-  get loaded(): boolean {
-    return this.api.loaded();
+    this.views.forEach((v) => (this.layouts[v.key] = v.ids.map((id) => ({ id, visible: true }))));
+    this.apply();
   }
 
   // ===== Views =====
 
   get activeView(): KpiViewDef {
-    return (
-      this.views.find((v) => v.key === this.activeKey) ??
-      this.views[0] ?? { key: this.activeKey, label: '', dashboard: 'KPI Dashboard', custom: false, items: [], defaultIds: [] }
-    );
+    return this.views.find((v) => v.key === this.activeKey) ?? this.views[0];
   }
 
   get standardViews(): KpiViewDef[] {
@@ -167,144 +143,151 @@ export class KpiDashboardPage extends AnalyticsPage {
 
   // ===== Data =====
 
-  /** Options and filter values, then the figures. */
-  private init(): void {
-    const errors: string[] = [];
-    const soft = <T>(fallback: T) => catchError<T, Observable<T>>((err: Error) => {
-      errors.push(err.message);
-      return of(fallback);
-    });
-    forkJoin({
-      options: this.api.loadOptions().pipe(soft<KdOptions | null>(null)),
-      filters: this.api.loadFilters().pipe(soft<KdFilterLists | null>(null))
-    }).subscribe(({ options, filters }) => {
-      if (options) {
-        this.periods = options.periods;
-        this.period = options.defaultPeriod;
-        this.metrics = options.metrics;
-        this.owners = options.owners;
-      }
-      if (filters) {
-        this.organizations = filters.organizations;
-        this.locations = filters.locations;
-        this.categories = filters.categories;
-      }
-      if (errors.length) this.notify(errors[0]);
-      this.apply();
-    });
-  }
-
-  private filters(): KdFilters {
-    return {
-      period: this.period, organization: this.organization, location: this.location, category: this.category, viewKey: this.activeKey,
-      granularity: this.granularity
-    };
-  }
-
-  /** Reloads the page from GET /overview and rebuilds the tiles, charts, exceptions and insights. */
-  apply(announce?: string): void {
-    this.loadSub?.unsubscribe();
-    this.refreshing = true;
-    this.loadSub = this.api.loadOverview(this.filters()).subscribe({
-      next: (d) => {
-        this.loadError = null;
-        this.build(d);
-        this.refreshing = false;
-        this.lastUpdated = Date.now();
-        this.updatedMinutes = 0;
-        if (announce) this.notify(announce);
-      },
-      error: (err: Error) => {
-        this.refreshing = false;
-        // An unknown view (old share link, deleted custom view) falls back to the default view
-        if (this.activeKey !== KD_DEFAULT_VIEW && /^View '/.test(err.message)) {
-          this.activeKey = KD_DEFAULT_VIEW;
-          this.apply();
-          return;
-        }
-        this.loadError = err.message;
-        this.notify(err.message);
-      }
-    });
-  }
-
-  override refresh(): void {
-    if (!this.refreshing) this.apply('Data refreshed.');
-  }
-
-  private tick(): void {
-    if (this.lastUpdated) this.updatedMinutes = Math.floor((Date.now() - this.lastUpdated) / 60_000);
-  }
-
-  override ngOnDestroy(): void {
-    clearInterval(this.clock);
-    this.loadSub?.unsubscribe();
-    super.ngOnDestroy();
-  }
-
-  private build(d: KpiDashboardVm): void {
-    this.views = d.views;
-    if (d.viewKey) this.activeKey = d.viewKey;
-    this.monthLabels = d.monthLabels;
-    this.states = new Map(d.kpis.map((s) => [s.def.id, s]));
-    this.tiles = d.tiles.map((state) => ({
-      state,
-      icon: KPI_ICONS[state.def.metric ?? state.def.id] ?? MODULE_ICONS[state.def.module],
-      tone: MODULE_TONES[state.def.module]
-    }));
-    this.viewExceptions = d.exceptions;
+  /** Re-evaluates every KPI against the filters and rebuilds the tiles, charts, exceptions and insights. */
+  apply(): void {
+    const scope = kpiScope(this.period, this.organization, this.location, this.businessUnit);
+    this.states = new Map(this.catalog.map((d) => [d.id, evaluateKpi(d, scope)]));
+    const layout = this.layouts[this.activeKey] ?? [];
+    this.tiles = layout
+      .filter((l) => l.visible && this.states.has(l.id))
+      .map((l) => {
+        const state = this.states.get(l.id) as KpiState;
+        return { state, icon: KPI_ICONS[l.id] ?? MODULE_ICONS[state.def.module], tone: MODULE_TONES[state.def.module] };
+      });
+    const shown = this.tiles.map((t) => t.state).filter((s) => s.status !== 'No Data');
+    this.viewExceptions = shown.filter((s) => s.status !== 'On Track');
     this.filterExceptions();
-    this.buildTrend(d);
-    this.targetRows = d.targets.map((t) => ({
-      label: t.module,
-      value: t.value,
-      display: `${t.value}%`,
-      color: t.value >= 100 ? RA_COLORS.green : t.value >= 97 ? RA_COLORS.orange : RA_COLORS.red,
-      target: 100,
-      targetDisplay: '100%'
-    }));
-    this.insights = d.insights.map((i) => ({ ...i, icon: INSIGHT_ICONS[i.tone] ?? TriangleAlert, kpi: i.kpiId ? this.states.get(i.kpiId) ?? null : null }));
-    this.library = d.library;
+    this.buildTrend(shown);
+    this.buildTargets(shown);
+    this.buildInsights(shown.length > 0);
+    this.library = KPI_MODULES.map((m) => ({ module: m, count: this.catalog.filter((k) => k.module === m).length }));
   }
 
   filterExceptions(): void {
     this.exceptions = this.exceptionStatus === EXCEPTION_STATUSES[0] ? this.viewExceptions : this.viewExceptions.filter((s) => s.status === this.exceptionStatus);
   }
 
-  /** GET /trend for the other granularity. */
   setGranularity(): void {
-    this.api.loadTrend(this.filters()).subscribe({
-      next: () => this.buildTrend(this.api.dashboard()),
-      error: (err: Error) => this.notify(err.message)
-    });
+    this.buildTrend(this.tiles.map((t) => t.state).filter((s) => s.status !== 'No Data'));
   }
 
   /** Overall score = average attainment vs target of the KPIs shown (100% = on target). */
-  private buildTrend(d: KpiDashboardVm): void {
-    const t = d.trend;
-    this.trendLabels = t.labels;
+  private buildTrend(shown: KpiState[]): void {
+    if (!shown.length) {
+      this.trendLabels = [];
+      this.trendSeries = [];
+      return;
+    }
+    const monthly = RA_MONTH_LABELS.map((_, i) =>
+      shown.length ? Number((shown.reduce((a, s) => a + Math.min(120, attainment(s.spark[i], s.target, s.def.direction)), 0) / shown.length).toFixed(1)) : 0
+    );
+    // Prior period: the same KPIs before this period's change
+    const prior = RA_MONTH_LABELS.map((_, i) =>
+      shown.length
+        ? Number((shown.reduce((a, s) => a + Math.min(120, attainment(s.spark[i] / (1 + s.def.change / 100), s.target, s.def.direction)), 0) / shown.length).toFixed(1))
+        : 0
+    );
+    let labels = RA_MONTH_LABELS;
+    let overall = monthly;
+    let previous = prior;
+    if (this.granularity === 'Quarterly') {
+      const quarters: [number, number][] = [[0, 3], [3, 6], [6, 9], [9, 10]];
+      const avg = (values: number[], [a, b]: [number, number]) => Number((values.slice(a, b).reduce((x, y) => x + y, 0) / (b - a)).toFixed(1));
+      labels = ['Q1', 'Q2', 'Q3', 'Q4 (QTD)'];
+      overall = quarters.map((q) => avg(monthly, q));
+      previous = quarters.map((q) => avg(prior, q));
+    }
+    this.trendLabels = labels;
     this.trendSeries = [
-      { name: 'Overall Score', values: t.overall, color: RA_COLORS.purple, area: true },
-      { name: 'Target', values: t.target, color: RA_COLORS.grey, dashed: true },
-      { name: 'Prior Period', values: t.prior, color: RA_COLORS.blue }
+      { name: 'Overall Score', values: overall, color: RA_COLORS.purple, area: true },
+      { name: 'Target', values: overall.map(() => 100), color: RA_COLORS.grey, dashed: true },
+      { name: 'Prior Period', values: previous, color: RA_COLORS.blue }
     ];
-    // The axis starts at 80% unless a month scored lower
-    const known = [...t.overall, ...t.prior].filter((v) => v > 0);
-    this.trendMin = known.length ? Math.min(80, Math.floor(Math.min(...known) / 10) * 10) : 80;
+  }
+
+  /** Average attainment per module of the KPIs shown */
+  private buildTargets(shown: KpiState[]): void {
+    this.targetRows = KPI_MODULES.filter((m) => shown.some((s) => s.def.module === m)).map((m) => {
+      const list = shown.filter((s) => s.def.module === m);
+      const value = Number((list.reduce((a, s) => a + s.attainment, 0) / list.length).toFixed(1));
+      return {
+        label: m,
+        value,
+        display: `${value}%`,
+        color: value >= 100 ? RA_COLORS.green : value >= 97 ? RA_COLORS.orange : RA_COLORS.red,
+        target: 100,
+        targetDisplay: '100%'
+      };
+    });
+  }
+
+  private buildInsights(hasData: boolean): void {
+    if (!hasData) {
+      this.insights = [];
+      return;
+    }
+    const ex = this.viewExceptions;
+    const below = ex.filter((s) => s.status !== 'Over Budget');
+    const over = ex.filter((s) => s.status === 'Over Budget').sort((a, b) => b.value - b.target - (a.value - a.target))[0];
+    const atRisk = ex.filter((s) => s.status === 'At Risk').sort((a, b) => a.attainment - b.attainment)[0];
+    const dueWeek = ex.filter((s) => s.def.dueInDays <= 7);
+    const owners = new Set(dueWeek.map((s) => s.def.owner)).size;
+    const names = (list: KpiState[]) => {
+      const n = list.map((s) => s.def.name);
+      return n.length > 1 ? `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}` : n.join('');
+    };
+    const insights: Insight[] = [];
+    insights.push(
+      below.length
+        ? {
+            tone: 'red', icon: TriangleAlert, kpi: null,
+            title: `${below.length} KPI${below.length === 1 ? '' : 's'} below target`,
+            text: `${names(below)} ${below.length === 1 ? 'is' : 'are'} below target.`,
+            action: { label: 'View exceptions', key: 'exceptions' }
+          }
+        : {
+            tone: 'green', icon: ShieldCheck, kpi: null,
+            title: 'All KPIs on target',
+            text: 'Every KPI in this view meets its target for the selected filters.',
+            action: { label: 'View exceptions', key: 'exceptions' }
+          }
+    );
+    if (over) {
+      insights.push({
+        tone: 'red', icon: TriangleAlert, kpi: over,
+        title: `${over.def.name} is ${money(over.value - over.target)} over budget`,
+        text: `${over.def.name} is ${over.varianceText} over budget, driven by higher spend than planned this period.`,
+        action: { label: 'Create action plan', key: 'plan' }
+      });
+    }
+    if (atRisk) {
+      const gap = Number((100 - atRisk.attainment).toFixed(1));
+      insights.push({
+        tone: 'orange', icon: TriangleAlert, kpi: atRisk,
+        title: `${atRisk.def.name} requires attention`,
+        text: `${atRisk.def.name} is ${gap}% off target${atRisk.changeGood ? '' : ' and trending the wrong way'} over the last periods.`,
+        action: { label: 'Open KPI settings', key: 'settings' }
+      });
+    }
+    insights.push({
+      tone: 'blue', icon: Users, kpi: null,
+      title: `${owners} KPI owner${owners === 1 ? ' has' : 's have'} actions due this week`,
+      text: `There ${dueWeek.length === 1 ? 'is' : 'are'} ${dueWeek.length} open action${dueWeek.length === 1 ? '' : 's'} for KPI owners due within the next 7 days.`,
+      action: { label: 'View exceptions', key: 'due-week' }
+    });
+    this.insights = insights;
   }
 
   // ===== Header actions =====
 
-  /** GET /export: the view as an Excel workbook. */
   exportAll(): void {
-    this.api.export(this.filters()).subscribe({
-      next: () => this.notify(`Exported ${this.tiles.length} KPIs from ${this.activeView.dashboard}.`),
-      error: (err: Error) => this.notify(err.message)
-    });
+    const rows = this.tiles.map((t) => this.exportRow(t.state));
+    downloadCsv(`kpi-dashboard-${this.activeKey.replace(/[^a-z0-9]+/gi, '-')}.csv`, EXPORT_HEADER, rows);
+    this.notify(`Exported ${rows.length} KPIs from ${this.activeView.dashboard}.`);
   }
 
   private exportRow(s: KpiState): (string | number)[] {
-    return [s.def.name, s.def.module, s.valueText, s.targetText, s.varianceText, s.changeText, s.status, s.def.owner || 'Unassigned', s.due];
+    return [s.def.name, s.def.module, s.valueText, s.targetText, s.varianceText, s.changeText, s.status, s.def.owner, s.due];
   }
 
   shared(message: string): void {
@@ -315,71 +298,44 @@ export class KpiDashboardPage extends AnalyticsPage {
   // ===== Layout =====
 
   get layoutItems(): LayoutItem[] {
-    return this.activeView.items.map((l) => {
-      const def = this.states.get(l.id)?.def;
+    return (this.layouts[this.activeKey] ?? []).map((l) => {
+      const def = this.catalog.find((k) => k.id === l.id);
       return { id: l.id, name: def?.name ?? l.id, module: def?.module ?? '', visible: l.visible };
     });
   }
 
   saveLayout(items: LayoutItem[]): void {
+    this.layouts[this.activeKey] = items.map((i) => ({ id: i.id, visible: i.visible }));
     this.layoutOpen = false;
-    this.persistLayout(items.map((i) => ({ id: i.id, visible: i.visible })), `Layout saved for ${this.activeView.dashboard}.`);
-  }
-
-  private persistLayout(items: { id: string; visible: boolean }[], message: string): void {
-    this.api.saveLayout(this.activeKey, items).subscribe({
-      next: () => this.apply(message),
-      error: (err: Error) => this.notify(err.message)
-    });
+    this.apply();
+    this.notify(`Layout saved for ${this.activeView.dashboard}.`);
   }
 
   resetLayout(): void {
+    this.layouts[this.activeKey] = this.activeView.ids.map((id) => ({ id, visible: true }));
     this.layoutOpen = false;
-    this.api.resetView(this.activeKey).subscribe({
-      next: () => this.apply('Layout reset to the default tiles.'),
-      error: (err: Error) => this.notify(err.message)
-    });
+    this.apply();
+    this.notify('Layout reset to the default tiles.');
   }
 
   saveCustomView(name: string): void {
+    const key = `custom:${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${this.views.length}`;
     const ids = this.tiles.map((t) => t.state.def.id);
-    this.api.createView(name, ids).subscribe({
-      next: (view) => {
-        this.saveCustomOpen = false;
-        this.activeKey = view.key;
-        this.apply(`Custom view “${name}” saved with ${ids.length} KPIs.`);
-      },
-      error: (err: Error) => this.notify(err.message)
-    });
-  }
-
-  deleteCustomView(): void {
-    const view = this.activeView;
-    this.customMenuOpen = false;
-    if (!view.custom) return;
-    this.api.deleteView(view.key).subscribe({
-      next: () => {
-        this.activeKey = KD_DEFAULT_VIEW;
-        this.apply(`Custom view “${view.label}” deleted.`);
-      },
-      error: (err: Error) => this.notify(err.message)
-    });
+    this.views = [...this.views, { key, label: name, dashboard: `${name} (custom)`, ids, custom: true }];
+    this.layouts[key] = ids.map((id) => ({ id, visible: true }));
+    this.saveCustomOpen = false;
+    this.selectView(key);
+    this.notify(`Custom view “${name}” saved with ${ids.length} KPIs.`);
   }
 
   // ===== KPI create / edit =====
 
   get takenNames(): string[] {
-    return [...this.states.values()].map((s) => s.def.name);
+    return this.catalog.map((k) => k.name);
   }
 
   get formKpi(): KpiDef | null {
     return this.form === 'new' ? null : this.form;
-  }
-
-  /** The edited KPI's current value for the filter bar */
-  get formValue(): number | null {
-    const kpi = this.formKpi;
-    return kpi ? this.states.get(kpi.id)?.value ?? null : null;
   }
 
   get formModule(): KpiModule {
@@ -388,30 +344,23 @@ export class KpiDashboardPage extends AnalyticsPage {
 
   saveKpi(value: KpiFormValue): void {
     const editing = this.formKpi;
-    const body: SaveKpiBody = {
-      name: value.name,
-      module: value.module,
-      unit: value.unit,
-      direction: value.direction,
-      target: value.target as number,
-      owner: value.owner,
-      metric: value.metric || null,
-      value: value.metric ? null : value.value,
-      reviewDueDate: value.reviewDue || null
-    };
-    this.saving = true;
-    const request = editing ? this.api.updateKpi(editing.id, body) : this.api.createKpi({ ...body, viewKey: this.activeKey });
-    request.subscribe({
-      next: () => {
-        this.saving = false;
-        this.form = null;
-        this.apply(editing ? `${value.name} updated.` : `KPI “${value.name}” added to ${value.module} and to ${this.activeView.dashboard}.`);
-      },
-      error: (err: Error) => {
-        this.saving = false;
-        this.notify(err.message);
-      }
-    });
+    if (editing) {
+      Object.assign(editing, { name: value.name, target: value.target as number, direction: value.direction, owner: value.owner });
+      this.notify(`${value.name} updated.`);
+    } else {
+      const id = `custom-${this.catalog.length + 1}`;
+      this.catalog = [
+        ...this.catalog,
+        {
+          id, name: value.name, module: value.module, unit: value.unit, value: value.value as number, target: value.target as number,
+          direction: value.direction, owner: value.owner, change: 0, dueInDays: 14, info: 'Custom KPI', custom: true
+        }
+      ];
+      this.layouts[this.activeKey] = [...(this.layouts[this.activeKey] ?? []), { id, visible: true }];
+      this.notify(`DEMO MODE: KPI “${value.name}” added to ${value.module} and to ${this.activeView.dashboard}.`);
+    }
+    this.form = null;
+    this.apply();
   }
 
   // ===== Tiles =====
@@ -426,16 +375,12 @@ export class KpiDashboardPage extends AnalyticsPage {
         this.form = s.def;
         break;
       case 'Hide tile':
-        this.persistLayout(
-          this.activeView.items.map((l) => (l.id === s.def.id ? { ...l, visible: false } : l)),
-          `${s.def.name} hidden. Use Edit KPI Layout to show it again.`
-        );
+        this.layouts[this.activeKey] = (this.layouts[this.activeKey] ?? []).map((l) => (l.id === s.def.id ? { ...l, visible: false } : l));
+        this.apply();
+        this.notify(`${s.def.name} hidden. Use Edit KPI Layout to show it again.`);
         break;
-      default: {
-        const monthly = s.monthly.length > 0 && s.monthly.length === this.monthLabels.length;
-        const rows: (string | number)[][] = monthly ? this.monthLabels.map((l, i) => [l, s.monthly[i] ?? '']) : [['Current', s.value ?? '']];
-        downloadCsv(`kpi-${s.def.id.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.csv`, ['Month', s.def.name], rows);
-      }
+      default:
+        downloadCsv(`kpi-${s.def.id}.csv`, ['Month', s.def.name], RA_MONTH_LABELS.map((l, i) => [l.replace('\n', ' '), s.spark[i]]));
     }
   }
 
@@ -451,11 +396,10 @@ export class KpiDashboardPage extends AnalyticsPage {
         { label: 'Direction', value: s.def.direction === 'higher' ? 'Higher is better' : 'Lower is better' },
         { label: 'Status', value: s.status },
         { label: 'Change vs previous period', value: s.changeText },
-        { label: 'Owner', value: s.def.owner || 'Unassigned' },
+        { label: 'Owner', value: s.def.owner },
         { label: 'Next review due', value: s.due },
-        { label: 'Source', value: s.def.metric ? s.def.source : 'Manual value' },
-        { label: 'Scope', value: `${this.organization} · ${this.location} · ${this.category}` },
-        { label: 'Period', value: this.period }
+        { label: 'Scope', value: `${this.locationLabel} · ${this.businessUnit || BUSINESS_UNITS[0]}` },
+        { label: 'Period', value: this.periodLabel }
       ]
     };
   }
@@ -485,12 +429,12 @@ export class KpiDashboardPage extends AnalyticsPage {
   // ===== Insights & library =====
 
   insightAction(ins: Insight): void {
-    switch (ins.action) {
+    switch (ins.action.key) {
       case 'exceptions':
         this.showExceptions('KPI exceptions', this.viewExceptions);
         break;
       case 'due-week':
-        this.showExceptions('KPI actions due this week', this.viewExceptions.filter((s) => ins.kpiIds.includes(s.def.id)));
+        this.showExceptions('KPI actions due this week', this.viewExceptions.filter((s) => s.def.dueInDays <= 7));
         break;
       case 'settings':
         if (ins.kpi) this.form = ins.kpi.def;
@@ -516,19 +460,19 @@ export class KpiDashboardPage extends AnalyticsPage {
   }
 
   openLibrary(module: KpiModule): void {
-    const states = [...this.states.values()].filter((s) => s.def.module === module);
+    const defs = this.catalog.filter((k) => k.module === module);
     this.list = {
       title: `${module} KPIs`,
-      subtitle: `${states.length} KPI${states.length === 1 ? '' : 's'} in the library`,
+      subtitle: `${defs.length} KPI${defs.length === 1 ? '' : 's'} in the library`,
       header: ['KPI', 'Current', 'Target', 'Status', 'Owner', 'On this view'],
-      rows: states.map((s) => [
-        s.def.name, s.valueText, s.targetText, s.status, s.def.owner || 'Unassigned', this.tiles.some((t) => t.state.def.id === s.def.id) ? 'Yes' : 'No'
-      ]),
+      rows: defs.map((d) => {
+        const s = this.states.get(d.id) as KpiState;
+        return [d.name, s.valueText, s.targetText, s.status, d.owner, this.tiles.some((t) => t.state.def.id === d.id) ? 'Yes' : 'No'];
+      }),
       fileName: `kpi-library-${module.toLowerCase()}.csv`
     };
   }
 
-  // DEMO MODE: action plans are not stored yet (there is no action-plan API)
   planSaved(plan: ActionPlan): void {
     this.plan = null;
     this.notify(`DEMO MODE: action plan “${plan.title}” created for ${plan.owner}, due ${plan.due}.`);

@@ -1,84 +1,54 @@
-import { Component, ElementRef, EventEmitter, HostListener, Input, Output, inject } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, inject } from '@angular/core';
 import { ArrowDown, ArrowUp, ArrowUpDown, Ellipsis, LucideAngularModule } from 'lucide-angular';
-import { InspectionFinding, SEVERITY_TONE } from '../inspection-analytics.model';
+import { InspectionFinding, SEVERITY_RANK, SEVERITY_TONE } from '../inspection-analytics.data';
 
 type SortKey = 'id' | 'asset' | 'site' | 'findingType' | 'severity' | 'due' | 'owner' | 'status';
 
-/** Sort request for GET /findings (sortBy is one of /options findingSortFields). */
-export interface FindingsSort {
-  sortBy: string;
-  sortDirection: 'asc' | 'desc';
-}
-
-/** Server-side sort field per column; Location has none, so it is not sortable. */
-const SORT_FIELDS: Partial<Record<SortKey, string>> = {
-  id: 'findingId',
-  asset: 'assetName',
-  findingType: 'category',
-  severity: 'severity',
-  due: 'dueDate',
-  owner: 'owner',
-  status: 'status'
-};
-
-/** Open Inspection Findings: sorted on the server (worst first by default), with View and a row menu. */
+/** Open Inspection Findings: sortable, worst first, with View and a row menu. */
 @Component({
   selector: 'app-ra-inspection-findings-table',
   imports: [LucideAngularModule],
   templateUrl: './findings-table.html',
   styleUrls: ['../../shared/analytics-page.css', './findings-table.css']
 })
-export class InspectionFindingsTable {
+export class InspectionFindingsTable implements OnChanges {
   private readonly host = inject(ElementRef<HTMLElement>);
   readonly icons = { ArrowDown, ArrowUp, ArrowUpDown, Ellipsis };
-  readonly columns: { key: SortKey; label: string; sortable: boolean }[] = [
-    { key: 'id', label: 'Finding ID', sortable: true },
-    { key: 'asset', label: 'Asset', sortable: true },
-    { key: 'site', label: 'Location', sortable: false },
-    { key: 'findingType', label: 'Category', sortable: true },
-    { key: 'severity', label: 'Severity', sortable: true },
-    { key: 'due', label: 'Due Date', sortable: true },
-    { key: 'owner', label: 'Owner', sortable: true },
-    { key: 'status', label: 'Status', sortable: true }
+  readonly columns: { key: SortKey; label: string }[] = [
+    { key: 'id', label: 'Finding ID' },
+    { key: 'asset', label: 'Asset' },
+    { key: 'site', label: 'Location' },
+    { key: 'findingType', label: 'Category' },
+    { key: 'severity', label: 'Severity' },
+    { key: 'due', label: 'Due Date' },
+    { key: 'owner', label: 'Owner' },
+    { key: 'status', label: 'Status' }
   ];
 
-  /** Rows already sorted by the API */
   @Input({ required: true }) rows: InspectionFinding[] = [];
-  /** Open findings matching the filters (rows holds the first page) */
-  @Input() total = 0;
   @Input() limit = 8;
   @Output() view = new EventEmitter<InspectionFinding>();
   @Output() plan = new EventEmitter<InspectionFinding>();
   @Output() progress = new EventEmitter<InspectionFinding>();
   @Output() viewAll = new EventEmitter<void>();
-  @Output() sortChange = new EventEmitter<FindingsSort>();
 
   sortKey: SortKey = 'severity';
   sortDir: 1 | -1 = -1;
+  sorted: InspectionFinding[] = [];
   menuId = '';
 
   get shown(): InspectionFinding[] {
-    return this.rows.slice(0, this.limit);
+    return this.sorted.slice(0, this.limit);
   }
 
-  get count(): number {
-    return Math.max(this.total, this.rows.length);
+  ngOnChanges(): void {
+    this.applySort();
   }
 
   sortBy(key: SortKey): void {
-    const field = SORT_FIELDS[key];
-    if (!field) return;
     this.sortDir = this.sortKey === key ? (this.sortDir === 1 ? -1 : 1) : key === 'severity' ? -1 : 1;
     this.sortKey = key;
-    // The API ranks Critical lowest, so "most severe first" is ascending there
-    const ascending = key === 'severity' ? this.sortDir === -1 : this.sortDir === 1;
-    this.sortChange.emit({ sortBy: field, sortDirection: ascending ? 'asc' : 'desc' });
-  }
-
-  /** Back to the default order (after the filters change). */
-  resetSort(): void {
-    this.sortKey = 'severity';
-    this.sortDir = -1;
+    this.applySort();
   }
 
   sortIcon(key: SortKey) {
@@ -90,7 +60,7 @@ export class InspectionFindingsTable {
   }
 
   tone(row: InspectionFinding): string {
-    return SEVERITY_TONE[row.severity] ?? 'grey';
+    return SEVERITY_TONE[row.severity];
   }
 
   toggleMenu(id: string): void {
@@ -107,5 +77,26 @@ export class InspectionFindingsTable {
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
     if (this.menuId && !this.host.nativeElement.contains(event.target as Node)) this.menuId = '';
+  }
+
+  private applySort(): void {
+    const key = this.sortKey;
+    const value = (r: InspectionFinding): string | number => {
+      switch (key) {
+        case 'severity':
+          return SEVERITY_RANK[r.severity] * 1000 - r.dueInDays;
+        case 'due':
+          return r.dueInDays;
+        case 'asset':
+          return r.assetName;
+        default:
+          return r[key];
+      }
+    };
+    this.sorted = [...this.rows].sort((a, b) => {
+      const va = value(a);
+      const vb = value(b);
+      return (typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb))) * this.sortDir;
+    });
   }
 }

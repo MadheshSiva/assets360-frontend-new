@@ -1,9 +1,9 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <lucide-icon [img]="icons.House" [size]="15" />
   <a routerLink="/dashboard">Asset360</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <a [routerLink]="basePath">Reports &amp; Analytics</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <strong>Predictive Analytics</strong>
 </nav>
 
@@ -32,42 +32,48 @@
   <label class="filter filter--period">
     <span>Period</span>
     <select [(ngModel)]="period" (ngModelChange)="recompute()">
+      <option value="">Select Period</option>
       @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Organization</span>
     <select [(ngModel)]="organization" (ngModelChange)="recompute()">
+      <option value="">Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Location</span>
     <select [(ngModel)]="location" (ngModelChange)="recompute()">
+      <option value="">Select Location</option>
       @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Asset Category</span>
     <select [(ngModel)]="category" (ngModelChange)="recompute()">
+      <option value="">Select Asset Category</option>
       @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Asset Type</span>
     <select [(ngModel)]="assetType" (ngModelChange)="recompute()">
+      <option value="">Select Asset Type</option>
       @for (t of assetTypes; track t) { <option [value]="t">{{ t }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Risk Level</span>
     <select [(ngModel)]="riskLevel" (ngModelChange)="recompute()">
+      <option value="">Select Risk Level</option>
       @for (r of riskOptions; track r) { <option [value]="r">{{ r }}</option> }
     </select>
   </label>
 </div>
 
-@if (empty) {
+@if (!view.monitored.length) {
   <div class="ra-notice">
     No monitored assets match the selected filters.
     <button type="button" class="btn btn--link" (click)="resetFilters()">Reset filters</button>
@@ -87,20 +93,20 @@
       <section class="widget span-2" id="pa-risk">
         <header class="widget__head">
           <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
-          <h2>Failure Risk Trend <span class="widget__info" title="Average AI risk score (0–100, 100 minus the model health score) of the assets in each risk band at each month end; {{ view.highRiskScore }}+ is above the high-risk threshold."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+          <h2>Failure Risk Trend <span class="widget__info" title="Average AI risk score (0–100) of the assets in each risk band; 80+ is above the high-risk threshold."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
           <ra-menu label="Failure Risk Trend actions" (select)="widgetAction($event, 'risk', 'Failure Risk Trend', riskTpl)" />
         </header>
         <div class="widget__body"><ng-container [ngTemplateOutlet]="riskTpl" /></div>
       </section>
       <ng-template #riskTpl>
-        <ra-cartesian-chart [labels]="view.labels" [series]="riskSeries" [max]="100" [height]="230" yTitle="Risk Score (0-100)" ariaLabel="Failure risk trend" />
+        <ra-cartesian-chart [labels]="view.labels" [series]="view.riskTrend" [max]="100" [height]="230" yTitle="Risk Score (0-100)" ariaLabel="Failure risk trend" />
       </ng-template>
 
       <!-- Remaining Useful Life Forecast -->
       <section class="widget span-2" id="pa-rul">
         <header class="widget__head">
           <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
-          <h2>Remaining Useful Life Forecast <span class="widget__info" title="Average hours to the predicted failure date at each month end, with a band sized by model confidence for high-risk assets."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+          <h2>Remaining Useful Life Forecast <span class="widget__info" title="Average predicted remaining useful life in hours, with the model's confidence band for critical assets."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
           <ra-menu label="Remaining Useful Life Forecast actions" (select)="widgetAction($event, 'rul', 'Remaining Useful Life Forecast', rulTpl)" />
         </header>
         <div class="widget__body"><ng-container [ngTemplateOutlet]="rulTpl" /></div>
@@ -126,7 +132,7 @@
       <section class="widget span-2" id="pa-anomalies">
         <header class="widget__head">
           <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
-          <h2>Anomaly Detection Events <span class="widget__info" title="Sensor anomalies recorded on predictive alerts per month, by signal."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+          <h2>Anomaly Detection Events <span class="widget__info" title="Sensor anomalies detected per month, by signal."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
           <ra-menu label="Anomaly Detection Events actions" (select)="widgetAction($event, 'anomalies', 'Anomaly Detection Events', anomaliesTpl)" />
         </header>
         <div class="widget__body"><ng-container [ngTemplateOutlet]="anomaliesTpl" /></div>
@@ -139,18 +145,18 @@
       <section class="widget span-2" id="pa-accuracy">
         <header class="widget__head">
           <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
-          <h2>Prediction Accuracy <span class="widget__info" title="Share of predictions whose outcome matched: failures recorded near the predicted date, failures prevented by maintenance and healthy predictions with no failure, against a {{ accuracyTarget }}% target."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+          <h2>Prediction Accuracy <span class="widget__info" title="Share of predictions confirmed by inspections and work orders, against a {{ accuracyTarget }}% target."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
           <ra-menu label="Prediction Accuracy actions" (select)="widgetAction($event, 'accuracy', 'Prediction Accuracy', accuracyTpl)" />
         </header>
         <div class="widget__body"><ng-container [ngTemplateOutlet]="accuracyTpl" /></div>
       </section>
       <ng-template #accuracyTpl>
         <div class="pa-accuracy">
-          <ra-gauge-chart [value]="view.accuracy ?? 0" [target]="accuracyTarget" [display]="dash(view.accuracy, '%')" [caption]="'Model Accuracy · Target ' + accuracyTarget + '%'" [color]="colors.purple" [size]="200" />
+          <ra-gauge-chart [value]="view.accuracy" [target]="accuracyTarget" [display]="view.accuracy + '%'" [caption]="'Model Accuracy · Target ' + accuracyTarget + '%'" [color]="colors.purple" [size]="200" />
           <ul class="pa-metrics">
-            <li><i [style.background]="colors.green"></i><span>Precision</span><strong>{{ dash(view.precision, '%') }}</strong></li>
-            <li><i [style.background]="colors.blue"></i><span>Recall</span><strong>{{ dash(view.recall, '%') }}</strong></li>
-            <li><i [style.background]="colors.orange"></i><span>False Positive Rate</span><strong>{{ dash(view.falsePositiveRate, '%') }}</strong></li>
+            <li><i [style.background]="colors.green"></i><span>Precision</span><strong>{{ view.precision }}%</strong></li>
+            <li><i [style.background]="colors.blue"></i><span>Recall</span><strong>{{ view.recall }}%</strong></li>
+            <li><i [style.background]="colors.orange"></i><span>False Positive Rate</span><strong>{{ view.falsePositiveRate }}%</strong></li>
           </ul>
         </div>
       </ng-template>
@@ -159,7 +165,7 @@
       <section class="widget span-2" id="pa-cost">
         <header class="widget__head">
           <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
-          <h2>Predicted Maintenance Cost <span class="widget__info" title="Preventive and corrective spend (AED) from cost records, with the downtime cost avoided: failures prevented by maintenance times the average corrective cost."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+          <h2>Predicted Maintenance Cost <span class="widget__info" title="Preventive and corrective spend (AED) with the downtime cost avoided by acting on predictions."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
           <ra-menu label="Predicted Maintenance Cost actions" (select)="widgetAction($event, 'cost', 'Predicted Maintenance Cost', costTpl)" />
         </header>
         <div class="widget__body"><ng-container [ngTemplateOutlet]="costTpl" /></div>
@@ -199,10 +205,10 @@
                 <tr>
                   <td>{{ a.id }}</td>
                   <td><button type="button" class="link" (click)="showAsset(a)">{{ a.name }}</button></td>
-                  <td>{{ a.location }}</td>
-                  <td><span class="score" [attr.data-tone]="scoreTone(a.riskScore)">{{ dash(a.riskScore) }}</span></td>
+                  <td>{{ a.site.name }}</td>
+                  <td><span class="score" [attr.data-tone]="scoreTone(a.riskScore)">{{ a.riskScore }}</span></td>
                   <td><span class="pa-window" [class.pa-window--soon]="a.failureWindowDays !== null">{{ windowText(a) }}</span></td>
-                  <td class="num">{{ dash(a.rulHours, ' hrs') }}</td>
+                  <td class="num">{{ a.rulHours.toLocaleString('en-US') }} hrs</td>
                   <td>{{ recommendation(a) }}</td>
                   <td>{{ a.owner }}</td>
                   <td><span class="ra-status" [attr.data-tone]="riskTone(a.risk)"><i></i>{{ a.risk }}</span></td>
@@ -230,7 +236,7 @@
       <section class="widget span-6" id="pa-models">
         <header class="widget__head">
           <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
-          <h2>Model Performance by Asset Type <span class="widget__info" title="Accuracy, precision and recall of the predictions for each asset type in the period; Online when scored in the last 30 days."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
+          <h2>Model Performance by Asset Type <span class="widget__info" title="Accuracy, precision and recall of the model trained for each asset type."><lucide-icon [img]="icons.Info" [size]="14" /></span></h2>
           <ra-menu label="Model Performance actions" (select)="widgetAction($event, 'models', 'Model Performance by Asset Type', modelsTpl)" />
         </header>
         <div class="widget__body"><ng-container [ngTemplateOutlet]="modelsTpl" /></div>
@@ -256,9 +262,9 @@
                   <td>{{ i + 1 }}</td>
                   <td>{{ m.type }}</td>
                   <td class="num">{{ m.monitored }}</td>
-                  <td class="num">{{ dash(m.accuracy, '%') }}</td>
-                  <td class="num">{{ dash(m.precision, '%') }}</td>
-                  <td class="num">{{ dash(m.recall, '%') }}</td>
+                  <td class="num">{{ m.accuracy }}%</td>
+                  <td class="num">{{ m.precision }}%</td>
+                  <td class="num">{{ m.recall }}%</td>
                   <td><span class="ra-status" [attr.data-tone]="m.status === 'Online' ? 'green' : 'orange'"><i></i>{{ m.status }}</span></td>
                   <td><button type="button" class="btn btn--sm" (click)="showModel(m)">View</button></td>
                 </tr>
@@ -275,7 +281,7 @@
   <aside class="insights" aria-label="Predictive insights">
     <header class="widget__head ra-insights-head">
       <lucide-icon class="widget__grip" [img]="icons.GripVertical" [size]="16" />
-      <h2>Predictive Insights <span class="widget__info" title="Worked out from the predictive alerts for the current filters."><lucide-icon [img]="icons.Sparkles" [size]="14" /></span></h2>
+      <h2>Predictive Insights <span class="widget__info" title="AI-generated from the current filters."><lucide-icon [img]="icons.Sparkles" [size]="14" /></span></h2>
     </header>
     @for (i of insights; track i.id) {
       <ra-insight-card [insight]="i" (action)="insightAction($event)" />
