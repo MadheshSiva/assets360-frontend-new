@@ -41,7 +41,7 @@ export interface CriticalityRecord {
   rootCauseRequired: boolean;
   approvalForDisposal: boolean;
   showInReports: boolean;
-  // DEMO MODE: asset counts owned by the Assets module
+  // asset counts owned by the Assets module
   assets: { total: number; underMaintenance: number; retired: number };
   documents: number;
   createdOn: string;

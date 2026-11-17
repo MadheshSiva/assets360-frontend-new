@@ -33,7 +33,6 @@ import {
   Workflow,
   X,
 } from 'lucide-angular';
-import TEMPLATE_DATA from './job-templates.json';
 import { JobTemplate, ResourceType, Stage, VersionEntry } from './job-template.model';
 
 type Tab = 'general' | 'routing' | 'tasks' | 'resources' | 'quality' | 'sla' | 'access';
@@ -48,10 +47,27 @@ interface ReadinessCheck {
   tab: Tab;
 }
 
-const CURRENT_USER = 'Rex Kumar';
+/** Signed-in user's display name; filled from the auth/user API once wired. */
+const CURRENT_USER = '';
 
-/** DEMO MODE: templates come from job-templates.json and are kept in memory until the WIP API is wired up. */
-const TEMPLATES: JobTemplate[] = TEMPLATE_DATA as JobTemplate[];
+/** Templates are kept in memory; empty until the WIP API is wired up. */
+const TEMPLATES: JobTemplate[] = [];
+
+/** Empty template used while there are no templates to edit. */
+function blankTemplate(): JobTemplate {
+  return {
+    code: '', name: '', version: '0.1', status: 'Draft', lastUpdated: '', lastUpdatedBy: '',
+    general: {
+      jobCategory: '', assetType: '', organization: '', defaultSite: '', outputItem: '', baseQuantity: 1, unit: 'Unit', estimatedHours: 0,
+      defaultPriority: 'Medium', owner: '', description: '', requireApproval: false, allowParallel: false, batchTraceability: false,
+    },
+    stages: [], tasks: [], checklists: [], resources: [], materials: [],
+    quality: { checks: [], permits: [], kpis: [] },
+    sla: { targetHours: 0, warningPercent: 80, escalateTo: '', alerts: [] },
+    access: { approvalPolicy: null, editors: [], viewers: [], versions: [] },
+    execution: { reworkAllowed: false, completionGate: '', workflow: '' },
+  };
+}
 /** Working copy of each template (unsaved edits survive leaving the page) and its last saved state. */
 const WORKING = new Map<string, JobTemplate>();
 const SAVED = new Map<string, string>();
@@ -72,7 +88,7 @@ function nextVersion(v: string): string {
   imports: [CommonModule, FormsModule, RouterModule, LucideAngularModule],
   templateUrl: './job-templates.html',
   // Split to keep each stylesheet under the anyComponentStyle budget
-  styleUrls: ['./job-templates.css', './job-templates-tabs.css'],
+  styleUrls: ['./job-templates.css', './job-templates-tabs.css', '../shared/wip-purple-theme.css'],
 })
 export class JobTemplates implements OnDestroy {
   readonly icons = {
@@ -92,18 +108,19 @@ export class JobTemplates implements OnDestroy {
 
   // ===== Option lists =====
   readonly jobCategories = ['Manufacturing', 'Assembly', 'Maintenance', 'Repair', 'Inspection', 'Installation'];
-  readonly assetTypes = ['Industrial Pump', 'Centrifugal Pump', 'Valve', 'Electric Motor', 'Gearbox', 'Compressor', 'Heat Exchanger'];
-  readonly organizations = ['Purple IQ Demo'];
-  readonly sites = ['Dubai Factory', 'Abu Dhabi Plant', 'Jebel Ali Warehouse'];
+  // Asset types, organizations and sites come from master data once the API is wired
+  readonly assetTypes: string[] = [];
+  readonly organizations: string[] = [];
+  readonly sites: string[] = [];
   readonly units = ['Unit', 'Set', 'Kg', 'Litre', 'Metre'];
   readonly priorities = ['Low', 'Medium', 'High', 'Critical'];
   readonly roles = ['Production Manager', 'Maintenance Manager', 'Quality Manager', 'Operations Manager', 'Process Engineer', 'Quality Inspector', 'Operators'];
   readonly resourceTypes: ResourceType[] = ['Team', 'Role', 'Equipment'];
   readonly channels = ['In-app', 'Email', 'SMS', 'Email + SMS'];
-  readonly workflows = ['Job Release Approval', 'Maintenance Close-out', 'Two-step QC Sign-off'];
+  readonly workflows: string[] = [];
   readonly templateList = TEMPLATES.map((t) => ({ code: t.code, name: t.name }));
 
-  t: JobTemplate = this.working(TEMPLATES[0].code);
+  t: JobTemplate = TEMPLATES.length ? this.working(TEMPLATES[0].code) : blankTemplate();
   tab: Tab = 'general';
   bannerOpen = true;
   switcherOpen = false;
@@ -125,7 +142,7 @@ export class JobTemplates implements OnDestroy {
       .subscribe((params) => {
         const code = params.get('code');
         const known = TEMPLATES.some((x) => x.code === code);
-        this.t = this.working(known && code ? code : TEMPLATES[0].code);
+        this.t = known && code ? this.working(code) : TEMPLATES.length ? this.working(TEMPLATES[0].code) : blankTemplate();
         this.tab = 'general';
         this.showReadinessErrors = false;
         this.formError = '';
@@ -149,6 +166,7 @@ export class JobTemplates implements OnDestroy {
   }
 
   get dirty(): boolean {
+    if (!SAVED.has(this.t.code)) return false;
     return JSON.stringify(this.t) !== SAVED.get(this.t.code);
   }
 

@@ -1,17 +1,23 @@
-import { Component, HostListener, OnDestroy, inject } from '@angular/core';
+import { Component, DoCheck, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
+import { Observable, Subscription, forkJoin, map, of } from 'rxjs';
+import { AuthService } from 'shared-ui';
 import {
   LucideAngularModule,
   Activity, Antenna, AudioWaveform, Battery, Bell, Bluetooth, Building2, Calendar, ChartColumn, Check, CircleAlert, CircleCheck, CircleX,
   Clock, Copy, Cpu, Droplets, Eye, Gauge, History, IdCard, Info, Key, LayoutDashboard, MapPin, Move3d, Pencil, Plus, RadioTower, RotateCcw, Save,
   Send, ShieldCheck, SignalHigh, Thermometer, Trash2, TriangleAlert, X, Zap,
 } from 'lucide-angular';
+import { apiErrorMessage } from '../shared/tracking-api';
+import { AlertRule, ConfigVersion, Device, DeviceConfig, DeviceOption, HistoryEvent, ParamIcon, TelemetryParam, VersionStatus, blankConfig, protocolKind } from './config-data';
 import {
-  AUTO_RATE, AlertRule, BATTERY_INTERVALS, CURRENT_USER, Cond, ConfigVersion, DATA_RATES, DEVICES, Device, DeviceConfig, NETWORK_MODES, NOTIFY,
-  ParamIcon, REGIONS, SAMPLING, Severity, TX_POWERS, TelemetryParam, VersionStatus, series,
-} from './config-data';
+  ConfigOptionsDto, ConfigOverviewDto, ConfigValidationDto, DeviceConfigurationApiService, SaveConfigRequest,
+  activityFromDto, configFromDto, configToRequest, ruleFromDto, ruleToRequest, versionFromDto,
+} from './device-configuration-api.service';
+import { IoTDeviceLookupService } from './iot-device-lookup.service';
 
 type Tab = 'overview' | 'connectivity' | 'telemetry' | 'alerts' | 'firmware' | 'history';
 type CheckState = 'ok' | 'warn' | 'fail';
@@ -25,27 +31,16 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const ICONS: Record<ParamIcon, typeof Thermometer> = { temp: Thermometer, hum: Droplets, battery: Battery, rssi: SignalHigh, snr: AudioWaveform, vib: Activity, accel: Move3d, speed: Gauge, volt: Zap, ign: Key };
 const COLORS = ['#6d28d9', '#0f9f94', '#2563eb'];
 const HEX16 = /^[0-9A-Fa-f]{16}$/;
+const CHECK_TABS: Record<string, Tab> = { connectivity: 'connectivity', telemetry: 'telemetry', alertRules: 'alerts', firmware: 'firmware' };
 const CW = 560;
 const PH = 62;
 const PGAP = 16;
 const PAD = { l: 44, r: 10, t: 8, b: 20 };
-/** Preview starts 24 h before "now" (27 Oct 2026 12:00). */
-const PREVIEW_START = new Date(2026, 9, 26, 12, 0).getTime();
-const ASSETS = ['Cold Room CR-03', 'Cold Room CR-04', 'Freezer FZ-02', 'Pump PMP-118', 'Forklift FL-008', 'Generator GEN-042', 'Chiller CH-07'];
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
-function cmpVersion(a: string, b: string): number {
-  const pa = a.replace(/[^\d.]/g, '').split('.').map(Number);
-  const pb = b.replace(/[^\d.]/g, '').split('.').map(Number);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (d) return d;
-  }
-  return 0;
-}
-
-function nowIso(): string {
+/** Local yyyy-MM-ddTHH:mm, the datetime-local input format. */
+function nowLocal(): string {
   const d = new Date();
   const z = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`;
@@ -66,37 +61,42 @@ const round = (v: number, dp = 1) => Math.round(v * 10 ** dp) / 10 ** dp;
   standalone: true,
   imports: [CommonModule, FormsModule, LucideAngularModule],
   templateUrl: './device-configuration.html',
-  styleUrls: ['./device-configuration.css', './device-configuration-sections.css'],
+  styleUrls: ['./device-configuration.css', './device-configuration-sections.css', '../shared/iot-purple-theme.css'],
 })
-export class DeviceConfiguration implements OnDestroy {
+export class DeviceConfiguration implements OnInit, DoCheck, OnDestroy {
   readonly icons = { Antenna, Bell, Bluetooth, Building2, Calendar, ChartColumn, Check, CircleAlert, CircleCheck, CircleX, Clock, Copy, Cpu, Eye, History, IdCard, Info, LayoutDashboard, Pencil, Plus, RadioTower, RotateCcw, Save, Send, ShieldCheck, Thermometer, Trash2, TriangleAlert, X, Battery };
-  readonly devices = DEVICES;
-  readonly regions = REGIONS;
-  readonly dataRates = DATA_RATES;
-  readonly autoRate = AUTO_RATE;
-  readonly samplings = SAMPLING;
-  readonly batteryIntervals = BATTERY_INTERVALS;
-  readonly txPowers = TX_POWERS;
-  readonly networkModes = NETWORK_MODES;
-  readonly notifyOptions = NOTIFY;
-  readonly aggs = ['Average', 'Min', 'Max', 'Last'];
-  readonly conds: Cond[] = ['>', '≥', '<', '≤'];
-  readonly severities: Severity[] = ['Critical', 'Warning', 'Info'];
-  readonly assets = ASSETS;
   readonly cw = CW;
   readonly pad = PAD;
   readonly tabs: { id: Tab; label: string }[] = [
     { id: 'overview', label: 'Overview' }, { id: 'connectivity', label: 'Connectivity' }, { id: 'telemetry', label: 'Telemetry' },
     { id: 'alerts', label: 'Alerts' }, { id: 'firmware', label: 'Firmware' }, { id: 'history', label: 'History' },
   ];
+  /** Preview covers the 24 h before the page was opened. */
+  private readonly previewStart = Date.now() - 24 * 3600000;
   readonly hourTicks = [0, 8, 16, 24, 32, 40, 48].map((i) => ({ i, x: this.px(i), label: this.timeLabel(i) }));
+  /** Last-24 h telemetry per parameter key (49 half-hourly points). No telemetry feed is wired to this page yet. */
+  private telemetry: Record<string, number[]> = {};
+
+  /** Dropdown option lists from GET /api/device-configurations/options. */
+  options: ConfigOptionsDto | null = null;
+  devices: DeviceOption[] = [];
+  loadingDevices = true;
+  loadingDevice = false;
+  busy = false;
+  loadError = '';
 
   tab: Tab = 'connectivity';
-  device: Device = DEVICES[0];
-  deviceId = DEVICES[0].id;
-  assetSel = DEVICES[0].asset;
-  form: DeviceConfig = clone(DEVICES[0].versions[0].config);
-  private baseline = '';
+  device: Device | null = null;
+  private overview: ConfigOverviewDto | null = null;
+  versions: ConfigVersion[] = [];
+  events: HistoryEvent[] = [];
+  deviceId = '';
+  form: DeviceConfig = blankConfig();
+  private baseline = JSON.stringify(this.form);
+  /** Server checks and the form snapshot they were computed for. */
+  private validation: { snap: string; checks: Check[] } = { snap: '', checks: [] };
+  private validateTimer?: ReturnType<typeof setTimeout>;
+  private validateSub?: Subscription;
   deploy: 'immediate' | 'scheduled' = 'immediate';
   scheduleAt = '';
   rollout: 'device' | 'group' = 'device';
@@ -108,78 +108,174 @@ export class DeviceConfiguration implements OnDestroy {
   alertForm: (AlertRule & { isNew: boolean }) | null = null;
   alertError = '';
   diffOf: ConfigVersion | null = null;
-  fwDialog: { when: 'checkin' | 'scheduled'; at: string } | null = null;
+  diffConfigs: { before: DeviceConfig | null; after: DeviceConfig } | null = null;
+  diffLoading = false;
+  fwDialog: { at: string } | null = null;
   fwError = '';
   private toastTimer?: ReturnType<typeof setTimeout>;
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly api = inject(DeviceConfigurationApiService);
+  private readonly lookup = inject(IoTDeviceLookupService);
+  private readonly auth = inject(AuthService);
 
-  constructor() {
-    const q = this.route.snapshot.queryParamMap.get('device');
-    this.load(DEVICES.find((d) => d.id === q) ?? DEVICES[0]);
+  ngOnInit(): void {
+    this.api.options().subscribe({ next: (o) => (this.options = o), error: (e) => this.showToast(apiErrorMessage(e, 'Could not load configuration options.')) });
+    this.lookup.list().subscribe({
+      next: (rows) => {
+        this.devices = rows
+          .map((d) => ({ id: d.deviceId, label: `${d.deviceType} ${d.deviceId}`, type: d.deviceType, protocol: d.connectivity }))
+          .sort((a, b) => a.id.localeCompare(b.id));
+        this.loadingDevices = false;
+        const q = this.route.snapshot.queryParamMap.get('device');
+        const first = this.devices.find((x) => x.id === q) ?? this.devices[0];
+        if (first) this.loadDevice(first.id);
+      },
+      error: (e) => {
+        this.loadingDevices = false;
+        this.loadError = apiErrorMessage(e, 'Could not load devices.');
+      },
+    });
   }
 
   ngOnDestroy(): void {
     clearTimeout(this.toastTimer);
+    clearTimeout(this.validateTimer);
+    this.validateSub?.unsubscribe();
   }
+
+  /** Re-checks the configuration on the server shortly after the form changes. */
+  ngDoCheck(): void {
+    if (!this.device || this.loadingDevice || this.validateTimer) return;
+    const snap = JSON.stringify(this.form);
+    if (snap === this.validation.snap) return;
+    this.validateTimer = setTimeout(() => {
+      this.validateTimer = undefined;
+      this.runValidation(false);
+    }, 700);
+  }
+
+  // ===== Option lists =====
+
+  get regions(): string[] { return this.options?.regions ?? []; }
+  get joinModes(): string[] { return this.options?.joinModes ?? []; }
+  get intervalUnits(): string[] { return this.options?.intervalUnits ?? []; }
+  get autoRate(): string { return this.options?.dataRates[0] ?? ''; }
+  get dataRates(): string[] { return (this.options?.dataRates ?? []).slice(1); }
+  get samplings(): number[] { return this.options?.samplingIntervalsSeconds ?? []; }
+  get batteryIntervals(): string[] { return this.options?.batteryReportIntervals ?? []; }
+  get aggs(): string[] { return this.options?.aggregations ?? []; }
+  get conds(): string[] { return this.options?.alertConditions ?? []; }
+  get severities(): string[] { return this.options?.alertSeverities ?? []; }
+  get notifyOptions(): string[] { return this.options?.notifyChannels ?? []; }
 
   // ===== Loading & versions =====
 
-  private load(d: Device): void {
-    this.device = d;
-    this.deviceId = d.id;
-    this.assetSel = d.asset;
-    const src = this.draft ?? this.currentVersion;
-    this.form = clone(src.config);
-    this.baseline = JSON.stringify(this.form);
-    this.group = d.groups[0]?.name ?? '';
-    this.rollout = 'device';
-    this.deploy = 'immediate';
-    this.scheduleAt = '';
-    this.applyError = '';
-    this.hover = null;
+  /** Selected device; only used where the template guarantees one is loaded. */
+  private get dev(): Device {
+    if (!this.device) throw new Error('No device selected');
+    return this.device;
+  }
+
+  private get currentUser(): string {
+    return this.auth.getUser()?.userName || this.auth.getUserEmail() || '—';
+  }
+
+  /** Loads the device's overview, versions and activity. With keepForm the unsaved form stays as it is. */
+  private loadDevice(id: string, keepForm = false, done?: () => void): void {
+    this.deviceId = id;
+    this.loadingDevice = !keepForm;
+    if (!keepForm) this.loadError = '';
+    forkJoin({ ov: this.api.overview(id), versions: this.api.versions(id), activity: this.api.activity(id) }).subscribe({
+      next: ({ ov, versions, activity }) => {
+        this.overview = ov;
+        this.device = this.toDevice(ov);
+        this.versions = versions.map(versionFromDto).sort((a, b) => a.v - b.v);
+        this.events = activity.map(activityFromDto);
+        if (!keepForm) {
+          this.form = configFromDto(ov.editable);
+          const loaded = JSON.stringify(this.form);
+          // prefill a protocol the saved settings lack (see toDevice), so the next save sends it
+          if (!this.form.protocol) this.form.protocol = this.device.protocol;
+          this.baseline = JSON.stringify(this.form);
+          const ed = ov.editable;
+          this.deploy = ed.deploymentMode === 'Scheduled' && ov.draft ? 'scheduled' : 'immediate';
+          this.scheduleAt = '';
+          this.rollout = ed.rolloutTarget === 'Device group' && ov.draft ? 'group' : 'device';
+          this.group = ed.deviceGroup ?? '';
+          this.applyError = '';
+          this.hover = null;
+          // a differing snapshot makes ngDoCheck re-validate with the prefilled protocol
+          this.validation = { snap: loaded, checks: this.toChecks(ov.validation) };
+        }
+        this.loadingDevice = false;
+        done?.();
+      },
+      error: (e) => {
+        this.loadingDevice = false;
+        if (keepForm) this.showToast(apiErrorMessage(e, 'Could not refresh the configuration.'));
+        else {
+          this.device = null;
+          this.loadError = apiErrorMessage(e, `Could not load the configuration of ${id}.`);
+        }
+      },
+    });
+  }
+
+  private toDevice(ov: ConfigOverviewDto): Device {
+    const d = ov.device;
+    const fw = ov.firmware;
+    // the model master gives the protocol; without one, use the connectivity the device registry has
+    const protocol = ov.editable.connectivity.protocol || this.devices.find((x) => x.id === d.deviceId)?.protocol || '';
+    return {
+      id: d.deviceId,
+      name: d.deviceName,
+      type: d.deviceType,
+      model: fw.model || d.model,
+      protocol,
+      protocolKind: protocolKind(protocol),
+      gateway: d.gateway,
+      asset: d.assetName || d.assetRegistrationId,
+      status: d.status,
+      lastSeen: d.lastSeenAt,
+      battery: d.batteryLevel,
+      rssi: d.rssiDbm,
+      snr: d.snrDb,
+      firmware: fw.installedVersion ?? d.firmwareVersion,
+      latestFirmware: fw.latestVersion,
+      updateAvailable: fw.updateAvailable,
+      latestReleaseDate: fw.latestReleaseDate,
+      minFirmware: fw.minimumVersion,
+      isCompatible: fw.isCompatible,
+      releaseNotes: fw.releaseNotes ?? [],
+      firmwareTarget: fw.pendingVersion ? { version: fw.pendingVersion, when: fw.updateScheduledAt } : null,
+    };
   }
 
   selectDevice(id: string): void {
-    const d = DEVICES.find((x) => x.id === id);
-    if (!d || d === this.device) return;
-    if (this.dirty && !confirm(`Discard unsaved changes to ${this.device.id}?`)) {
+    if (!id || id === this.device?.id) return;
+    if (this.device && this.dirty && !confirm(`Discard unsaved changes to ${this.device.id}?`)) {
       // let the select show the choice, then snap back to the current device
       this.deviceId = id;
-      setTimeout(() => (this.deviceId = this.device.id));
+      setTimeout(() => (this.deviceId = this.device?.id ?? ''));
       return;
     }
-    this.load(d);
-    this.router.navigate([], { relativeTo: this.route, queryParams: { device: d.id }, replaceUrl: true });
-  }
-
-  relinkAsset(asset: string): void {
-    const d = this.device;
-    const other = DEVICES.find((x) => x !== d && x.asset === asset);
-    if (other && !confirm(`${asset} is linked to ${other.id}. Link it to ${d.id} as well?`)) {
-      this.assetSel = asset;
-      setTimeout(() => (this.assetSel = d.asset));
-      return;
-    }
-    this.assetSel = asset;
-    const prev = d.asset;
-    d.asset = asset;
-    this.log(`Linked asset changed from ${prev} to ${asset}`);
-    this.showToast(`${d.id} is now linked to ${asset}.`);
+    this.loadDevice(id);
+    this.router.navigate([], { relativeTo: this.route, queryParams: { device: id }, replaceUrl: true });
   }
 
   get draft(): ConfigVersion | undefined {
-    return this.device.versions.find((v) => v.status === 'Draft');
+    return this.versions.find((v) => v.status === 'Draft');
   }
 
-  /** Latest version that is not a draft (applied, queued or scheduled). */
-  get currentVersion(): ConfigVersion {
-    const vs = this.device.versions.filter((v) => v.status !== 'Draft' && v.status !== 'Superseded');
-    return vs[vs.length - 1] ?? this.device.versions[this.device.versions.length - 1];
+  /** Latest applied or queued version. */
+  get currentVersion(): ConfigVersion | undefined {
+    const c = this.overview?.current;
+    return c ? this.versions.find((v) => v.v === c.version) : undefined;
   }
 
   get nextV(): number {
-    return Math.max(...this.device.versions.map((v) => v.v)) + 1;
+    return Math.max(0, ...this.versions.map((v) => v.v)) + 1;
   }
 
   get dirty(): boolean {
@@ -190,42 +286,56 @@ export class DeviceConfiguration implements OnDestroy {
   get shownVersion(): { v: number; status: VersionStatus; createdBy: string; unsaved: boolean; scheduledFor?: string } {
     const d = this.draft;
     if (d) return { v: d.v, status: 'Draft', createdBy: d.createdBy, unsaved: this.dirty };
-    if (this.dirty) return { v: this.nextV, status: 'Draft', createdBy: CURRENT_USER, unsaved: true };
+    if (this.dirty) return { v: this.nextV, status: 'Draft', createdBy: this.currentUser, unsaved: true };
     const c = this.currentVersion;
-    return { v: c.v, status: c.status, createdBy: c.createdBy, unsaved: false, scheduledFor: c.scheduledFor };
+    if (!c) return { v: 0, status: 'Draft', createdBy: '—', unsaved: false };
+    const cur = this.overview?.current;
+    const scheduledFor = cur?.deploymentMode === 'Scheduled' && cur.scheduledAt ? cur.scheduledAt : undefined;
+    return { v: c.v, status: c.status, createdBy: c.createdBy, unsaved: false, scheduledFor };
   }
 
   get lastApplied(): string {
-    const a = this.device.versions.filter((v) => v.applied).map((v) => v.applied as string).sort();
+    const a = this.versions.map((v) => v.applied).filter((x): x is string => !!x).sort();
     return a.length ? this.fmt(a[a.length - 1]) : 'Never';
   }
 
-  get appliedVersion(): ConfigVersion | undefined {
-    return this.device.versions.find((v) => v.status === 'Applied');
+  /** The version the device confirmed at check-in. */
+  get runningVersion(): number | null {
+    return this.overview?.runningVersion ?? null;
   }
 
-  saveDraft(silent = false): ConfigVersion | null {
-    let d = this.draft;
-    if (!d && !this.dirty) {
-      if (!silent) this.showToast(`No changes to save. v${this.currentVersion.v} is the current configuration.`);
-      return null;
+  /** Body for Save Draft / Validate / Apply. */
+  private request(withDeployment = false): SaveConfigRequest {
+    const body = configToRequest(this.form);
+    if (!withDeployment) return body;
+    return {
+      ...body,
+      deploymentMode: this.deploy === 'scheduled' ? 'Scheduled' : 'Immediate',
+      scheduledAt: this.deploy === 'scheduled' && this.scheduleAt ? new Date(this.scheduleAt).toISOString() : null,
+      rolloutTarget: this.rollout === 'group' ? 'Device group' : 'Device',
+      deviceGroup: this.rollout === 'group' ? this.group.trim() || null : null,
+    };
+  }
+
+  saveDraft(): void {
+    if (!this.device || this.busy) return;
+    const d = this.draft;
+    if (!this.dirty) {
+      this.showToast(d ? `Draft v${d.v} is already saved.` : this.currentVersion ? `No changes to save. v${this.currentVersion.v} is the current configuration.` : 'No changes to save.');
+      return;
     }
-    if (!d) {
-      d = { v: this.nextV, status: 'Draft', createdBy: CURRENT_USER, created: nowIso(), note: 'Edited in Device Configuration', config: clone(this.form) };
-      this.device.versions.push(d);
-      this.log(`Draft v${d.v} created`);
-    } else {
-      if (!this.dirty) {
-        if (!silent) this.showToast(`Draft v${d.v} is already saved.`);
-        return d;
-      }
-      d.config = clone(this.form);
-      d.createdBy = CURRENT_USER;
-      this.log(`Draft v${d.v} updated`);
-    }
-    this.baseline = JSON.stringify(this.form);
-    if (!silent) this.showToast(`Draft v${d.v} saved.`);
-    return d;
+    const id = this.device.id;
+    this.busy = true;
+    this.api.saveDraft(id, this.request()).subscribe({
+      next: (saved) => {
+        this.busy = false;
+        this.loadDevice(id, false, () => this.showToast(`Draft v${saved.version} saved.`));
+      },
+      error: (e) => {
+        this.busy = false;
+        this.showToast(apiErrorMessage(e, 'Could not save the draft.'));
+      },
+    });
   }
 
   discardChanges(): void {
@@ -234,65 +344,51 @@ export class DeviceConfiguration implements OnDestroy {
     this.showToast('Unsaved changes discarded.');
   }
 
+  /** Deletes the saved draft (DELETE …/draft). */
+  discardDraft(): void {
+    const d = this.draft;
+    if (!this.device || !d || this.busy) return;
+    if (!confirm(`Discard draft v${d.v}? Its settings will be lost.`)) return;
+    const id = this.device.id;
+    this.busy = true;
+    this.api.discardDraft(id).subscribe({
+      next: () => {
+        this.busy = false;
+        this.loadDevice(id, false, () => this.showToast(`Draft v${d.v} discarded.`));
+      },
+      error: (e) => {
+        this.busy = false;
+        this.showToast(apiErrorMessage(e, 'Could not discard the draft.'));
+      },
+    });
+  }
+
   // ===== Validation =====
 
-  hexError(v: string, label: string): string {
-    if (!v.trim()) return `${label} is required.`;
+  hexError(v: string, label: string, required = true): string {
+    if (!v.trim()) return required ? `${label} is required.` : '';
     return HEX16.test(v.trim()) ? '' : `${label} must be 16 hexadecimal characters (${v.trim().length}/16).`;
   }
 
-  get appEuiError(): string { return this.hexError(this.form.appEui, 'AppEUI'); }
+  get appEuiError(): string { return this.hexError(this.form.appEui, 'AppEUI', this.form.joinMode === 'OTAA'); }
   get devEuiError(): string { return this.hexError(this.form.devEui, 'DevEUI'); }
 
   get intervalError(): string {
     const n = Number(this.form.interval);
-    const max = this.form.intervalUnit === 'hours' ? 24 : 1440;
-    return Number.isInteger(n) && n >= 1 && n <= max ? '' : `Enter a whole number from 1 to ${max} ${this.form.intervalUnit}.`;
+    return Number.isInteger(n) && n >= 1 ? '' : `Enter a whole number of ${this.form.intervalUnit}.`;
   }
 
-  get advError(): string {
-    const n = Number(this.form.advInterval);
-    return n >= 20 && n <= 10240 ? '' : 'Advertising interval must be 20–10240 ms.';
+  private toChecks(v: ConfigValidationDto): Check[] {
+    return v.checks.map((c) => ({ title: c.title, sub: c.detail, state: c.passed ? 'ok' : 'fail', tab: CHECK_TABS[c.key] ?? 'overview' }));
   }
 
-  get apnError(): string { return this.form.apn.trim() ? '' : 'APN is required.'; }
-  get iccidError(): string { return /^\d{19,20}$/.test(this.form.iccid.trim()) ? '' : 'ICCID must be 19–20 digits.'; }
-
-  private get connErrors(): string[] {
-    const p = this.device.protocol;
-    const e = [this.intervalError];
-    if (p === 'LoRaWAN') e.push(this.form.region ? '' : 'Region is required.', this.appEuiError, this.devEuiError, !this.form.adr && this.form.dataRate === AUTO_RATE ? 'Choose a fixed data rate when ADR is off.' : '');
-    if (p === 'BLE 5.0') e.push(this.advError);
-    if (p === 'Cellular') e.push(this.apnError, this.iccidError);
-    return e.filter((x) => x);
-  }
-
+  /** Validation Checklist from the server (POST …/validate with the current form). */
   get checks(): Check[] {
-    const f = this.form;
-    const d = this.device;
-    const conn = this.connErrors;
-    const connOk = this.device.protocol === 'LoRaWAN' ? 'Region, join mode and keys configured.' : this.device.protocol === 'BLE 5.0' ? 'Advertising and TX power configured.' : 'APN, SIM and network mode configured.';
-    const sensors = f.params.filter((x) => x.kind === 'sensor');
-    const enabled = f.params.filter((x) => x.enabled);
-    const badThr = enabled.filter((x) => (x.threshold as number | null) === null || !(Number(x.threshold) >= 0));
-    const tele: Check = !sensors.some((x) => x.enabled)
-      ? { title: 'Telemetry mapping complete', sub: 'Enable at least one measured parameter.', state: 'fail', tab: 'telemetry' }
-      : badThr.length ? { title: 'Telemetry mapping complete', sub: `Set a valid threshold for ${badThr[0].name}.`, state: 'fail', tab: 'telemetry' }
-        : { title: 'Telemetry mapping complete', sub: 'All enabled parameters mapped.', state: 'ok', tab: 'telemetry' };
-    const rules = f.alerts.filter((a) => a.enabled);
-    const orphan = rules.find((a) => !f.params.find((x) => x.key === a.param && x.enabled));
-    const alert: Check = !rules.length
-      ? { title: 'Alert rules linked', sub: 'No active alert rules. Devices will report without alarms.', state: 'warn', tab: 'alerts' }
-      : orphan ? { title: 'Alert rules linked', sub: `A rule uses ${this.paramName(orphan.param)}, which is not transmitted.`, state: 'warn', tab: 'alerts' }
-        : { title: 'Alert rules linked', sub: 'Threshold rules configured.', state: 'ok', tab: 'alerts' };
-    let fw: Check = { title: 'Firmware compatibility verified', sub: `${d.firmware} is compatible.`, state: 'ok', tab: 'firmware' };
-    if (cmpVersion(d.firmware, d.minFirmware) < 0) fw = { ...fw, sub: `${d.firmware} is below ${d.minFirmware} required by this configuration.`, state: 'fail' };
-    else if (f.sampling < 30 && d.fastSamplingFirmware && cmpVersion(d.firmware, d.fastSamplingFirmware) < 0) fw = { ...fw, sub: `${f.sampling} s sampling needs ${d.fastSamplingFirmware} or later.`, state: 'fail' };
-    if (fw.state === 'fail' && d.firmwareTarget) fw.sub += ` Update to ${d.firmwareTarget.version} pending.`;
-    return [
-      { title: 'Connectivity parameters complete', sub: conn.length ? conn[0] : connOk, state: conn.length ? 'fail' : 'ok', tab: 'connectivity' },
-      tele, alert, fw,
-    ];
+    return this.validation.checks;
+  }
+
+  get firmwareCheck(): Check | undefined {
+    return this.checks.find((c) => c.tab === 'firmware');
   }
 
   get failing(): Check[] {
@@ -303,83 +399,89 @@ export class DeviceConfiguration implements OnDestroy {
     return s === 'ok' ? CircleCheck : s === 'warn' ? CircleAlert : CircleX;
   }
 
-  validate(): void {
-    const c = this.checks;
-    const fail = c.filter((x) => x.state === 'fail');
-    const warn = c.filter((x) => x.state === 'warn');
-    this.applyError = '';
+  private runValidation(announce: boolean): void {
+    if (!this.device) return;
+    const snap = JSON.stringify(this.form);
+    this.validateSub?.unsubscribe();
+    this.validateSub = this.api.validate(this.device.id, this.request()).subscribe({
+      next: (v) => {
+        this.validation = { snap, checks: this.toChecks(v) };
+        if (announce) this.announceChecks();
+      },
+      error: (e) => {
+        // invalid field values (400): show the reason against connectivity / telemetry
+        const msg = apiErrorMessage(e, 'Could not validate the configuration.');
+        const field = e instanceof HttpErrorResponse && e.error?.errors ? Object.keys(e.error.errors)[0] ?? '' : '';
+        const tab: Tab = field.startsWith('Telemetry') ? 'telemetry' : field.startsWith('AlertRules') ? 'alerts' : 'connectivity';
+        const checks = this.validation.checks.length ? this.validation.checks.map((c) => (c.tab === tab ? { ...c, sub: msg, state: 'fail' as CheckState } : c)) : [{ title: 'Configuration valid', sub: msg, state: 'fail' as CheckState, tab }];
+        this.validation = { snap, checks };
+        if (announce) this.showToast(msg);
+      },
+    });
+  }
+
+  private announceChecks(): void {
+    const fail = this.failing;
     if (fail.length) this.showToast(`${fail.length} check${fail.length > 1 ? 's' : ''} failed: ${fail.map((x) => x.sub).join(' ')}`);
-    else if (warn.length) this.showToast(`Configuration is valid with ${warn.length} warning: ${warn[0].sub}`);
-    else this.showToast('All 4 checks passed. Configuration is ready to apply.');
+    else this.showToast(`All ${this.checks.length} checks passed. Configuration is ready to apply.`);
+  }
+
+  validate(): void {
+    this.applyError = '';
+    clearTimeout(this.validateTimer);
+    this.validateTimer = undefined;
+    this.runValidation(true);
   }
 
   // ===== Apply =====
 
-  get selectedGroup(): { name: string; count: number } | undefined {
-    return this.device.groups.find((g) => g.name === this.group);
-  }
-
   apply(): void {
     this.applyError = '';
-    const fail = this.failing;
-    if (fail.length) {
-      this.applyError = `Fix ${fail.length} failing check${fail.length > 1 ? 's' : ''} before applying: ${fail.map((x) => x.title.toLowerCase()).join(', ')}.`;
-      this.showToast('Apply blocked. ' + fail[0].sub);
-      return;
-    }
-    if (this.deploy === 'scheduled' && (!this.scheduleAt || this.scheduleAt <= nowIso())) {
+    if (!this.device || this.busy) return;
+    if (this.deploy === 'scheduled' && (!this.scheduleAt || this.scheduleAt <= nowLocal())) {
       this.applyError = 'Choose a future date and time for the scheduled deployment.';
       return;
     }
+    if (this.rollout === 'group' && !this.group.trim()) {
+      this.applyError = 'Enter the device group to apply this configuration to.';
+      return;
+    }
+    if (!this.draft && !this.dirty && this.rollout === 'device') {
+      const cur = this.currentVersion;
+      this.showToast(cur ? `Nothing new to apply. v${cur.v} is already ${cur.status.toLowerCase()} on ${this.device.id}.` : 'Nothing to apply. Change a setting first.');
+      return;
+    }
     const d = this.device;
-    let ver = this.draft || this.dirty ? this.saveDraft(true) : null;
-    const target = this.rollout === 'group' && this.selectedGroup ? `group ${this.selectedGroup.name} (${this.selectedGroup.count} devices)` : d.id;
-    if (!ver) {
-      if (this.rollout !== 'group') {
-        this.showToast(`Nothing new to apply. v${this.currentVersion.v} is already ${this.currentVersion.status.toLowerCase()} on ${d.id}.`);
-        return;
-      }
-      ver = this.currentVersion;
-      this.log(`v${ver.v} pushed to ${target}`);
-      this.showToast(`v${ver.v} queued for ${target}.`);
-      return;
-    }
-    for (const v of d.versions) if (v !== ver && (v.status === 'Queued' || v.status === 'Scheduled')) v.status = 'Superseded';
-    const applied = ver;
-    if (this.deploy === 'scheduled') {
-      applied.status = 'Scheduled';
-      applied.scheduledFor = this.scheduleAt;
-      this.log(`v${applied.v} scheduled for ${target} on ${this.fmt(this.scheduleAt)}`);
-      this.showToast(`v${applied.v} scheduled for ${this.fmt(this.scheduleAt)}.`);
-      return;
-    }
-    applied.status = 'Queued';
-    applied.applied = nowIso();
-    this.log(`v${applied.v} applied to ${target}, queued until next check-in`);
-    if (d.status === 'Offline') {
-      this.showToast(`v${applied.v} queued. ${d.id} is offline and will receive it when it reconnects.`);
-      return;
-    }
-    this.showToast(`v${applied.v} queued for ${target}. Waiting for device check-in…`);
-    setTimeout(() => {
-      if (applied.status !== 'Queued') return;
-      for (const v of d.versions) if (v.status === 'Applied') v.status = 'Superseded';
-      applied.status = 'Applied';
-      d.lastSeen = nowIso();
-      d.events.unshift({ at: nowIso(), by: 'System', text: `v${applied.v} confirmed by ${d.id} at check-in` });
-      if (d === this.device) this.showToast(`${d.id} checked in and confirmed v${applied.v}.`);
-    }, 5000);
-  }
-
-  private log(text: string, d: Device = this.device): void {
-    d.events.unshift({ at: nowIso(), by: CURRENT_USER, text });
+    const target = this.rollout === 'group' ? `group ${this.group.trim()}` : d.id;
+    this.busy = true;
+    this.api.apply(d.id, this.request(true)).subscribe({
+      next: (applied) => {
+        this.busy = false;
+        const msg = applied.deploymentMode === 'Scheduled' && applied.scheduledAt
+          ? `v${applied.version} scheduled for ${target} on ${this.fmt(applied.scheduledAt)}.`
+          : d.status === 'Offline' ? `v${applied.version} queued. ${d.id} is offline and will receive it when it reconnects.` : `v${applied.version} queued for ${target}. Waiting for device check-in…`;
+        this.loadDevice(d.id, false, () => this.showToast(msg));
+      },
+      error: (e) => {
+        this.busy = false;
+        const body = e instanceof HttpErrorResponse ? e.error : null;
+        if (e instanceof HttpErrorResponse && e.status === 422 && Array.isArray(body?.checks)) {
+          this.validation = { snap: JSON.stringify(this.form), checks: this.toChecks(body as ConfigValidationDto) };
+          const fail = this.failing;
+          this.applyError = `Fix ${fail.length} failing check${fail.length > 1 ? 's' : ''} before applying: ${fail.map((x) => x.title.toLowerCase()).join(', ')}.`;
+          this.showToast('Apply blocked. ' + (fail[0]?.sub ?? ''));
+          return;
+        }
+        this.applyError = apiErrorMessage(e, 'Could not apply the configuration.');
+      },
+    });
   }
 
   // ===== Connectivity helpers =====
 
   onAdr(on: boolean): void {
     this.form.adr = on;
-    this.form.dataRate = on ? AUTO_RATE : DATA_RATES[2];
+    this.form.dataRate = on ? this.autoRate : this.dataRates[2] ?? this.dataRates[0] ?? '';
   }
 
   copy(value: string, label: string): void {
@@ -401,13 +503,8 @@ export class DeviceConfiguration implements OnDestroy {
     return this.form.params.filter((p) => p.kind === 'sensor');
   }
 
-  get batteryParam(): TelemetryParam | undefined {
-    return this.form.params.find((p) => p.key === 'battery');
-  }
-
   toggleBattery(): void {
-    const b = this.batteryParam;
-    if (b) b.enabled = !b.enabled;
+    this.form.batteryReporting = !this.form.batteryReporting;
   }
 
   paramIcon(p: TelemetryParam) {
@@ -425,8 +522,8 @@ export class DeviceConfiguration implements OnDestroy {
   /** Changing the display unit converts the threshold and the related alert values. */
   changeUnit(p: TelemetryParam, unit: string): void {
     const from = p.unit;
-    p.threshold = round(convert(p.threshold, from, unit, true), 2);
-    for (const a of this.form.alerts) if (a.param === p.key) a.value = round(convert(a.value, from, unit), 1);
+    if (p.threshold !== null) p.threshold = round(convert(Number(p.threshold), from, unit, true), 2);
+    for (const a of this.form.alerts) if (a.param === p.key) { a.value = round(convert(a.value, from, unit), 1); a.unit = unit; }
     p.unit = unit;
   }
 
@@ -435,16 +532,17 @@ export class DeviceConfiguration implements OnDestroy {
   }
 
   samplingLabel(s: number): string {
-    return s < 60 ? `${s} seconds` : s === 60 ? '60 seconds' : `${s / 60} minutes`;
+    return s < 60 ? `${s} seconds` : s === 60 ? '60 seconds' : s < 3600 ? `${s / 60} minutes` : `${s / 3600} hour${s === 3600 ? '' : 's'}`;
   }
 
   get protocolIcon() {
-    return this.device.protocol === 'LoRaWAN' ? Antenna : this.device.protocol === 'BLE 5.0' ? Bluetooth : RadioTower;
+    const k = this.device?.protocolKind;
+    return k === 'LoRaWAN' ? Antenna : k === 'BLE' ? Bluetooth : RadioTower;
   }
 
   get deviceIcon() {
-    const id = this.device.id;
-    return id.startsWith('TS') ? Thermometer : id.startsWith('VS') ? Activity : id.startsWith('BLE') ? Bluetooth : MapPin;
+    const t = (this.device?.type ?? '').toLowerCase();
+    return t.includes('temp') ? Thermometer : t.includes('vib') ? Activity : t.includes('ble') || t.includes('beacon') ? Bluetooth : MapPin;
   }
 
   get connSummary(): { k: string; v: string }[] {
@@ -453,21 +551,18 @@ export class DeviceConfiguration implements OnDestroy {
 
   private summarize(f: DeviceConfig): { k: string; v: string }[] {
     const every = `${f.interval} ${f.intervalUnit}`;
-    if (this.device.protocol === 'LoRaWAN') return [
-      { k: 'Region', v: f.region }, { k: 'Join mode', v: f.joinMode }, { k: 'AppEUI', v: f.appEui || '—' }, { k: 'DevEUI', v: f.devEui || '—' },
-      { k: 'Reporting', v: every }, { k: 'Confirmed uplink', v: f.confirmed ? 'On' : 'Off' }, { k: 'ADR', v: f.adr ? 'On' : 'Off' }, { k: 'Data rate', v: f.dataRate },
+    if (protocolKind(f.protocol) === 'LoRaWAN') return [
+      { k: 'Region', v: f.region || '—' }, { k: 'Join mode', v: f.joinMode || '—' }, { k: 'AppEUI', v: f.appEui || '—' }, { k: 'DevEUI', v: f.devEui || '—' },
+      { k: 'Reporting', v: every }, { k: 'Confirmed uplink', v: f.confirmed ? 'On' : 'Off' }, { k: 'ADR', v: f.adr ? 'On' : 'Off' }, { k: 'Data rate', v: f.dataRate || '—' },
     ];
-    if (this.device.protocol === 'BLE 5.0') return [
-      { k: 'Advertising interval', v: `${f.advInterval} ms` }, { k: 'TX power', v: `${f.txPower} dBm` }, { k: 'Connectable', v: f.connectable ? 'Yes' : 'No' }, { k: 'Gateway upload', v: every },
-    ];
-    return [{ k: 'APN', v: f.apn || '—' }, { k: 'SIM ICCID', v: f.iccid || '—' }, { k: 'Network mode', v: f.networkMode }, { k: 'Roaming', v: f.roaming ? 'Allowed' : 'Blocked' }, { k: 'Reporting', v: every }];
+    return [{ k: 'Reporting', v: every }];
   }
 
   get enabledCount(): number {
     return this.form.params.filter((p) => p.enabled).length;
   }
 
-  get severityCounts(): { s: Severity; n: number }[] {
+  get severityCounts(): { s: string; n: number }[] {
     return this.severities.map((s) => ({ s, n: this.form.alerts.filter((a) => a.enabled && a.severity === s).length }));
   }
 
@@ -478,7 +573,7 @@ export class DeviceConfiguration implements OnDestroy {
   }
 
   timeLabel(i: number, withDay = false): string {
-    const d = new Date(PREVIEW_START + i * 30 * 60000);
+    const d = new Date(this.previewStart + i * 30 * 60000);
     const t = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     return withDay ? `${d.getDate()} ${MONTHS[d.getMonth()]} ${t}` : t;
   }
@@ -491,12 +586,13 @@ export class DeviceConfiguration implements OnDestroy {
 
   get panels(): Panel[] {
     const sensors = this.sensorParams.slice(0, 3);
-    const key = this.device.id + JSON.stringify(sensors.map((p) => [p.key, p.unit, p.threshold, p.enabled]));
+    const key = (this.device?.id ?? '') + JSON.stringify(sensors.map((p) => [p.key, p.unit, p.threshold, p.enabled]));
     if (this.previewCache?.key === key) return this.previewCache.panels;
-    const panels = sensors.map((p, n) => {
+    const withData = sensors.filter((p) => (this.telemetry[p.key]?.length ?? 0) >= 49);
+    const panels = withData.map((p, n) => {
       const top = PAD.t + n * (PH + PGAP);
       const bottom = top + PH;
-      const values = series(this.device.id, p.key).map((v) => convert(v, p.units[0], p.unit));
+      const values = this.telemetry[p.key].slice(0, 49).map((v: number) => convert(v, p.units[0], p.unit));
       const min = Math.min(...values);
       const max = Math.max(...values);
       const raw = (max - min) / 2 || 1;
@@ -545,90 +641,157 @@ export class DeviceConfiguration implements OnDestroy {
     return Math.min(82, Math.max(18, (this.px(h) / CW) * 100));
   }
 
-  // ===== Alerts =====
+  // ===== Alerts (saved straight into the draft through the alert-rule endpoints) =====
 
   editAlert(a?: AlertRule): void {
     this.alertError = '';
-    const first = this.form.params[0]?.key ?? '';
-    this.alertForm = a ? { ...a, isNew: false } : { id: '', param: first, cond: '>', value: 0, severity: 'Warning', notify: 'Email', enabled: true, isNew: true };
+    this.alertForm = a
+      ? { ...a, notify: [...a.notify], isNew: false }
+      : { id: '', param: '', cond: '', value: 0, unit: null, severity: '', notify: this.notifyOptions.slice(0, 1), enabled: true, isNew: true };
+  }
+
+  toggleNotify(f: AlertRule, channel: string): void {
+    f.notify = f.notify.includes(channel) ? f.notify.filter((c) => c !== channel) : [...f.notify, channel];
+  }
+
+  notifyText(a: AlertRule): string {
+    return a.notify.length ? a.notify.join(' + ') : '—';
+  }
+
+  /** Puts a rule change into the form and into the baseline, so it does not count as unsaved. */
+  private patchRules(change: (rules: AlertRule[]) => AlertRule[]): void {
+    this.form.alerts = change(this.form.alerts);
+    const base = JSON.parse(this.baseline) as DeviceConfig;
+    base.alerts = change(base.alerts);
+    this.baseline = JSON.stringify(base);
   }
 
   saveAlert(): void {
     const f = this.alertForm;
-    if (!f) return;
+    const d = this.device;
+    if (!f || !d || this.busy) return;
     if (!f.param) return void (this.alertError = 'Choose a parameter.');
+    if (!f.cond) return void (this.alertError = 'Choose a condition.');
+    if (!f.severity) return void (this.alertError = 'Choose a severity.');
     if ((f.value as number | null) === null || !Number.isFinite(Number(f.value))) return void (this.alertError = 'Enter a numeric threshold value.');
     const { isNew, ...rule } = f;
     rule.value = Number(rule.value);
+    rule.unit = this.paramUnit(rule.param) || null;
     const dup = this.form.alerts.find((a) => a.id !== rule.id && a.param === rule.param && a.cond === rule.cond && a.value === rule.value);
     if (dup) return void (this.alertError = 'An identical rule already exists.');
-    if (isNew) {
-      const n = Math.max(0, ...this.form.alerts.map((a) => Number(a.id.split('-')[1]) || 0)) + 1;
-      this.form.alerts.push({ ...rule, id: `AR-${n}` });
-    } else {
-      const i = this.form.alerts.findIndex((a) => a.id === rule.id);
-      if (i >= 0) this.form.alerts[i] = rule;
-    }
-    this.alertForm = null;
-    this.showToast(`Alert rule ${isNew ? 'added' : 'updated'}. Save the draft to keep it.`);
+    this.busy = true;
+    const call = isNew ? this.api.addRule(d.id, ruleToRequest(rule)) : this.api.updateRule(d.id, rule.id, ruleToRequest(rule));
+    call.subscribe({
+      next: (saved) => {
+        this.busy = false;
+        const r = ruleFromDto(saved);
+        this.patchRules((rules) => (isNew ? [...rules, r] : rules.map((x) => (x.id === r.id ? r : x))));
+        this.alertForm = null;
+        this.showToast(`Alert rule ${isNew ? 'added' : 'updated'} in the draft.`);
+        this.loadDevice(d.id, true);
+      },
+      error: (e) => {
+        this.busy = false;
+        this.alertError = apiErrorMessage(e, 'Could not save the alert rule.');
+      },
+    });
+  }
+
+  toggleAlert(a: AlertRule): void {
+    const d = this.device;
+    if (!d || this.busy) return;
+    this.busy = true;
+    this.api.setRuleActive(d.id, a.id, !a.enabled).subscribe({
+      next: (saved) => {
+        this.busy = false;
+        const r = ruleFromDto(saved);
+        this.patchRules((rules) => rules.map((x) => (x.id === r.id ? { ...x, enabled: r.enabled } : x)));
+        this.loadDevice(d.id, true);
+      },
+      error: (e) => {
+        this.busy = false;
+        this.showToast(apiErrorMessage(e, 'Could not change the alert rule.'));
+      },
+    });
   }
 
   deleteAlert(a: AlertRule): void {
+    const d = this.device;
+    if (!d || this.busy) return;
     if (!confirm(`Delete the rule "${this.paramName(a.param)} ${a.cond} ${a.value} ${this.paramUnit(a.param)}"?`)) return;
-    this.form.alerts = this.form.alerts.filter((x) => x !== a);
-    this.showToast('Alert rule deleted.');
+    this.busy = true;
+    this.api.deleteRule(d.id, a.id).subscribe({
+      next: () => {
+        this.busy = false;
+        this.patchRules((rules) => rules.filter((x) => x.id !== a.id));
+        this.showToast('Alert rule deleted from the draft.');
+        this.loadDevice(d.id, true);
+      },
+      error: (e) => {
+        this.busy = false;
+        this.showToast(apiErrorMessage(e, 'Could not delete the alert rule.'));
+      },
+    });
   }
 
-  sevClass(s: Severity): string {
+  sevClass(s: string): string {
     return 'sev--' + s.toLowerCase();
   }
 
   // ===== Firmware =====
 
   get fwUpToDate(): boolean {
-    return cmpVersion(this.device.firmware, this.device.latestFirmware) >= 0;
+    // with the installed version unknown the API reports no update; that is not "up to date"
+    return !!this.device?.firmware && !this.device.updateAvailable;
   }
 
   openFirmware(): void {
     this.fwError = '';
-    this.fwDialog = { when: 'checkin', at: '' };
+    this.fwDialog = { at: '' };
   }
 
   scheduleFirmware(): void {
     const f = this.fwDialog;
     const d = this.device;
-    if (!f) return;
-    if (f.when === 'scheduled' && (!f.at || f.at <= nowIso())) return void (this.fwError = 'Choose a future date and time.');
-    const version = d.latestFirmware;
-    d.firmwareTarget = { version, when: f.when === 'checkin' ? 'Next check-in' : f.at };
-    this.fwDialog = null;
-    this.log(`Firmware update to ${version} scheduled (${f.when === 'checkin' ? 'next check-in' : this.fmt(f.at)})`, d);
-    if (f.when === 'scheduled' || d.status === 'Offline') {
-      this.showToast(`Firmware ${version} pending for ${d.id}${d.status === 'Offline' ? ' (device offline)' : ''}.`);
-      return;
-    }
-    this.showToast(`Firmware ${version} will install at ${d.id}'s next check-in…`);
-    setTimeout(() => {
-      if (d.firmwareTarget?.version !== version) return;
-      const old = d.firmware;
-      d.firmware = version;
-      d.firmwareTarget = null;
-      d.events.unshift({ at: nowIso(), by: 'System', text: `Firmware updated ${old} → ${version}` });
-      if (d === this.device) this.showToast(`${d.id} updated to firmware ${version}.`);
-    }, 8000);
+    if (!f || !d || this.busy) return;
+    if (!f.at || f.at <= nowLocal()) return void (this.fwError = 'Choose a future date and time.');
+    this.busy = true;
+    this.api.scheduleFirmware(d.id, new Date(f.at).toISOString(), d.latestFirmware).subscribe({
+      next: (fw) => {
+        this.busy = false;
+        this.fwDialog = null;
+        const v = fw.pendingVersion ?? d.latestFirmware ?? '';
+        this.showToast(`Firmware ${v} pending for ${d.id}${d.status === 'Offline' ? ' (device offline)' : ''}.`);
+        this.loadDevice(d.id, true);
+      },
+      error: (e) => {
+        this.busy = false;
+        this.fwError = apiErrorMessage(e, 'Could not schedule the firmware update.');
+      },
+    });
   }
 
   cancelFirmware(): void {
-    const t = this.device.firmwareTarget;
-    if (!t) return;
-    this.device.firmwareTarget = null;
-    this.log(`Firmware update to ${t.version} cancelled`);
-    this.showToast('Pending firmware update cancelled.');
+    const d = this.device;
+    const t = d?.firmwareTarget;
+    if (!d || !t || this.busy) return;
+    this.busy = true;
+    this.api.cancelFirmware(d.id).subscribe({
+      next: () => {
+        this.busy = false;
+        this.showToast('Pending firmware update cancelled.');
+        this.loadDevice(d.id, true);
+      },
+      error: (e) => {
+        this.busy = false;
+        this.showToast(apiErrorMessage(e, 'Could not cancel the firmware update.'));
+      },
+    });
   }
 
   get fwWhen(): string {
-    const t = this.device.firmwareTarget;
-    return !t ? '' : t.when === 'Next check-in' ? 'next check-in' : this.fmt(t.when);
+    const t = this.device?.firmwareTarget;
+    return !t ? '' : t.when ? this.fmt(t.when) : '—';
   }
 
   // ===== History =====
@@ -637,47 +800,104 @@ export class DeviceConfiguration implements OnDestroy {
     const m = new Map<string, string>();
     for (const s of this.summarize(c)) m.set(s.k, s.v);
     m.set('Sampling interval', this.samplingLabel(c.sampling));
-    m.set('Battery reporting interval', c.batteryInterval);
-    for (const p of c.params) m.set(`${p.name}`, p.enabled ? `On · ${p.agg} · Δ ≥ ${p.threshold} ${p.unit}` : 'Off');
+    m.set('Battery reporting', c.batteryReporting ? `On · ${c.batteryInterval || '—'}` : 'Off');
+    for (const p of c.params) m.set(`${p.name}`, p.enabled ? `On · ${p.agg} · Δ ≥ ${p.threshold ?? '—'} ${p.unit}` : 'Off');
     for (const a of c.alerts) {
       const name = c.params.find((p) => p.key === a.param)?.name ?? a.param;
-      m.set(`Alert ${a.id}`, `${name} ${a.cond} ${a.value} · ${a.severity} · ${a.notify}${a.enabled ? '' : ' (off)'}`);
+      m.set(`Alert ${name} ${a.cond} ${a.value}`, `${a.severity} · ${a.notify.join(' + ') || '—'}${a.enabled ? '' : ' (off)'}`);
     }
     return m;
   }
 
-  get diffRows(): { k: string; from: string; to: string }[] {
+  /** View changes: loads the version and the one before it. */
+  openDiff(v: ConfigVersion): void {
+    const d = this.device;
+    if (!d) return;
+    this.diffOf = v;
+    this.diffConfigs = null;
+    this.diffLoading = true;
+    const prev = this.versions.filter((x) => x.v < v.v).sort((a, b) => b.v - a.v)[0];
+    const before$: Observable<DeviceConfig | null> = prev ? this.api.version(d.id, prev.v).pipe(map(configFromDto)) : of(null);
+    forkJoin({ after: this.api.version(d.id, v.v), before: before$ }).subscribe({
+      next: ({ after, before }) => {
+        if (this.diffOf !== v) return;
+        this.diffConfigs = { before, after: configFromDto(after) };
+        this.diffLoading = false;
+      },
+      error: (e) => {
+        this.diffLoading = false;
+        this.showToast(apiErrorMessage(e, `Could not load v${v.v}.`));
+      },
+    });
+  }
+
+  get diffPrevV(): number | null {
     const v = this.diffOf;
-    if (!v) return [];
-    const prev = this.device.versions.find((x) => x.v === v.v - 1);
-    const a = prev ? this.flatten(prev.config) : new Map<string, string>();
-    const b = this.flatten(v.config);
+    if (!v) return null;
+    return this.versions.filter((x) => x.v < v.v).sort((a, b) => b.v - a.v)[0]?.v ?? null;
+  }
+
+  get diffRows(): { k: string; from: string; to: string }[] {
+    const c = this.diffConfigs;
+    if (!c) return [];
+    const a = c.before ? this.flatten(c.before) : new Map<string, string>();
+    const b = this.flatten(c.after);
     const keys = [...new Set([...a.keys(), ...b.keys()])];
     return keys.filter((k) => a.get(k) !== b.get(k)).map((k) => ({ k, from: a.get(k) ?? '—', to: b.get(k) ?? 'Removed' }));
   }
 
   restore(v: ConfigVersion): void {
+    const dev = this.device;
+    if (!dev || this.busy) return;
     const d = this.draft;
-    const msg = d && d !== v ? `Load v${v.v} into draft v${d.v}? The current draft contents will be replaced.` : `Load v${v.v} as a new draft?`;
-    if (d === v) return void this.showToast(`v${v.v} is the current draft.`);
+    if (d && d.v === v.v) return void this.showToast(`v${v.v} is the current draft.`);
+    const msg = d ? `Load v${v.v} into draft v${d.v}? The current draft contents will be replaced.` : `Load v${v.v} as a new draft?`;
     if (!confirm(this.dirty ? msg + ' Unsaved changes will be lost.' : msg)) return;
-    this.form = clone(v.config);
-    this.baseline = '';
-    const saved = this.saveDraft(true);
-    if (saved) {
-      saved.note = `Restored from v${v.v}`;
-      this.showToast(`v${v.v} restored as draft v${saved.v}.`);
-    }
+    this.busy = true;
+    this.api.restore(dev.id, v.v).subscribe({
+      next: (saved) => {
+        this.busy = false;
+        this.loadDevice(dev.id, false, () => this.showToast(`v${v.v} restored as draft v${saved.version}.`));
+      },
+      error: (e) => {
+        this.busy = false;
+        this.showToast(apiErrorMessage(e, `Could not restore v${v.v}.`));
+      },
+    });
   }
 
-  statusClass(s: VersionStatus): string {
+  /** Records the device's check-in confirmation of a Queued version (normally sent by the device platform). */
+  confirmVersion(v: ConfigVersion): void {
+    const dev = this.device;
+    if (!dev || this.busy || v.status !== 'Queued') return;
+    if (!confirm(`Mark v${v.v} as confirmed by ${dev.id}? The previously applied version will be superseded.`)) return;
+    this.busy = true;
+    this.api.confirm(dev.id, v.v).subscribe({
+      next: () => {
+        this.busy = false;
+        this.showToast(`v${v.v} is now applied on ${dev.id}.`);
+        this.loadDevice(dev.id, true);
+      },
+      error: (e) => {
+        this.busy = false;
+        this.showToast(apiErrorMessage(e, `Could not confirm v${v.v}.`));
+      },
+    });
+  }
+
+  statusClass(s: string): string {
     return 'vs--' + s.toLowerCase();
   }
 
   // ===== Formatting / UI =====
 
-  fmt(iso: string): string {
-    return `${iso.slice(8, 10)} ${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)} ${iso.slice(11, 16)}`;
+  /** Local date and time for an ISO timestamp (or a datetime-local value); '—' when missing. */
+  fmt(iso: string | null | undefined): string {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    const z = (n: number) => String(n).padStart(2, '0');
+    return `${z(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()} ${z(d.getHours())}:${z(d.getMinutes())}`;
   }
 
   toggleMenu(name: string, e: Event): void {

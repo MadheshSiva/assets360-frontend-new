@@ -2,7 +2,7 @@
   <header class="page-head">
     <div class="grow">
       <nav class="breadcrumb">
-        <a routerLink="/inspection/overview">Inspection</a><span>/</span><span class="current">Findings &amp; Actions</span>
+        <a routerLink="/inspection/overview">Inspection</a><span class="crumb-sep" aria-hidden="true">›</span><span class="current">Findings &amp; Actions</span>
       </nav>
       <h1>Inspection Findings</h1>
       <p class="subtitle">Track inspection exceptions, assign corrective actions and verify closure.</p>
@@ -44,13 +44,13 @@
             <input type="search" placeholder="Search finding, asset or inspection..." [ngModel]="search()" (ngModelChange)="setFilter('search', $event)" />
           </label>
           <select class="control sel" [ngModel]="severity()" (ngModelChange)="setFilter('severity', $event)" aria-label="Severity">
-            <option value="">All Severities</option>
+            <option value="">Select Severity</option>
             <option value="Critical/High">Critical / High</option>
             @for (s of severities; track s) { <option [value]="s">{{ s }}</option> }
           </select>
           <select class="control sel" [ngModel]="status()" (ngModelChange)="setFilter('status', $event)" aria-label="Status">
+            <option value="">Select Status</option>
             <option value="Open">Open</option>
-            <option value="">All Statuses</option>
             @for (s of statuses; track s) { <option [value]="s">{{ s === 'Open' ? 'Open (new)' : s }}</option> }
           </select>
           @if (overdueOnly()) {

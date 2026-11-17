@@ -761,3 +761,12 @@ body, .dashboard-wrapper {
   flex: 1 1 100%;
   max-width: 100%;
 }
+
+/* Empty state for widgets without data */
+.panel-empty {
+  margin: 0;
+  padding: 18px;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+}

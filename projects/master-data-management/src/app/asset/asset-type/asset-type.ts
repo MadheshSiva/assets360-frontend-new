@@ -20,7 +20,7 @@ const EMPTY_FILTERS: AssetTypeFilters = { search: '', category: '', status: '' }
   selector: 'app-mdm-asset-asset-type',
   imports: [FormsModule, RouterLink, LucideAngularModule, TypeForm, TypeDetail],
   templateUrl: './asset-type.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../asset-model/asset-model.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../asset-model/asset-model.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class AssetTypePage implements OnInit {
   readonly service = inject(AssetTypeService);

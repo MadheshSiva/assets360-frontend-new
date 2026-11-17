@@ -46,6 +46,7 @@ import { APPROVAL_LEVELS, ApprovalRule, RoleRecord } from '../role-access.data';
               </td>
               <td>
                 <select class="select ra-select" [disabled]="!a.enabled" [(ngModel)]="a.level" (ngModelChange)="changed.emit()" [attr.aria-label]="a.type + ' level'">
+                  <option value="" disabled>Select Level</option>
                   @for (l of levels; track l) {
                     <option [value]="l">{{ l }}</option>
                   }

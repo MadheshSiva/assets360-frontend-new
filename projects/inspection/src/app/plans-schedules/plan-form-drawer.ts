@@ -27,13 +27,14 @@ const FREQUENCIES = ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually'];
           }
           <label class="field"><span class="field-label">Inspection type <span class="req">*</span></span>
             <select class="control" [ngModel]="form.inspectionTypeName" (ngModelChange)="pickType($event)">
-              <option value="">Select type</option>
+              <option value="">Select Type</option>
               @for (t of api.types.items(); track t.id) { <option [value]="t.inspectionTypeName">{{ t.inspectionTypeName }}</option> }
               @if (form.inspectionTypeName && !hasType(form.inspectionTypeName)) { <option [value]="form.inspectionTypeName">{{ form.inspectionTypeName }}</option> }
             </select></label>
           <label class="field"><span class="field-label">Category</span><input class="control" [(ngModel)]="form.category" placeholder="e.g. Safety" /></label>
           <label class="field"><span class="field-label">Frequency</span>
             <select class="control" [(ngModel)]="form.frequency">
+              <option value="" disabled>Select Frequency</option>
               @for (f of frequencies; track f) { <option [value]="f">{{ f }}</option> }
             </select></label>
           <label class="field"><span class="field-label">Scope (asset count)</span><input class="control" type="number" min="0" [(ngModel)]="form.assetCount" /></label>
@@ -88,7 +89,7 @@ export class PlanFormDrawer implements OnInit {
           planName: '',
           inspectionTypeName: '',
           category: '',
-          frequency: 'Monthly',
+          frequency: '',
           assetCount: 1,
           nextDueDate: null,
           inspectorName: '',
@@ -136,6 +137,7 @@ export class PlanFormDrawer implements OnInit {
     const f = this.form;
     if (!f.planName?.trim()) return this.error.set('Plan name is required.');
     if (!f.inspectionTypeName) return this.error.set('Select an inspection type.');
+    if (!f.frequency) return this.error.set('Select a frequency.');
     this.error.set(null);
     this.saving.set(true);
     const record: Partial<InspectionPlan> = {

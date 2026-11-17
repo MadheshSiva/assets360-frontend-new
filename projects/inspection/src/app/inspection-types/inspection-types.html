@@ -3,8 +3,8 @@
   <div class="page-head">
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a routerLink="/inspection/overview">Inspection</a><span aria-hidden="true">/</span>
-        <span>Configuration</span><span aria-hidden="true">/</span>
+        <a routerLink="/inspection/overview">Inspection</a><span class="crumb-sep" aria-hidden="true">›</span>
+        <span>Configuration</span><span class="crumb-sep" aria-hidden="true">›</span>
         <span class="current">Inspection Types</span>
       </nav>
       <h1>Inspection Types</h1>
@@ -20,7 +20,7 @@
 
   <!-- ===== KPIs ===== -->
   <div class="kpis">
-    <button type="button" class="kpi" (click)="statusFilter.set('All'); resetPage()">
+    <button type="button" class="kpi" (click)="statusFilter.set(''); resetPage()">
       <span class="kpi-ic"><lucide-icon [img]="icons.FileText" [size]="22"></lucide-icon></span>
       <span class="kpi-body"><span class="kpi-label">Total Types</span><strong class="kpi-value">{{ kpis().total }}</strong></span>
     </button>
@@ -50,13 +50,13 @@
         <label class="field flt">
           <span class="field-label">Status</span>
           <select class="control" [(ngModel)]="statusFilter" (ngModelChange)="resetPage()">
-            <option value="All">All</option><option value="Active">Active</option><option value="Inactive">Inactive</option>
+            <option value="">Select Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option>
           </select>
         </label>
         <label class="field flt">
           <span class="field-label">Category</span>
           <select class="control" [(ngModel)]="categoryFilter" (ngModelChange)="resetPage()">
-            <option value="All">All</option>
+            <option value="">Select Category</option>
             @for (c of categories(); track c) { <option [value]="c">{{ c }}</option> }
           </select>
         </label>
@@ -188,23 +188,26 @@
           <input class="control" [value]="f.inspectionTypeCode || 'Assigned on save'" readonly /></label>
         <label class="field"><span class="field-label">Category <span class="req">*</span></span>
           <select class="control" [(ngModel)]="f.category">
+            <option value="" disabled>Select Category</option>
             @for (c of categories(); track c) { <option [value]="c">{{ c }}</option> }
           </select></label>
         <label class="field span-2"><span class="field-label">Description</span>
           <textarea class="control" rows="3" [(ngModel)]="f.description"></textarea></label>
         <label class="field span-2"><span class="field-label">Default checklist</span>
           <select class="control" [ngModel]="f.defaultChecklistCode" (ngModelChange)="pickChecklist($event)">
-            <option value="">— None —</option>
+            <option value="">Select Default Checklist</option>
             @for (c of api.checklists.items(); track c.id) { <option [value]="c.checklistCode">{{ c.templateName }} v{{ c.versionLabel }} ({{ c.checklistCode }})</option> }
           </select>
           @if (f.defaultChecklistCode) { <span class="field-hint">{{ f.defaultChecklistCode }} · {{ f.defaultChecklistName }}</span> }
         </label>
         <label class="field"><span class="field-label">Default priority</span>
           <select class="control" [(ngModel)]="f.defaultPriority">
+            <option value="" disabled>Select Default Priority</option>
             @for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }
           </select></label>
         <label class="field"><span class="field-label">Default frequency</span>
           <select class="control" [(ngModel)]="f.defaultFrequency">
+            <option value="" disabled>Select Default Frequency</option>
             @for (p of frequencies; track p) { <option [value]="p">{{ p }}</option> }
           </select></label>
         <label class="field"><span class="field-label">Applicable assets</span>

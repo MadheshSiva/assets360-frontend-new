@@ -19,7 +19,7 @@ const EMPTY_FILTERS: CriticalityFilters = { search: '', status: '' };
   selector: 'app-mdm-asset-criticality',
   imports: [FormsModule, RouterLink, LucideAngularModule, CritForm, CritDetail],
   templateUrl: './criticality.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../level-page.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../level-page.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class CriticalityPage implements OnInit {
   readonly service = inject(CriticalityService);

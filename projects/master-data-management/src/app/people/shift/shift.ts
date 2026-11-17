@@ -19,7 +19,7 @@ type SortKey = 'name' | 'code' | 'startTime' | 'duration';
   selector: 'app-mdm-people-shift',
   imports: [FormsModule, RouterLink, LucideAngularModule, ShiftForm],
   templateUrl: './shift.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../people.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../people.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class ShiftPage extends ListPage<ShiftRecord, ShiftFilters, SortKey> {
   readonly service = inject(ShiftService);

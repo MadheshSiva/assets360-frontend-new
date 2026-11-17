@@ -14,7 +14,8 @@ import {
   RaWidget, fmtInt, previousSeries, siteInScope, sumOf
 } from './parts';
 
-const KPI_DELTAS = { value: 7.6, items: 3.1, turnover: 9.2, belowReorder: -14, accuracy: 1.8 };
+/** Change vs the previous period comes from the inventory API; 0 until it is wired */
+const KPI_DELTAS = { value: 0, items: 0, turnover: 0, belowReorder: 0, accuracy: 0 };
 const UTIL_LIMIT = 90;
 
 /** Reports & Analytics > Inventory Analytics */
@@ -34,10 +35,10 @@ export class InventoryAnalyticsPage extends RaDashboardPage implements OnInit {
   readonly categories = [ALL_CATEGORIES, ...INV_CATEGORIES];
   readonly statuses = [ALL_STATUSES, ...STOCK_STATUSES];
   readonly allWarehouses = ALL_WAREHOUSES;
-  warehouse = ALL_WAREHOUSES;
-  store = ALL_STORES;
-  category = ALL_CATEGORIES;
-  status = ALL_STATUSES;
+  warehouse = '';
+  store = '';
+  category = '';
+  status = '';
 
   view!: InventoryView;
   kpis: KpiCardData[] = [];
@@ -56,7 +57,6 @@ export class InventoryAnalyticsPage extends RaDashboardPage implements OnInit {
   readonly pct = (v: number) => `${Math.round(v)}%`;
 
   ngOnInit(): void {
-    this.updatedMinutes = 6;
     this.apply();
   }
 
@@ -72,14 +72,14 @@ export class InventoryAnalyticsPage extends RaDashboardPage implements OnInit {
   /** Recomputes the view whenever a filter changes. */
   apply(): void {
     this.warehouseOptions = WAREHOUSES.filter((w) => siteInScope(w.site, this.organization, this.location));
-    if (this.warehouse !== ALL_WAREHOUSES && !this.warehouseOptions.some((w) => w.name === this.warehouse)) this.warehouse = ALL_WAREHOUSES;
-    const codes = this.warehouseOptions.filter((w) => this.warehouse === ALL_WAREHOUSES || w.name === this.warehouse).map((w) => w.code);
+    if (this.warehouse && this.warehouse !== ALL_WAREHOUSES && !this.warehouseOptions.some((w) => w.name === this.warehouse)) this.warehouse = '';
+    const codes = this.warehouseOptions.filter((w) => !this.warehouse || this.warehouse === ALL_WAREHOUSES || w.name === this.warehouse).map((w) => w.code);
     this.storeOptions = [ALL_STORES, ...STORES.filter((s) => codes.includes(s.warehouse)).map((s) => s.name)];
-    if (!this.storeOptions.includes(this.store)) this.store = ALL_STORES;
+    if (this.store && !this.storeOptions.includes(this.store)) this.store = '';
 
     const v = buildInventoryView({
       period: this.period, organization: this.organization, location: this.location,
-      warehouse: this.warehouse, store: this.store, category: this.category, status: this.status
+      warehouse: this.warehouse || ALL_WAREHOUSES, store: this.store || ALL_STORES, category: this.category, status: this.status || ALL_STATUSES
     });
     this.view = v;
     this.buildKpis(v);
@@ -111,10 +111,10 @@ export class InventoryAnalyticsPage extends RaDashboardPage implements OnInit {
     }
     this.categorySeries = v.categories
       .map((name, i) => ({ name, values: v.categoryStacks[i], color: v.categoryColors[i], type: 'bar' as const }))
-      .filter((s) => this.category === ALL_CATEGORIES || s.name === this.category);
+      .filter((s) => !this.category || this.category === ALL_CATEGORIES || s.name === this.category);
     this.statusSlices = v.statuses
       .map((name, i) => ({ name, value: v.statusCounts[i], color: v.statusColors[i] }))
-      .filter((s) => this.status === ALL_STATUSES || s.name === this.status);
+      .filter((s) => !this.status || this.status === ALL_STATUSES || s.name === this.status);
     const lineColors = [RA_COLORS.purple, RA_COLORS.green, RA_COLORS.pink];
     this.consumptionSeries = v.consumption.map((c, i) => ({ name: c.name, values: c.values, color: lineColors[i] }));
 
@@ -130,6 +130,8 @@ export class InventoryAnalyticsPage extends RaDashboardPage implements OnInit {
 
   private buildInsights(v: InventoryView): void {
     const list: InsightCard[] = [];
+    this.insights = list;
+    if (!v.hasScope) return;
     const n = v.belowReorder;
     list.push(
       n

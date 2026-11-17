@@ -18,7 +18,8 @@ type Tab = 'basic' | 'rules' | 'settings';
     '../../../shared/styles/mdm-drawer-extras.css',
     '../../../people/people-form.css',
     '../../../asset/level-form.css',
-    '../../../people/shift/shift-form/shift-form.css'
+    '../../../people/shift/shift-form/shift-form.css',
+    '../../../shared/styles/mdm-purple-theme.css'
   ]
 })
 export class StockStatusForm extends MasterForm<StockStatusRecord, Tab> {
@@ -47,10 +48,12 @@ export class StockStatusForm extends MasterForm<StockStatusRecord, Tab> {
 
   protected validate(f: StockStatusRecord) {
     const errors: Record<string, string> = {};
+    if (!f.type) errors['type'] = 'Select a type.';
+    if (!f.status) errors['status'] = 'Select a status.';
     if (this.original?.isDefault && !f.isDefault) errors['isDefault'] = 'Make another status the system default instead.';
     else if (f.isDefault && f.status !== 'Active') errors['isDefault'] = 'The system default must be active.';
     if (f.canIssue && !f.countsAsAvailable) errors['canIssue'] = 'Stock that can be issued must count as available.';
-    return { errors, tab: (errors['isDefault'] ? 'basic' : 'rules') as Tab };
+    return { errors, tab: (errors['type'] || errors['status'] || errors['isDefault'] ? 'basic' : 'rules') as Tab };
   }
 
   protected override tidy(f: StockStatusRecord): StockStatusRecord {

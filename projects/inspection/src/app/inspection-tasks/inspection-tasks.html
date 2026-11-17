@@ -3,8 +3,8 @@
   <div class="page-head">
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a routerLink="/inspection/overview">Inspection</a><span aria-hidden="true">/</span>
-        <span>Configuration</span><span aria-hidden="true">/</span>
+        <a routerLink="/inspection/overview">Inspection</a><span class="crumb-sep" aria-hidden="true">›</span>
+        <span>Configuration</span><span class="crumb-sep" aria-hidden="true">›</span>
         <span class="current">Inspection Tasks</span>
       </nav>
       <h1>Inspection Tasks</h1>
@@ -22,7 +22,7 @@
 
   <!-- ===== KPIs ===== -->
   <div class="kpis">
-    <button type="button" class="kpi" (click)="statusFilter.set('All'); resetPage()">
+    <button type="button" class="kpi" (click)="statusFilter.set(''); resetPage()">
       <span class="kpi-ic"><lucide-icon [img]="icons.FileText" [size]="22"></lucide-icon></span>
       <span class="kpi-body"><span class="kpi-label">Total Tasks</span><strong class="kpi-value">{{ kpis().total }}</strong></span>
     </button>
@@ -50,11 +50,11 @@
           <input type="search" placeholder="Search tasks by name or code..." aria-label="Search tasks" [(ngModel)]="search" (ngModelChange)="resetPage()" />
         </label>
         <select class="control flt" aria-label="Category" [(ngModel)]="categoryFilter" (ngModelChange)="resetPage()">
-          <option value="All">All Categories</option>
+          <option value="">Select Category</option>
           @for (c of categories(); track c) { <option [value]="c">{{ c }}</option> }
         </select>
         <select class="control flt flt--sm" aria-label="Status" [(ngModel)]="statusFilter" (ngModelChange)="resetPage()">
-          <option value="All">All Statuses</option><option value="Active">Active</option><option value="Inactive">Inactive</option>
+          <option value="">Select Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option>
         </select>
       </div>
 
@@ -206,12 +206,14 @@
           <input class="control" [value]="f.taskCode || 'Assigned on save'" readonly /></label>
         <label class="field"><span class="field-label">Category</span>
           <select class="control" [(ngModel)]="f.taskCategory">
+            <option value="" disabled>Select Category</option>
             @for (c of categories(); track c) { <option [value]="c">{{ c }}</option> }
           </select></label>
         <label class="field span-2"><span class="field-label">Description</span>
           <textarea class="control" rows="2" [(ngModel)]="f.taskDescription"></textarea></label>
         <label class="field"><span class="field-label">Response type</span>
           <select class="control" [(ngModel)]="f.responseType">
+            <option value="" disabled>Select Response Type</option>
             @for (r of responseTypes; track r) { <option [value]="r">{{ r }}</option> }
           </select></label>
         <label class="field"><span class="field-label">Unit</span>
@@ -226,6 +228,7 @@
           <input class="control" type="number" min="0" [(ngModel)]="f.estimatedDurationMinutes" /></label>
         <label class="field"><span class="field-label">Default severity</span>
           <select class="control" [(ngModel)]="f.defaultSeverity">
+            <option value="" disabled>Select Default Severity</option>
             @for (s of severities; track s) { <option [value]="s">{{ s }}</option> }
           </select></label>
         <label class="field span-2"><span class="field-label">Procedure</span>

@@ -78,6 +78,15 @@ export class NodeConfigPanel implements OnChanges {
     const out: Record<string, string> = {};
     if (!d.name.trim()) out['name'] = 'Node name is required.';
     else if (d.name.trim().length > 60) out['name'] = 'Keep the name under 60 characters.';
+    const need = (key: keyof typeof c, label: string) => {
+      if (!c[key]) out[key] = `${label} is required.`;
+    };
+    if (d.type === 'trigger') { need('triggerEvent', 'Trigger event'); need('triggerModule', 'Source module'); }
+    if (d.type === 'condition') { need('conditionField', 'Field'); need('operator', 'Operator'); }
+    if (d.type === 'approval') { need('approvalType', 'Approval type'); need('approverSource', 'Approver source'); }
+    if (d.type === 'action') { need('actionType', 'Action type'); need('actionTarget', 'Target'); }
+    if (d.type === 'notification') { need('template', 'Notification template'); need('channel', 'Channel'); need('recipient', 'Recipient'); }
+    if (d.type === 'end') need('outcome', 'Outcome');
     if (d.type === 'condition' && !c.conditionValue.trim()) out['conditionValue'] = 'Enter the value to compare with.';
     if (d.type === 'approval') {
       if (c.approverSource === 'Role Based' && !c.approverRole) out['approverRole'] = 'Approver role is required.';

@@ -204,11 +204,11 @@
 
     @case ('assets') {
       <div class="card">
-        <p class="muted">{{ condition.usage.assets | number }} assets are in this condition. Sample shown below.</p>
+        <p class="muted">{{ condition.usage.assets | number }} assets are in this condition.</p>
         <table class="grid-table">
           <thead><tr><th>Asset Tag</th><th>Model</th><th>Manufacturer</th><th>Asset Type</th></tr></thead>
           <tbody>
-            @for (a of sampleAssets; track a.tag) {
+            @for (a of assets; track a.tag) {
               <tr><td class="mono">{{ a.tag }}</td><td>{{ a.model }}</td><td>{{ a.manufacturer }}</td><td>{{ a.type }}</td></tr>
             } @empty {
               <tr><td colspan="4" class="empty">No assets are in this condition.</td></tr>
@@ -240,6 +240,9 @@
             <li><span class="timeline__when">{{ formatDateTime(a.when) }}</span><span><strong>{{ a.who }}</strong> {{ a.text }}</span></li>
           }
         </ol>
+        @if (!activity.length) {
+          <p class="muted">No records found.</p>
+        }
       </div>
     }
 

@@ -58,30 +58,35 @@
           <div class="field">
             <label for="s-tz">Default Time Zone</label>
             <select id="s-tz" name="timeZone" [(ngModel)]="form.general.timeZone">
+              <option value="" disabled>Select Default Time Zone</option>
               @for (o of options.timeZones; track o) { <option [value]="o">{{ o }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="s-df">Date Format</label>
             <select id="s-df" name="dateFormat" [(ngModel)]="form.general.dateFormat">
+              <option value="" disabled>Select Date Format</option>
               @for (o of options.dateFormats; track o) { <option [value]="o">{{ o }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="s-tf">Time Format</label>
             <select id="s-tf" name="timeFormat" [(ngModel)]="form.general.timeFormat">
+              <option value="" disabled>Select Time Format</option>
               @for (o of options.timeFormats; track o) { <option [value]="o">{{ o }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="s-lang">Default Language</label>
             <select id="s-lang" name="language" [(ngModel)]="form.general.language">
+              <option value="" disabled>Select Default Language</option>
               @for (o of options.languages; track o) { <option [value]="o">{{ o }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="s-cur">Default Currency</label>
             <select id="s-cur" name="currency" [(ngModel)]="form.general.currency">
+              <option value="" disabled>Select Default Currency</option>
               @for (o of options.currencies; track o) { <option [value]="o">{{ o }}</option> }
             </select>
           </div>
@@ -112,12 +117,14 @@
           <div class="field">
             <label for="s-week">Week Starts On</label>
             <select id="s-week" name="weekStartsOn" [(ngModel)]="form.dateTime.weekStartsOn">
+              <option value="" disabled>Select Week Starts On</option>
               @for (o of options.weekStart; track o) { <option [value]="o">{{ o }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="s-fy">Fiscal Year Starts</label>
             <select id="s-fy" name="fiscalYearStart" [(ngModel)]="form.dateTime.fiscalYearStart">
+              <option value="" disabled>Select Fiscal Year Starts</option>
               @for (o of options.months; track o) { <option [value]="o">{{ o }}</option> }
             </select>
           </div>
@@ -218,24 +225,28 @@
           <div class="field">
             <label for="s-crit">Default Criticality</label>
             <select id="s-crit" name="criticality" [(ngModel)]="form.defaults.criticality">
+              <option value="" disabled>Select Default Criticality</option>
               @for (c of criticalities.all(); track c.code) { <option [value]="c.name">{{ c.name }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="s-cond">Default Condition</label>
             <select id="s-cond" name="condition" [(ngModel)]="form.defaults.condition">
+              <option value="" disabled>Select Default Condition</option>
               @for (c of conditions.all(); track c.code) { <option [value]="c.name">{{ c.name }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="s-src">Default Update Source</label>
             <select id="s-src" name="updateSource" [(ngModel)]="form.defaults.updateSource">
+              <option value="" disabled>Select Default Update Source</option>
               @for (s of sources.all(); track s.code) { <option [value]="s.code">{{ s.name }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="s-chart">Default Chart Type</label>
             <select id="s-chart" name="chartType" [(ngModel)]="form.defaults.chartType">
+              <option value="" disabled>Select Default Chart Type</option>
               @for (c of charts.all(); track c.code) { <option [value]="c.code">{{ c.name }}</option> }
             </select>
           </div>
@@ -322,6 +333,7 @@
         <div class="field narrow">
           <label for="s-digest">Summary Digest</label>
           <select id="s-digest" name="digest" [(ngModel)]="form.email.digest">
+            <option value="" disabled>Select Summary Digest</option>
             @for (d of options.digests; track d) { <option [value]="d">{{ d }}</option> }
           </select>
         </div>
@@ -349,6 +361,7 @@
           <div class="field">
             <label for="s-numfmt">Number Format</label>
             <select id="s-numfmt" name="numberFormat" [(ngModel)]="form.localization.numberFormat">
+              <option value="" disabled>Select Number Format</option>
               @for (n of options.numberFormats; track n) { <option [value]="n">{{ n }}</option> }
             </select>
           </div>
@@ -400,6 +413,7 @@
           <div class="field">
             <label for="s-erp">ERP System</label>
             <select id="s-erp" name="erp" [(ngModel)]="form.integration.erp">
+              <option value="" disabled>Select ERP System</option>
               @for (e of options.erp; track e) { <option [value]="e">{{ e }}</option> }
             </select>
           </div>
@@ -431,6 +445,7 @@
           <div class="field">
             <label for="s-failed">Status for Failed Syncs</label>
             <select id="s-failed" name="failedSyncStatus" [(ngModel)]="form.integration.failedSyncStatus">
+              <option value="" disabled>Select Status for Failed Syncs</option>
               @for (s of failedStatuses; track s.code) { <option [value]="s.code">{{ s.name }}</option> }
             </select>
           </div>
@@ -451,6 +466,7 @@
           <div class="field">
             <label for="s-bfreq">Frequency</label>
             <select id="s-bfreq" name="frequency" [(ngModel)]="form.backup.frequency">
+              <option value="" disabled>Select Frequency</option>
               @for (b of options.backupFrequencies; track b) { <option [value]="b">{{ b }}</option> }
             </select>
           </div>

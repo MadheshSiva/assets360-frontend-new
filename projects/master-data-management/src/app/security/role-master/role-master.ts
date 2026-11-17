@@ -23,7 +23,7 @@ interface Filters {
   selector: 'app-mdm-security-role-master',
   imports: [FormsModule, RouterLink, LucideAngularModule, RoleForm],
   templateUrl: './role-master.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../security.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../security.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class RoleMasterPage extends ListPage<RoleRecord, Filters, SortKey> {
   readonly service = inject(RoleService);

@@ -8,14 +8,14 @@
 
     <div class="field" [class.invalid]="errors['emails']">
       <label for="inv-emails">Email Addresses <span class="req">*</span></label>
-      <textarea id="inv-emails" name="emails" rows="4" [(ngModel)]="emails" placeholder="name@purpleiq.com, another@purpleiq.com"></textarea>
+      <textarea id="inv-emails" name="emails" rows="4" [(ngModel)]="emails" placeholder="name@company.com, another@company.com"></textarea>
       <small>{{ errors['emails'] || 'Separate addresses with commas or new lines. ' + count + ' address' + (count === 1 ? '' : 'es') + '.' }}</small>
     </div>
     <div class="grid2">
       <div class="field" [class.invalid]="errors['department']">
         <label for="inv-dept">Department <span class="req">*</span></label>
         <select id="inv-dept" name="department" [(ngModel)]="department">
-          <option value="">Select...</option>
+          <option value="" disabled>Select Department</option>
           @for (d of departments; track d) { <option [value]="d">{{ d }}</option> }
         </select>
         @if (errors['department']) { <small>{{ errors['department'] }}</small> }
@@ -23,7 +23,7 @@
       <div class="field" [class.invalid]="errors['primaryRole']">
         <label for="inv-role">Primary Role <span class="req">*</span></label>
         <select id="inv-role" name="primaryRole" [(ngModel)]="primaryRole">
-          <option value="">Select...</option>
+          <option value="" disabled>Select Primary Role</option>
           @for (r of roles; track r.name) { <option [value]="r.name">{{ r.name }}</option> }
         </select>
         @if (errors['primaryRole']) { <small>{{ errors['primaryRole'] }}</small> }
@@ -31,6 +31,7 @@
       <div class="field field--wide">
         <label for="inv-loc">Location</label>
         <select id="inv-loc" name="location" [(ngModel)]="location">
+          <option value="" disabled>Select Location</option>
           @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
         </select>
       </div>

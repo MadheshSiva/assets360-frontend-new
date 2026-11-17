@@ -28,14 +28,14 @@
         <label class="filter">
           <span>Status</span>
           <select name="status" [(ngModel)]="draft.status">
-            <option value="">All</option>
+            <option value="">Select Status</option>
             @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Skill</span>
           <select name="skill" [(ngModel)]="draft.skill">
-            <option value="">All</option>
+            <option value="">Select Skill</option>
             @for (s of skills.activeNames(); track s) { <option [value]="s">{{ s }}</option> }
           </select>
         </label>

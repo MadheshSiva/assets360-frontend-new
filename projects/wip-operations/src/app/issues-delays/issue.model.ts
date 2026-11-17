@@ -1,4 +1,4 @@
-/** Issue / delay records for WIP jobs. DEMO MODE: loaded from issues.json and kept in memory. */
+/** Issue / delay records for WIP jobs.  */
 export type IssueStatus = 'Open' | 'Investigating' | 'Action in progress' | 'Awaiting verification' | 'Closed';
 export type Severity = 'Critical' | 'High' | 'Medium' | 'Low';
 export type ActionStatus = 'Pending' | 'In progress' | 'Done';

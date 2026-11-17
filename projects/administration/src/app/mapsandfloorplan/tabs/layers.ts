@@ -9,10 +9,11 @@ import { MapsStore } from '../maps.store';
 const CATEGORIES = ['HVAC', 'Electrical', 'Mechanical', 'Plumbing', 'Fire Safety', 'IT'];
 const LAYER_TYPES = ['Zone (Area)', 'Geofence (Alerting)', 'Asset (Plotted / Tracked)', 'Device (IoT)', 'Annotation (Text)', 'Room (Space)', 'Heatmap', 'Base Map'];
 
-/** Saved layer visibility for each layer set (view). */
-type LayerSetState = Record<string, boolean>;
-
-/** Layers: which layers draw on the map, their order and style, and saved layer sets (views). */
+/**
+ * Layers: which layers draw on the map and their style (per floor plan, GET / PUT layers), and saved layer sets
+ * (views, GET / POST / DELETE layer-sets). The API has a fixed set of eight layers: name, type and description are
+ * read only, layers can't be added or removed, and the drag order is kept on this page only.
+ */
 @Component({
   standalone: true,
   selector: 'app-maps-layers',
@@ -52,46 +53,42 @@ export class LayersTab {
 
   rightTab: 'details' | 'style' = 'details';
   selectedId = 'assets';
-  draft: MapLayer | null = null;
   dragId: string | null = null;
   overId: string | null = null;
+  /** Id of the layer set being renamed. */
   renaming: string | null = null;
   renameText = '';
 
-  /** Visibility each layer set restores. */
-  private setStates: Record<string, LayerSetState> = {
-    'Operations View': this.capture(),
-    'Maintenance View': { ...this.capture(), devices: false, geofences: false, heatmap: false },
-    'Security View': { ...this.capture(), assets: false, rooms: false, geofences: true },
-    'Audit View': { ...this.capture(), heatmap: true, annotations: true }
-  };
-
-  constructor() {
-    this.pick(this.selectedId);
-  }
+  private draft: MapLayer | null = null;
+  /** Store layer the draft was copied from; a new object (load, save, toggle) refreshes the draft. */
+  private draftSource: MapLayer | undefined;
 
   get enabledCount(): number {
     return this.store.layers.length;
   }
 
-  private capture(): LayerSetState {
-    return Object.fromEntries(this.store.layers.map((l) => [l.id, l.enabled]));
+  /** Editable copy of the selected layer. */
+  get d(): MapLayer | null {
+    const l = this.store.layer(this.selectedId);
+    if (l !== this.draftSource) {
+      this.draftSource = l;
+      this.draft = l ? { ...l, categories: [...l.categories] } : null;
+    }
+    return this.draft;
   }
 
   pick(id: string): void {
     this.selectedId = id;
-    const l = this.store.layer(id);
-    this.draft = l ? { ...l, categories: [...l.categories] } : null;
+    this.draftSource = undefined;
   }
 
   toggleEye(event: MouseEvent, l: MapLayer): void {
     event.stopPropagation();
-    if (l.locked) return;
-    l.visible = !l.visible;
-    if (this.draft?.id === l.id) this.draft.visible = l.visible;
+    if (l.locked || this.store.working) return;
+    this.store.saveLayer({ ...l, visible: !l.visible }, { quiet: true });
   }
 
-  /* ===== Drag to reorder ===== */
+  /* ===== Drag to reorder (this page only - the API keeps a fixed order) ===== */
 
   dragStart(id: string): void {
     this.dragId = id;
@@ -117,84 +114,70 @@ export class LayersTab {
 
   /* ===== Layer sets ===== */
 
-  applySet(name: string): void {
-    this.setStates[this.store.activeLayerSet] = this.capture();
-    this.store.activeLayerSet = name;
-    const state = this.setStates[name] ?? {};
-    this.store.layers.forEach((l) => (l.enabled = state[l.id] ?? l.enabled));
-    this.pick(this.selectedId);
+  applySet(id: string): void {
+    this.store.applyLayerSet(id);
   }
 
   addSet(): void {
+    const names = new Set(this.store.layerSets.map((s) => s.name));
     let n = this.store.layerSets.length + 1;
-    while (this.store.layerSets.includes(`Custom View ${n}`)) n++;
-    const name = `Custom View ${n}`;
-    this.store.layerSets = [...this.store.layerSets, name];
-    this.setStates[name] = this.capture();
-    this.store.activeLayerSet = name;
-    this.startRename(name);
+    while (names.has(`Custom View ${n}`)) n++;
+    this.store.addLayerSet(`Custom View ${n}`, (s) => this.startRename(s.id, s.name));
   }
 
-  startRename(name: string): void {
-    this.renaming = name;
+  startRename(id: string, name: string): void {
+    this.renaming = id;
     this.renameText = name;
   }
 
   commitRename(): void {
-    const from = this.renaming;
+    const id = this.renaming;
     const to = this.renameText.trim();
     this.renaming = null;
-    if (!from || !to || to === from || this.store.layerSets.includes(to)) return;
-    this.store.layerSets = this.store.layerSets.map((s) => (s === from ? to : s));
-    this.setStates[to] = this.setStates[from];
-    delete this.setStates[from];
-    if (this.store.activeLayerSet === from) this.store.activeLayerSet = to;
+    const set = this.store.layerSets.find((s) => s.id === id);
+    if (!id || !set || !to || to === set.name) return;
+    if (this.store.layerSets.some((s) => s.name === to)) {
+      this.store.notify(`A layer set named ${to} already exists`, 'error');
+      return;
+    }
+    this.store.renameLayerSet(id, to);
   }
 
-  removeSet(name: string): void {
-    if (this.store.layerSets.length <= 1) return;
-    this.store.layerSets = this.store.layerSets.filter((s) => s !== name);
-    delete this.setStates[name];
-    if (this.store.activeLayerSet === name) this.applySet(this.store.layerSets[0]);
+  removeSet(id: string): void {
+    const set = this.store.layerSets.find((s) => s.id === id);
+    if (!set || !confirm(`Delete layer set ${set.name}?`)) return;
+    this.store.removeLayerSet(id);
   }
 
-  /* ===== Add / edit layer ===== */
+  /* ===== Edit layer ===== */
 
   addLayer(): void {
-    const id = `layer-${Date.now()}`;
-    const base = this.store.layer('annotations')!;
-    this.store.layers = [
-      ...this.store.layers,
-      { ...base, id, name: 'New Layer', description: '', enabled: true, visible: true, locked: false, categories: [] }
-    ];
-    this.pick(id);
-    this.rightTab = 'details';
+    this.store.notify('The maps API has a fixed set of layers - custom layers are not supported yet');
   }
 
   addCategory(c: string): void {
-    if (this.draft && c && !this.draft.categories.includes(c)) this.draft.categories = [...this.draft.categories, c];
+    const d = this.d;
+    if (d && c && !d.categories.includes(c)) d.categories = [...d.categories, c];
   }
 
   removeCategory(c: string): void {
-    if (this.draft) this.draft.categories = this.draft.categories.filter((x) => x !== c);
+    const d = this.d;
+    if (d) d.categories = d.categories.filter((x) => x !== c);
   }
 
   reset(): void {
-    this.pick(this.selectedId);
+    this.draftSource = undefined;
   }
 
   save(): void {
-    if (!this.draft || !this.draft.name.trim()) return;
-    this.store.layers = this.store.layers.map((l) => (l.id === this.draft!.id ? { ...this.draft!, name: this.draft!.name.trim() } : l));
-    this.store.notify(`Layer ${this.draft.name} saved`);
-  }
-
-  removeLayer(): void {
-    if (!this.draft || this.draft.locked) return;
-    const name = this.draft.name;
-    this.store.layers = this.store.layers.filter((l) => l.id !== this.draft!.id);
-    this.pick(this.store.layers[0]?.id ?? '');
-    this.store.notify(`Layer ${name} removed`);
+    // Enter on the Details tab moves on to Style instead of saving
+    if (this.rightTab === 'details') {
+      this.rightTab = 'style';
+      return;
+    }
+    const d = this.d;
+    if (!d || this.store.working || !d.name.trim()) return;
+    this.store.saveLayer({ ...d, name: d.name.trim(), categories: [...d.categories] }, { success: `Layer ${d.name.trim()} saved` });
   }
 
   /* ===== Quick "Show" toggles above the map ===== */
@@ -204,8 +187,6 @@ export class LayersTab {
   }
 
   setShown(id: string, on: boolean): void {
-    const l = this.store.layer(id);
-    if (l) l.enabled = on;
-    if (this.draft?.id === id) this.draft.enabled = on;
+    this.store.setLayerEnabled(id, on);
   }
 }

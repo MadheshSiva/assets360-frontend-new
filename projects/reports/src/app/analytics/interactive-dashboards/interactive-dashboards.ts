@@ -21,6 +21,14 @@ type MenuKey = 'picker' | 'mine' | 'shared' | 'favorites' | 'more' | 'info';
 
 const SPAN_STEPS: WidgetSpan[] = [3, 4, 5, 6, 7, 8, 12];
 
+/** Placeholder shown while the user has no dashboards (never persisted). */
+function noDashboard(): Dashboard {
+  return {
+    id: '', name: 'No dashboards', description: '', owner: CURRENT_USER.name, sharing: 'private', sharedWith: [], groups: [],
+    role: 'Owner', favorite: false, updatedAt: '—', widgets: []
+  };
+}
+
 /** Reports & Analytics > Interactive Dashboards (configurable, drag-and-drop widget dashboards) */
 @Component({
   selector: 'app-ra-interactive-dashboards',
@@ -40,7 +48,7 @@ export class InteractiveDashboardsPage extends AnalyticsPage implements OnInit {
   readonly categories = ['All categories', ...RA_CATEGORIES];
   readonly me = CURRENT_USER.name;
 
-  category = this.categories[0];
+  category = '';
   compare = false;
   filters: DashFilters = this.buildFilters();
   current!: Dashboard;
@@ -52,7 +60,7 @@ export class InteractiveDashboardsPage extends AnalyticsPage implements OnInit {
   overIndex: number | null = null;
 
   menu: MenuKey | null = null;
-  addDialog: { type: WidgetType; index: number } | null = null;
+  addDialog: { type: WidgetType | ''; index: number } | null = null;
   createOpen = false;
   shareOpen = false;
   expanded: WidgetConfig | null = null;
@@ -61,15 +69,19 @@ export class InteractiveDashboardsPage extends AnalyticsPage implements OnInit {
   viewName = '';
   viewTried = false;
 
-  override updatedMinutes = 2;
 
   ngOnInit(): void {
     const requested = this.route.snapshot.queryParamMap.get('dashboard');
-    this.current = (requested && this.store.get(requested)) || this.store.dashboards[0];
+    this.current = (requested && this.store.get(requested)) || this.store.dashboards[0] || noDashboard();
+  }
+
+  /** False while the placeholder is shown (no saved dashboards yet) */
+  get hasDashboard(): boolean {
+    return !!this.current.id;
   }
 
   get canEdit(): boolean {
-    return this.current.role !== 'Viewer';
+    return this.hasDashboard && this.current.role !== 'Viewer';
   }
 
   get myDashboards(): Dashboard[] {
@@ -86,7 +98,7 @@ export class InteractiveDashboardsPage extends AnalyticsPage implements OnInit {
 
   get sharedText(): string {
     const d = this.current;
-    if (d.sharing === 'organization') return 'Everyone in Purple IQ Group';
+    if (d.sharing === 'organization') return 'Everyone in the organization';
     const users = d.sharedWith.length;
     const groups = d.groups.length;
     if (!users && !groups) return 'Only you';
@@ -165,6 +177,10 @@ export class InteractiveDashboardsPage extends AnalyticsPage implements OnInit {
   }
 
   openShare(): void {
+    if (!this.hasDashboard) {
+      this.notify('Create a dashboard first.');
+      return;
+    }
     if (this.current.role !== 'Owner') {
       this.notify(`Only the owner (${this.current.owner}) can change sharing. Use Copy link from the ⋯ menu instead.`);
       return;
@@ -189,15 +205,6 @@ export class InteractiveDashboardsPage extends AnalyticsPage implements OnInit {
     } catch {
       this.notify(`Copy the link: ${this.shareLink}`);
     }
-  }
-
-  resetDemo(): void {
-    this.menu = null;
-    this.editMode = false;
-    this.snapshot = null;
-    this.store.reset();
-    this.current = this.store.dashboards[0];
-    this.notify('Demo dashboards restored.');
   }
 
   // ===== Edit mode =====
@@ -287,11 +294,15 @@ export class InteractiveDashboardsPage extends AnalyticsPage implements OnInit {
   // ===== Adding widgets =====
 
   openAdd(type: WidgetType | null, index = this.current.widgets.length): void {
+    if (!this.hasDashboard) {
+      this.notify('Create a dashboard first, then add widgets to it.');
+      return;
+    }
     if (!this.canEdit) {
       this.notify(`You have view access to “${this.current.name}”. Copy it with Create Dashboard to customise it.`);
       return;
     }
-    this.addDialog = { type: type ?? 'kpi', index };
+    this.addDialog = { type: type ?? '', index };
   }
 
   onWidgetAdded(n: NewWidget): void {

@@ -28,13 +28,17 @@ export const AUTH_METHODS = ['OAuth 2.0 (client credentials)', 'API key', 'Basic
               <small>{{ nameError }}</small>
             }
           </div>
-          <div class="field">
+          <div class="field" [class.invalid]="submitted && !form.type">
             <label for="dx-con-type">Type</label>
             <select id="dx-con-type" name="type" [(ngModel)]="form.type">
+              <option value="" disabled>Select Type</option>
               @for (t of types; track t) {
                 <option [value]="t">{{ t }}</option>
               }
             </select>
+            @if (submitted && !form.type) {
+              <small>Choose a type.</small>
+            }
           </div>
         </div>
         <div class="field" [class.invalid]="submitted && urlError">
@@ -43,13 +47,17 @@ export const AUTH_METHODS = ['OAuth 2.0 (client credentials)', 'API key', 'Basic
           <small>{{ submitted && urlError ? urlError : 'Must use HTTPS. Do not put keys or tokens in the URL.' }}</small>
         </div>
         <div class="dx-form-grid">
-          <div class="field">
+          <div class="field" [class.invalid]="submitted && !form.auth">
             <label for="dx-con-auth">Authentication</label>
             <select id="dx-con-auth" name="auth" [(ngModel)]="form.auth">
+              <option value="" disabled>Select Authentication</option>
               @for (a of authMethods; track a) {
                 <option [value]="a">{{ a }}</option>
               }
             </select>
+            @if (submitted && !form.auth) {
+              <small>Choose an authentication method.</small>
+            }
           </div>
           <div class="field">
             <label for="dx-con-client">Client ID / user <span class="muted">(optional)</span></label>
@@ -81,7 +89,7 @@ export class ConnectionDialog {
   readonly icons = { Lock };
   readonly types: ConnectionType[] = ['REST', 'OData', 'JDBC'];
   readonly authMethods = AUTH_METHODS;
-  form: ConnectionForm = { name: '', type: 'REST', baseUrl: 'https://', auth: AUTH_METHODS[0], clientId: '', secret: '' };
+  form: Omit<ConnectionForm, 'type'> & { type: ConnectionType | '' } = { name: '', type: '', baseUrl: 'https://', auth: '', clientId: '', secret: '' };
   submitted = false;
 
   get secretLabel(): string {
@@ -118,8 +126,8 @@ export class ConnectionDialog {
 
   save(): void {
     this.submitted = true;
-    if (this.nameError || this.urlError || this.secretError) return;
-    const con = this.service.addConnection(this.form);
+    if (this.nameError || !this.form.type || this.urlError || !this.form.auth || this.secretError) return;
+    const con = this.service.addConnection({ ...this.form, type: this.form.type });
     this.form.secret = '';
     this.saved.emit(con.name);
   }

@@ -14,7 +14,7 @@
       <div class="field" [class.invalid]="submitted && errors.user">
         <label for="ex-user">User <span class="req">*</span></label>
         <select id="ex-user" name="user" [(ngModel)]="draft.user">
-          <option value="">Select user</option>
+          <option value="" disabled>Select User</option>
           @for (p of people; track p) {
             <option [value]="p">{{ p }}</option>
           }
@@ -24,20 +24,22 @@
       <div class="field" [class.invalid]="submitted && errors.module">
         <label for="ex-module">Module <span class="req">*</span></label>
         <select id="ex-module" name="module" [(ngModel)]="draft.module">
-          <option value="">Select module</option>
+          <option value="" disabled>Select Module</option>
           @for (m of modules; track m) {
             <option [value]="m">{{ m }}</option>
           }
         </select>
         @if (submitted && errors.module) { <small>{{ errors.module }}</small> }
       </div>
-      <div class="field">
-        <label for="ex-access">Access</label>
+      <div class="field" [class.invalid]="submitted && errors.access">
+        <label for="ex-access">Access <span class="req">*</span></label>
         <select id="ex-access" name="access" [(ngModel)]="draft.access">
+          <option value="" disabled>Select Access</option>
           @for (a of accessTypes; track a) {
             <option [value]="a">{{ a }}</option>
           }
         </select>
+        @if (submitted && errors.access) { <small>{{ errors.access }}</small> }
       </div>
       <div class="field" [class.invalid]="submitted && errors.expires">
         <label for="ex-expires">Expires</label>

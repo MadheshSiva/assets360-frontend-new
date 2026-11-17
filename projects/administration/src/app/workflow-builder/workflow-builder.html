@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a routerLink="/administration">Administration</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <strong>Workflow Builder</strong>
 </nav>
 
@@ -13,6 +13,7 @@
   <label class="org-picker">
     Organization
     <select [(ngModel)]="organization" name="organization">
+      <option value="" disabled>Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
@@ -77,14 +78,14 @@
         <div class="field">
           <label for="wb-f-status">Status</label>
           <select id="wb-f-status" [(ngModel)]="statusFilter" name="statusFilter">
-            <option value="">All statuses</option>
+            <option value="">Select Status</option>
             @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
           </select>
         </div>
         <div class="field">
           <label for="wb-f-cat">Category</label>
           <select id="wb-f-cat" [(ngModel)]="categoryFilter" name="categoryFilter">
-            <option value="">All categories</option>
+            <option value="">Select Category</option>
             @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
           </select>
         </div>
@@ -142,6 +143,7 @@
             {{ wf.name }}
             <span class="pill" [attr.data-tone]="statusTone(wf.status)">{{ wf.status }}</span>
             <select class="select wb-version" [(ngModel)]="viewVersion" name="viewVersion" (ngModelChange)="onVersionChange($event)" aria-label="Version">
+              <option value="" disabled>Select Version</option>
               @for (v of versionOptions(); track v) { <option [value]="v">{{ v }}</option> }
             </select>
             @if (dirty) { <span class="pill" data-tone="orange">Unsaved changes</span> }
@@ -220,7 +222,7 @@
   <div class="overlay" (click)="details = null">
     <form class="confirm wb-modal" (click)="$event.stopPropagation()" (ngSubmit)="saveDetails()" novalidate>
       <h2>{{ d.id ? 'Edit Workflow Details' : 'Create Workflow' }}</h2>
-      @if (!d.id && d.template >= 0) { <p class="note">Starting from template: {{ templates[d.template].name }}</p> }
+      @if (!d.id && d.template !== null && d.template >= 0) { <p class="note">Starting from template: {{ templates[d.template].name }}</p> }
       <div class="grid2">
         <div class="field field--wide" [class.invalid]="detailErr('name')">
           <label for="wb-name">Workflow Name <span class="req">*</span></label>
@@ -235,22 +237,28 @@
         <div class="field" [class.invalid]="detailErr('category')">
           <label for="wb-cat">Category <span class="req">*</span></label>
           <select id="wb-cat" name="category" [(ngModel)]="d.category">
+            <option value="" disabled>Select Category</option>
             @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
           </select>
+          @if (detailErr('category')) { <small>{{ detailErr('category') }}</small> }
         </div>
-        <div class="field">
-          <label for="wb-owner">Owner</label>
+        <div class="field" [class.invalid]="detailErr('owner')">
+          <label for="wb-owner">Owner <span class="req">*</span></label>
           <select id="wb-owner" name="owner" [(ngModel)]="d.owner">
+            <option value="" disabled>Select Owner</option>
             @for (p of people; track p) { <option [value]="p">{{ p }}</option> }
           </select>
+          @if (detailErr('owner')) { <small>{{ detailErr('owner') }}</small> }
         </div>
         @if (!d.id) {
-          <div class="field">
-            <label for="wb-tpl">Start From</label>
+          <div class="field" [class.invalid]="detailErr('template')">
+            <label for="wb-tpl">Start From <span class="req">*</span></label>
             <select id="wb-tpl" name="template" [(ngModel)]="d.template">
+              <option [ngValue]="null" disabled>Select Start From</option>
               <option [ngValue]="-1">Blank (trigger only)</option>
               @for (t of templates; track t.name; let i = $index) { <option [ngValue]="i">{{ t.name }}</option> }
             </select>
+            @if (detailErr('template')) { <small>{{ detailErr('template') }}</small> }
           </div>
         }
         <div class="field field--wide">

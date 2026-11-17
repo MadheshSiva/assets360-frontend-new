@@ -4,11 +4,11 @@
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <a routerLink="/wip-operations">WIP</a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <span>Operations</span>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <a routerLink="/wip-operations/job-orders">Job Orders</a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <span class="menu-wrap">
           <button type="button" class="crumb-btn crumb-btn--accent" (click)="toggleSwitcher($event)" [attr.aria-expanded]="switcherOpen" aria-haspopup="menu" title="Switch job order">
             {{ o.code }}<lucide-icon [img]="icons.ChevronDown" [size]="14"></lucide-icon>
@@ -23,7 +23,7 @@
       <h1>Job Order (Instance)</h1>
       <p class="subtitle">Execute, track and complete a job created from a published template</p>
     </div>
-    <div class="head-actions">
+    <div *ngIf="orderList.length" class="head-actions">
       <button type="button" class="btn btn-outline" [disabled]="o.status === 'Completed'" (click)="togglePause()">
         <lucide-icon [img]="o.status === 'In Progress' ? icons.Pause : icons.Play" [size]="18"></lucide-icon>
         {{ o.status === 'In Progress' ? 'Pause Job' : o.status === 'Paused' ? 'Resume Job' : 'Start Job' }}
@@ -35,6 +35,7 @@
     </div>
   </div>
 
+  <ng-container *ngIf="orderList.length; else noOrders">
   <!-- ===== Order summary ===== -->
   <div class="card summary-card">
     <img class="product" [src]="o.image" [alt]="o.name" />
@@ -245,6 +246,7 @@
             <td>
               <select *ngIf="s.status === 'In Progress' && o.status === 'In Progress'; else readStatus" class="control control--xs" [ngModel]="t.status"
                 (ngModelChange)="setTaskStatus(s, t, $event)" [attr.aria-label]="'Status of ' + t.name">
+                <option [ngValue]="null" disabled>Select Status</option>
                 <option *ngFor="let x of taskStatuses" [ngValue]="x">{{ x }}</option>
               </select>
               <ng-template #readStatus><span class="state" [ngClass]="'state--' + statusTone(t.status)"><span class="dot"></span>{{ t.status }}</span></ng-template>
@@ -355,6 +357,11 @@
     <span class="grow">Template version locked at job creation &bull; All execution changes are recorded</span>
     <button type="button" class="link-btn" (click)="tab = 'activity'">View Audit Trail<lucide-icon [img]="icons.ArrowRight" [size]="15"></lucide-icon></button>
   </footer>
+  </ng-container>
+
+  <ng-template #noOrders>
+    <div class="card panel"><p class="empty">No job orders yet.</p></div>
+  </ng-template>
 </section>
 
 <!-- =================== Dialogs =================== -->
@@ -367,9 +374,9 @@
         <form class="modal-body" (ngSubmit)="saveIssue()">
           <label class="field"><span class="field-label">Title <em>*</em></span><input class="control" [(ngModel)]="issueForm.title" name="title" /></label>
           <div class="grid-3">
-            <label class="field"><span class="field-label">Severity</span><select class="control" [(ngModel)]="issueForm.severity" name="severity"><option *ngFor="let s of severities" [ngValue]="s">{{ s }}</option></select></label>
-            <label class="field"><span class="field-label">Stage</span><select class="control" [(ngModel)]="issueForm.stage" name="stage"><option *ngFor="let s of o.stages" [value]="s.name">{{ s.name }}</option></select></label>
-            <label class="field"><span class="field-label">Owner</span><select class="control" [(ngModel)]="issueForm.owner" name="owner"><option *ngFor="let s of owners" [value]="s">{{ s }}</option></select></label>
+            <label class="field"><span class="field-label">Severity</span><select class="control" [(ngModel)]="issueForm.severity" name="severity"><option [ngValue]="null" disabled>Select Severity</option><option *ngFor="let s of severities" [ngValue]="s">{{ s }}</option></select></label>
+            <label class="field"><span class="field-label">Stage</span><select class="control" [(ngModel)]="issueForm.stage" name="stage"><option value="" disabled>Select Stage</option><option *ngFor="let s of o.stages" [value]="s.name">{{ s.name }}</option></select></label>
+            <label class="field"><span class="field-label">Owner</span><select class="control" [(ngModel)]="issueForm.owner" name="owner"><option value="" disabled>Select Owner</option><option *ngFor="let s of owners" [value]="s">{{ s }}</option></select></label>
           </div>
           <label class="field"><span class="field-label">Description</span><textarea class="control" rows="3" [(ngModel)]="issueForm.description" name="description"></textarea></label>
           <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
@@ -382,10 +389,10 @@
         <div class="modal-head"><h2 id="jo-dialog-title">Log Progress · {{ currentStage?.name }}</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
         <form class="modal-body" (ngSubmit)="saveProgress()">
           <label class="field"><span class="field-label">Task</span>
-            <select class="control" [(ngModel)]="progressForm.task" name="task"><option *ngFor="let t of currentStage?.tasks; let i = index" [ngValue]="i">{{ t.name }} ({{ t.status }})</option></select>
+            <select class="control" [(ngModel)]="progressForm.task" name="task"><option [ngValue]="null" disabled>Select Task</option><option *ngFor="let t of currentStage?.tasks; let i = index" [ngValue]="i">{{ t.name }} ({{ t.status }})</option></select>
           </label>
           <div class="grid-3">
-            <label class="field"><span class="field-label">New Status</span><select class="control" [(ngModel)]="progressForm.status" name="status"><option *ngFor="let s of taskStatuses" [ngValue]="s">{{ s }}</option></select></label>
+            <label class="field"><span class="field-label">New Status</span><select class="control" [(ngModel)]="progressForm.status" name="status"><option [ngValue]="null" disabled>Select New Status</option><option *ngFor="let s of taskStatuses" [ngValue]="s">{{ s }}</option></select></label>
             <label class="field"><span class="field-label">Photos Added</span><input type="number" class="control" [(ngModel)]="progressForm.photos" name="photos" min="0" /></label>
           </div>
           <label class="field"><span class="field-label">Note</span><textarea class="control" rows="2" [(ngModel)]="progressForm.note" name="note"></textarea></label>
@@ -434,7 +441,7 @@
         <form class="modal-body" (ngSubmit)="saveConsumption()">
           <div class="grid-3">
             <label class="field grid-span-2"><span class="field-label">Material</span>
-              <select class="control" [(ngModel)]="consumptionForm.material" name="material"><option *ngFor="let m of o.materials; let i = index" [ngValue]="i">{{ m.item }} ({{ m.issued - m.consumed }} {{ m.unit.toLowerCase() }} available)</option></select>
+              <select class="control" [(ngModel)]="consumptionForm.material" name="material"><option [ngValue]="null" disabled>Select Material</option><option *ngFor="let m of o.materials; let i = index" [ngValue]="i">{{ m.item }} ({{ m.issued - m.consumed }} {{ m.unit.toLowerCase() }} available)</option></select>
             </label>
             <label class="field"><span class="field-label">Quantity</span><input type="number" class="control" [(ngModel)]="consumptionForm.quantity" name="quantity" min="1" /></label>
           </div>

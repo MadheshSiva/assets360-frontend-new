@@ -18,7 +18,7 @@ const USERNAME = /^[a-z0-9]+([._-][a-z0-9]+)*$/;
   selector: 'app-user-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './user-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', './user-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', './user-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class UserForm extends MasterForm<UserRecord, Tab> implements OnChanges {
   protected readonly store = inject(UserService);
@@ -148,7 +148,8 @@ export class UserForm extends MasterForm<UserRecord, Tab> implements OnChanges {
     else if (this.store.isEmailTaken(f.email, code)) errors['email'] = 'Another user has this email.';
     if (!f.department) errors['department'] = 'Select a department.';
     if (!f.primaryRole) errors['primaryRole'] = 'Select a primary role.';
-    if (this.isSelf && f.status !== 'Active') errors['status'] = 'You can’t deactivate your own account.';
+    if (!f.status) errors['status'] = 'Select a status.';
+    else if (this.isSelf && f.status !== 'Active') errors['status'] = 'You can’t deactivate your own account.';
     if (f.accountExpiry && f.accountExpiry <= new Date().toISOString().slice(0, 10) && f.status === 'Active') errors['accountExpiry'] = 'The expiry date must be in the future.';
     if (!f.sites.length) errors['sites'] = 'Give access to at least one site.';
     const tab: Tab = Object.keys(errors).some((k) => ['username', 'email', 'department', 'primaryRole', 'status', 'photo'].includes(k)) ? 'basic' : 'access';

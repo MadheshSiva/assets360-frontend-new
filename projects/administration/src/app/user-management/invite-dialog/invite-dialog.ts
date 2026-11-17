@@ -31,12 +31,14 @@ export class InviteDialog {
   readonly icons = { Mail, X };
   readonly departments = ADMIN_DEPARTMENTS;
   readonly locations = ADMIN_LOCATIONS;
-  readonly roles = USER_ROLES.filter((r) => !r.secondaryOnly);
+  get roles() {
+    return USER_ROLES.filter((r) => !r.secondaryOnly);
+  }
 
   emails = '';
   department = '';
   primaryRole = '';
-  location = ADMIN_LOCATIONS[0];
+  location = '';
   errors: Record<string, string> = {};
 
   /** Addresses split on commas, semicolons, spaces or new lines. */

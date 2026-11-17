@@ -15,7 +15,7 @@ type Tab = 'basic';
   selector: 'app-chart-type-form',
   imports: [FormsModule, LucideAngularModule, ChartPreviewIcon],
   templateUrl: './chart-type-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', './chart-type-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', './chart-type-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class ChartTypeForm extends MasterForm<ChartTypeRecord, Tab> {
   protected readonly store = inject(ChartTypeService);
@@ -43,6 +43,7 @@ export class ChartTypeForm extends MasterForm<ChartTypeRecord, Tab> {
   protected validate(f: ChartTypeRecord) {
     const errors: Record<string, string> = {};
     if (!f.category) errors['category'] = 'Select a category.';
+    if (!f.status) errors['status'] = 'Select a status.';
     return { errors };
   }
 

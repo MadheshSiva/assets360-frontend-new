@@ -174,10 +174,11 @@ export class ConfigDetailDrawer implements OnChanges {
   }
 
   date(iso: string): string {
-    return formatDate(iso);
+    return iso ? formatDate(iso) : '—';
   }
 
   dateTime(iso: string): string {
+    if (!iso) return '—';
     const d = new Date(iso);
     return `${formatDate(iso)}, ${d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
   }

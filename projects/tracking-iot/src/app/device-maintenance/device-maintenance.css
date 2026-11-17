@@ -189,3 +189,5 @@ select.control {
   .dm-head .btn { flex: 1; }
   .search--sm { width: 100%; }
 }
+.dk--other { background: #f1f2f6; color: #4b5563; }
+.load-error { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }

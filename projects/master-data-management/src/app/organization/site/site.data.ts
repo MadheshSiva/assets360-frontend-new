@@ -2,18 +2,18 @@ import { SiteContact, SiteRecord, SiteType } from './site.model';
 
 /* Blank record for the site form. Records come from the API. */
 
-const NO_CONTACT: SiteContact = { name: '', designation: '', email: '', phoneCountry: 'United Arab Emirates', phone: '' };
+const NO_CONTACT: SiteContact = { name: '', designation: '', email: '', phoneCountry: '', phone: '' };
 
 function base(): Omit<SiteRecord, 'id' | 'code' | 'name' | 'siteType' | 'businessUnit' | 'department'> {
   return {
     organizationCode: '',
     parentId: null,
-    timeZone: '(GMT+04:00) Dubai',
+    timeZone: '',
     description: '',
     status: 'Active',
     image: null,
     images: [],
-    address: { line1: '', line2: '', city: '', state: '', country: 'United Arab Emirates', postalCode: '' },
+    address: { line1: '', line2: '', city: '', state: '', country: '', postalCode: '' },
     lat: null,
     lng: null,
     manager: { ...NO_CONTACT },

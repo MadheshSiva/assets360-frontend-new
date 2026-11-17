@@ -71,7 +71,7 @@ export interface AddBuildingInput {
 export class SiteHierarchyService {
   private nextId = 1000;
 
-  private readonly _projects = signal<Project[]>([this.seedProject()]);
+  private readonly _projects = signal<Project[]>([]);
   readonly projects = this._projects.asReadonly();
   readonly allZones = computed(() => this.flattenZones(this._projects()));
 
@@ -85,87 +85,6 @@ export class SiteHierarchyService {
       lat: base.lat + jitter(),
       lng: base.lng + jitter(),
       zoom: Math.min(base.zoom + zoomStep, 20),
-    };
-  }
-
-  private seedProject(): Project {
-    const projectCoords: Coords = { lat: 25.2048, lng: 55.2708, zoom: 6 };
-    const areaCoords: Coords = { lat: 25.2048, lng: 55.2708, zoom: 11 };
-    const floorCoords: Coords = { lat: 25.2048, lng: 55.2708, zoom: 17 };
-
-    const zone = (id: string, name: string, color: string, coords: Coords, subZones: Zone[] = []): Zone => ({
-      kind: 'zone',
-      id,
-      name,
-      color,
-      coords,
-      zones: subZones,
-    });
-
-    // Azy floor is a sub-zone nested inside Second Colony.
-    const azyFloorZone = zone('zone-2', 'Azy floor', '#dc2626', { lat: 25.2045, lng: 55.2705, zoom: 19 });
-    const secondColonyZone = zone('zone-1', 'Second Colony', '#158b4b', { lat: 25.2051, lng: 55.2711, zoom: 19 }, [
-      azyFloorZone,
-    ]);
-
-    const thirdRightFloor: Floor = {
-      kind: 'floor',
-      id: 'floor-1',
-      name: 'Third Right',
-      coords: floorCoords,
-      zones: [secondColonyZone],
-    };
-
-    const building: Building = {
-      kind: 'building',
-      id: 'building-1',
-      name: 'Street One',
-      coords: areaCoords,
-      floors: [thirdRightFloor],
-    };
-
-    const outerZone: OuterZone = {
-      kind: 'outerZone',
-      id: 'outerzone-1',
-      name: 'Main Outer Zone',
-      coords: areaCoords,
-      buildings: [building],
-    };
-
-    // A direct outdoor zone on Oman itself, alongside its indoor outer-zone/building/floor/zone chain.
-    const outdoorParkingZone = zone('zone-3', 'Outdoor Parking', '#2563eb', {
-      lat: 25.2058,
-      lng: 55.2695,
-      zoom: 15,
-    });
-
-    const state: State = {
-      kind: 'state',
-      id: 'state-1',
-      name: 'Oman',
-      type: 'indoor_outdoor',
-      coords: areaCoords,
-      zones: [outdoorParkingZone],
-      outerZones: [outerZone],
-    };
-
-    // Country -> State -> Outer Zone -> Building -> Floor -> Zone.
-    const area: Area = {
-      kind: 'area',
-      id: 'area-1',
-      name: 'UAE',
-      coords: areaCoords,
-      states: [state],
-    };
-
-    return {
-      kind: 'project',
-      id: 'project-1',
-      name: 'Track Assets',
-      description: 'Primary demo project',
-      status: 'active',
-      coords: projectCoords,
-      areas: [area],
     };
   }
 

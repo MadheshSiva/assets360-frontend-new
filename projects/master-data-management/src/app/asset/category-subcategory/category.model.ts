@@ -10,7 +10,7 @@ export interface SubcategoryRecord {
   icon: AssetModelIcon;
   color: string;
   status: CategoryStatus;
-  // DEMO MODE: registered assets, owned by the Assets module
+  // registered assets, owned by the Assets module
   assets: number;
 }
 
@@ -40,7 +40,7 @@ export interface CategoryRecord {
   showInMobile: boolean;
   includeInReports: boolean;
   approvalForNewAssets: boolean;
-  // DEMO MODE: counts owned by the Maintenance and Documents modules
+  // counts owned by the Maintenance and Documents modules
   openWorkOrders: number;
   documents: number;
   createdOn: string;

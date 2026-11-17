@@ -28,7 +28,7 @@
         <div class="field" [class.invalid]="errors['warehouseCode']">
           <label for="st-wh"><span class="req">*</span> Warehouse</label>
           <select id="st-wh" name="warehouseCode" [(ngModel)]="form.warehouseCode">
-            <option value="" disabled>Select warehouse</option>
+            <option value="" disabled>Select Warehouse</option>
             @for (w of warehouseOptions; track w.code) { <option [value]="w.code">{{ w.name }} ({{ w.code }})</option> }
           </select>
           @if (errors['warehouseCode']) { <small>{{ errors['warehouseCode'] }}</small> }
@@ -37,13 +37,14 @@
         <div class="field">
           <label for="st-type">Store Type</label>
           <select id="st-type" name="storeType" [(ngModel)]="form.storeType">
+            <option value="" disabled>Select Store Type</option>
             @for (t of storeTypes; track t) { <option [value]="t">{{ t }}</option> }
           </select>
         </div>
         <div class="field">
           <label for="st-keeper">Store Keeper</label>
           <select id="st-keeper" name="keeperId" [(ngModel)]="form.keeperId">
-            <option value="">Select store keeper</option>
+            <option value="">Select Store Keeper</option>
             @for (e of keepers; track e.id) { <option [value]="e.id">{{ e.name }} ({{ e.id }})</option> }
           </select>
         </div>
@@ -51,15 +52,17 @@
           <label for="st-desc">Description</label>
           <textarea id="st-desc" name="description" rows="2" [(ngModel)]="form.description"></textarea>
         </div>
-        <div class="field">
-          <label for="st-status">Status</label>
+        <div class="field" [class.invalid]="errors['status']">
+          <label for="st-status"><span class="req">*</span> Status</label>
           <div class="status-select">
             <i [attr.data-status]="form.status"></i>
             <select id="st-status" name="status" [(ngModel)]="form.status">
+              <option value="" disabled>Select Status</option>
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
             </select>
           </div>
+          @if (errors['status']) { <small>{{ errors['status'] }}</small> }
         </div>
       }
 
@@ -79,7 +82,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

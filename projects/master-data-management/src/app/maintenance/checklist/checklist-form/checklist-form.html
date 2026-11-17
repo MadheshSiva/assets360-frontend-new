@@ -28,7 +28,7 @@
         <div class="field" [class.invalid]="errors['checklistType']">
           <label for="cl-checklistType"><span class="req">*</span> Checklist Type</label>
           <select id="cl-checklistType" name="checklistType" [(ngModel)]="form.checklistType">
-            <option value="" disabled>Select type</option>
+            <option value="" disabled>Select Type</option>
             @for (o of types; track o) { <option [value]="o">{{ o }}</option> }
           </select>
           @if (errors['checklistType']) { <small>{{ errors['checklistType'] }}</small> }
@@ -36,7 +36,7 @@
         <div class="field" [class.invalid]="errors['category']">
           <label for="cl-category"><span class="req">*</span> Category</label>
           <select id="cl-category" name="category" [(ngModel)]="form.category">
-            <option value="" disabled>Select category</option>
+            <option value="" disabled>Select Category</option>
             @for (o of categories; track o) { <option [value]="o">{{ o }}</option> }
           </select>
           @if (errors['category']) { <small>{{ errors['category'] }}</small> }
@@ -45,15 +45,17 @@
           <label for="cl-desc">Description</label>
           <textarea id="cl-desc" name="description" rows="3" placeholder="" [(ngModel)]="form.description"></textarea>
         </div>
-        <div class="field">
-          <label for="cl-status">Status</label>
+        <div class="field" [class.invalid]="errors['status']">
+          <label for="cl-status"><span class="req">*</span> Status</label>
           <div class="status-select">
             <i [attr.data-status]="form.status"></i>
             <select id="cl-status" name="status" [(ngModel)]="form.status">
+              <option value="" disabled>Select Status</option>
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
             </select>
           </div>
+          @if (errors['status']) { <small>{{ errors['status'] }}</small> }
         </div>
       }
 
@@ -65,6 +67,7 @@
               <span class="hint">{{ $index + 1 }}</span>
               <input [name]="'q' + $index" placeholder="Question or check" [attr.aria-label]="'Item ' + ($index + 1)" [(ngModel)]="item.question" />
               <select [name]="'r' + $index" [attr.aria-label]="'Item ' + ($index + 1) + ' response'" [(ngModel)]="item.response">
+                <option value="" disabled>Select Response</option>
                 @for (t of responseTypes; track t) { <option [value]="t">{{ t }}</option> }
               </select>
               <label class="req-tick" [title]="'Required'"><input type="checkbox" [name]="'req' + $index" [(ngModel)]="item.required" /> Req.</label>
@@ -85,7 +88,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

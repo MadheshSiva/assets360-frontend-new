@@ -18,7 +18,7 @@ type SortKey = 'name' | 'code' | 'kind';
   selector: 'app-mdm-maintenance-priority-severity',
   imports: [FormsModule, RouterLink, LucideAngularModule, PriorityForm],
   templateUrl: './priority-severity.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../../people/people.css', '../maintenance.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../../people/people.css', '../maintenance.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class PrioritySeverityPage extends ListPage<PriorityRecord, PriorityFilters, SortKey> implements OnInit {
   readonly service = inject(PriorityService);

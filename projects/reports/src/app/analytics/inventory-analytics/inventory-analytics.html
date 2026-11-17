@@ -14,18 +14,21 @@
   <label class="filter filter--period">
     <span>Period</span>
     <select [(ngModel)]="period" (ngModelChange)="apply()">
+      <option value="">Select Period</option>
       @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Organization</span>
     <select [(ngModel)]="organization" (ngModelChange)="apply()">
+      <option value="">Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Warehouse</span>
     <select [(ngModel)]="warehouse" (ngModelChange)="apply()">
+      <option value="">Select Warehouse</option>
       <option [value]="allWarehouses">{{ allWarehouses }}</option>
       @for (w of warehouseOptions; track w.code) { <option [value]="w.name">{{ w.name }} · {{ w.site }}</option> }
     </select>
@@ -33,18 +36,21 @@
   <label class="filter">
     <span>Store / Bin</span>
     <select [(ngModel)]="store" (ngModelChange)="apply()">
+      <option value="">Select Store / Bin</option>
       @for (s of storeOptions; track s) { <option [value]="s">{{ s }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Item Category</span>
     <select [(ngModel)]="category" (ngModelChange)="apply()">
+      <option value="">Select Item Category</option>
       @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Stock Status</span>
     <select [(ngModel)]="status" (ngModelChange)="apply()">
+      <option value="">Select Stock Status</option>
       @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
     </select>
   </label>

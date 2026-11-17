@@ -18,6 +18,7 @@ import { DataExportService } from './data-export-api.service';
           <lucide-icon class="widget__info" [img]="icons.Info" [size]="14" title="Export runs and reporting API calls per day (Asia/Dubai)"></lucide-icon>
         </h2>
         <select class="select dx-select-sm" [(ngModel)]="range" (ngModelChange)="build()" aria-label="Range">
+          <option value="" disabled>Select Range</option>
           <option value="7">Last 7 days</option>
           <option value="30">Last 30 days</option>
         </select>
@@ -25,6 +26,7 @@ import { DataExportService } from './data-export-api.service';
       <div class="dx-health-grid">
         <div>
           <h3 class="dx-h3">Export Run Success Rate</h3>
+          @if (labels.length) {
           <ra-cartesian-chart
             [labels]="labels"
             [series]="runSeries"
@@ -37,9 +39,13 @@ import { DataExportService } from './data-export-api.service';
             yTitle="Number of runs"
             ariaLabel="Export runs per day with success rate"
           ></ra-cartesian-chart>
+          } @else {
+          <p class="empty">No data</p>
+          }
         </div>
         <div>
           <h3 class="dx-h3">API Request Volume</h3>
+          @if (labels.length) {
           <ra-cartesian-chart
             [labels]="labels"
             [series]="apiSeries"
@@ -47,6 +53,9 @@ import { DataExportService } from './data-export-api.service';
             [height]="210"
             ariaLabel="Reporting API requests per day"
           ></ra-cartesian-chart>
+          } @else {
+          <p class="empty">No data</p>
+          }
         </div>
       </div>
     </section>

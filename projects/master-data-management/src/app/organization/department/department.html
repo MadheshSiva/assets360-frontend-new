@@ -51,14 +51,14 @@
         <label class="filter">
           <span>Business Unit</span>
           <select name="businessUnit" [(ngModel)]="draft.businessUnitCode">
-            <option value="">All</option>
+            <option value="">Select Business Unit</option>
             @for (b of businessUnits.all(); track b.code) { <option [value]="b.code">{{ b.name }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Status</span>
           <select name="status" [(ngModel)]="draft.status">
-            <option value="">All</option>
+            <option value="">Select Status</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
           </select>

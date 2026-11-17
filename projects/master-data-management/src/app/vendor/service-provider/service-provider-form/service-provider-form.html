@@ -19,7 +19,7 @@
           <div class="field" [class.invalid]="errors['serviceType']">
             <label for="srv-type"><span class="req">*</span> Service Type</label>
             <select id="srv-type" name="serviceType" [ngModel]="form.serviceType" (ngModelChange)="setServiceType($event)">
-              <option value="" disabled>Select service type</option>
+              <option value="" disabled>Select Service Type</option>
               @for (t of serviceTypes; track t) { <option [value]="t">{{ t }}</option> }
             </select>
             @if (errors['serviceType']) { <small>{{ errors['serviceType'] }}</small> }
@@ -27,7 +27,7 @@
           <div class="field" [class.invalid]="errors['country']">
             <label for="srv-country"><span class="req">*</span> Country</label>
             <select id="srv-country" name="country" [ngModel]="form.country" (ngModelChange)="setCountry($event)">
-              <option value="" disabled>Select country</option>
+              <option value="" disabled>Select Country</option>
               @for (c of countries; track c.name) { <option [value]="c.name">{{ c.flag }} {{ c.name }}</option> }
             </select>
             @if (errors['country']) { <small>{{ errors['country'] }}</small> }
@@ -142,7 +142,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

@@ -52,7 +52,7 @@ export class FormatBuilder {
 
   addToken(kind: TokenKind): void {
     if (this.hasKind(kind)) return;
-    const token: FormatToken = { kind, value: kind === 'date' ? 'YYYY' : kind === 'location' ? 'DXB' : kind === 'prefix' ? 'NEW' : '' };
+    const token: FormatToken = { kind, value: kind === 'date' ? 'YYYY' : kind === 'location' ? LOCATION_CODES[0] ?? '' : kind === 'prefix' ? 'NEW' : '' };
     const tokens = this.sequence.tokens;
     // Prefix goes first, suffix last, everything else just before the number (or at the end)
     if (kind === 'prefix') tokens.unshift(token);

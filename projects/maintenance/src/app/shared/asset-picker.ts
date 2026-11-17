@@ -15,7 +15,7 @@ let nextId = 0;
   template: `
     <label class="field">
       <span class="field-label">Asset Tag <span class="req">*</span></span>
-      <input class="control" [attr.list]="listId" placeholder="e.g. GEN-00045" [ngModel]="assetId()" [ngModelOptions]="{ standalone: true }" (ngModelChange)="onTag($event)" />
+      <input class="control" [attr.list]="listId" placeholder="Asset tag" [ngModel]="assetId()" [ngModelOptions]="{ standalone: true }" (ngModelChange)="onTag($event)" />
       <datalist [id]="listId">
         @for (a of options; track a.tag) { <option [value]="a.tag">{{ a.name }}</option> }
       </datalist>

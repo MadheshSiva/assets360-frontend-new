@@ -19,7 +19,7 @@ type SortKey = 'name' | 'code' | 'category' | 'items';
   selector: 'app-mdm-maintenance-checklist',
   imports: [FormsModule, RouterLink, LucideAngularModule, ChecklistForm],
   templateUrl: './checklist.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../../people/people.css', '../maintenance.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../../people/people.css', '../maintenance.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class ChecklistPage extends ListPage<ChecklistRecord, ChecklistFilters, SortKey> implements OnInit {
   readonly service = inject(ChecklistService);

@@ -75,7 +75,7 @@ export class CreateDashboardDialog {
   readonly sharingOptions: { value: Sharing; label: string; hint: string }[] = [
     { value: 'private', label: 'Private', hint: 'Only you can see it.' },
     { value: 'people', label: 'Specific people and groups', hint: 'Choose who to share with after creating it.' },
-    { value: 'organization', label: 'Everyone in Purple IQ Group', hint: 'All users can view it.' }
+    { value: 'organization', label: 'Everyone in the organization', hint: 'All users can view it.' }
   ];
   name = '';
   description = '';

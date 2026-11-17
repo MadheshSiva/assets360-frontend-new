@@ -18,7 +18,7 @@
         <div class="field" [class.invalid]="errors['storeCode']">
           <label for="bin-store"><span class="req">*</span> Store</label>
           <select id="bin-store" name="storeCode" [(ngModel)]="form.storeCode" (ngModelChange)="onLocationChange()">
-            <option value="" disabled>Select store</option>
+            <option value="" disabled>Select Store</option>
             @for (s of storeOptions; track s.code) { <option [value]="s.code">{{ s.name }} ({{ s.code }})</option> }
           </select>
           @if (errors['storeCode']) { <small>{{ errors['storeCode'] }}</small> }
@@ -43,6 +43,7 @@
           <div class="field">
             <label for="bin-type">Bin Type</label>
             <select id="bin-type" name="binType" [(ngModel)]="form.binType">
+              <option value="" disabled>Select Bin Type</option>
               @for (t of binTypes; track t) { <option [value]="t">{{ t }}</option> }
             </select>
           </div>
@@ -52,15 +53,17 @@
             @if (errors['capacity']) { <small>{{ errors['capacity'] }}</small> }
           </div>
         </div>
-        <div class="field">
-          <label for="bin-status">Status</label>
+        <div class="field" [class.invalid]="errors['status']">
+          <label for="bin-status"><span class="req">*</span> Status</label>
           <div class="status-select">
             <i [attr.data-status]="form.status"></i>
             <select id="bin-status" name="status" [(ngModel)]="form.status">
+              <option value="" disabled>Select Status</option>
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
             </select>
           </div>
+          @if (errors['status']) { <small>{{ errors['status'] }}</small> }
         </div>
       }
 
@@ -74,7 +77,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

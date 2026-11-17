@@ -25,7 +25,7 @@
             </div>
           }
         </div>
-        <button type="button" class="icon-btn" aria-label="Delete selected" [disabled]="!checked.size" (click)="removeChecked()" title="Delete selected">
+        <button type="button" class="icon-btn" aria-label="Delete selected" [disabled]="!checked.size || store.working" (click)="removeChecked()" title="Delete selected">
           <lucide-icon [img]="icons.Ellipsis" [size]="16"></lucide-icon>
         </button>
       </div>
@@ -34,19 +34,19 @@
     <div class="mstats">
       <div class="stat">
         <span class="stat__icon"><lucide-icon [img]="icons.Building2" [size]="20"></lucide-icon></span>
-        <span class="stat__body"><span class="stat__value">{{ all.length }}</span><span class="stat__label">Floor Plans</span></span>
+        <span class="stat__body"><span class="stat__value">{{ store.summary.floorPlans }}</span><span class="stat__label">Floor Plans</span></span>
       </div>
       <div class="stat">
         <span class="stat__icon"><lucide-icon [img]="icons.Layers" [size]="20"></lucide-icon></span>
-        <span class="stat__body"><span class="stat__value">{{ store.zones.length }}</span><span class="stat__label">Zones</span></span>
+        <span class="stat__body"><span class="stat__value">{{ store.summary.zones }}</span><span class="stat__label">Zones</span></span>
       </div>
       <div class="stat">
         <span class="stat__icon" data-tone="blue"><lucide-icon [img]="icons.Wifi" [size]="20"></lucide-icon></span>
-        <span class="stat__body"><span class="stat__value">{{ devicesPlotted }}</span><span class="stat__label">Devices Plotted</span></span>
+        <span class="stat__body"><span class="stat__value">{{ store.summary.devicesPlotted }}</span><span class="stat__label">Devices Plotted</span></span>
       </div>
       <div class="stat">
         <span class="stat__icon"><lucide-icon [img]="icons.Package" [size]="20"></lucide-icon></span>
-        <span class="stat__body"><span class="stat__value">{{ assetsPlotted }}</span><span class="stat__label">Assets Plotted</span></span>
+        <span class="stat__body"><span class="stat__value">{{ store.summary.assetsPlotted }}</span><span class="stat__label">Assets Plotted</span></span>
       </div>
     </div>
 
@@ -56,17 +56,20 @@
         <input placeholder="Search floor plans..." aria-label="Search floor plans" [(ngModel)]="search" (ngModelChange)="onFilter()" />
       </label>
       <select class="select" aria-label="Status" [(ngModel)]="statusFilter" (ngModelChange)="onFilter()">
+        <option value="" disabled>Select Status</option>
         <option value="">Status: All</option>
         <option value="Published">Published</option>
         <option value="Draft">Draft</option>
         <option value="Archived">Archived</option>
       </select>
       <select class="select" aria-label="Type" [(ngModel)]="typeFilter" (ngModelChange)="onFilter()">
+        <option value="" disabled>Select Type</option>
         <option value="">Type: All</option>
         <option value="Floor Plan">Floor Plan</option>
         <option value="Site Map">Site Map</option>
       </select>
       <select class="select" aria-label="Sort" [(ngModel)]="sort">
+        <option value="" disabled>Select Sort</option>
         <option value="updated">Sort: Updated Date</option>
         <option value="name">Sort: Name</option>
         <option value="version">Sort: Version</option>
@@ -101,7 +104,7 @@
                 <td (click)="$event.stopPropagation()"><input type="checkbox" [attr.aria-label]="'Select ' + p.name" [checked]="checked.has(p.id)" (change)="toggle(p.id)" /></td>
                 <td>
                   <div class="name-cell">
-                    <app-map-canvas class="thumb" [preview]="true"></app-map-canvas>
+                    <app-map-canvas class="thumb" [preview]="true" [plan]="p"></app-map-canvas>
                     <span><b>{{ p.name }}</b><small>{{ p.subtitle }}</small></span>
                   </div>
                 </td>
@@ -124,12 +127,12 @@
                           <button type="button" role="menuitem" (click)="select(p); edit(p)">Edit details</button>
                           <button type="button" role="menuitem" (click)="download(p)">Download</button>
                           @if (p.status !== 'Published') {
-                            <button type="button" role="menuitem" (click)="publish(p)">Publish</button>
+                            <button type="button" role="menuitem" [disabled]="store.working" (click)="publish(p)">Publish</button>
                           }
                           @if (p.status !== 'Archived') {
-                            <button type="button" role="menuitem" (click)="archive(p)">Archive</button>
+                            <button type="button" role="menuitem" [disabled]="store.working" (click)="archive(p)">Archive</button>
                           }
-                          <button type="button" role="menuitem" class="danger" (click)="remove(p)">Delete</button>
+                          <button type="button" role="menuitem" class="danger" [disabled]="store.working" (click)="remove(p)">Delete</button>
                         </div>
                       }
                     </div>
@@ -137,7 +140,7 @@
                 </td>
               </tr>
             } @empty {
-              <tr><td colspan="8" class="empty">No floor plans match. Use Add Floor Plan to upload one.</td></tr>
+              <tr><td colspan="8" class="empty">{{ emptyText }}</td></tr>
             }
           </tbody>
         </table>
@@ -146,13 +149,13 @@
       <div class="plan-grid">
         @for (p of paged; track p.id) {
           <button type="button" class="plan-card" [class.active]="p.id === selected?.id" (click)="select(p)">
-            <app-map-canvas [preview]="true"></app-map-canvas>
+            <app-map-canvas [preview]="true" [plan]="p"></app-map-canvas>
             <b>{{ p.name }}</b>
             <small class="muted">{{ p.format }} · {{ p.version }}</small>
             <span class="pill" [attr.data-tone]="tone(p.status)"><i></i>{{ p.status }}</span>
           </button>
         } @empty {
-          <p class="empty">No floor plans match.</p>
+          <p class="empty">{{ emptyText }}</p>
         }
       </div>
     }
@@ -184,7 +187,7 @@
     </div>
     @if (selected; as p) {
       <div class="preview">
-        <app-map-canvas [preview]="true"></app-map-canvas>
+        <app-map-canvas [preview]="true" [plan]="p"></app-map-canvas>
         <button type="button" class="icon-btn" aria-label="Open on map" (click)="open(p, 'map-library')">
           <lucide-icon [img]="icons.Maximize2" [size]="13"></lucide-icon>
         </button>
@@ -203,27 +206,32 @@
           <div class="field">
             <label for="fp-type">Type</label>
             <select id="fp-type" name="type" [(ngModel)]="editing.type">
+              <option value="" disabled>Select Type</option>
               <option value="Floor Plan">Floor Plan</option>
               <option value="Site Map">Site Map</option>
             </select>
           </div>
           <div class="field">
-            <label for="fp-dim">Dimensions</label>
-            <input id="fp-dim" name="dim" [(ngModel)]="editing.dimensions" />
+            <label for="fp-w">Width (m)</label>
+            <input id="fp-w" name="width" type="number" min="0" step="0.01" [(ngModel)]="editing.widthMeters" />
+          </div>
+          <div class="field">
+            <label for="fp-h">Height (m)</label>
+            <input id="fp-h" name="height" type="number" min="0" step="0.01" [(ngModel)]="editing.heightMeters" />
           </div>
           <div class="field">
             <label for="fp-scale">Scale</label>
             <input id="fp-scale" name="scale" [(ngModel)]="editing.scale" />
           </div>
           <div class="rfoot">
-            <button type="button" class="btn" (click)="editing = null">Cancel</button>
-            <button type="submit" class="btn btn--primary">Save</button>
+            <button type="button" class="btn" [disabled]="store.working" (click)="editing = null">Cancel</button>
+            <button type="submit" class="btn btn--primary" [disabled]="store.working || !editing.name.trim()">{{ store.working ? 'Saving…' : 'Save' }}</button>
           </div>
         </form>
       } @else {
         <dl class="rows">
           <dt>Name</dt><dd>{{ p.name }}</dd>
-          <dt>Location</dt><dd class="inline"><lucide-icon [img]="icons.Building2" [size]="14"></lucide-icon> {{ store.locationLabel(p.floorId) }}</dd>
+          <dt>Location</dt><dd class="inline"><lucide-icon [img]="icons.Building2" [size]="14"></lucide-icon> {{ store.planLocation(p) }}</dd>
           <dt>Type</dt><dd>{{ p.type }}</dd>
           <dt>File</dt>
           <dd class="inline">
@@ -236,8 +244,8 @@
           <dt>Status</dt><dd><span class="pill" [attr.data-tone]="tone(p.status)"><i></i>{{ p.status }}</span></dd>
           <dt>Dimensions</dt><dd>{{ p.dimensions }}</dd>
           <dt>Scale</dt><dd>{{ p.scale }}</dd>
-          <dt>{{ p.status === 'Published' ? 'Published On' : 'Updated On' }}</dt><dd>{{ date(p.updated) }}, {{ time(p.updated) }}</dd>
-          <dt>{{ p.status === 'Published' ? 'Published By' : 'Updated By' }}</dt><dd>{{ p.updatedBy }}</dd>
+          <dt>{{ p.status === 'Published' ? 'Published On' : 'Updated On' }}</dt><dd>{{ date(p.status === 'Published' ? (p.publishedAt ?? p.updated) : p.updated) }} {{ time(p.status === 'Published' ? (p.publishedAt ?? p.updated) : p.updated) }}</dd>
+          <dt>{{ p.status === 'Published' ? 'Published By' : 'Updated By' }}</dt><dd>{{ (p.status === 'Published' ? (p.publishedBy ?? p.updatedBy) : p.updatedBy) || '—' }}</dd>
         </dl>
         <div class="action-grid">
           <button type="button" class="btn btn--outline" (click)="edit(p)"><lucide-icon [img]="icons.Pencil" [size]="14"></lucide-icon> Edit Details</button>
@@ -246,11 +254,11 @@
         </div>
       }
     } @else {
-      <p class="empty">No floor plans for this location yet.</p>
+      <p class="empty">{{ emptyText }}</p>
     }
   </aside>
 </div>
 
 @if (uploadOpen) {
-  <app-upload-dialog (done)="uploaded($event)" (cancel)="uploadOpen = false"></app-upload-dialog>
+  <app-upload-dialog (done)="uploaded()" (cancel)="uploadOpen = false"></app-upload-dialog>
 }

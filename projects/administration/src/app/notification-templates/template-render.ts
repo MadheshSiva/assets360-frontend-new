@@ -132,6 +132,9 @@ export function validateTemplate(t: NotificationTemplate, codeTaken: boolean, fu
   if (!t.category) out['category'] = 'Category is required.';
   if (!t.triggerEvent) out['triggerEvent'] = 'Trigger event is required.';
   if (!t.language) out['language'] = 'Language is required.';
+  if (!t.priority) out['priority'] = 'Priority is required.';
+  if (!t.deliveryTiming) out['deliveryTiming'] = 'Delivery timing is required.';
+  if (!t.retryPolicy) out['retryPolicy'] = 'Retry policy is required.';
   if (!t.channels.email && !t.channels.sms && !t.channels.inApp && !t.channels.push) out['channels'] = 'Select at least one channel.';
 
   if (t.channels.email) {

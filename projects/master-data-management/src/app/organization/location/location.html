@@ -52,28 +52,28 @@
         <label class="filter">
           <span>Site</span>
           <select name="site" [(ngModel)]="draft.siteId" (ngModelChange)="onDraftSiteChange()">
-            <option value="">All</option>
+            <option value="">Select Site</option>
             @for (s of service.sites(); track s.id) { <option [value]="s.id">{{ s.name }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Building</span>
           <select name="building" [(ngModel)]="draft.buildingCode" (ngModelChange)="onDraftBuildingChange()">
-            <option value="">All</option>
+            <option value="">Select Building</option>
             @for (b of service.buildings(draft.siteId); track b.code) { <option [value]="b.code">{{ b.code }} - {{ b.name }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Floor</span>
           <select name="floor" [(ngModel)]="draft.floorCode" (ngModelChange)="onDraftFloorChange()">
-            <option value="">All</option>
+            <option value="">Select Floor</option>
             @for (f of service.floors(draft.buildingCode); track f.code) { <option [value]="f.code">{{ f.code }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Zone</span>
           <select name="zone" [(ngModel)]="draft.zoneCode">
-            <option value="">All</option>
+            <option value="">Select Zone</option>
             @for (z of service.zones(draft.buildingCode, draft.floorCode); track z.code) { <option [value]="z.code">{{ z.code }}</option> }
           </select>
         </label>

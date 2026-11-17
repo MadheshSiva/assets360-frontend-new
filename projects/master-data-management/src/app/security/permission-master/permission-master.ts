@@ -23,7 +23,7 @@ interface Filters {
   selector: 'app-mdm-security-permission-master',
   imports: [FormsModule, RouterLink, LucideAngularModule, PermissionForm],
   templateUrl: './permission-master.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../security.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../security.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class PermissionMasterPage extends ListPage<PermissionRecord, Filters, SortKey> {
   readonly service = inject(PermissionService);

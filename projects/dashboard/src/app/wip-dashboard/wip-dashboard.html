@@ -44,7 +44,7 @@
       </div>
       <div class="wip-stat-bottom">
         <strong class="wip-stat-value">{{ card.value }}</strong>
-        <span class="wip-stat-delta" [class.delta-up]="card.trend === 'up'" [class.delta-down]="card.trend === 'down'">
+        <span *ngIf="card.delta" class="wip-stat-delta" [class.delta-up]="card.trend === 'up'" [class.delta-down]="card.trend === 'down'">
           <svg *ngIf="card.trend === 'up'" viewBox="0 0 24 24" fill="currentColor" width="11" height="11"><path d="M12 4l8 8H4z"/></svg>
           <svg *ngIf="card.trend === 'down'" viewBox="0 0 24 24" fill="currentColor" width="11" height="11"><path d="M12 20l8-8H4z"/></svg>
           {{ card.delta }}
@@ -76,7 +76,7 @@
       </div>
       <div class="wip-donut-body">
         <div class="wip-donut-chart-wrap">
-          <div class="wip-donut-chart">
+          <div class="wip-donut-chart" [style.background]="donutGradient">
             <div class="wip-donut-center">
               <span class="wip-donut-label">Total Jobs</span>
               <strong class="wip-donut-total">{{ wipTotalJobs }}</strong>
@@ -84,6 +84,7 @@
           </div>
         </div>
         <ul class="wip-donut-legend">
+          <li *ngIf="!wipStatusDistribution.length" class="wip-empty">No data</li>
           <li *ngFor="let seg of wipStatusDistribution">
             <span class="wip-legend-dot" [style.background]="seg.color"></span>
             <span class="wip-legend-text">- {{ seg.label }} {{ seg.percent }}%</span>
@@ -131,16 +132,13 @@
             <line x1="0" y1="135" x2="420" y2="135" stroke="#ede9f4" stroke-width="1"/>
             <line x1="0" y1="180" x2="420" y2="180" stroke="#ede9f4" stroke-width="1"/>
             <!-- Area fill -->
-            <path class="wip-area-fill" d="M0,162 C30,162 50,108 70,90 C90,72 110,81 140,63 C170,45 200,90 230,72 C260,54 290,27 320,18 C350,9 380,63 420,45 L420,180 L0,180 Z" fill="url(#wipAreaGrad)"/>
+            <path *ngIf="trendArea" class="wip-area-fill" [attr.d]="trendArea" fill="url(#wipAreaGrad)"/>
             <!-- Line -->
-            <path class="wip-area-line" d="M0,162 C30,162 50,108 70,90 C90,72 110,81 140,63 C170,45 200,90 230,72 C260,54 290,27 320,18 C350,9 380,63 420,45" fill="none" stroke="#4f2bd8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path *ngIf="trendLine" class="wip-area-line" [attr.d]="trendLine" fill="none" stroke="#4f2bd8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
             <!-- Data points -->
-            <circle cx="70" cy="90" r="5" fill="#4f2bd8" stroke="#fff" stroke-width="2"/>
-            <circle cx="140" cy="63" r="5" fill="#4f2bd8" stroke="#fff" stroke-width="2"/>
-            <circle cx="230" cy="72" r="5" fill="#4f2bd8" stroke="#fff" stroke-width="2"/>
-            <circle cx="320" cy="18" r="7" fill="#4f2bd8" stroke="#fff" stroke-width="2"/>
-            <circle cx="420" cy="45" r="5" fill="#4f2bd8" stroke="#fff" stroke-width="2"/>
+            <circle *ngFor="let p of wipTrendPoints" [attr.cx]="p.x" [attr.cy]="p.y" r="5" fill="#4f2bd8" stroke="#fff" stroke-width="2"/>
           </svg>
+          <p *ngIf="!wipTrendPoints.length" class="wip-empty">No data</p>
         </div>
       </div>
       <p class="wip-trend-label">Last 7 days</p>
@@ -165,6 +163,7 @@
         </button>
       </div>
       <div class="wip-alert-list">
+        <p *ngIf="!wipAlerts.length" class="wip-empty">No alerts</p>
         <div class="wip-alert-row" *ngFor="let alert of wipAlerts">
           <span class="wip-alert-icon" [class.alert-warning]="alert.type === 'warning'" [class.alert-danger]="alert.type === 'danger'">
             <svg *ngIf="alert.type === 'warning'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
@@ -222,6 +221,7 @@
               <td>{{ job.assignedTo }}</td>
               <td>{{ job.eta }}</td>
             </tr>
+            <tr *ngIf="!wipActiveJobs.length"><td colspan="6" class="wip-empty">No active jobs</td></tr>
           </tbody>
         </table>
       </div>

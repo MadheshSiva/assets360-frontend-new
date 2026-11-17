@@ -61,3 +61,10 @@
 .rd .row-field select {
   height: 36px;
 }
+
+.rd-row-error {
+  display: block;
+  margin: -6px 0 10px;
+  color: var(--adm-red);
+  font-size: 11.5px;
+}

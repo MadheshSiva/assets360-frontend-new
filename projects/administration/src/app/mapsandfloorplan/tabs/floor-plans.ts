@@ -28,7 +28,7 @@ import { UploadDialog } from '../upload-dialog/upload-dialog';
 
 type SortKey = 'updated' | 'name' | 'version';
 
-/** Floor Plans: list of plans for the selected floor with filters, and details of the selected plan. */
+/** Floor Plans: list of plans for the selected location with filters, and details of the selected plan. */
 @Component({
   standalone: true,
   selector: 'app-maps-floor-plans',
@@ -66,16 +66,15 @@ export class FloorPlansTab {
     return STATUS_TONE[s];
   }
 
-  get devicesPlotted(): number {
-    return this.store.plotted.filter((i) => i.kind === 'device').length;
-  }
-
-  get assetsPlotted(): number {
-    return this.store.plotted.filter((i) => i.kind === 'asset').length;
-  }
-
   get all(): FloorPlan[] {
     return this.store.plansOf(this.store.selectedFloorId);
+  }
+
+  get emptyText(): string {
+    if (this.store.plansLoading || this.store.treeLoading) return 'Loading floor plans…';
+    if (this.store.plansError) return this.store.plansError;
+    if (!this.store.selectedFloorId) return 'Select a site, building or floor.';
+    return this.all.length ? 'No floor plans match.' : 'No floor plans for this location yet. Use Add Floor Plan to upload one.';
   }
 
   get rows(): FloorPlan[] {
@@ -87,7 +86,7 @@ export class FloorPlansTab {
         (!this.typeFilter || p.type === this.typeFilter)
     );
     const by: Record<SortKey, (a: FloorPlan, b: FloorPlan) => number> = {
-      updated: (a, b) => b.updated.localeCompare(a.updated),
+      updated: (a, b) => (b.updated ?? '').localeCompare(a.updated ?? ''),
       name: (a, b) => a.name.localeCompare(b.name),
       version: (a, b) => b.version.localeCompare(a.version, undefined, { numeric: true })
     };
@@ -135,7 +134,7 @@ export class FloorPlansTab {
   }
 
   select(p: FloorPlan): void {
-    this.store.selectedPlanId = p.id;
+    this.store.selectPlan(p.id);
     this.editing = null;
   }
 
@@ -156,31 +155,26 @@ export class FloorPlansTab {
   }
 
   publish(p: FloorPlan): void {
-    p.status = 'Published';
-    p.updated = new Date().toISOString();
-    this.store.notify(`${p.name} published`);
+    this.store.publishPlan(p);
   }
 
   archive(p: FloorPlan): void {
-    p.status = 'Archived';
-    this.store.notify(`${p.name} archived`);
+    this.store.archivePlan(p);
   }
 
   remove(p: FloorPlan): void {
-    this.store.removePlan(p.id);
-    this.checked.delete(p.id);
-    this.store.notify(`${p.name} deleted`);
+    if (!confirm(`Delete ${p.name}? Its zones, plots and layers are deleted with it.`)) return;
+    this.store.removePlans([p.id], () => this.checked.delete(p.id));
   }
 
   removeChecked(): void {
-    const n = this.checked.size;
-    [...this.checked].forEach((id) => this.store.removePlan(id));
-    this.checked.clear();
-    this.store.notify(`${n} floor plan${n === 1 ? '' : 's'} deleted`);
+    const ids = [...this.checked];
+    if (!ids.length || !confirm(`Delete ${ids.length} floor plan${ids.length === 1 ? '' : 's'}? Their zones, plots and layers are deleted with them.`)) return;
+    this.store.removePlans(ids, () => this.checked.clear());
   }
 
   download(p: FloorPlan): void {
-    this.store.notify(`Downloading ${p.fileName}`);
+    this.store.download(p.fileUrl, p.fileName);
   }
 
   edit(p: FloorPlan): void {
@@ -188,20 +182,22 @@ export class FloorPlansTab {
   }
 
   saveEdit(): void {
-    if (!this.editing || !this.editing.name.trim()) return;
-    const target = this.store.floorPlans.find((p) => p.id === this.editing!.id);
-    if (target) Object.assign(target, this.editing, { name: this.editing.name.trim(), updated: new Date().toISOString() });
-    this.store.notify('Floor plan details saved');
-    this.editing = null;
+    const draft = this.editing;
+    if (!draft || !draft.name.trim() || this.store.working) return;
+    const num = (v: unknown) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? null : Number(v));
+    this.store.updatePlan(
+      { ...draft, name: draft.name.trim(), subtitle: draft.subtitle.trim(), widthMeters: num(draft.widthMeters), heightMeters: num(draft.heightMeters), scale: draft.scale.trim() },
+      () => (this.editing = null)
+    );
   }
 
   open(p: FloorPlan, tab: string): void {
-    this.store.selectedPlanId = p.id;
+    this.store.selectPlan(p.id);
     this.goTo.emit(tab);
   }
 
-  uploaded(name: string): void {
+  /** The store already showed the success toast. */
+  uploaded(): void {
     this.uploadOpen = false;
-    this.store.notify(`${name} uploaded as a draft`);
   }
 }

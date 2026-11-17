@@ -21,6 +21,7 @@ import {
   Shield,
   SlidersHorizontal
 } from 'lucide-angular';
+import { MapsApiService, SettingsDto } from '../maps-api.service';
 import { MapsStore } from '../maps.store';
 
 type SectionId = 'general' | 'plotting' | 'zones' | 'layers' | 'access' | 'calibration' | 'integrations' | 'advanced';
@@ -65,10 +66,35 @@ const DEFAULTS = {
   auditEdits: true
 };
 
-type MapSettings = typeof DEFAULTS;
+export type MapSettings = typeof DEFAULTS;
 
-function clone(s: MapSettings): MapSettings {
+/** The Settings tab defaults (also the shape PUT api/administration/maps/settings receives). */
+export const MAP_SETTINGS_DEFAULTS: Readonly<MapSettings> = DEFAULTS;
+
+export function cloneSettings(s: MapSettings): MapSettings {
   return JSON.parse(JSON.stringify(s)) as MapSettings;
+}
+
+const clone = cloneSettings;
+
+/**
+ * GET settings merged over the defaults: every DEFAULTS key is taken from the response (or its `extra` bag) when the
+ * stored value has the same type; maps (fileTypes, plotted, integrations) are merged key by key.
+ */
+export function mergeSettings(dto: SettingsDto | null | undefined): MapSettings {
+  const out = clone(DEFAULTS) as unknown as Record<string, unknown>;
+  const src: Record<string, unknown> = { ...(dto?.extra ?? {}), ...(dto ?? {}) };
+  for (const key of Object.keys(out)) {
+    const value = src[key];
+    const def = out[key];
+    if (value === null || value === undefined) continue;
+    if (def && typeof def === 'object') {
+      if (typeof value === 'object' && !Array.isArray(value)) out[key] = { ...(def as object), ...(value as object) };
+    } else if (typeof value === typeof def) {
+      out[key] = value;
+    }
+  }
+  return out as unknown as MapSettings;
 }
 
 /** Settings: global defaults for maps, plotting, zones, versioning, access and notifications. */
@@ -121,9 +147,35 @@ export class SettingsTab {
   readonly zoneColors = ['#7c3aed', '#2563eb', '#10b981', '#f59e0b', '#f97316', '#ec4899'];
   readonly objectKeys = Object.keys;
 
+  private readonly api = inject(MapsApiService);
+
   section: SectionId = 'general';
   s: MapSettings = clone(DEFAULTS);
   private saved: MapSettings = clone(DEFAULTS);
+  loading = true;
+  loadError: string | null = null;
+
+  constructor() {
+    this.load();
+  }
+
+  /** GET settings (the API answers with defaults when none are saved). */
+  load(): void {
+    this.loading = true;
+    this.loadError = null;
+    this.api.getSettings().subscribe({
+      next: (dto) => {
+        this.s = mergeSettings(dto);
+        this.saved = clone(this.s);
+        this.loading = false;
+      },
+      error: (err) => {
+        this.loading = false;
+        this.loadError = `Could not load map settings: ${this.store.errorText(err)}`;
+        this.store.notify(this.loadError, 'error');
+      }
+    });
+  }
 
   get sectionLabel(): string {
     return this.sections.find((x) => x.id === this.section)!.label;
@@ -147,11 +199,15 @@ export class SettingsTab {
   }
 
   save(): void {
+    if (this.store.working || this.loading) return;
     if (this.s.maxFileMb < 1 || this.s.keepVersions < 1 || this.s.gridSize <= 0) {
-      this.store.notify('Check the values: file size, versions kept and grid size must be above zero');
+      this.store.notify('Check the values: file size, versions kept and grid size must be above zero', 'error');
       return;
     }
-    this.saved = clone(this.s);
-    this.store.notify('Map settings saved');
+    const sent = clone(this.s);
+    this.store.run(this.api.saveSettings(sent), { pending: 'Saving…', success: 'Map settings saved', error: 'Could not save map settings' }, (dto) => {
+      this.s = dto && typeof dto === 'object' ? mergeSettings(dto) : sent;
+      this.saved = clone(this.s);
+    });
   }
 }

@@ -19,7 +19,7 @@ const EMPTY_FILTERS: ConditionFilters = { search: '', status: '', type: '' };
   selector: 'app-mdm-asset-condition',
   imports: [FormsModule, RouterLink, LucideAngularModule, CondForm, CondDetail],
   templateUrl: './condition.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../level-page.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../level-page.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class ConditionPage implements OnInit {
   readonly service = inject(ConditionService);

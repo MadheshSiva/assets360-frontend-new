@@ -51,21 +51,21 @@
         <label class="filter">
           <span>Manufacturer</span>
           <select name="manufacturer" [(ngModel)]="draft.manufacturer">
-            <option value="">All</option>
+            <option value="">Select Manufacturer</option>
             @for (m of service.manufacturers(); track m) { <option [value]="m">{{ m }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Asset Type</span>
           <select name="assetType" [(ngModel)]="draft.assetType">
-            <option value="">All</option>
+            <option value="">Select Asset Type</option>
             @for (t of service.usedTypes(); track t) { <option [value]="t">{{ t }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Status</span>
           <select name="status" [(ngModel)]="draft.status">
-            <option value="">All</option>
+            <option value="">Select Status</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
           </select>

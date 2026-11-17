@@ -4,9 +4,9 @@
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <a routerLink="/dashboard" aria-label="Home"><lucide-icon [img]="icons.House" [size]="16"></lucide-icon></a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <a routerLink="/wip-operations">WIP / Operations</a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <span class="crumb-current">Location Management</span>
       </nav>
       <h1>Location Management</h1>
@@ -29,19 +29,19 @@
       <div class="filters">
         <label class="field"><span class="field-label">Site</span>
           <span class="icon-select"><lucide-icon [img]="icons.Factory" [size]="16"></lucide-icon>
-            <select class="control" [(ngModel)]="site" (ngModelChange)="onSite()"><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></span>
+            <select class="control" [(ngModel)]="site" (ngModelChange)="onSite()"><option value="" disabled>Select Site</option><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></span>
         </label>
         <label class="field"><span class="field-label">Building</span>
           <span class="icon-select"><lucide-icon [img]="icons.Building2" [size]="16"></lucide-icon>
-            <select class="control" [(ngModel)]="building" (ngModelChange)="onBuilding()"><option value="">All Buildings</option><option *ngFor="let b of buildings" [value]="b">{{ b }}</option></select></span>
+            <select class="control" [(ngModel)]="building" (ngModelChange)="onBuilding()"><option value="">Select Building</option><option *ngFor="let b of buildings" [value]="b">{{ b }}</option></select></span>
         </label>
         <label class="field"><span class="field-label">Floor</span>
           <span class="icon-select"><lucide-icon [img]="icons.Layers" [size]="16"></lucide-icon>
-            <select class="control" [(ngModel)]="floor"><option value="">All Floors</option><option *ngFor="let f of floors" [value]="f">{{ f }}</option></select></span>
+            <select class="control" [(ngModel)]="floor"><option value="">Select Floor</option><option *ngFor="let f of floors" [value]="f">{{ f }}</option></select></span>
         </label>
         <label class="field"><span class="field-label">Status</span>
           <span class="icon-select"><lucide-icon [img]="icons.RefreshCw" [size]="16"></lucide-icon>
-            <select class="control" [(ngModel)]="statusFilter"><option value="">All</option><option value="Available">Available</option><option value="Full">Full</option><option value="Inactive">Inactive</option></select></span>
+            <select class="control" [(ngModel)]="statusFilter"><option value="">Select Status</option><option value="Available">Available</option><option value="Full">Full</option><option value="Inactive">Inactive</option></select></span>
         </label>
       </div>
 
@@ -109,7 +109,7 @@
             </div>
           </section>
 
-          <section class="panel-box" aria-labelledby="lm-jobs">
+          <section *ngIf="locations.length" class="panel-box" aria-labelledby="lm-jobs">
             <h3 id="lm-jobs">Jobs at {{ selected.name }}</h3>
             <div class="table-wrap">
               <table class="loc-table">
@@ -140,7 +140,7 @@
         </div>
 
         <!-- Details -->
-        <section class="panel-box details" aria-labelledby="lm-det">
+        <section *ngIf="locations.length" class="panel-box details" aria-labelledby="lm-det">
           <div class="det-head">
             <h3 id="lm-det" class="grow">Location Details</h3>
             <button type="button" class="st-pill" [ngClass]="'st--' + selected.status.toLowerCase()" (click)="toggleActive(selected)" [title]="selected.status === 'Active' ? 'Deactivate' : 'Activate'"><span class="dot"></span>{{ selected.status }}</button>
@@ -217,6 +217,7 @@
                 <td class="nowrap">{{ o.arrival | date: 'dd MMM, HH:mm' }}</td><td class="nowrap">{{ durationSince(o.arrival) }}</td>
                 <td><button type="button" class="btn btn-outline btn-xs" (click)="openMove(o)"><lucide-icon [img]="icons.ArrowRight" [size]="14"></lucide-icon>Move Job</button></td>
               </tr>
+              <tr *ngIf="!occupancy.length"><td colspan="7" class="empty">No jobs at any location.</td></tr>
             </tbody>
           </table>
         </div>
@@ -237,6 +238,7 @@
                   <button type="button" class="link-btn link-btn--danger" (click)="approve(m, false)">Reject</button>
                 </ng-container></td>
               </tr>
+              <tr *ngIf="!movements.length"><td colspan="7" class="empty">No movements yet.</td></tr>
             </tbody>
           </table>
         </div>
@@ -256,13 +258,14 @@
                   <span class="next-chips">
                     <span *ngFor="let c of l.next" class="loc-chip">{{ locName(c) }}<button type="button" (click)="removeNext(l, c)" [attr.aria-label]="'Remove ' + locName(c)"><lucide-icon [img]="icons.X" [size]="12"></lucide-icon></button></span>
                     <select *ngIf="addNextFor === l.code; else addBtn" class="control control--xs" (change)="addNext(l, $any($event.target).value)" aria-label="Add next location">
-                      <option value="">Choose…</option><option *ngFor="let o of nextOptions(l)" [value]="o.code">{{ o.name }}</option>
+                      <option value="">Select Next Location</option><option *ngFor="let o of nextOptions(l)" [value]="o.code">{{ o.name }}</option>
                     </select>
                     <ng-template #addBtn><button type="button" class="link-btn" (click)="addNextFor = l.code"><lucide-icon [img]="icons.Plus" [size]="13"></lucide-icon>Add</button></ng-template>
                   </span>
                 </td>
                 <td class="muted small">{{ l.controls.requireCapacity ? 'Capacity' : '' }}{{ l.controls.requireStage ? ' · Stage' : '' }}{{ l.controls.scanQr ? ' · QR scan' : '' }}{{ l.controls.supervisorApproval ? ' · Approval' : '' }}</td>
               </tr>
+              <tr *ngIf="!scoped.length"><td colspan="3" class="empty">No locations.</td></tr>
             </tbody>
           </table>
         </div>
@@ -305,13 +308,13 @@
     <form class="modal-body" (ngSubmit)="saveLocation()">
       <div class="grid-2">
         <label class="field"><span class="field-label">Name <em>*</em></span><input class="control" [(ngModel)]="f.name" name="name" /></label>
-        <label class="field"><span class="field-label">Type</span><select class="control" [(ngModel)]="f.type" name="type"><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
+        <label class="field"><span class="field-label">Type</span><select class="control" [(ngModel)]="f.type" name="type"><option value="" disabled>Select Type</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
         <label class="field"><span class="field-label">Building <em>*</em></span><input class="control" [(ngModel)]="f.building" name="building" list="lm-buildings" /></label>
         <label class="field"><span class="field-label">Floor <em>*</em></span><input class="control" [(ngModel)]="f.floor" name="floor" /></label>
         <label class="field"><span class="field-label">Zone <em>*</em></span><input class="control" [(ngModel)]="f.zone" name="zone" list="lm-zones" /></label>
         <label class="field"><span class="field-label">Job Capacity <em>*</em></span><input type="number" class="control" [(ngModel)]="f.capacity" name="capacity" min="1" /></label>
         <label class="field"><span class="field-label">Supervisor</span><input class="control" [(ngModel)]="f.supervisor" name="supervisor" /></label>
-        <label class="field"><span class="field-label">Shift</span><select class="control" [(ngModel)]="f.shift" name="shift"><option *ngFor="let s of shifts" [value]="s">{{ s }}</option></select></label>
+        <label class="field"><span class="field-label">Shift</span><select class="control" [(ngModel)]="f.shift" name="shift"><option value="" disabled>Select Shift</option><option *ngFor="let s of shifts" [value]="s">{{ s }}</option></select></label>
       </div>
       <datalist id="lm-buildings"><option *ngFor="let b of buildings" [value]="b"></option></datalist>
       <datalist id="lm-zones"><option *ngFor="let z of zonesFor" [value]="z"></option></datalist>

@@ -170,3 +170,4 @@ select.control {
   .sm-head .btn { flex: 1; }
   .toast { right: 12px; left: 12px; }
 }
+.load-error { display: flex; align-items: center; gap: 8px; padding: 10px 16px; }

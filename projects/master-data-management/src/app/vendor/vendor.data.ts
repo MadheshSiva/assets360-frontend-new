@@ -1,6 +1,6 @@
 import { MdmAudit } from '../shared/mdm-api';
 import { apiDate, apiText, stampOf } from '../people/people.data';
-import { VendorAddress, VendorBase } from './vendor.model';
+import { VendorAddress, VendorBase, VendorStatus } from './vendor.model';
 
 export type { VendorBase, VendorStatus } from './vendor.model';
 
@@ -61,7 +61,7 @@ export function blankVendorBase(): VendorBase {
     contactPerson: '',
     email: '',
     phone: '',
-    status: 'Active',
+    status: '' as VendorStatus,
     address: blankAddress(),
     alternateContact: '',
     alternateEmail: '',

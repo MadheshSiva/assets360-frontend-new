@@ -14,7 +14,7 @@ import {
 } from 'lucide-angular';
 import { MapCanvas } from '../map-canvas/map-canvas';
 import { MapViewer } from '../map-viewer/map-viewer';
-import { MapZone, PlotItem, PlotKind, fmtDate } from '../maps.data';
+import { MapZone, PlotItem, PlotKind, ZoneGeometry, fmtDate } from '../maps.data';
 import { MapsStore } from '../maps.store';
 import { SiteTree } from '../site-tree/site-tree';
 import { UploadDialog } from '../upload-dialog/upload-dialog';
@@ -46,9 +46,11 @@ export class MapLibraryTab {
   uploadOpen = false;
   /** Plot Device / Plot Asset: the next plan click drops the first unplotted item of that kind. */
   placing: PlotKind | null = null;
+  /** Zone shape being drawn on the map (clicks draw its outline), or null. */
+  drawing: MapZone['shape'] | null = null;
   show = { zones: true, devices: true, assets: true, labels: true };
 
-  readonly usedGb = 3.2;
+  /** Storage quota shown in the Storage & Usage card (no quota API yet). */
   readonly totalGb = 10;
   date = fmtDate;
 
@@ -62,18 +64,33 @@ export class MapLibraryTab {
     event.stopPropagation();
     this.drawOpen = !this.drawOpen;
     this.placing = null;
+    this.drawing = null;
   }
 
   draw(shape: MapZone['shape']): void {
     this.drawOpen = false;
-    const zone = this.store.addZone(shape);
-    this.rightTab = 'zone';
-    this.store.notify(`${zone.name} added - fill in its details and save`);
+    // Draw the outline on the map; a floor with only a Master Data image gets its floor plan first
+    this.store.ensurePlan(() => {
+      this.placing = null;
+      this.drawing = shape;
+    });
+  }
+
+  /** The outline is finished: save the zone there and open its details. */
+  zoneDrawn(geometry: ZoneGeometry): void {
+    const shape = this.drawing;
+    this.drawing = null;
+    if (shape) this.store.addZone(shape, () => (this.rightTab = 'zone'), geometry);
   }
 
   startPlacing(kind: PlotKind): void {
     if (this.placing === kind) {
       this.placing = null;
+      return;
+    }
+    this.drawing = null;
+    if (!this.store.currentPlan) {
+      this.store.ensurePlan(() => this.startPlacing(kind));
       return;
     }
     if (!this.store.unplotted.some((i) => i.kind === kind)) {
@@ -87,9 +104,8 @@ export class MapLibraryTab {
     const item = this.store.unplotted.find((i) => i.kind === this.placing);
     this.placing = null;
     if (!item) return;
-    this.store.plot(item.id, pos.x, pos.y);
     this.store.selectedItemId = item.id;
-    this.store.notify(`${item.name} (${item.code}) plotted`);
+    this.store.plot(item.id, pos.x, pos.y, `${item.name} (${item.code}) plotted`);
   }
 
   selectZone(z: MapZone): void {
@@ -102,8 +118,18 @@ export class MapLibraryTab {
     this.goTo.emit('device-asset-plotting');
   }
 
+  /** Size of the floor plan files (current versions) stored for the tenant. */
+  get usedBytes(): number {
+    return this.store.floorPlans.reduce((sum, p) => sum + (p.sizeBytes || 0), 0);
+  }
+
+  get usedLabel(): string {
+    const gb = this.usedBytes / 1024 ** 3;
+    return gb >= 0.1 ? `${gb.toFixed(1)} GB` : `${(this.usedBytes / 1024 ** 2).toFixed(1)} MB`;
+  }
+
   get storagePct(): number {
-    return Math.round((this.usedGb / this.totalGb) * 100);
+    return Math.min(100, Math.round((this.usedBytes / (this.totalGb * 1024 ** 3)) * 100));
   }
 
   toggleUploadMenu(event: MouseEvent): void {
@@ -111,8 +137,8 @@ export class MapLibraryTab {
     this.uploadMenuOpen = !this.uploadMenuOpen;
   }
 
-  uploaded(name: string): void {
+  /** The store already showed the success toast. */
+  uploaded(): void {
     this.uploadOpen = false;
-    this.store.notify(`${name} uploaded as a draft`);
   }
 }

@@ -46,13 +46,11 @@ interface WizardForm {
 type Field = keyof WizardForm;
 
 const STEPS = ['Details', 'Assets & Scope', 'Checklist', 'Assign & Schedule', 'Review & Submit'];
-const DEPARTMENTS = ['Maintenance & Engineering', 'Operations', 'EHS', 'Facilities', 'Quality', 'Reliability'];
-const TEAMS = ['Maintenance Team', 'Reliability Team', 'EHS Team', 'Facilities Team', 'Inspection Team'];
 
 function blankForm(): WizardForm {
   return {
-    title: '', inspectionTypeName: '', priority: 'Medium', siteName: '', department: '', planCode: '', trigger: 'Manual',
-    description: '', scope: 'Asset-based', category: 'Internal', referenceStandard: '', permitRequired: false, evidenceRequired: true,
+    title: '', inspectionTypeName: '', priority: '', siteName: '', department: '', planCode: '', trigger: '',
+    description: '', scope: 'Asset-based', category: '', referenceStandard: '', permitRequired: false, evidenceRequired: true,
     assetCode: '', assetName: '', location: '', checklistCode: '', assignedTo: '', assignedTeam: '', dueDate: '', startTime: '09:00', endTime: '10:00'
   };
 }
@@ -129,8 +127,8 @@ export class NewInspectionPage {
   // ===== Options built from loaded data =====
   readonly activeTypes = computed(() => this.types.items().filter((t) => t.isActive !== false));
   readonly sites = computed(() => uniq([...this.inspections.items().map((i) => i.siteName), ...this.api.calendars.items().map((c) => c.siteName)]));
-  readonly departments = computed(() => uniq([...DEPARTMENTS, ...this.inspections.items().map((i) => i.department)]));
-  readonly teams = computed(() => uniq([...TEAMS, ...this.inspections.items().map((i) => i.assignedTeam)]));
+  readonly departments = computed(() => uniq(this.inspections.items().map((i) => i.department)));
+  readonly teams = computed(() => uniq(this.inspections.items().map((i) => i.assignedTeam)));
   readonly people = computed(() =>
     uniq([
       ...this.inspections.items().map((i) => i.assignedTo),
@@ -196,7 +194,7 @@ export class NewInspectionPage {
   // ===== Validation =====
   private required(step: number): Field[] {
     switch (step) {
-      case 1: return ['title', 'inspectionTypeName', 'priority', 'siteName', 'description', 'category'];
+      case 1: return ['title', 'inspectionTypeName', 'priority', 'siteName', 'trigger', 'description', 'category'];
       case 2: return this.form.scope === 'Location-based' ? ['location'] : ['assetCode', 'assetName'];
       case 3: return ['checklistCode'];
       case 4: return ['assignedTo', 'dueDate'];

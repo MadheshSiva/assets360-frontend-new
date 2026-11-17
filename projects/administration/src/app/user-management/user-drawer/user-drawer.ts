@@ -5,6 +5,8 @@ import {
   Calendar,
   Camera,
   ChartColumn,
+  Eye,
+  EyeOff,
   LayoutDashboard,
   LucideAngularModule,
   LucideIconData,
@@ -15,7 +17,8 @@ import {
   Wrench,
   X
 } from 'lucide-angular';
-import { ADMIN_DEPARTMENTS, ADMIN_LOCATIONS, avatarTone, initials } from '../../shared/admin-common';
+import { ADMIN_LOCATIONS, avatarTone, initials } from '../../shared/admin-common';
+import scopeOptions from '../../role-access-control/role-scope-options.json';
 import { ALL_LOCATIONS, LOCATION_TIME_ZONES, TIME_ZONES, USER_MODULES, USER_ROLES, roleModules } from '../user-management.data';
 import { AdminUser, UserStatus } from '../user-management.model';
 import { UserAdminService } from '../user-management.service';
@@ -24,6 +27,13 @@ import { loginLabel, roleOf } from '../user-format';
 const EMAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
 const EMPLOYEE_ID = /^EMP-\d{4,}$/;
 const PHONE = /^\+?[\d\s()-]{7,20}$/;
+/** Same rule as the Administration API: at least 8 characters with letters and numbers. */
+export const MIN_PASSWORD = 8;
+function passwordProblem(p: string): string | null {
+  if (p.length < MIN_PASSWORD) return `Use at least ${MIN_PASSWORD} characters.`;
+  if (!/[a-z]/i.test(p) || !/\d/.test(p)) return 'Use both letters and numbers.';
+  return null;
+}
 const MODULE_ICONS: Record<string, LucideIconData> = {
   Dashboard: LayoutDashboard,
   Assets: Box,
@@ -48,12 +58,15 @@ const MODULE_ICONS: Record<string, LucideIconData> = {
 export class UserDrawer implements OnChanges {
   @Input({ required: true }) user!: AdminUser;
   @Input() mode: 'add' | 'edit' = 'edit';
-  @Output() saved = new EventEmitter<{ user: AdminUser; isNew: boolean }>();
+  /** `password` is set for a new user, and for an existing one only when it is being changed. */
+  @Output() saved = new EventEmitter<{ user: AdminUser; isNew: boolean; password?: string }>();
   @Output() closed = new EventEmitter<void>();
 
   private readonly service = inject(UserAdminService);
-  readonly icons = { X, Camera, Pencil, MapPin, Calendar };
-  readonly departments = ADMIN_DEPARTMENTS;
+  readonly icons = { X, Camera, Pencil, MapPin, Calendar, Eye, EyeOff };
+  readonly minPassword = MIN_PASSWORD;
+  // Same department list as the Role form (role-scope-options.json)
+  readonly departments: string[] = scopeOptions.departments;
   readonly locations = ADMIN_LOCATIONS;
   readonly timeZones = TIME_ZONES;
   readonly modules = USER_MODULES;
@@ -64,10 +77,17 @@ export class UserDrawer implements OnChanges {
   form!: AdminUser;
   errors: Record<string, string> = {};
   editingProfile = false;
+  /** Sign-in password; never stored in the page model */
+  password = '';
+  confirmPassword = '';
+  showPassword = false;
 
   ngOnChanges(): void {
     this.form = { ...this.user, secondaryRoles: [...this.user.secondaryRoles], modules: [...this.user.modules] };
     this.errors = {};
+    this.password = '';
+    this.confirmPassword = '';
+    this.showPassword = false;
     this.editingProfile = this.isAdd;
   }
 
@@ -190,8 +210,16 @@ export class UserDrawer implements OnChanges {
     else if (!EMPLOYEE_ID.test(f.employeeId.trim().toUpperCase())) e['employeeId'] = 'Use the format EMP-0001.';
     else if (this.service.employeeIdTaken(f.employeeId, exceptId)) e['employeeId'] = 'This employee ID is already used.';
     if (!f.department) e['department'] = 'Department is required.';
+    // Required for a new user; optional when editing (blank keeps the current password)
+    if (this.isAdd && !this.password) e['password'] = 'Password is required.';
+    else if (this.password) {
+      const problem = passwordProblem(this.password);
+      if (problem) e['password'] = problem;
+      else if (this.password !== this.confirmPassword) e['confirmPassword'] = 'Passwords do not match.';
+    }
     if (f.phone.trim() && !PHONE.test(f.phone.trim())) e['phone'] = 'Enter a valid phone number.';
     if (!f.primaryRole) e['primaryRole'] = 'Primary role is required.';
+    if (!f.accessScope) e['accessScope'] = 'Access scope is required.';
     if (!f.modules.length) e['modules'] = 'Give access to at least one module.';
     if (f.status === 'Suspended' && !f.suspendReason.trim()) e['suspendReason'] = 'Say why the account is suspended.';
     if (!this.isAdd && f.status !== 'Active' && this.user.status === 'Active') {
@@ -200,7 +228,7 @@ export class UserDrawer implements OnChanges {
     }
     this.errors = e;
     // Profile errors are only visible with the profile fields open
-    if (['name', 'email', 'employeeId', 'department', 'phone'].some((k) => e[k])) this.editingProfile = true;
+    if (['name', 'email', 'password', 'confirmPassword', 'employeeId', 'department', 'phone'].some((k) => e[k])) this.editingProfile = true;
     return Object.keys(e).length === 0;
   }
 
@@ -217,7 +245,8 @@ export class UserDrawer implements OnChanges {
         phone: f.phone.trim(),
         suspendReason: f.status === 'Suspended' ? f.suspendReason.trim() : ''
       },
-      isNew: this.isAdd
+      isNew: this.isAdd,
+      password: this.password || undefined
     });
   }
 

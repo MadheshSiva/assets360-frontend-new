@@ -18,7 +18,7 @@ interface DrawState { areas: DrawnArea[]; devices: PlottedDevice[] }
 interface PickDevice { id: string; name: string; type: string; serial: string }
 interface PickRow { d: PickDevice; plotted: string }
 
-/** Live state of one plotted device: the last fixes, the marker's animation leg and (demo mode) its simulated walk. */
+/** Live state of one plotted device: the last fixes and the marker's animation leg. */
 interface Track {
   /** Marker animates from `from` to `to` over `dur` ms starting at `t0`. */
   from: LL;
@@ -31,10 +31,6 @@ interface Track {
   fix: DeviceFix;
   outside: boolean;
   mobile: boolean;
-  /** Simulation: where it is heading, how fast, and when a stop ends. */
-  target: LL | null;
-  speed: number;
-  pauseUntil: number;
 }
 
 /** Shown in the selected-device card. */
@@ -45,7 +41,6 @@ const STORE = 'a360.map-draw.';
 const M_LAT = 111_320;
 /** Trackers move (on people, pallets, vehicles); sensors and readers are fixed installations. */
 const MOBILE_TYPES = new Set(['BLE Tracker', 'GPS / Cellular']);
-const SIM_STEP_MS = 1000;
 const TRAIL_MAX = 40;
 /** m/s; anything faster between two fixes is treated as a position jump. */
 const MAX_SPEED = 12;
@@ -130,7 +125,6 @@ export class MapDrawTools implements OnChanges, OnDestroy {
   private markers = new Map<string, Leaflet.Marker>();
   private trails = new Map<string, Leaflet.Polyline>();
   private accuracy?: Leaflet.Circle;
-  private simTimer?: ReturnType<typeof setInterval>;
   private frame = 0;
   private lastSave = 0;
 
@@ -560,7 +554,6 @@ export class MapDrawTools implements OnChanges, OnDestroy {
     this.stopTracking();
     this.feedSub = this.feed.fixes$.subscribe((f) => this.onFix(f, true));
     if (this.feedUrl) this.stopPoll = this.feed.poll(this.feedUrl, this.feedEveryMs);
-    this.simTimer = setInterval(() => this.simulate(), SIM_STEP_MS);
     const tick = () => {
       this.animate();
       this.frame = requestAnimationFrame(tick);
@@ -571,7 +564,6 @@ export class MapDrawTools implements OnChanges, OnDestroy {
   private stopTracking(): void {
     this.feedSub?.unsubscribe();
     this.stopPoll?.();
-    clearInterval(this.simTimer);
     cancelAnimationFrame(this.frame);
   }
 
@@ -588,11 +580,8 @@ export class MapDrawTools implements OnChanges, OnDestroy {
       const area = this.areaOf(d);
       t = {
         from: p, to: p, t0: 0, dur: 0, settled: true, trail: [p],
-        fix: { deviceId: d.deviceId, lat: d.lat, lng: d.lng, at: Date.now(), accuracy: mobile ? 2.6 : 1.2, speed: 0 },
-        outside: !!area && !inside(d.lat, d.lng, area.points), mobile, target: null,
-        // walking pace for tags on people / pallets, vehicle pace for GPS trackers
-        speed: type === 'GPS / Cellular' ? 1.6 + Math.random() * 0.8 : 0.6 + Math.random() * 0.7,
-        pauseUntil: Date.now() + 1500 + Math.random() * 2000,
+        fix: { deviceId: d.deviceId, lat: d.lat, lng: d.lng, at: Date.now(), speed: 0 },
+        outside: !!area && !inside(d.lat, d.lng, area.points), mobile,
       };
       this.tracks.set(d.deviceId, t);
     }
@@ -610,7 +599,7 @@ export class MapDrawTools implements OnChanges, OnDestroy {
     return [t.from[0] + (t.to[0] - t.from[0]) * k, t.from[1] + (t.to[1] - t.from[1]) * k];
   }
 
-  /** Applies one location fix (from the backend, or simulated) to a plotted device. */
+  /** Applies one location fix from the backend to a plotted device. */
   private onFix(f: DeviceFix, live: boolean): void {
     const d = this.devices.find((x) => x.deviceId === f.deviceId);
     const area = d && this.areaOf(d);
@@ -626,7 +615,7 @@ export class MapDrawTools implements OnChanges, OnDestroy {
     t.t0 = now;
     // faster than any tracked asset moves on site: a position jump (re-acquired signal), so snap instead of gliding
     const jump = metres / dt > MAX_SPEED;
-    t.dur = jump ? 0 : live ? Math.min(2000, Math.max(300, f.at - t.fix.at)) : SIM_STEP_MS;
+    t.dur = jump ? 0 : Math.min(2000, Math.max(300, f.at - t.fix.at));
     t.settled = false;
     t.fix = { ...f, speed: f.speed ?? (jump || metres <= 0.2 ? 0 : +(metres / dt).toFixed(2)) };
     if (metres > 0.3) {
@@ -649,60 +638,6 @@ export class MapDrawTools implements OnChanges, OnDestroy {
       this.lastSave = Date.now();
       this.save();
     }
-  }
-
-  /**
-   * Demo mode for devices the backend has not reported: trackers walk between random points inside their area at a
-   * realistic pace, with occasional stops; sensors and readers stay put and send a heartbeat.
-   */
-  private simulate(): void {
-    const now = Date.now();
-    for (const d of this.devices) {
-      if (this.feed.isLive(d.deviceId)) continue;
-      const area = this.areaOf(d);
-      if (!area || (this.mode === 'edit' && this.selected === area.id)) continue;
-      const t = this.trackOf(d);
-      if (!t.mobile || now < t.pauseUntil) {
-        if (now - t.fix.at >= (t.mobile ? 3000 : 5000)) this.onFix({ ...t.fix, at: now, speed: 0 }, false);
-        continue;
-      }
-      const cur: LL = [d.lat, d.lng];
-      t.target ??= this.wanderTarget(area, cur);
-      if (!t.target) continue;
-      const mLng = M_LAT * Math.cos((cur[0] * Math.PI) / 180);
-      const dy = (t.target[0] - cur[0]) * M_LAT;
-      const dx = (t.target[1] - cur[1]) * mLng;
-      const dist = Math.hypot(dx, dy);
-      const step = t.speed * (SIM_STEP_MS / 1000) * (0.85 + Math.random() * 0.3);
-      let next: LL;
-      if (dist <= step) {
-        next = t.target;
-        t.target = null;
-        if (Math.random() < 0.4) t.pauseUntil = now + 2000 + Math.random() * 6000;
-      } else {
-        next = [cur[0] + ((dy / dist) * step) / M_LAT, cur[1] + ((dx / dist) * step) / mLng];
-      }
-      if (!inside(next[0], next[1], area.points)) {
-        t.target = null;
-        continue;
-      }
-      this.onFix({ deviceId: d.deviceId, lat: next[0], lng: next[1], at: now, accuracy: +(1.8 + Math.random() * 1.6).toFixed(1), speed: +(Math.min(step, dist) / (SIM_STEP_MS / 1000)).toFixed(2) }, false);
-    }
-  }
-
-  /** A random point inside the area that can be reached in a straight line without leaving it. */
-  private wanderTarget(area: DrawnArea, from: LL): LL | null {
-    const lats = area.points.map((p) => p[0]);
-    const lngs = area.points.map((p) => p[1]);
-    const [s, n, w, e] = [Math.min(...lats), Math.max(...lats), Math.min(...lngs), Math.max(...lngs)];
-    for (let i = 0; i < 30; i++) {
-      const p: LL = [s + Math.random() * (n - s), w + Math.random() * (e - w)];
-      if (!inside(p[0], p[1], area.points) || distM(from, p) < 2) continue;
-      let clear = true;
-      for (let k = 1; k < 8 && clear; k++) clear = inside(from[0] + ((p[0] - from[0]) * k) / 8, from[1] + ((p[1] - from[1]) * k) / 8, area.points);
-      if (clear) return p;
-    }
-    return null;
   }
 
   private animate(): void {

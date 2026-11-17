@@ -26,7 +26,7 @@ interface Filters {
   selector: 'app-mdm-inventory-item',
   imports: [FormsModule, RouterLink, DecimalPipe, LucideAngularModule, ItemForm],
   templateUrl: './item.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../inventory.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../inventory.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class ItemPage extends ListPage<ItemRecord, Filters, SortKey> {
   readonly service = inject(ItemService);

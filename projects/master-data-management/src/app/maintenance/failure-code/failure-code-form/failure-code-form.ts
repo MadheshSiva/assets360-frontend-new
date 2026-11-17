@@ -1,8 +1,9 @@
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { LucideAngularModule, Plus, Trash2, X } from 'lucide-angular';
+import { CategoryService } from '../../../asset/category-subcategory/category.service';
 import { MasterForm } from '../../form-base';
-import { ASSET_CATEGORY_OPTIONS, FAILURE_CATEGORIES, FAILURE_SEVERITIES, blankFailureCode } from '../failure-code.data';
+import { FAILURE_CATEGORIES, FAILURE_SEVERITIES, blankFailureCode } from '../failure-code.data';
 import { FailureCodeRecord } from '../failure-code.model';
 import { FailureCodeService } from '../failure-code.service';
 
@@ -13,18 +14,24 @@ type Tab = 'basic' | 'classification';
   selector: 'app-failure-code-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './failure-code-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../maintenance-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../maintenance-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class FailureCodeForm extends MasterForm<FailureCodeRecord, Tab> {
   protected readonly store = inject(FailureCodeService);
   readonly icons = { X, Plus, Trash2 };
   readonly categories = FAILURE_CATEGORIES;
   readonly severities = FAILURE_SEVERITIES;
-  readonly assetCategories = ASSET_CATEGORY_OPTIONS;
+  private readonly categoryService = inject(CategoryService);
   readonly tabs: { id: Tab; label: string }[] = [
     { id: 'basic', label: 'Basic Information' },
     { id: 'classification', label: 'Classification' }
   ];
+
+  // Asset category names from the categories API, plus any already picked on this record
+  get assetCategories(): string[] {
+    const names = this.categoryService.all().map((c) => c.name);
+    return [...new Set([...names, ...(this.form?.assetCategories ?? [])])];
+  }
 
   protected blank(): FailureCodeRecord {
     return blankFailureCode();
@@ -47,6 +54,7 @@ export class FailureCodeForm extends MasterForm<FailureCodeRecord, Tab> {
     const errors: Record<string, string> = {};
     if (!f.category) errors['category'] = 'Select a category.';
     if (!f.severity) errors['severity'] = 'Select a severity.';
+    if (!f.status) errors['status'] = 'Select a status.';
     return { errors, tab: 'basic' as Tab };
   }
 

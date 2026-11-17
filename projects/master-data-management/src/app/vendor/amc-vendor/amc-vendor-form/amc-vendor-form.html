@@ -19,7 +19,7 @@
           <div class="field" [class.invalid]="errors['assetType']">
             <label for="amc-type"><span class="req">*</span> Asset Type</label>
             <select id="amc-type" name="assetType" [(ngModel)]="form.assetType">
-              <option value="" disabled>Select asset type</option>
+              <option value="" disabled>Select Asset Type</option>
               @for (t of assetTypes; track t) { <option [value]="t">{{ t }}</option> }
             </select>
             @if (errors['assetType']) { <small>{{ errors['assetType'] }}</small> }
@@ -27,7 +27,7 @@
           <div class="field" [class.invalid]="errors['contractType']">
             <label for="amc-contract"><span class="req">*</span> Contract Type</label>
             <select id="amc-contract" name="contractType" [(ngModel)]="form.contractType">
-              <option value="" disabled>Select contract type</option>
+              <option value="" disabled>Select Contract Type</option>
               @for (t of contractTypes; track t) { <option [value]="t">{{ t }}</option> }
             </select>
             @if (errors['contractType']) { <small>{{ errors['contractType'] }}</small> }
@@ -55,6 +55,7 @@
           <div class="field">
             <label for="amc-billing">Billing Cycle</label>
             <select id="amc-billing" name="billingCycle" [(ngModel)]="form.billingCycle">
+              <option value="" disabled>Select Billing Cycle</option>
               @for (b of billingCycles; track b) { <option [value]="b">{{ b }}</option> }
             </select>
           </div>
@@ -66,6 +67,7 @@
           <div class="field">
             <label for="amc-currency">Currency</label>
             <select id="amc-currency" name="currency" [(ngModel)]="form.currency">
+              <option value="" disabled>Select Currency</option>
               @for (c of currencies; track c) { <option [value]="c">{{ c }}</option> }
             </select>
           </div>
@@ -129,7 +131,7 @@
             @if (errors['uptimePercent']) { <small>{{ errors['uptimePercent'] }}</small> }
           </div>
           <div class="field" [class.invalid]="errors['penaltyPerHour']">
-            <label for="amc-penalty">Penalty per Hour Late ({{ form.currency.slice(0, 3) }})</label>
+            <label for="amc-penalty">Penalty per Hour Late{{ form.currency ? ' (' + form.currency.slice(0, 3) + ')' : '' }}</label>
             <input id="amc-penalty" name="penaltyPerHour" type="number" min="0" [(ngModel)]="form.penaltyPerHour" />
             @if (errors['penaltyPerHour']) { <small>{{ errors['penaltyPerHour'] }}</small> }
           </div>
@@ -160,7 +162,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

@@ -2,7 +2,7 @@
   <header class="page-head">
     <div class="grow">
       <nav class="breadcrumb">
-        <a routerLink="/inspection/overview">Inspection</a><span>/</span><span class="current">Plans &amp; Schedule</span>
+        <a routerLink="/inspection/overview">Inspection</a><span class="crumb-sep" aria-hidden="true">›</span><span class="current">Plans &amp; Schedule</span>
       </nav>
       <h1>Inspection Plan &amp; Schedule</h1>
       <p class="subtitle">Manage recurring inspection plans, upcoming inspections and inspector availability.</p>
@@ -46,9 +46,9 @@
           <input type="search" placeholder="Search plans by name, code or category..." [ngModel]="search()" (ngModelChange)="search.set($event)" />
         </label>
         <select class="control status-sel" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)" aria-label="Status">
+          <option value="">Select Status</option>
           <option value="Active">Active</option>
           <option value="Inactive">Inactive</option>
-          <option value="All">All statuses</option>
         </select>
       </div>
 

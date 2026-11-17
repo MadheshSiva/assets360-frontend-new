@@ -1,4 +1,4 @@
-import { ADMIN_LOCATIONS, ADMIN_PEOPLE } from '../shared/admin-common';
+import { ADMIN_LOCATIONS } from '../shared/admin-common';
 
 /*
  * Setting catalogue for Administration > System Configuration. The General Settings that the
@@ -70,20 +70,10 @@ export interface ConfigChange {
   status: ChangeStatus;
 }
 
-/** Connected systems, mirrors the Integration & API page. */
-export const ACTIVE_INTEGRATIONS = 8;
-
-let seq = 0;
-
-/** Deterministic "last updated" stamp, spread over Dec 2023 / Jan 2024. */
-function stamp(i: number): string {
-  const d = new Date(Date.UTC(2023, 11, 1 + ((i * 7) % 42), 8 + (i % 9), (i * 13) % 60));
-  return d.toISOString();
-}
+/** Connected systems, mirrors the Integration & API page (0 until the integrations API feeds it). */
+export const ACTIVE_INTEGRATIONS = 0;
 
 function setting(key: string, label: string, type: ConfigFieldType, value: ConfigValue, extra: Partial<ConfigSetting> = {}): ConfigSetting {
-  const i = seq++;
-  const updatedAt = stamp(i);
   return {
     key,
     label,
@@ -93,9 +83,10 @@ function setting(key: string, label: string, type: ConfigFieldType, value: Confi
     hint: '',
     description: `Configure the ${label.toLowerCase()} for your organization.`,
     scope: 'Organization-wide',
-    effectiveDate: updatedAt.slice(0, 10),
-    updatedBy: ADMIN_PEOPLE[(i * 3) % 7],
-    updatedAt,
+    // Filled from the API's updatedBy / updatedAt once a setting has been saved
+    effectiveDate: '',
+    updatedBy: '',
+    updatedAt: '',
     ...extra
   };
 }
@@ -118,7 +109,6 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 const SYNC_FREQUENCIES = ['Real-time', 'Every 15 minutes', 'Hourly', 'Daily', 'Manual'];
 
 export function buildSections(): ConfigSection[] {
-  seq = 0;
   return [
     {
       id: 'general',
@@ -146,7 +136,7 @@ export function buildSections(): ConfigSection[] {
               hint: 'Name displayed across the platform.',
               description: 'The product name shown in the header, browser tab and outgoing emails.'
             }),
-            setting('organizationName', 'Organization Name', 'text', 'Purple IQ Group', {
+            setting('organizationName', 'Organization Name', 'text', '', {
               required: true,
               hint: "Your organization's legal name.",
               description: 'Legal name of the organization, used on reports, exports and documents.'
@@ -177,10 +167,7 @@ export function buildSections(): ConfigSection[] {
               options: TIME_ZONES,
               hint: 'Applies to all users.',
               allowed: 'All time zones (IANA)',
-              description: 'Configure the default time zone for your organization.',
-              updatedBy: 'Sarah Ahmed',
-              updatedAt: '2024-01-12T06:24:00.000Z',
-              effectiveDate: '2024-01-12'
+              description: 'Configure the default time zone for your organization.'
             }),
             setting('dateFormat', 'Date Format', 'select', 'DD/MM/YYYY', {
               options: DATE_FORMATS,
@@ -297,7 +284,7 @@ export function buildSections(): ConfigSection[] {
           tabs: ['notifications'],
           settings: [
             setting('systemAnnouncements', 'System Announcements', 'toggle', true, { hint: 'Show banner announcements to all users.' }),
-            setting('adminAlertEmail', 'Admin Alert Email', 'email', 'it-admin@purpleiq.com', { required: true, hint: 'Receives critical platform alerts.' }),
+            setting('adminAlertEmail', 'Admin Alert Email', 'email', '', { required: true, hint: 'Receives critical platform alerts.' }),
             setting('alertDigest', 'Alert Digest', 'select', 'Daily', { options: ['Immediately', 'Hourly', 'Daily', 'Weekly'] }),
             setting('maintenanceNotice', 'Maintenance Notice', 'number', 48, { min: 1, max: 336, unit: 'hours', hint: 'Advance notice before downtime.' })
           ]
@@ -330,10 +317,10 @@ export function buildSections(): ConfigSection[] {
           subtitle: 'Legal and registration information.',
           icon: 'Building2',
           settings: [
-            setting('legalName', 'Legal Name', 'text', 'Purple IQ Group LLC', { required: true }),
-            setting('tradeLicense', 'Trade License No.', 'text', 'DED-784512', { required: true }),
-            setting('taxNumber', 'Tax Registration (TRN)', 'text', '100384756200003'),
-            setting('headquarters', 'Headquarters', 'select', ADMIN_LOCATIONS[0], { options: ADMIN_LOCATIONS })
+            setting('legalName', 'Legal Name', 'text', '', { required: true }),
+            setting('tradeLicense', 'Trade License No.', 'text', '', { required: true }),
+            setting('taxNumber', 'Tax Registration (TRN)', 'text', ''),
+            setting('headquarters', 'Headquarters', 'select', ADMIN_LOCATIONS[0] ?? '', { options: ADMIN_LOCATIONS })
           ]
         },
         {
@@ -342,9 +329,9 @@ export function buildSections(): ConfigSection[] {
           subtitle: 'How people reach your organization.',
           icon: 'Mail',
           settings: [
-            setting('contactEmail', 'Contact Email', 'email', 'info@purpleiq.com', { required: true }),
-            setting('contactPhone', 'Contact Phone', 'text', '+971 4 123 4567'),
-            setting('website', 'Website', 'url', 'https://www.purpleiq.com'),
+            setting('contactEmail', 'Contact Email', 'email', '', { required: true }),
+            setting('contactPhone', 'Contact Phone', 'text', ''),
+            setting('website', 'Website', 'url', ''),
             setting('brandColor', 'Brand Colour', 'select', 'Purple #5B2AA8', {
               options: ['Purple #5B2AA8', 'Blue #2563EB', 'Pink #EC4899', 'Green #10B981']
             })
@@ -405,7 +392,7 @@ export function buildSections(): ConfigSection[] {
           icon: 'Mail',
           settings: [
             setting('senderName', 'Sender Name', 'text', 'Asset360 Notifications', { required: true }),
-            setting('senderEmail', 'Sender Email', 'email', 'no-reply@purpleiq.com', { required: true }),
+            setting('senderEmail', 'Sender Email', 'email', '', { required: true }),
             setting('quietHours', 'Quiet Hours (22:00 – 07:00)', 'toggle', true, { hint: 'Hold non-urgent notifications overnight.' }),
             setting('reminderLead', 'Reminder Lead Time', 'number', 24, { min: 1, max: 168, unit: 'hours' })
           ]
@@ -567,7 +554,7 @@ export function buildSections(): ConfigSection[] {
             setting('apiVersion', 'Default API Version', 'select', 'v2', { options: ['v1', 'v2'] }),
             setting('webhookRetries', 'Webhook Retries', 'number', 3, { min: 0, max: 10, unit: 'retries' }),
             setting('webhookTimeout', 'Webhook Timeout', 'number', 30, { min: 5, max: 120, unit: 'seconds' }),
-            setting('apiDocsUrl', 'API Documentation URL', 'url', 'https://developer.purpleiq.com/asset360')
+            setting('apiDocsUrl', 'API Documentation URL', 'url', '')
           ]
         }
       ]
@@ -614,7 +601,7 @@ export function buildSections(): ConfigSection[] {
             setting('featurePreview', 'Feature Previews', 'toggle', true, { hint: 'Show beta features to admins.' }),
             setting('cacheTtl', 'Cache TTL', 'number', 300, { min: 0, max: 86400, unit: 'seconds' }),
             setting('maxExportRows', 'Max Export Rows', 'number', 50000, { min: 1000, max: 1000000, unit: 'rows' }),
-            setting('supportUrl', 'Support Portal URL', 'url', 'https://support.purpleiq.com')
+            setting('supportUrl', 'Support Portal URL', 'url', '')
           ]
         }
       ]

@@ -140,7 +140,7 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
  * Import jobs are loaded, created, updated (settings drawer and schedule tab) and deleted through the
  * Administration API. There is no export-job API, so export jobs stay in memory, as do the field mapping and
  * validation rules (not stored by the API) and the job code (numbered here per type and data object).
- * DEMO MODE: Run Now and Validate are simulated with timers.
+ * DEMO MODE: Run Now and Validate are simulated with timers (no invented record counts).
  */
 @Injectable({ providedIn: 'root' })
 export class DataJobService {
@@ -342,7 +342,7 @@ export class DataJobService {
     setTimeout(() => {
       const current = this.get(id);
       if (!current) return;
-      const total = current.type === 'Import' ? current.records || 1250 : current.records || 3400;
+      const total = current.records; // real counts come from the import service once wired
       const failed = current.issues.filter((i) => i.severity === 'Error' && i.status === 'Open').length;
       const done: DataJob = {
         ...current,

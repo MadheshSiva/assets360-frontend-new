@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { CURRENT_USER } from '../shared/analytics-common';
 import { Dashboard, METRICS, SEED_DASHBOARDS, Sharing, WIDGET_SIZES, WidgetConfig, WidgetSpan } from './interactive-dashboards.data';
 
-const STORAGE_KEY = 'asset360.ra.interactive-dashboards.v1';
+const STORAGE_KEY = 'asset360.ra.interactive-dashboards.v2';
 const SPANS = WIDGET_SIZES.map((s) => s.span).concat([5, 7]);
 
 function clone<T>(value: T): T {
@@ -66,11 +66,6 @@ export class DashboardStore {
     this.persist();
   }
 
-  reset(): void {
-    this.dashboards = clone(SEED_DASHBOARDS);
-    this.persist();
-  }
-
   nameTaken(name: string): boolean {
     const n = name.trim().toLowerCase();
     return this.dashboards.some((d) => d.name.toLowerCase() === n);
@@ -91,7 +86,7 @@ export class DashboardStore {
         }
       }
     } catch {
-      // Storage blocked or corrupt: fall back to the seed dashboards
+      // Storage blocked or corrupt: fall back to the seed dashboards (none until the API exists)
     }
     return clone(SEED_DASHBOARDS);
   }

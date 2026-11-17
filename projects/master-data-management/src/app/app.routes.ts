@@ -7,6 +7,7 @@ import { BuildingFloorZonePage } from './organization/building-floor-zone/buildi
 import { LocationPage } from './organization/location/location';
 import { CategorySubcategoryPage } from './asset/category-subcategory/category-subcategory';
 import { AssetTypePage } from './asset/asset-type/asset-type';
+import { AssetSubTypePage } from './asset/asset-sub-type/asset-sub-type';
 import { AssetModelPage } from './asset/asset-model/asset-model';
 import { ManufacturerPage } from './asset/manufacturer/manufacturer';
 import { ConditionPage } from './asset/condition/condition';
@@ -65,6 +66,7 @@ export const routes: Routes = [
       { path: '', redirectTo: 'category-subcategory', pathMatch: 'full' },
       { path: 'category-subcategory', component: CategorySubcategoryPage },
       { path: 'asset-type', component: AssetTypePage },
+      { path: 'asset-sub-type', component: AssetSubTypePage },
       { path: 'asset-model', component: AssetModelPage },
       { path: 'manufacturer', component: ManufacturerPage },
       { path: 'condition', component: ConditionPage },

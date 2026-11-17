@@ -23,7 +23,7 @@ const EMPTY_FILTERS: DepartmentFilters = { search: '', businessUnitCode: '', sta
   selector: 'app-mdm-organization-department',
   imports: [FormsModule, RouterLink, DecimalPipe, LucideAngularModule, DeptForm, DeptDetail],
   templateUrl: './department.html',
-  styleUrl: '../../shared/styles/mdm-page.css'
+  styleUrls: ['../../shared/styles/mdm-page.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class DepartmentPage {
   readonly service = inject(DepartmentService);

@@ -22,7 +22,7 @@ const DAY = 86400000;
   selector: 'app-mdm-vendor-amc-vendor',
   imports: [FormsModule, RouterLink, LucideAngularModule, AmcVendorForm],
   templateUrl: './amc-vendor.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../vendor.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../vendor.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class AmcVendorPage extends ListPage<AmcVendorRecord, AmcVendorFilters, SortKey> {
   readonly service = inject(AmcVendorService);

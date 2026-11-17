@@ -225,12 +225,13 @@
 
     @case ('assets') {
       <div class="card">
-        <p class="muted">Showing {{ assets(building).length }} of {{ building.assets | number }} assets in {{ building.name }}.</p>
         <table class="grid-table">
           <thead><tr><th>Asset Tag</th><th>Name</th><th>Category</th><th>Status</th></tr></thead>
           <tbody>
-            @for (a of assets(building); track a.tag) {
+            @for (a of assets; track a.tag) {
               <tr><td class="mono">{{ a.tag }}</td><td>{{ a.name }}</td><td>{{ a.category }}</td><td>{{ a.status }}</td></tr>
+            } @empty {
+              <tr><td colspan="4" class="empty">No records found.</td></tr>
             }
           </tbody>
         </table>
@@ -242,7 +243,7 @@
         <table class="grid-table">
           <thead><tr><th>Department</th><th>Head</th><th>People</th></tr></thead>
           <tbody>
-            @for (d of departments(building, building.departments); track d.name) {
+            @for (d of departments; track d.name) {
               <tr><td>{{ d.name }}</td><td>{{ d.head }}</td><td>{{ d.people }}</td></tr>
             } @empty {
               <tr><td colspan="3" class="empty">No departments are based here.</td></tr>
@@ -254,12 +255,13 @@
 
     @case ('people') {
       <div class="card">
-        <p class="muted">Showing {{ people(building).length }} of {{ building.people | number }} people based in {{ building.name }}.</p>
         <table class="grid-table">
           <thead><tr><th>Name</th><th>Role</th><th>Department</th></tr></thead>
           <tbody>
-            @for (p of people(building); track p.name) {
+            @for (p of people; track p.name) {
               <tr><td>{{ p.name }}</td><td>{{ p.role }}</td><td>{{ p.department }}</td></tr>
+            } @empty {
+              <tr><td colspan="3" class="empty">No records found.</td></tr>
             }
           </tbody>
         </table>
@@ -271,8 +273,10 @@
         <table class="grid-table">
           <thead><tr><th>Document</th><th>Type</th><th>Size</th><th>Uploaded On</th></tr></thead>
           <tbody>
-            @for (d of documents(record); track d.name) {
+            @for (d of documents; track d.name) {
               <tr><td>{{ d.name }}</td><td>{{ d.kind }}</td><td>{{ d.size }}</td><td>{{ d.date }}</td></tr>
+            } @empty {
+              <tr><td colspan="4" class="empty">No records found.</td></tr>
             }
           </tbody>
         </table>
@@ -288,10 +292,13 @@
     @case ('activity') {
       <div class="card">
         <ol class="timeline">
-          @for (a of activity(record); track $index) {
+          @for (a of activity; track $index) {
             <li><span class="timeline__when">{{ formatDateTime(a.when) }}</span><span><strong>{{ a.who }}</strong> {{ a.text }}</span></li>
           }
         </ol>
+        @if (!activity.length) {
+          <p class="muted">No records found.</p>
+        }
       </div>
     }
   }

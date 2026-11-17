@@ -1,0 +1,229 @@
+<aside class="drawer" role="dialog" aria-labelledby="subtype-form-title">
+  <header class="drawer__header">
+    <h2 id="subtype-form-title">{{ isEdit ? 'Edit Asset Sub Type' : 'Add Asset Sub Type' }}</h2>
+    <button type="button" class="drawer__close" (click)="cancelled.emit()" aria-label="Close">
+      <lucide-icon [img]="icons.X" [size]="18"></lucide-icon>
+    </button>
+  </header>
+
+  <nav class="drawer__tabs" role="tablist">
+    @for (t of tabs; track t.id) {
+      <button type="button" role="tab" [class.active]="tab === t.id" [attr.aria-selected]="tab === t.id" (click)="tab = t.id">{{ t.label }}</button>
+    }
+  </nav>
+
+  <form class="drawer__body" (ngSubmit)="submit()" novalidate>
+    @switch (tab) {
+      @case ('basic') {
+        <div class="basic-top">
+          <div class="logo-field">
+            <span class="field__label">Sub Type Icon</span>
+            <label class="upload" [class.upload--filled]="form.image" [class.invalid]="errors.image">
+              <input type="file" accept="image/png,image/jpeg" (change)="onImagePicked($event)" />
+              @if (form.image) {
+                <img [src]="form.image" alt="Sub type icon" class="logo-img" />
+                <button type="button" class="upload__remove" (click)="$event.preventDefault(); removeImage()">Remove</button>
+              } @else {
+                <span class="upload__icon"><lucide-icon [img]="typeIcons[form.icon]" [size]="34" [strokeWidth]="1.8"></lucide-icon></span>
+                <span class="upload__title">Click to upload</span>
+                <span class="upload__hint">PNG, JPG (Max 2MB)</span>
+              }
+            </label>
+          </div>
+
+          <div class="basic-top__fields">
+            <div class="field" [class.invalid]="errors.name">
+              <label for="st-name"><span class="req">*</span> Sub Type Name</label>
+              <input id="st-name" name="name" placeholder="Enter sub type name" [(ngModel)]="form.name" />
+              @if (errors.name) { <small>{{ errors.name }}</small> }
+            </div>
+            <div class="field" [class.invalid]="errors.code">
+              <label for="st-code"><span class="req">*</span> Code</label>
+              <input id="st-code" name="code" placeholder="Enter unique code" [(ngModel)]="form.code" (ngModelChange)="onCodeChange()" />
+              @if (errors.code) { <small>{{ errors.code }}</small> }
+            </div>
+            <div class="field" [class.invalid]="errors.assetType">
+              <label for="st-type"><span class="req">*</span> Asset Type</label>
+              <select id="st-type" name="assetType" [(ngModel)]="form.assetType" (ngModelChange)="onTypeChange()">
+                <option value="" disabled>Select Asset Type</option>
+                @for (t of service.parentTypes(); track t) { <option [value]="t">{{ t }}</option> }
+              </select>
+              @if (errors.assetType) { <small>{{ errors.assetType }}</small> }
+            </div>
+            <div class="field">
+              <label for="st-cat">Category</label>
+              <input id="st-cat" name="category" [value]="form.category || 'Follows the asset type'" readonly />
+            </div>
+          </div>
+        </div>
+        @if (errors.image) { <small class="upload-error">{{ errors.image }}</small> }
+
+        <div class="grid">
+          <div class="field">
+            <label for="st-subcat">Subcategory</label>
+            <select id="st-subcat" name="subcategory" [(ngModel)]="form.subcategory" [disabled]="!subcategories.length">
+              <option value="">{{ subcategories.length ? 'Select subcategory' : 'No subcategories on this type' }}</option>
+              @for (s of subcategories; track s) { <option [value]="s">{{ s }}</option> }
+            </select>
+          </div>
+          <div class="field" [class.invalid]="errors.taggingFormat">
+            <label for="st-tag"><span class="req">*</span> Tagging Format</label>
+            <input id="st-tag" name="taggingFormat" placeholder="DGS-{YY}-{0000}" [(ngModel)]="form.taggingFormat" />
+            @if (errors.taggingFormat) { <small>{{ errors.taggingFormat }}</small> } @else { <small class="hint">Sample: {{ sample }}</small> }
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="st-desc">Description</label>
+          <textarea id="st-desc" name="description" rows="3" placeholder="Enter description about this sub type" [(ngModel)]="form.description"></textarea>
+        </div>
+
+        @if (!form.image) {
+          <div class="field">
+            <span class="field__label">Icon (used when there is no image)</span>
+            <div class="icon-picker" role="radiogroup" aria-label="Icon">
+              @for (k of iconKeys; track k) {
+                <button type="button" class="icon-picker__item" role="radio" [class.on]="form.icon === k" [attr.aria-checked]="form.icon === k" [attr.aria-label]="k" (click)="form.icon = k">
+                  <lucide-icon [img]="typeIcons[k]" [size]="18"></lucide-icon>
+                </button>
+              }
+            </div>
+          </div>
+        }
+
+        <div class="field">
+          <span class="field__label">Status</span>
+          <div class="radios">
+            <label><input type="radio" name="status" value="Active" [(ngModel)]="form.status" /> Active</label>
+            <label><input type="radio" name="status" value="Inactive" [(ngModel)]="form.status" /> Inactive</label>
+          </div>
+        </div>
+      }
+
+      @case ('specifications') {
+        <p class="hint">Technical specifications captured for every asset of this sub type.</p>
+        <div class="specs">
+          @for (s of form.specifications; track $index) {
+            <div class="spec-row field-row">
+              <input [name]="'specName' + $index" placeholder="Specification, e.g. Power Rating" [attr.aria-label]="'Specification ' + ($index + 1) + ' name'" [(ngModel)]="s.name" />
+              <input [name]="'specUnit' + $index" placeholder="Unit, e.g. kVA" [attr.aria-label]="'Specification ' + ($index + 1) + ' unit'" [(ngModel)]="s.unit" />
+              <label class="field-row__req"><input type="checkbox" [name]="'specReq' + $index" [(ngModel)]="s.required" /> Required</label>
+              <button type="button" class="spec-row__remove" (click)="removeSpec($index)" [attr.aria-label]="'Remove specification ' + ($index + 1)">
+                <lucide-icon [img]="icons.Trash2" [size]="15"></lucide-icon>
+              </button>
+            </div>
+          } @empty {
+            <p class="hint">No specifications yet.</p>
+          }
+        </div>
+        @if (errors.specifications) { <small class="upload-error">{{ errors.specifications }}</small> }
+        <div class="spec-actions">
+          <button type="button" class="btn btn--ghost" (click)="addSpec()">
+            <lucide-icon [img]="icons.Plus" [size]="15"></lucide-icon> Add specification
+          </button>
+        </div>
+      }
+
+      @case ('lifecycle') {
+        <div class="grid">
+          <div class="field" [class.invalid]="errors.lifecycleYears">
+            <label for="st-life"><span class="req">*</span> Lifecycle (Years)</label>
+            <input id="st-life" name="lifecycleYears" type="number" min="1" max="50" [(ngModel)]="form.lifecycleYears" />
+            @if (errors.lifecycleYears) { <small>{{ errors.lifecycleYears }}</small> }
+          </div>
+          <div class="field" [class.invalid]="errors.warrantyMonths">
+            <label for="st-warranty">Warranty Period (Months)</label>
+            <input id="st-warranty" name="warrantyMonths" type="number" min="0" max="240" [(ngModel)]="form.warrantyMonths" />
+            @if (errors.warrantyMonths) { <small>{{ errors.warrantyMonths }}</small> }
+          </div>
+          <div class="field">
+            <label for="st-mtype">Maintenance Type</label>
+            <select id="st-mtype" name="maintenanceType" [(ngModel)]="form.maintenanceType">
+              <option value="" disabled>Select Maintenance Type</option>
+              @for (m of maintenanceTypes; track m) { <option [value]="m">{{ m }}</option> }
+            </select>
+          </div>
+          <div class="field" [class.invalid]="errors.maintenanceFrequencyDays">
+            <label for="st-freq">Maintenance Frequency (Days)</label>
+            <input id="st-freq" name="maintenanceFrequencyDays" type="number" min="1" max="3650" [(ngModel)]="form.maintenanceFrequencyDays" />
+            @if (errors.maintenanceFrequencyDays) { <small>{{ errors.maintenanceFrequencyDays }}</small> }
+          </div>
+        </div>
+        <div class="toggles">
+          <label class="toggle">
+            <span><strong>Inspection required</strong><small>Schedule periodic inspections for these assets.</small></span>
+            <input type="checkbox" name="inspectionRequired" [(ngModel)]="form.inspectionRequired" />
+          </label>
+        </div>
+      }
+
+      @case ('defaults') {
+        <span class="section-title">Default Values for New Assets</span>
+        <div class="grid">
+          <div class="field">
+            <label for="st-condition">Default Condition</label>
+            <select id="st-condition" name="defaultCondition" [(ngModel)]="form.defaultCondition">
+              <option value="" disabled>Select Default Condition</option>
+              <option value="New">New</option>
+              <option value="Good">Good</option>
+              <option value="Fair">Fair</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="st-tracking">Tracking Method</label>
+            <select id="st-tracking" name="trackingMethod" [(ngModel)]="form.trackingMethod">
+              <option value="" disabled>Select Tracking Method</option>
+              @for (t of trackingMethods; track t) { <option [value]="t">{{ t }}</option> }
+            </select>
+          </div>
+        </div>
+        <div class="toggles">
+          <label class="toggle">
+            <span><strong>Serial number required</strong><small>Assets can't be registered without a serial number.</small></span>
+            <input type="checkbox" name="serialRequired" [(ngModel)]="form.serialRequired" />
+          </label>
+          <label class="toggle">
+            <span><strong>IoT tracking</strong><small>Show live location and telemetry from tags or sensors.</small></span>
+            <input type="checkbox" name="iotTracking" [(ngModel)]="form.iotTracking" />
+          </label>
+        </div>
+      }
+
+      @case ('fields') {
+        <p class="hint">Extra fields captured when an asset of this sub type is registered.</p>
+        <div class="specs">
+          @for (c of form.customFields; track $index) {
+            <div class="spec-row field-row">
+              <input [name]="'fieldName' + $index" placeholder="Field name, e.g. ATS Model" [attr.aria-label]="'Custom field ' + ($index + 1) + ' name'" [(ngModel)]="c.name" />
+              <select [name]="'fieldType' + $index" [attr.aria-label]="'Custom field ' + ($index + 1) + ' type'" [(ngModel)]="c.type">
+                <option value="" disabled>Select Type</option>
+                @for (t of fieldTypes; track t) { <option [value]="t">{{ t }}</option> }
+              </select>
+              <label class="field-row__req"><input type="checkbox" [name]="'fieldReq' + $index" [(ngModel)]="c.required" /> Required</label>
+              <button type="button" class="spec-row__remove" (click)="removeField($index)" [attr.aria-label]="'Remove custom field ' + ($index + 1)">
+                <lucide-icon [img]="icons.Trash2" [size]="15"></lucide-icon>
+              </button>
+            </div>
+          } @empty {
+            <p class="hint">No custom fields yet.</p>
+          }
+        </div>
+        @if (errors.customFields) { <small class="upload-error">{{ errors.customFields }}</small> }
+        <div class="spec-actions">
+          <button type="button" class="btn btn--ghost" (click)="addField()">
+            <lucide-icon [img]="icons.Plus" [size]="15"></lucide-icon> Add custom field
+          </button>
+        </div>
+      }
+    }
+
+    <footer class="drawer__footer">
+      <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
+    </footer>
+  </form>
+</aside>

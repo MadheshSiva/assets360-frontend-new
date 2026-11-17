@@ -8,11 +8,13 @@ import { ShiftRecord } from '../shift.model';
 import { ShiftService } from '../shift.service';
 
 type FormTab = 'basic' | 'schedule' | 'breaks' | 'assignments' | 'settings';
-type FieldKey = 'name' | 'code' | 'startTime' | 'endTime' | 'workingDays' | 'grace' | 'breaks';
+type FieldKey = 'name' | 'code' | 'shiftType' | 'status' | 'startTime' | 'endTime' | 'workingDays' | 'grace' | 'breaks';
 
 const TAB_OF: Record<FieldKey, FormTab> = {
   name: 'basic',
   code: 'basic',
+  shiftType: 'basic',
+  status: 'basic',
   startTime: 'basic',
   endTime: 'basic',
   workingDays: 'basic',
@@ -25,7 +27,7 @@ const TAB_OF: Record<FieldKey, FormTab> = {
   selector: 'app-shift-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './shift-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../people-form.css', './shift-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../people-form.css', './shift-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class ShiftForm implements OnChanges {
   @Input() mode: 'add' | 'edit' = 'add';
@@ -114,13 +116,31 @@ export class ShiftForm implements OnChanges {
     this.form.breaks = this.form.breaks.filter((_, i) => i !== index);
   }
 
+  /** True on the final tab, where the primary button saves instead of advancing. */
+  get isLastTab(): boolean {
+    return this.tab === this.tabs[this.tabs.length - 1].id;
+  }
+
+  /** Move to the next tab. */
+  next(): void {
+    const i = this.tabs.findIndex((t) => t.id === this.tab);
+    if (i < this.tabs.length - 1) this.tab = this.tabs[i + 1].id;
+  }
+
   submit(): void {
+    // Enter key / primary button on earlier tabs just advances
+    if (!this.isLastTab) {
+      this.next();
+      return;
+    }
     const f = this.form;
     const errors: Partial<Record<FieldKey, string>> = {};
     if (!f.name.trim()) errors.name = 'Enter a shift name.';
     else if (this.service.isNameTaken(f.name, this.original?.code ?? null)) errors.name = `${f.name.trim()} already exists.`;
     if (!f.code.trim()) errors.code = 'Enter a code.';
     else if (this.service.isCodeTaken(f.code, this.original?.code ?? null)) errors.code = `${f.code.trim()} is already used.`;
+    if (!f.shiftType) errors.shiftType = 'Select a shift type.';
+    if (!f.status) errors.status = 'Select a status.';
     if (this.fixedHours) {
       if (!f.startTime) errors.startTime = 'Enter a start time.';
       if (!f.endTime) errors.endTime = 'Enter an end time.';

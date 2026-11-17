@@ -2,7 +2,8 @@ import { Component, EventEmitter, Input, OnChanges, Output, inject } from '@angu
 import { FormsModule } from '@angular/forms';
 import { LucideAngularModule, Plus, Trash2, X } from 'lucide-angular';
 import { EmployeeService } from '../../employee/employee.service';
-import { PEOPLE_DEPARTMENTS, nowStamp } from '../../people.data';
+import { MasterLookups } from '../../name-lookup';
+import { nowStamp } from '../../people.data';
 import { ShiftService } from '../../shift/shift.service';
 import { TechnicianService } from '../../technician/technician.service';
 import { blankTeam } from '../team.data';
@@ -10,7 +11,7 @@ import { TeamRecord } from '../team.model';
 import { TeamService } from '../team.service';
 
 type FormTab = 'basic' | 'members' | 'roles' | 'settings';
-type FieldKey = 'name' | 'code' | 'department' | 'members';
+type FieldKey = 'name' | 'code' | 'department' | 'status' | 'members';
 
 interface Person {
   id: string;
@@ -23,7 +24,7 @@ interface Person {
   selector: 'app-team-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './team-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../people-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../people-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class TeamForm implements OnChanges {
   @Input() mode: 'add' | 'edit' = 'add';
@@ -36,7 +37,13 @@ export class TeamForm implements OnChanges {
   private readonly employees = inject(EmployeeService);
   private readonly technicians = inject(TechnicianService);
   readonly icons = { X, Plus, Trash2 };
-  readonly departments = PEOPLE_DEPARTMENTS;
+  private readonly lookups = inject(MasterLookups);
+
+  // Department names from the departments API, plus the current value so an edit keeps it
+  get departments(): string[] {
+    const names = this.lookups.departments.names;
+    return this.form.department && !names.includes(this.form.department) ? [this.form.department, ...names] : names;
+  }
   readonly tabs: { id: FormTab; label: string }[] = [
     { id: 'basic', label: 'Basic Information' },
     { id: 'members', label: 'Members' },
@@ -108,7 +115,23 @@ export class TeamForm implements OnChanges {
     this.form.responsibilities = this.form.responsibilities.filter((_, i) => i !== index);
   }
 
+  /** True on the final tab, where the primary button saves instead of advancing. */
+  get isLastTab(): boolean {
+    return this.tab === this.tabs[this.tabs.length - 1].id;
+  }
+
+  /** Move to the next tab. */
+  next(): void {
+    const i = this.tabs.findIndex((t) => t.id === this.tab);
+    if (i < this.tabs.length - 1) this.tab = this.tabs[i + 1].id;
+  }
+
   submit(): void {
+    // Enter key / primary button on earlier tabs just advances
+    if (!this.isLastTab) {
+      this.next();
+      return;
+    }
     const f = this.form;
     const errors: Partial<Record<FieldKey, string>> = {};
     if (!f.name.trim()) errors.name = 'Enter a team name.';
@@ -116,11 +139,12 @@ export class TeamForm implements OnChanges {
     if (!f.code.trim()) errors.code = 'Enter a code.';
     else if (this.service.isCodeTaken(f.code, this.original?.code ?? null)) errors.code = `${f.code.trim()} is already used.`;
     if (!f.department) errors.department = 'Select a department.';
+    if (!f.status) errors.status = 'Select a status.';
     if (f.status === 'Active' && !f.members.length) errors.members = 'An active team needs at least one member.';
     this.errors = errors;
 
     if (Object.keys(errors).length) {
-      this.tab = errors.name || errors.code || errors.department ? 'basic' : 'members';
+      this.tab = errors.name || errors.code || errors.department || errors.status ? 'basic' : 'members';
       return;
     }
 

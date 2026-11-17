@@ -11,7 +11,7 @@ export function blankSkill(): SkillRecord {
     type: 'Hard Skill',
     description: '',
     icon: 'wrench',
-    status: 'Active',
+    status: '' as SkillRecord['status'],
     levels: [...DEFAULT_LEVELS],
     relatedRoles: [],
     certificationRequired: false,

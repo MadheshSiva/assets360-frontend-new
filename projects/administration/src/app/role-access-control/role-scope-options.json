@@ -1,0 +1,4 @@
+{
+  "locations": ["Dubai HQ", "Abu Dhabi Office", "Sharjah Facility", "Riyadh Office", "London Office", "Singapore Office"],
+  "departments": ["Administration", "Operations", "Maintenance", "Finance", "IT", "Compliance", "Inventory", "HR", "Procurement"]
+}

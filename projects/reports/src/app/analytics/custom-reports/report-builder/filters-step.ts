@@ -17,10 +17,11 @@ import { CustomReport, FieldDef, FilterOperator, ReportFilter } from '../custom-
     @for (f of report.filters; track $index; let i = $index) {
       <div class="cr-filter" [class.cr-filter--invalid]="errorOf(f)">
         <select class="select" [ngModel]="f.field" (ngModelChange)="setField(f, $event)" [attr.aria-label]="'Filter ' + (i + 1) + ' field'">
-          <option value="">Field…</option>
+          <option value="" disabled>Select Field</option>
           @for (fd of fields; track fd.key) { <option [value]="fd.key">{{ fd.label }}</option> }
         </select>
         <select class="select" [(ngModel)]="f.op" [attr.aria-label]="'Filter ' + (i + 1) + ' operator'">
+          <option value="" disabled>Select Op</option>
           @for (o of operatorsOf(f); track o) { <option [value]="o">{{ o }}</option> }
         </select>
         <input class="select" [type]="inputType(f)" [(ngModel)]="f.value" [attr.list]="'cr-values-' + i" placeholder="Value"
@@ -74,12 +75,12 @@ export class FiltersStep {
   setField(f: ReportFilter, key: string): void {
     f.field = key;
     const field = fieldOf(this.report, key);
-    f.op = field ? operatorsFor(field.kind)[0] : 'equals';
+    f.op = '' as FilterOperator;
     f.value = '';
   }
 
   add(): void {
-    this.report.filters = [...this.report.filters, { field: '', op: 'equals', value: '' }];
+    this.report.filters = [...this.report.filters, { field: '', op: '' as FilterOperator, value: '' }];
   }
 
   remove(i: number): void {

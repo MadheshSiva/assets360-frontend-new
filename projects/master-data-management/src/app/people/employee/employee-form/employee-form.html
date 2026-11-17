@@ -44,7 +44,7 @@
             <div class="field" [class.invalid]="errors.department">
               <label for="emp-dept"><span class="req">*</span> Department</label>
               <select id="emp-dept" name="department" [(ngModel)]="form.department">
-                <option value="" disabled>Select department</option>
+                <option value="" disabled>Select Department</option>
                 @for (d of departments; track d) { <option [value]="d">{{ d }}</option> }
               </select>
               @if (errors.department) { <small>{{ errors.department }}</small> }
@@ -52,7 +52,7 @@
             <div class="field" [class.invalid]="errors.designation">
               <label for="emp-desig"><span class="req">*</span> Designation</label>
               <select id="emp-desig" name="designation" [(ngModel)]="form.designation">
-                <option value="" disabled>Select designation</option>
+                <option value="" disabled>Select Designation</option>
                 @for (d of designations; track d) { <option [value]="d">{{ d }}</option> }
               </select>
               @if (errors.designation) { <small>{{ errors.designation }}</small> }
@@ -66,15 +66,17 @@
               <label for="emp-phone">Phone</label>
               <input id="emp-phone" name="phone" type="tel" placeholder="Enter phone number" [(ngModel)]="form.phone" />
             </div>
-            <div class="field">
+            <div class="field" [class.invalid]="errors.status">
               <div class="status-select">
                 <i [attr.data-status]="form.status"></i>
                 <select id="emp-status" name="status" aria-label="Status" [(ngModel)]="form.status">
+                  <option value="" disabled>Select Status</option>
                   <option value="Active">Active</option>
                   <option value="On Leave">On Leave</option>
                   <option value="Inactive">Inactive</option>
                 </select>
               </div>
+              @if (errors.status) { <small>{{ errors.status }}</small> }
             </div>
           </div>
         </div>
@@ -86,6 +88,7 @@
           <div class="field">
             <label for="emp-type">Employment Type</label>
             <select id="emp-type" name="employmentType" [(ngModel)]="form.employmentType">
+              <option value="" disabled>Select Employment Type</option>
               @for (t of employmentTypes; track t) { <option [value]="t">{{ t }}</option> }
             </select>
           </div>
@@ -96,7 +99,7 @@
           <div class="field">
             <label for="emp-site">Site</label>
             <select id="emp-site" name="site" [(ngModel)]="form.site">
-              <option value="">Select site</option>
+              <option value="">Select Site</option>
               @for (s of sites; track s) { <option [value]="s">{{ s }}</option> }
             </select>
           </div>
@@ -107,7 +110,7 @@
           <div class="field field--wide" [class.invalid]="errors.reportingManager">
             <label for="emp-manager">Reporting Manager</label>
             <select id="emp-manager" name="reportingManager" [(ngModel)]="form.reportingManager">
-              <option value="">None</option>
+              <option value="">Select Reporting Manager</option>
               @for (m of managers; track m.id) { <option [value]="m.id">{{ m.name }} ({{ m.id }}, {{ m.designation }})</option> }
             </select>
             @if (errors.reportingManager) { <small>{{ errors.reportingManager }}</small> }
@@ -128,7 +131,7 @@
           <div class="field">
             <label for="emp-nat">Nationality</label>
             <select id="emp-nat" name="nationality" [(ngModel)]="form.nationality">
-              <option value="">Select nationality</option>
+              <option value="">Select Nationality</option>
               @for (n of nationalities; track n) { <option [value]="n">{{ n }}</option> }
             </select>
           </div>
@@ -181,6 +184,7 @@
         <div class="field">
           <label for="emp-role">System Access</label>
           <select id="emp-role" name="accessRole" [(ngModel)]="form.accessRole">
+            <option value="" disabled>Select System Access</option>
             @for (r of accessRoles; track r) { <option [value]="r">{{ r }}</option> }
           </select>
           <small class="hint">Login accounts are created in Administration › User Management.</small>
@@ -204,7 +208,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

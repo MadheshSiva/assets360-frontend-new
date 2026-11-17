@@ -19,7 +19,7 @@
           <div class="field" [class.invalid]="errors['category']">
             <label for="sup-cat"><span class="req">*</span> Category</label>
             <select id="sup-cat" name="category" [(ngModel)]="form.category">
-              <option value="" disabled>Select category</option>
+              <option value="" disabled>Select Category</option>
               @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
             </select>
             @if (errors['category']) { <small>{{ errors['category'] }}</small> }
@@ -27,7 +27,7 @@
           <div class="field" [class.invalid]="errors['country']">
             <label for="sup-country"><span class="req">*</span> Country</label>
             <select id="sup-country" name="country" [ngModel]="form.country" (ngModelChange)="setCountry($event)">
-              <option value="" disabled>Select country</option>
+              <option value="" disabled>Select Country</option>
               @for (c of countries; track c.name) { <option [value]="c.name">{{ c.flag }} {{ c.name }}</option> }
             </select>
             @if (errors['country']) { <small>{{ errors['country'] }}</small> }
@@ -82,17 +82,19 @@
           <div class="field">
             <label for="sup-currency">Currency</label>
             <select id="sup-currency" name="currency" [(ngModel)]="form.currency">
+              <option value="" disabled>Select Currency</option>
               @for (c of currencies; track c) { <option [value]="c">{{ c }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="sup-terms">Payment Terms</label>
             <select id="sup-terms" name="paymentTerms" [(ngModel)]="form.paymentTerms">
+              <option value="" disabled>Select Payment Terms</option>
               @for (t of paymentTerms; track t) { <option [value]="t">{{ t }}</option> }
             </select>
           </div>
           <div class="field" [class.invalid]="errors['creditLimit']">
-            <label for="sup-credit">Credit Limit ({{ form.currency.slice(0, 3) }})</label>
+            <label for="sup-credit">Credit Limit{{ form.currency ? ' (' + form.currency.slice(0, 3) + ')' : '' }}</label>
             <input id="sup-credit" name="creditLimit" type="number" min="0" [(ngModel)]="form.creditLimit" />
             @if (errors['creditLimit']) { <small>{{ errors['creditLimit'] }}</small> }
           </div>
@@ -145,7 +147,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

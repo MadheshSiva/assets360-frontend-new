@@ -4,9 +4,21 @@ import { LucideAngularModule, Plus, Trash2, X } from 'lucide-angular';
 import { CURRENCIES } from '../../../organization/organization/organization.data';
 import { TRACKING_METHODS, hasRunningNumber, sampleTag } from '../../asset-model/asset-model.data';
 import { MODEL_ICONS, MODEL_ICON_KEYS } from '../../asset-model/asset-model.icons';
-import { ASSET_CLASSES, CUSTOM_FIELD_TYPES, MAINTENANCE_TYPES, SERVICE_PROVIDERS, TYPE_COST_CENTERS, blankAssetType, categoryDefaults } from '../asset-type.data';
+import { ASSET_CLASSES, CUSTOM_FIELD_TYPES, MAINTENANCE_TYPES, blankAssetType } from '../asset-type.data';
 import { AssetTypeRecord } from '../asset-type.model';
 import { AssetTypeService } from '../asset-type.service';
+
+/** A new asset type starts with every dropdown empty so the user picks each value. */
+function newAssetType(): AssetTypeRecord {
+  return {
+    ...blankAssetType(),
+    maintenanceType: '' as AssetTypeRecord['maintenanceType'],
+    depreciationMethod: '' as AssetTypeRecord['depreciationMethod'],
+    currency: '',
+    defaultCondition: '' as AssetTypeRecord['defaultCondition'],
+    trackingMethod: '' as AssetTypeRecord['trackingMethod']
+  };
+}
 
 export type TypeFormTab = 'basic' | 'classification' | 'lifecycle' | 'financial' | 'defaults' | 'fields';
 type FieldKey =
@@ -46,7 +58,8 @@ const TAB_OF: Record<FieldKey, TypeFormTab> = {
     '../../../shared/styles/mdm-drawer.css',
     '../../../shared/styles/mdm-drawer-extras.css',
     '../../asset-model/model-form/model-form.css',
-    './type-form.css'
+    './type-form.css',
+    '../../../shared/styles/mdm-purple-theme.css'
   ]
 })
 export class TypeForm implements OnChanges {
@@ -64,8 +77,6 @@ export class TypeForm implements OnChanges {
   readonly classes = ASSET_CLASSES;
   readonly maintenanceTypes = MAINTENANCE_TYPES;
   readonly fieldTypes = CUSTOM_FIELD_TYPES;
-  readonly providers = SERVICE_PROVIDERS;
-  readonly costCenters = TYPE_COST_CENTERS;
   readonly currencies = CURRENCIES;
   readonly trackingMethods = TRACKING_METHODS;
   readonly tabs: { id: TypeFormTab; label: string }[] = [
@@ -78,14 +89,14 @@ export class TypeForm implements OnChanges {
   ];
 
   tab: TypeFormTab = 'basic';
-  form: AssetTypeRecord = blankAssetType();
+  form: AssetTypeRecord = newAssetType();
   newSubcategory = '';
   errors: Partial<Record<FieldKey, string>> = {};
   private original: AssetTypeRecord | null = null;
 
   ngOnChanges(): void {
     this.original = this.mode === 'edit' ? this.type : null;
-    this.form = this.type ? structuredClone(this.type) : blankAssetType();
+    this.form = this.type ? structuredClone(this.type) : newAssetType();
     this.newSubcategory = '';
     this.errors = {};
     this.tab = this.startTab;
@@ -103,13 +114,14 @@ export class TypeForm implements OnChanges {
     return this.form.currency.slice(0, 3);
   }
 
-  /** New types pick up the usual cost center and service provider of their category. */
-  onCategoryChange(): void {
-    const d = categoryDefaults(this.form.category);
-    if (!d || this.isEdit) return;
-    if (!this.form.costCenter) this.form.costCenter = d.costCenter;
-    if (!this.form.serviceProvider) this.form.serviceProvider = d.serviceProvider;
-    this.form.capitalizationThreshold = d.threshold;
+  // Cost centers already used on asset types, plus the current value
+  get costCenters(): string[] {
+    return [...new Set([this.form.costCenter, ...this.service.all().map((r) => r.costCenter)].filter(Boolean))];
+  }
+
+  // Service providers already used on asset types, plus the current value
+  get providers(): string[] {
+    return [...new Set([this.form.serviceProvider, ...this.service.all().map((r) => r.serviceProvider)].filter(Boolean))];
   }
 
   // Suggest a tagging format from the code (AT-LAP-001 gives LAP-{YY}-{0000}) until one is typed
@@ -145,7 +157,7 @@ export class TypeForm implements OnChanges {
   }
 
   addField(): void {
-    this.form.customFields = [...this.form.customFields, { name: '', type: 'Text', required: false }];
+    this.form.customFields = [...this.form.customFields, { name: '', type: '' as AssetTypeRecord['customFields'][number]['type'], required: false }];
   }
 
   removeField(index: number): void {
@@ -178,7 +190,23 @@ export class TypeForm implements OnChanges {
     this.form.image = null;
   }
 
+  /** True on the final tab, where the primary button saves instead of advancing. */
+  get isLastTab(): boolean {
+    return this.tab === this.tabs[this.tabs.length - 1].id;
+  }
+
+  /** Move to the next tab. */
+  next(): void {
+    const i = this.tabs.findIndex((t) => t.id === this.tab);
+    if (i < this.tabs.length - 1) this.tab = this.tabs[i + 1].id;
+  }
+
   submit(): void {
+    // Enter key / primary button on earlier tabs just advances
+    if (!this.isLastTab) {
+      this.next();
+      return;
+    }
     const f = this.form;
     const errors: Partial<Record<FieldKey, string>> = {};
     if (!f.name.trim()) errors.name = 'Enter an asset type name.';
@@ -196,6 +224,7 @@ export class TypeForm implements OnChanges {
     const names = f.customFields.map((c) => c.name.trim().toLowerCase());
     if (names.some((n) => !n)) errors.customFields = 'Every custom field needs a name.';
     else if (new Set(names).size !== names.length) errors.customFields = 'Custom field names must be unique.';
+    else if (f.customFields.some((c) => !c.type)) errors.customFields = 'Every custom field needs a type.';
     this.errors = errors;
 
     const keys = Object.keys(errors) as FieldKey[];
@@ -216,7 +245,7 @@ export class TypeForm implements OnChanges {
         taggingFormat: f.taggingFormat.trim(),
         customFields: f.customFields.map((c) => ({ ...c, name: c.name.trim() })),
         createdOn: this.original?.createdOn ?? stamp,
-        createdBy: this.original?.createdBy ?? 'Rex Kumar',
+        createdBy: this.original?.createdBy ?? '',
         updatedOn: stamp
       },
       originalCode: this.original?.code ?? null,

@@ -8,7 +8,7 @@ import { ListPage } from '../../shared/list-page';
 import { apiErrorMessage } from '../../shared/mdm-api';
 import { ShiftService } from '../shift/shift.service';
 import { EmployeeService } from '../employee/employee.service';
-import { PEOPLE_DEPARTMENTS } from '../people.data';
+import { MasterLookups } from '../name-lookup';
 import { TechnicianService } from '../technician/technician.service';
 import { TeamForm } from './team-form/team-form';
 import { TeamFilters, TeamRecord } from './team.model';
@@ -21,7 +21,7 @@ type SortKey = 'name' | 'code' | 'department' | 'members';
   selector: 'app-mdm-people-team',
   imports: [FormsModule, RouterLink, LucideAngularModule, TeamForm],
   templateUrl: './team.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../people.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../people.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class TeamPage extends ListPage<TeamRecord, TeamFilters, SortKey> {
   readonly service = inject(TeamService);
@@ -29,7 +29,13 @@ export class TeamPage extends ListPage<TeamRecord, TeamFilters, SortKey> {
   private readonly technicians = inject(TechnicianService);
   private readonly shifts = inject(ShiftService);
   readonly basePath = MASTER_DATA_BASE_PATH;
-  readonly departments = PEOPLE_DEPARTMENTS;
+  private readonly lookups = inject(MasterLookups);
+
+  // Department names from the departments API
+  get departments(): string[] {
+    const names = this.lookups.departments.names;
+    return names;
+  }
   readonly statuses: TeamRecord['status'][] = ['Active', 'On Leave', 'Inactive'];
   readonly icons = { Users, Search, Plus, Ellipsis, ArrowUp, ArrowDown, ChevronLeft, ChevronRight };
 

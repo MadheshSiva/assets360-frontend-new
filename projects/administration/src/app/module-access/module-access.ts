@@ -4,10 +4,9 @@ import { RouterLink } from '@angular/router';
 import { catchError, concatMap, defer, from, of, toArray } from 'rxjs';
 import {
   BadgeCheck, Box, Building2, ChevronRight, Coins, Copy, Download, Ellipsis, Eye, Funnel, Hammer, List, Lock, LucideAngularModule, LucideIconData,
-  Plus, Search, Server, Shield, Upload, User, Users, Wrench, X
+  Pencil, Plus, Search, Server, Shield, Trash2, Upload, User, Users, Wrench, X
 } from 'lucide-angular';
 import { ASSET360_MODULES, AdminPage } from '../shared/admin-common';
-import { demoUsers } from '../role-access-control/role-access.data';
 import { RoleAccessService, adminApiError } from '../role-access-control/role-access.service';
 import { UsersDialog } from '../role-access-control/users-dialog/users-dialog';
 import { ExceptionList } from './exception-list/exception-list';
@@ -49,7 +48,7 @@ export class ModuleAccessPage extends AdminPage {
   private readonly service = inject(ModuleAccessService);
   private readonly roles = inject(RoleAccessService);
 
-  readonly icons = { Box, List, Lock, Users, Plus, Copy, Upload, Download, Search, Funnel, ChevronRight, Ellipsis, X };
+  readonly icons = { Box, List, Lock, Users, Plus, Copy, Upload, Download, Search, Funnel, ChevronRight, Ellipsis, Pencil, Trash2, X };
   readonly modules = ASSET360_MODULES;
   readonly tabs: { id: Tab; label: string }[] = [
     { id: 'modules', label: 'Modules' },
@@ -71,16 +70,24 @@ export class ModuleAccessPage extends AdminPage {
   drawerOpen = true;
   menuOpen = false;
   usersOpen = false;
+  /** A create/update request is in flight */
+  saving = false;
   confirm: Confirm | null = null;
 
   constructor() {
     super();
     this.service.load().subscribe({
-      next: (all) => this.load(all.find((p) => p.code === 'OPS-MGR-001') ?? all[0]),
-      error: (err) => this.notify(`Couldn't load access policies: ${adminApiError(err, 'access policy')}`)
+      next: (all) => {
+        this.load(all.find((p) => p.code === 'OPS-MGR-001') ?? all[0]);
+        this.notify(
+          all.length ? `Loaded ${all.length} access polic${all.length === 1 ? 'y' : 'ies'} from the server.` : 'No access policies yet. Create the first policy.',
+          'success'
+        );
+      },
+      error: (err) => this.notify(`Couldn't load access policies: ${adminApiError(err, 'access policy')}`, 'error')
     });
     // Role options for the policy drawer
-    this.roles.ensureLoaded().subscribe({ error: (err) => this.notify(`Couldn't load roles: ${adminApiError(err, 'roles')}`) });
+    this.roles.ensureLoaded().subscribe({ error: (err) => this.notify(`Couldn't load roles: ${adminApiError(err, 'roles')}`, 'error') });
   }
 
   get loading(): boolean {
@@ -187,7 +194,8 @@ export class ModuleAccessPage extends AdminPage {
   // ===== Toolbar actions =====
   createPolicy(): void {
     this.guard(() => {
-      this.startDraft(blankPolicy());
+      // New policies open with Data Scope / Landing Module unselected
+      this.startDraft({ ...blankPolicy(), dataScope: '', landingModule: '' });
       this.tab = 'modules';
     });
   }
@@ -235,14 +243,15 @@ export class ModuleAccessPage extends AdminPage {
         const parsed = JSON.parse(text);
         rows = Array.isArray(parsed) ? parsed : [parsed];
       } catch {
-        this.notify('Import failed: the file is not valid JSON.');
+        this.notify('Import failed: the file is not valid JSON.', 'error');
         return;
       }
       const valid = rows.filter((row) => row && typeof row.name === 'string' && typeof row.code === 'string');
       if (!valid.length) {
-        this.notify('No policies found in the file (each needs a name and code).');
+        this.notify('No policies found in the file (each needs a name and code).', 'error');
         return;
       }
+      this.notify(`Importing ${valid.length} polic${valid.length === 1 ? 'y' : 'ies'}...`);
       // One POST at a time so each unique code sees the policies created before it
       from(valid)
         .pipe(
@@ -261,7 +270,7 @@ export class ModuleAccessPage extends AdminPage {
         .subscribe((saved) => {
           const added = saved.filter(Boolean).length;
           const failed = saved.length - added;
-          this.notify(`Imported ${added} polic${added === 1 ? 'y' : 'ies'}.` + (failed ? ` ${failed} failed (check names and codes).` : ''));
+          this.notify(`Imported ${added} polic${added === 1 ? 'y' : 'ies'}.` + (failed ? ` ${failed} failed (check names and codes).` : ''), failed ? 'error' : 'success');
         });
     });
   }
@@ -273,19 +282,32 @@ export class ModuleAccessPage extends AdminPage {
     const first = Object.values(errors)[0];
     if (first) {
       this.drawerOpen = true;
-      this.notify(`Fix the highlighted fields: ${first}`);
+      this.notify(`Fix the highlighted fields: ${first}`, 'error');
       return;
     }
+    if (this.saving) return;
     this.draft.name = this.draft.name.trim();
     this.draft.code = this.draft.code.trim();
     const wasNew = this.isNew;
+    this.saving = true;
+    this.notify(`${wasNew ? 'Creating' : 'Saving'} ${this.draft.name}...`);
     this.service.save(this.draft).subscribe({
       next: (stored) => {
+        this.saving = false;
         this.load(stored);
-        this.notify(`${stored.name} ${wasNew ? 'created' : 'saved'}.`);
+        this.notify(`${stored.name} ${wasNew ? 'created' : 'saved'} successfully.`, 'success');
       },
-      error: (err) => this.notify(`Couldn't save ${this.draft.name}: ${adminApiError(err, 'access policy')}`)
+      error: (err) => {
+        this.saving = false;
+        this.notify(`Couldn't ${wasNew ? 'create' : 'save'} ${this.draft.name}: ${adminApiError(err, 'access policy')}`, 'error');
+      }
     });
+  }
+
+  /** Row action: open the policy in the details drawer for editing */
+  editPolicy(p: PolicyRecord, e: Event): void {
+    e.stopPropagation();
+    this.select(p);
   }
 
   cancelEdit(): void {
@@ -314,30 +336,34 @@ export class ModuleAccessPage extends AdminPage {
       next: (saved) => {
         if (wasDirty) this.draft.status = saved.status;
         else this.load(saved);
-        this.notify(`${saved.name} set to ${saved.status}.`);
+        this.notify(`${saved.name} set to ${saved.status}.`, 'success');
       },
-      error: (err) => this.notify(`Couldn't update ${stored.name}: ${adminApiError(err, 'access policy')}`)
+      error: (err) => this.notify(`Couldn't update ${stored.name}: ${adminApiError(err, 'access policy')}`, 'error')
     });
   }
 
-  askDelete(): void {
+  /** Deletes the given policy (row action) or the selected one (menu action) after confirmation */
+  askDelete(policy?: PolicyRecord, e?: Event): void {
+    e?.stopPropagation();
     this.menuOpen = false;
-    const p = this.service.byId(this.selectedId);
-    if (!p || this.isNew) return;
+    const p = policy ?? (this.isNew ? undefined : this.service.byId(this.selectedId));
+    if (!p) return;
     this.confirm = {
       title: `Delete ${p.name}?`,
       message: p.users
         ? `${p.users} user${p.users === 1 ? '' : 's'} lose the module access this policy grants. This can't be undone.`
         : "No users are covered by this policy. This can't be undone.",
       action: 'Delete Policy',
-      run: () =>
+      run: () => {
+        this.notify(`Deleting ${p.name}...`);
         this.service.remove(p.id).subscribe({
           next: () => {
-            this.load(this.policies[0]);
-            this.notify(`${p.name} deleted.`);
+            if (p.id === this.selectedId || !this.service.byId(this.selectedId)) this.load(this.policies[0]);
+            this.notify(`${p.name} deleted successfully.`, 'success');
           },
-          error: (err) => this.notify(`Couldn't delete ${p.name}: ${adminApiError(err, 'access policy')}`)
-        })
+          error: (err) => this.notify(`Couldn't delete ${p.name}: ${adminApiError(err, 'access policy')}`, 'error')
+        });
+      }
     };
   }
 
@@ -357,6 +383,7 @@ export class ModuleAccessPage extends AdminPage {
   }
 
   allUsers(): string[] {
-    return demoUsers(this.draft.id || this.draft.name, this.draft.users);
+    // Policy members come from the users API once wired
+    return [];
   }
 }

@@ -25,7 +25,7 @@ export interface ShareResult {
           <label for="sh-person">Add people</label>
           <div class="idb-share-add">
             <select id="sh-person" class="select" [(ngModel)]="person">
-              <option value="">Select a person</option>
+              <option value="">Select Person</option>
               @for (p of availablePeople; track p) { <option [value]="p">{{ p }}</option> }
             </select>
             <button type="button" class="btn" [disabled]="!person" (click)="addPerson()">Add</button>
@@ -45,7 +45,7 @@ export interface ShareResult {
           <label for="sh-group">Add groups</label>
           <div class="idb-share-add">
             <select id="sh-group" class="select" [(ngModel)]="group">
-              <option value="">Select a group</option>
+              <option value="">Select Group</option>
               @for (g of availableGroups; track g) { <option [value]="g">{{ g }}</option> }
             </select>
             <button type="button" class="btn" [disabled]="!group" (click)="addGroup()">Add</button>
@@ -61,7 +61,7 @@ export interface ShareResult {
 
         <label class="switch idb-share-org">
           <input type="checkbox" [(ngModel)]="organization" />
-          <i></i> Everyone in Purple IQ Group can view
+          <i></i> Everyone in the organization can view
         </label>
 
         <div class="field">

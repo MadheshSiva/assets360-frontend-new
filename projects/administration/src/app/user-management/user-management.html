@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a routerLink="/administration">Administration</a>
-  <span aria-hidden="true">/</span>
+  <span aria-hidden="true">›</span>
   <strong>User Management</strong>
 </nav>
 
@@ -13,6 +13,7 @@
   <label class="org-picker">
     <span>Organization</span>
     <select [(ngModel)]="organization" aria-label="Organization">
+      <option value="" disabled>Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
@@ -83,11 +84,11 @@
         <input placeholder="Search users by name, email or ID..." aria-label="Search users" [(ngModel)]="search" (ngModelChange)="onFilterChange()" />
       </label>
       <select class="select" aria-label="Department" [(ngModel)]="department" (ngModelChange)="onFilterChange()">
-        <option value="">All Departments</option>
+        <option value="">Select Department</option>
         @for (d of departments; track d) { <option [value]="d">{{ d }}</option> }
       </select>
       <select class="select" aria-label="Status" [(ngModel)]="status" (ngModelChange)="onFilterChange()">
-        <option value="">All Statuses</option>
+        <option value="">Select Status</option>
         @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
       </select>
     </div>
@@ -149,6 +150,15 @@
                 <td class="login-cell">{{ loginDate(u) }}@if (loginTime(u)) { <br /><span class="muted">{{ loginTime(u) }}</span> }</td>
                 <td><span class="pill" [attr.data-tone]="statusTone(u)"><i></i>{{ u.status }}</span></td>
                 <td class="center" (click)="$event.stopPropagation()">
+                  <span class="um-row-actions">
+                    <button type="button" class="icon-btn icon-btn--bare" [attr.aria-label]="'Edit ' + u.name" title="Edit user" (click)="editUser(u, $event)">
+                      <lucide-icon [img]="icons.Pencil" [size]="15"></lucide-icon>
+                    </button>
+                    @if (!isSelf(u)) {
+                      <button type="button" class="icon-btn icon-btn--bare um-row-delete" [attr.aria-label]="'Delete ' + u.name" title="Delete user" (click)="remove(u, $event)">
+                        <lucide-icon [img]="icons.Trash2" [size]="15"></lucide-icon>
+                      </button>
+                    }
                   <span class="row-menu">
                     <button type="button" class="icon-btn icon-btn--bare" [attr.aria-label]="'Actions for ' + u.name" [attr.aria-expanded]="menuFor === u.id" (click)="toggleMenu(u, $event)">
                       <lucide-icon [img]="icons.Ellipsis" [size]="18"></lucide-icon>
@@ -172,6 +182,7 @@
                         @if (!isSelf(u)) { <button type="button" role="menuitem" class="danger" (click)="remove(u)">Delete</button> }
                       </div>
                     }
+                  </span>
                   </span>
                 </td>
               </tr>
@@ -228,5 +239,5 @@
 }
 
 @if (toast) {
-  <div class="toast" role="status">{{ toast }}</div>
+  <div class="toast" role="status" [attr.data-tone]="toastTone">{{ toast }}</div>
 }

@@ -15,7 +15,8 @@ import {
   RaWidget, fmtDate, previousSeries, sumOf
 } from '../inventory-analytics/parts';
 
-const KPI_DELTAS = { assetValue: 6.3, maintenance: 8.2, capex: 12.1, opex: 4.7, nbv: 2.4 };
+/** Change vs the previous period (%). Not available until a data source is wired. */
+const KPI_DELTAS = { assetValue: 0, maintenance: 0, capex: 0, opex: 0, nbv: 0 };
 
 /** Reports & Analytics > Financial Analytics */
 @Component({
@@ -35,8 +36,8 @@ export class FinancialAnalyticsPage extends RaDashboardPage implements OnInit {
   readonly costCenterOptions = [ALL_COST_CENTERS, ...COST_CENTERS.map((c) => `${c.code} ${c.name}`)];
   readonly currencies = CURRENCIES;
   readonly budgetTarget = BUDGET_TARGET;
-  category = ALL_CATEGORIES;
-  costCenter = ALL_COST_CENTERS;
+  category = '';
+  costCenter = '';
   currency: Currency = 'AED';
   /** CAPEX requests decided from the approvals dialog this session */
   private decided = new Set<string>();
@@ -60,7 +61,6 @@ export class FinancialAnalyticsPage extends RaDashboardPage implements OnInit {
   readonly sliceFormat = (v: number) => compactNumber(v);
 
   ngOnInit(): void {
-    this.updatedMinutes = 7;
     this.apply();
   }
 
@@ -92,7 +92,7 @@ export class FinancialAnalyticsPage extends RaDashboardPage implements OnInit {
 
   /** Recomputes the view whenever a filter changes. */
   apply(): void {
-    const v = buildFinancialView({ period: this.period, organization: this.organization, location: this.location, category: this.category, costCenter: this.costCenter });
+    const v = buildFinancialView({ period: this.period, organization: this.organization, location: this.location, category: this.category, costCenter: this.costCenter || ALL_COST_CENTERS });
     v.capexRequests = v.capexRequests.filter((r) => !this.decided.has(r.ref));
     this.view = v;
     this.buildKpis(v);
@@ -119,7 +119,7 @@ export class FinancialAnalyticsPage extends RaDashboardPage implements OnInit {
     this.tcoSeries = TCO_COMPONENTS.map((name, i) => ({ name, values: cur(v.tco[i]), color: TCO_COLORS[i], type: 'bar' as const }));
     this.tcoSeries.push({ name: 'Total TCO (cumulative)', values: cur(v.tcoCumulative), color: RA_COLORS.purple, type: 'line', axis: 'right' });
     if (this.compare) {
-      this.tcoSeries.push({ name: 'Total TCO (previous period)', values: cur(previousSeries(v.tcoCumulative, 6.3)), color: RA_COLORS.grey, type: 'line', axis: 'right', dashed: true });
+      this.tcoSeries.push({ name: 'Total TCO (previous period)', values: cur(previousSeries(v.tcoCumulative, KPI_DELTAS.assetValue)), color: RA_COLORS.grey, type: 'line', axis: 'right', dashed: true });
     }
     this.tcoCenter = this.fmt(v.tcoTotal).replace(`${this.currency} `, '');
 
@@ -138,7 +138,7 @@ export class FinancialAnalyticsPage extends RaDashboardPage implements OnInit {
       { name: 'Accumulated Depreciation', values: cur(v.accumulated), color: RA_COLORS.purple, type: 'line', axis: 'right' }
     ];
     if (this.compare) {
-      this.depreciationSeries.push({ name: 'Monthly Depreciation (previous period)', values: cur(previousSeries(v.depreciation, 2.4)), color: RA_COLORS.grey, type: 'line', dashed: true });
+      this.depreciationSeries.push({ name: 'Monthly Depreciation (previous period)', values: cur(previousSeries(v.depreciation, KPI_DELTAS.nbv)), color: RA_COLORS.grey, type: 'line', dashed: true });
     }
 
     // Wrap the last word of the site name onto a second line ("Jebel Ali\nWarehouse")
@@ -155,7 +155,7 @@ export class FinancialAnalyticsPage extends RaDashboardPage implements OnInit {
 
   private buildInsights(v: FinancialView): void {
     const list: InsightCard[] = [];
-    if (v.maintenance > 0) {
+    if (v.maintenance > 0 && KPI_DELTAS.maintenance > 0) {
       list.push({
         id: 'maintenance', tone: 'red', icon: TriangleAlert, title: `Maintenance spend ${KPI_DELTAS.maintenance}% above prior period`,
         text: `Maintenance costs are ${KPI_DELTAS.maintenance}% higher than the previous period (${this.fmt(v.maintenance)}), driven by increased corrective maintenance.`,

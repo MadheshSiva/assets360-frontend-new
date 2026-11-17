@@ -29,7 +29,7 @@
         <div class="field" [class.invalid]="errors.category">
           <label for="skill-cat"><span class="req">*</span> Category</label>
           <select id="skill-cat" name="category" [(ngModel)]="form.category">
-            <option value="" disabled>Select category</option>
+            <option value="" disabled>Select Category</option>
             @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
           </select>
           @if (errors.category) { <small>{{ errors.category }}</small> }
@@ -61,15 +61,17 @@
             </div>
           }
         </div>
-        <div class="field">
+        <div class="field" [class.invalid]="errors.status">
           <label for="skill-status">Status</label>
           <div class="status-select">
             <i [attr.data-status]="form.status"></i>
             <select id="skill-status" name="status" [(ngModel)]="form.status">
+              <option value="" disabled>Select Status</option>
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
             </select>
           </div>
+          @if (errors.status) { <small>{{ errors.status }}</small> }
           @if (isEdit && usage && form.status === 'Inactive' && skill?.status === 'Active') {
             <small class="note">{{ usage }} people hold this skill. It stays on their records but can't be picked for new ones.</small>
           }
@@ -134,7 +136,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

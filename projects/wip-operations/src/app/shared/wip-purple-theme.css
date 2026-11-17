@@ -1,0 +1,12 @@
+/* Breadcrumb (the current item keeps its own color) */
+.breadcrumb a {
+  color: #6d28d9;
+}
+
+.breadcrumb a:hover {
+  color: #4c1d95;
+}
+
+.breadcrumb .sep {
+  color: #a78bfa;
+}

@@ -78,3 +78,37 @@
   background: #dc2626;
   border-color: #dc2626;
 }
+
+
+/* Policy row: the select button plus edit / delete actions in its bottom-right corner (the pills keep the top right) */
+.ma-row {
+  position: relative;
+}
+
+.ma-row .list-item {
+  padding-bottom: 40px;
+}
+
+.ma-row__actions {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  display: flex;
+  gap: 2px;
+}
+
+.ma-row__actions .icon-btn {
+  width: 30px;
+  height: 30px;
+  color: #64748b;
+}
+
+.ma-row__actions .icon-btn:hover {
+  background: #f1f5f9;
+  color: var(--adm-purple);
+}
+
+.ma-row__actions .ma-row__delete:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}

@@ -1,22 +1,17 @@
 import { Directive, OnDestroy } from '@angular/core';
 
-// DEMO MODE: Administration pages keep their records in memory until the admin APIs exist
+// Tenant lookups (organizations, people, locations, departments) come from the APIs; empty until loaded
+export const ORGANIZATIONS: string[] = [];
 
-export const ORGANIZATIONS = ['Purple IQ Group', 'Purple IQ UAE', 'Purple IQ KSA', 'Purple IQ Qatar'];
+/** The signed-in administrator shown as owner / "updated by" on new records (filled from the session once wired). */
+export const CURRENT_USER = { id: '', name: '', role: '', email: '' };
 
-/** The signed-in administrator shown as owner / "updated by" on new records. */
-export const CURRENT_USER = { id: 'USR-000121', name: 'Sarah Ahmed', role: 'Administrator', email: 'sarah.ahmed@purpleiq.com' };
+/** Shared people pool for owners, approvers and audit actors across the Administration pages. */
+export const ADMIN_PEOPLE: string[] = [];
 
-/** Shared people pool so owners, approvers and audit actors line up across the Administration pages. */
-export const ADMIN_PEOPLE = [
-  'Sarah Ahmed', 'Omar Hassan', 'Aisha Rahman', 'James Tan', 'Priya Sharma', 'Fatima Noor', 'Mohammed Ali',
-  'Daniel Kim', 'Rahul Mehta', 'Ahmed Khan', 'Lisa Wong', 'John Mathew', 'Fatima Ali', 'Omar Khalid',
-  'Michael Chen', 'Sarah Khan', 'Ahmed Al Marri', 'Priya Nair', 'Daniel Tan', 'Fatima Al Mansoori', 'James Wilson'
-];
+export const ADMIN_LOCATIONS: string[] = [];
 
-export const ADMIN_LOCATIONS = ['Dubai HQ', 'Abu Dhabi Office', 'Sharjah Facility', 'Riyadh Office', 'London Office', 'Singapore Office'];
-
-export const ADMIN_DEPARTMENTS = ['Administration', 'Operations', 'Maintenance', 'Finance', 'IT', 'Compliance', 'Inventory', 'HR', 'Procurement'];
+export const ADMIN_DEPARTMENTS: string[] = [];
 
 /** The Asset360 modules, used by access policies, roles and numbering. */
 export const ASSET360_MODULES = [
@@ -49,18 +44,24 @@ export function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+export type ToastTone = 'info' | 'success' | 'error';
+
 /** Base for the Administration pages: organization picker + toast. */
 @Directive()
 export abstract class AdminPage implements OnDestroy {
   readonly organizations = ORGANIZATIONS;
-  organization = ORGANIZATIONS[0];
+  organization = ORGANIZATIONS[0] ?? '';
   toast: string | null = null;
+  /** Colour of the toast: info (dark), success (green) or error (red). */
+  toastTone: ToastTone = 'info';
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
-  notify(message: string): void {
+  notify(message: string, tone: ToastTone = 'info'): void {
     this.toast = message;
+    this.toastTone = tone;
     if (this.toastTimer) clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => (this.toast = null), 3200);
+    // errors stay a little longer so the reason can be read
+    this.toastTimer = setTimeout(() => (this.toast = null), tone === 'error' ? 5000 : 3200);
   }
 
   ngOnDestroy(): void {

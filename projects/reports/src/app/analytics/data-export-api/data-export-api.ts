@@ -96,29 +96,24 @@ export class DataExportApiPage extends AnalyticsPage implements OnDestroy {
     const s = this.service;
     const rate = s.successRate;
     return [
-      this.kpi('Active Exports', s.activeExports, [5, 5, 6, 6, 6, 7, 7], 'purple', FileText, 'Export jobs that are not paused or drafts'),
-      this.kpi('API Connections', s.connections.length, [3, 3, 4, 4, 4, 5, 5], 'blue', Link, 'Reporting systems connected to Asset360'),
-      this.kpi('Scheduled Jobs', s.scheduledJobs, [4, 4, 5, 5, 5, 6, 6], 'pink', Calendar, 'Exports that run on a schedule'),
+      this.kpi('Active Exports', s.activeExports, 'purple', FileText, 'Export jobs that are not paused or drafts'),
+      this.kpi('API Connections', s.connections.length, 'blue', Link, 'Reporting systems connected to Asset360'),
+      this.kpi('Scheduled Jobs', s.scheduledJobs, 'pink', Calendar, 'Exports that run on a schedule'),
       {
-        label: 'Successful Runs', value: `${rate.toFixed(1)}%`, delta: `${rate >= 95.1 ? '+' : ''}${(rate - 95.1).toFixed(1)} pts`,
-        up: rate >= 95.1, tone: 'green', icon: CircleCheck, trend: [95.1, 95.8, 96, 95.6, 96.4, 96.9, 97.2, rate], color: RA_COLORS.green,
-        info: 'Export runs that succeeded, last 30 days'
+        label: 'Successful Runs', value: rate === null ? '—' : `${rate.toFixed(1)}%`, delta: '', up: true, tone: 'green', icon: CircleCheck,
+        trend: [], color: RA_COLORS.green, info: 'Export runs that succeeded, last 30 days'
       },
       {
-        label: 'Data Delivered', value: `${s.deliveredTb.toFixed(1)} TB`, delta: this.pct(s.deliveredTb, 4.3), up: true, tone: 'orange',
-        icon: Database, trend: [3.9, 4, 4.2, 4.3, 4.4, 4.6, 4.7, s.deliveredTb], color: RA_COLORS.orange, info: 'Volume delivered by exports and the API, last 30 days'
+        label: 'Data Delivered', value: `${s.deliveredTb.toFixed(1)} TB`, delta: '', up: true, tone: 'orange',
+        icon: Database, trend: [], color: RA_COLORS.orange, info: 'Volume delivered by exports and the API, last 30 days'
       }
     ];
   }
 
-  private kpi(label: string, value: number, history: number[], tone: string, icon: typeof Info, info: string): Kpi {
+  /** Trend history and week-over-week delta come from the API; until then only the current value is shown. */
+  private kpi(label: string, value: number, tone: string, icon: typeof Info, info: string): Kpi {
     const color = tone === 'blue' ? RA_COLORS.blue : tone === 'pink' ? RA_COLORS.pink : RA_COLORS.purple;
-    return { label, value: String(value), delta: this.pct(value, history[0]), up: value >= history[0], tone, icon, trend: history.concat(value), color, info };
-  }
-
-  private pct(now: number, before: number): string {
-    const p = before ? ((now - before) / before) * 100 : 0;
-    return `${p >= 0 ? '+' : ''}${Math.round(p)}%`;
+    return { label, value: String(value), delta: '', up: true, tone, icon, trend: [], color, info };
   }
 
   // ----- Filters -----
@@ -279,7 +274,7 @@ export class DataExportApiPage extends AnalyticsPage implements OnDestroy {
 
   rotateCertificate(c: ApiConnection): void {
     this.service.rotateCertificate(c);
-    this.notify(`Certificate for ${c.name} rotated — valid for 365 days. (DEMO MODE)`);
+    this.notify(`Certificate for ${c.name} rotated — valid for 365 days.`);
   }
 
   onConnectionSaved(name: string): void {

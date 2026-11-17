@@ -52,7 +52,7 @@
         <div class="field" [class.invalid]="errors['department']">
           <label for="user-dept"><span class="req">*</span> Department</label>
           <select id="user-dept" name="department" [(ngModel)]="form.department">
-            <option value="" disabled>Select department</option>
+            <option value="" disabled>Select Department</option>
             @for (d of departments; track d) { <option [value]="d">{{ d }}</option> }
           </select>
           @if (errors['department']) { <small>{{ errors['department'] }}</small> }
@@ -60,7 +60,7 @@
         <div class="field" [class.invalid]="errors['primaryRole']">
           <label for="user-role"><span class="req">*</span> Primary Role</label>
           <select id="user-role" name="primaryRole" [(ngModel)]="form.primaryRole" (ngModelChange)="onPrimaryChange()">
-            <option value="" disabled>Select role</option>
+            <option value="" disabled>Select Role</option>
             @for (r of roleOptions; track r.code) { <option [value]="r.code">{{ r.name }}</option> }
           </select>
           @if (errors['primaryRole']) { <small>{{ errors['primaryRole'] }}</small> }
@@ -70,10 +70,11 @@
           <input id="user-phone" name="phone" type="tel" placeholder="Enter phone number" [(ngModel)]="form.phone" />
         </div>
         <div class="field" [class.invalid]="errors['status']">
-          <label for="user-status">Status</label>
+          <label for="user-status"><span class="req">*</span> Status</label>
           <div class="status-select">
             <i [attr.data-status]="form.status"></i>
             <select id="user-status" name="status" [(ngModel)]="form.status" [disabled]="isSelf">
+              <option value="" disabled>Select Status</option>
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
             </select>
@@ -104,6 +105,7 @@
           <div class="field field--wide">
             <label for="user-emp">Linked Employee</label>
             <select id="user-emp" name="employeeId" [(ngModel)]="form.employeeId" (ngModelChange)="onEmployeeLink()">
+              <option value="" disabled>Select Linked Employee</option>
               <option value="">Not linked</option>
               @for (e of employeeOptions; track e.id) { <option [value]="e.id">{{ e.name }} ({{ e.id }})</option> }
             </select>
@@ -137,18 +139,21 @@
           <div class="field">
             <label for="user-lang">Language</label>
             <select id="user-lang" name="language" [(ngModel)]="form.language">
+              <option value="" disabled>Select Language</option>
               @for (l of languages; track l) { <option [value]="l">{{ l }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="user-date">Date Format</label>
             <select id="user-date" name="dateFormat" [(ngModel)]="form.dateFormat">
+              <option value="" disabled>Select Date Format</option>
               @for (d of dateFormats; track d) { <option [value]="d">{{ d }}</option> }
             </select>
           </div>
           <div class="field field--wide">
             <label for="user-tz">Time Zone</label>
             <select id="user-tz" name="timeZone" [(ngModel)]="form.timeZone">
+              <option value="" disabled>Select Time Zone</option>
               @for (t of timeZones; track t) { <option [value]="t">{{ t }}</option> }
             </select>
           </div>
@@ -168,7 +173,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

@@ -20,7 +20,7 @@ const EMPTY_FILTERS: ManufacturerFilters = { search: '', status: '', assetType: 
   selector: 'app-mdm-asset-manufacturer',
   imports: [FormsModule, RouterLink, LucideAngularModule, MfrForm, MfrDetail],
   templateUrl: './manufacturer.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', './manufacturer.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', './manufacturer.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class ManufacturerPage implements OnInit {
   readonly service = inject(ManufacturerService);

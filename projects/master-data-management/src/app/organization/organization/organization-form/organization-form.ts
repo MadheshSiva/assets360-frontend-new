@@ -25,7 +25,7 @@ const URL_PATTERN = /^https?:\/\/[^\s.]+\.[^\s]+$/i;
   selector: 'app-organization-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './organization-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', './organization-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', './organization-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class OrganizationForm implements OnChanges {
   // 'edit' changes `organization`; 'add' creates a new record, pre-filled from `organization` if given
@@ -137,7 +137,23 @@ export class OrganizationForm implements OnChanges {
     this.form.logo = null;
   }
 
+  /** True on the final tab, where the primary button saves instead of advancing. */
+  get isLastTab(): boolean {
+    return this.tab === this.tabs[this.tabs.length - 1].id;
+  }
+
+  /** Move to the next tab. */
+  next(): void {
+    const i = this.tabs.findIndex((t) => t.id === this.tab);
+    if (i < this.tabs.length - 1) this.tab = this.tabs[i + 1].id;
+  }
+
   submit(): void {
+    // Enter key / primary button on earlier tabs just advances
+    if (!this.isLastTab) {
+      this.next();
+      return;
+    }
     const f = this.form;
     const errors: Partial<Record<FieldKey, string>> = {};
     if (!f.name.trim()) errors.name = 'Enter an organization name.';

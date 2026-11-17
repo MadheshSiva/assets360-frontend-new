@@ -27,7 +27,6 @@ import {
   Upload,
   X,
 } from 'lucide-angular';
-import DATA from './locations.json';
 import { Movement, MovementControls, Occupancy, OpLocation } from './location.model';
 
 type Tab = 'directory' | 'layout' | 'occupancy' | 'history' | 'routing';
@@ -67,18 +66,22 @@ interface LocationForm {
   shift: string;
 }
 
-const CURRENT_USER = 'Sarah Khan';
+/** Signed-in user's display name; filled from the auth/user API once wired. */
+const CURRENT_USER = '';
 const WORK_TYPES = ['Workstation', 'Testing', 'Quality'];
 const TYPE_PREFIX: Record<string, string> = { Staging: 'PRE', Workstation: 'WRK', Testing: 'TST', Quality: 'QLT', Dispatch: 'DSP', Process: 'PRC', Receiving: 'RCV', Storage: 'STR' };
-/** Job orders that exist on the Job Orders page. */
-const KNOWN_JOBS = ['JO-2026-00438', 'JO-2026-00431', 'JO-2026-00442'];
+/** Job orders that exist on the Job Orders page; filled from the API once wired. */
+const KNOWN_JOBS: string[] = [];
 
-/** DEMO MODE: kept in memory until the WIP API is wired up. */
-const SOURCE = DATA as { asOf: string; locations: OpLocation[]; occupancy: Occupancy[]; movements: Movement[] };
-const LOCATIONS: OpLocation[] = structuredClone(SOURCE.locations);
-const OCCUPANCY: Occupancy[] = structuredClone(SOURCE.occupancy);
-let MOVEMENTS: Movement[] = structuredClone(SOURCE.movements);
-let OPENED_AT = 0;
+/** Locations, occupancy and movements are kept in memory; empty until the WIP API is wired up. */
+const LOCATIONS: OpLocation[] = [];
+const OCCUPANCY: Occupancy[] = [];
+let MOVEMENTS: Movement[] = [];
+/** Placeholder while no location exists (keeps the detail bindings safe). */
+const NO_LOCATION: OpLocation = {
+  code: '', name: '', type: '', site: '', building: '', floor: '', zone: '', capacity: 0, supervisor: '', shift: '', status: 'Active', workstation: '', assets: [], next: [],
+  controls: { requireCapacity: false, requireStage: false, scanQr: false, supervisorApproval: false },
+};
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const stamp = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -96,7 +99,7 @@ function parseLocal(s: string): Date {
   imports: [CommonModule, FormsModule, RouterModule, LucideAngularModule],
   templateUrl: './location-management.html',
   // Buttons, controls, cards, tabs, switches, menu, modal and toast come from the Job Templates stylesheet
-  styleUrls: ['../job-templates/job-templates.css', './location-management.css', './location-management-panels.css'],
+  styleUrls: ['../job-templates/job-templates.css', './location-management.css', './location-management-panels.css', '../shared/wip-purple-theme.css'],
 })
 export class LocationManagement implements OnDestroy {
   readonly icons = {
@@ -118,15 +121,15 @@ export class LocationManagement implements OnDestroy {
   tab: Tab = 'directory';
 
   // Filters
-  site = 'Dubai Factory';
-  building = 'Production Building';
-  floor = 'Ground Floor';
+  site = LOCATIONS[0]?.site ?? '';
+  building = '';
+  floor = '';
   statusFilter: LocState | '' = '';
   search = '';
   /** Collapsed tree nodes ("Building", "Building|Floor", "Building|Floor|Zone"). */
   readonly collapsed = new Set<string>();
 
-  selectedCode = 'LOC-ASM-002';
+  selectedCode = LOCATIONS[0]?.code ?? '';
   /** Unsaved movement-control edits for the selected location. */
   controlsDraft: MovementControls = { ...this.selected.controls };
 
@@ -145,16 +148,12 @@ export class LocationManagement implements OnDestroy {
   toastError = false;
   private toastTimer?: ReturnType<typeof setTimeout>;
 
-  constructor() {
-    if (!OPENED_AT) OPENED_AT = Date.now();
-  }
-
   ngOnDestroy(): void {
     clearTimeout(this.toastTimer);
   }
 
   private nowStamp(): string {
-    return stamp(new Date(parseLocal(SOURCE.asOf).getTime() + (Date.now() - OPENED_AT)));
+    return stamp(new Date());
   }
 
   isKnownJob(job: string): boolean {
@@ -181,7 +180,7 @@ export class LocationManagement implements OnDestroy {
   }
 
   get selected(): OpLocation {
-    return this.loc(this.selectedCode) ?? this.locations[0];
+    return this.loc(this.selectedCode) ?? this.locations[0] ?? NO_LOCATION;
   }
 
   // ===== Filters & hierarchy =====
@@ -483,7 +482,6 @@ export class LocationManagement implements OnDestroy {
   downloadTemplate(): void {
     const sheet = XLSX.utils.aoa_to_sheet([
       ['Name', 'Type', 'Building', 'Floor', 'Zone', 'Capacity', 'Supervisor', 'Shift'],
-      ['Assembly Bay 03', 'Workstation', 'Production Building', 'Ground Floor', 'Assembly Zone', 2, 'Ahmed Khan', 'Factory Day Shift'],
     ]);
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, sheet, 'Locations');

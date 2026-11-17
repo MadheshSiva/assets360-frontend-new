@@ -1,6 +1,6 @@
 <nav class="crumbs">
   <a routerLink="/administration">Administration</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <strong>Checklist Templates</strong>
 </nav>
 
@@ -13,6 +13,7 @@
   <label class="org-picker">
     Organization
     <select [(ngModel)]="organization">
+      <option value="" disabled>Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
@@ -61,11 +62,11 @@
     <input [(ngModel)]="search" (ngModelChange)="onFilter()" placeholder="Search templates..." aria-label="Search templates" />
   </label>
   <select class="select" [(ngModel)]="categoryFilter" (ngModelChange)="onFilter()" aria-label="Category filter">
-    <option value="">All Categories</option>
+    <option value="">Select Category</option>
     @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
   </select>
   <select class="select" [(ngModel)]="statusFilter" (ngModelChange)="onFilter()" aria-label="Status filter">
-    <option value="">All Statuses</option>
+    <option value="">Select Status</option>
     @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
   </select>
 </div>
@@ -248,15 +249,18 @@
             <input id="ct-code" [(ngModel)]="draft.code" (ngModelChange)="markDirty()" maxlength="20" />
             @if (err('code'); as e) { <small>{{ e }}</small> }
           </div>
-          <div class="field">
+          <div class="field" [class.invalid]="err('category')">
             <label for="ct-category">Category <span class="req">*</span></label>
             <select id="ct-category" [(ngModel)]="draft.category" (ngModelChange)="onCategoryChange()">
+              <option value="" disabled>Select Category</option>
               @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
             </select>
+            @if (err('category'); as e) { <small>{{ e }}</small> }
           </div>
           <div class="field" [class.invalid]="err('owner')">
             <label for="ct-owner">Owner <span class="req">*</span></label>
             <select id="ct-owner" [(ngModel)]="draft.owner" (ngModelChange)="markDirty()">
+              <option value="" disabled>Select Owner</option>
               @for (o of owners; track o) { <option [value]="o">{{ o }}</option> }
             </select>
           </div>
@@ -267,6 +271,7 @@
           <div class="field">
             <label for="ct-freq">Frequency</label>
             <select id="ct-freq" [(ngModel)]="draft.frequency" (ngModelChange)="markDirty()">
+              <option value="" disabled>Select Frequency</option>
               @for (f of frequencies; track f) { <option [value]="f">{{ f }}</option> }
             </select>
           </div>

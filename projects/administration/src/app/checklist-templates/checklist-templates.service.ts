@@ -3,7 +3,6 @@ import { Injectable, inject, signal } from '@angular/core';
 import { Observable, catchError, map, tap, throwError } from 'rxjs';
 import { AuthService, environment } from 'shared-ui';
 import { CURRENT_USER, todayIso } from '../shared/admin-common';
-import { TEMPLATES } from './checklist-templates.data';
 import { CATEGORY_CODES, ChecklistItem, ChecklistTemplate, ResponseType, TemplateStatus, bumpVersion } from './checklist-templates.model';
 
 /** Body of POST /api/administration/checklist-items */
@@ -110,9 +109,9 @@ export class ChecklistTemplatesService {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly itemsUrl = `${environment.administrationApiUrl}api/administration/checklist-items`;
-  private readonly store = signal<ChecklistTemplate[]>(structuredClone(TEMPLATES));
+  private readonly store = signal<ChecklistTemplate[]>([]); // templates come from the checklist API once wired
   readonly templates = this.store.asReadonly();
-  private seq = TEMPLATES.length;
+  private seq = 0;
   private idSeq = 1000;
   private readonly savedStore = signal<SavedChecklistItem[]>([]);
   /** Items persisted on the server, ordered by section. */

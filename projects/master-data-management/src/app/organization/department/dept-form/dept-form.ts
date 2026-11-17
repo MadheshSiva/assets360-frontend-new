@@ -2,7 +2,6 @@ import { Component, EventEmitter, Input, OnChanges, Output, inject, SimpleChange
 import { FormsModule } from '@angular/forms';
 import { LucideAngularModule, User, X } from 'lucide-angular';
 import { MASTER_ICONS, MASTER_ICON_KEYS } from '../../../shared/master-icons';
-import { COST_CENTERS, EMPLOYEES } from '../../business-unit/business-unit.data';
 import { BusinessUnitService } from '../../business-unit/business-unit.service';
 import { COUNTRIES, CURRENCIES } from '../../organization/organization.data';
 import { blankDepartment } from '../department.data';
@@ -20,7 +19,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   selector: 'app-dept-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './dept-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class DeptForm implements OnChanges {
   // 'edit' changes `department`; 'add' creates a new one, pre-filled from `department` if given
@@ -36,7 +35,8 @@ export class DeptForm implements OnChanges {
   readonly logoIcons = MASTER_ICONS;
   readonly logoKeys = MASTER_ICON_KEYS;
   readonly types = DEPARTMENT_TYPES;
-  readonly employees = EMPLOYEES;
+  // Employee suggestions for the head and deputy fields; free text until the employee list is wired here
+  readonly employees: string[] = [];
   readonly currencies = CURRENCIES;
   readonly countries = COUNTRIES;
   readonly tabs: { id: FormTab; label: string }[] = [
@@ -76,7 +76,7 @@ export class DeptForm implements OnChanges {
     const ownUnit = this.businessUnits.find(this.form.businessUnitCode)?.costCenter;
     const fromDepartments = this.service.ofBusinessUnit(this.form.businessUnitCode).map((d) => d.costCenter);
     const suggested = this.form.businessUnitCode && this.form.code ? [`CC-${this.form.businessUnitCode}-${this.form.code.trim().toUpperCase()}`] : [];
-    return [...new Set([...suggested, ...(ownUnit ? [ownUnit] : []), ...fromDepartments, ...(this.form.businessUnitCode ? [] : COST_CENTERS)].filter(Boolean))];
+    return [...new Set([...suggested, ...(ownUnit ? [ownUnit] : []), ...fromDepartments, this.form.costCenter].filter(Boolean))];
   }
 
   get path(): string {
@@ -125,7 +125,23 @@ export class DeptForm implements OnChanges {
     this.form.logo = null;
   }
 
+  /** True on the final tab, where the primary button saves instead of advancing. */
+  get isLastTab(): boolean {
+    return this.tab === this.tabs[this.tabs.length - 1].id;
+  }
+
+  /** Move to the next tab. */
+  next(): void {
+    const i = this.tabs.findIndex((t) => t.id === this.tab);
+    if (i < this.tabs.length - 1) this.tab = this.tabs[i + 1].id;
+  }
+
   submit(): void {
+    // Enter key / primary button on earlier tabs just advances
+    if (!this.isLastTab) {
+      this.next();
+      return;
+    }
     const f = this.form;
     const errors: Partial<Record<FieldKey, string>> = {};
     if (!f.name.trim()) errors.name = 'Enter a department name.';

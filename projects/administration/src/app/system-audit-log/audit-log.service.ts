@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { AuditCategory, AuditEvent, AuditFilters, SavedAuditFilter } from './audit-log.model';
-import { AUDIT_DAY, CATEGORY_COUNTS, seedAuditEvents } from './audit-log.data';
+import { AUDIT_CATEGORIES, AUDIT_DAY } from './audit-log.data';
 
-// DEMO MODE: audit events are generated in memory; the real feed is read-only and append-only
+// Audit events come from the audit API once wired (read-only and append-only); empty until then
 
 export function emptyFilters(): AuditFilters {
   return { from: AUDIT_DAY, to: AUDIT_DAY, eventType: '', module: '', user: '', severity: '', ip: '', outcome: '' };
@@ -11,10 +11,10 @@ export function emptyFilters(): AuditFilters {
 @Injectable({ providedIn: 'root' })
 export class AuditLogService {
   /** Frozen: logs are immutable, nothing in the UI can change them. */
-  private readonly events: readonly AuditEvent[] = Object.freeze(seedAuditEvents().map((e) => Object.freeze(e)));
+  private readonly events: readonly AuditEvent[] = Object.freeze([]);
   private readonly saved: SavedAuditFilter[] = [];
 
-  readonly categories: AuditCategory[] = CATEGORY_COUNTS.map(([c]) => c);
+  readonly categories: AuditCategory[] = [...AUDIT_CATEGORIES];
   readonly eventTypes = [...new Set(this.events.map((e) => e.event))].sort();
   readonly modules = [...new Set(this.events.map((e) => e.module))].sort();
   readonly users = [...new Set(this.events.map((e) => e.user))].sort();

@@ -6,6 +6,11 @@ import { BRAND_PALETTE, MANUFACTURER_COUNTRIES, PAYMENT_TERMS, badgeInk, badgeTe
 import { ManufacturerRecord } from '../manufacturer.model';
 import { ManufacturerService } from '../manufacturer.service';
 
+/** A new manufacturer starts with every dropdown empty so the user picks each value. */
+function newManufacturer(): ManufacturerRecord {
+  return { ...blankManufacturer(), defaultCurrency: '', paymentTerms: '' as ManufacturerRecord['paymentTerms'] };
+}
+
 export type MfrFormTab = 'basic' | 'contact' | 'support' | 'defaults';
 type FieldKey = 'name' | 'code' | 'country' | 'logo' | 'website' | 'email' | 'secondaryEmail' | 'supportPortal' | 'supportEmail' | 'standardWarrantyMonths' | 'slaResponseHours';
 
@@ -31,7 +36,7 @@ const TAB_OF: Record<FieldKey, MfrFormTab> = {
   selector: 'app-mfr-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './mfr-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', './mfr-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', './mfr-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class MfrForm implements OnChanges {
   // 'edit' changes `manufacturer`; 'add' creates a new one, pre-filled from it if given (Duplicate)
@@ -57,13 +62,13 @@ export class MfrForm implements OnChanges {
   ];
 
   tab: MfrFormTab = 'basic';
-  form: ManufacturerRecord = blankManufacturer();
+  form: ManufacturerRecord = newManufacturer();
   errors: Partial<Record<FieldKey, string>> = {};
   private original: ManufacturerRecord | null = null;
 
   ngOnChanges(): void {
     this.original = this.mode === 'edit' ? this.manufacturer : null;
-    this.form = this.manufacturer ? structuredClone(this.manufacturer) : blankManufacturer();
+    this.form = this.manufacturer ? structuredClone(this.manufacturer) : newManufacturer();
     this.errors = {};
     this.tab = this.startTab;
   }
@@ -113,7 +118,23 @@ export class MfrForm implements OnChanges {
     this.form.logo = null;
   }
 
+  /** True on the final tab, where the primary button saves instead of advancing. */
+  get isLastTab(): boolean {
+    return this.tab === this.tabs[this.tabs.length - 1].id;
+  }
+
+  /** Move to the next tab. */
+  next(): void {
+    const i = this.tabs.findIndex((t) => t.id === this.tab);
+    if (i < this.tabs.length - 1) this.tab = this.tabs[i + 1].id;
+  }
+
   submit(): void {
+    // Enter key / primary button on earlier tabs just advances
+    if (!this.isLastTab) {
+      this.next();
+      return;
+    }
     const f = this.form;
     const errors: Partial<Record<FieldKey, string>> = {};
     if (!f.name.trim()) errors.name = 'Enter a manufacturer name.';
@@ -154,7 +175,7 @@ export class MfrForm implements OnChanges {
         supportPortal: trim(f.supportPortal),
         supportEmail: trim(f.supportEmail),
         createdOn: this.original?.createdOn ?? stamp,
-        createdBy: this.original?.createdBy ?? 'Rex Kumar',
+        createdBy: this.original?.createdBy ?? '',
         updatedOn: stamp
       },
       originalCode: this.original?.code ?? null,

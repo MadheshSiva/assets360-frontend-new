@@ -9,7 +9,7 @@ import {
 import { ADMIN_PEOPLE, AdminPage, CURRENT_USER, formatDate, todayIso } from '../shared/admin-common';
 import { NodeConfigPanel } from './node-config/node-config';
 import { WorkflowCanvas } from './workflow-canvas/workflow-canvas';
-import { defaultConfig, NODE_TYPES, WORKFLOW_CATEGORIES, WORKFLOW_TEMPLATES } from './workflow-builder.data';
+import { blankConfig, defaultConfig, NODE_TYPES, WORKFLOW_CATEGORIES, WORKFLOW_TEMPLATES } from './workflow-builder.data';
 import { NODE_LABELS, NODE_SIZE, NodeType, WfGraph, WfNode, Workflow, WorkflowStatus } from './workflow-builder.model';
 import { WorkflowService } from './workflow-builder.service';
 
@@ -20,7 +20,7 @@ interface DetailsForm {
   category: string;
   owner: string;
   description: string;
-  template: number;
+  template: number | null;
 }
 
 type ConfirmKind = 'deleteNode' | 'deleteWorkflow' | 'discard';
@@ -212,14 +212,13 @@ export class WorkflowBuilderPage extends AdminPage {
     const sel = this.selectedNode;
     const from = sel && sel.type !== 'end' ? sel : mainRow.reduce<WfNode | null>((best, n) => (!best || n.x > best.x ? n : best), null);
     const id = this.nextNodeId(g);
-    const node: WfNode = { id, type, name: `New ${NODE_LABELS[type]}`, x: 20, y: 110, config: defaultConfig() };
+    const node: WfNode = { id, type, name: `New ${NODE_LABELS[type]}`, x: 20, y: 110, config: blankConfig() };
     if (type === 'condition') {
       node.name = 'New Condition?';
       node.config.conditionValue = 'High';
     }
 
     if (type === 'end') {
-      node.config.outcome = 'Completed';
       node.x = from ? from.x : 20;
       node.y = 270;
       while (g.nodes.some((n) => n.type === 'end' && Math.abs(n.x - node.x) < 150 && Math.abs(n.y - node.y) < 60)) node.y += 70;
@@ -455,16 +454,16 @@ export class WorkflowBuilderPage extends AdminPage {
     return code;
   }
 
-  openCreate(template = -1): void {
-    const tpl = this.templates[template];
+  openCreate(template: number | null = null): void {
+    const tpl = template === null ? undefined : this.templates[template];
     this.templatesOpen = false;
     this.detailsSubmitted = false;
     this.details = {
       id: null,
       name: tpl ? tpl.name : '',
       code: this.uniqueCode(`WF-NEW-${String(this.service.all().length + 1).padStart(3, '0')}`),
-      category: tpl ? tpl.category : this.categories[0],
-      owner: CURRENT_USER.name,
+      category: tpl ? tpl.category : '',
+      owner: '',
       description: tpl ? tpl.description : '',
       template
     };
@@ -487,6 +486,8 @@ export class WorkflowBuilderPage extends AdminPage {
     else if (!/^[A-Z0-9-]{3,20}$/.test(d.code.trim())) out['code'] = 'Use 3-20 capital letters, digits or hyphens.';
     else if (this.service.codeTaken(d.code, d.id)) out['code'] = 'This code is already in use.';
     if (!d.category) out['category'] = 'Pick a category.';
+    if (!d.owner) out['owner'] = 'Pick an owner.';
+    if (!d.id && d.template === null) out['template'] = 'Pick what to start from.';
     return out;
   }
 
@@ -514,10 +515,10 @@ export class WorkflowBuilderPage extends AdminPage {
       return;
     }
 
-    const tpl = this.templates[d.template];
+    const tpl = d.template === null ? undefined : this.templates[d.template];
     const graph: WfGraph = tpl
       ? tpl.build()
-      : { nodes: [{ id: 'n1', type: 'trigger', name: 'New Trigger', x: 20, y: 110, config: defaultConfig() }], edges: [] };
+      : { nodes: [{ id: 'n1', type: 'trigger', name: 'New Trigger', x: 20, y: 110, config: blankConfig() }], edges: [] };
     const wf: Workflow = {
       id: this.service.newId(),
       code: d.code.trim(),

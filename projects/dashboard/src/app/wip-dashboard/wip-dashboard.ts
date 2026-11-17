@@ -79,45 +79,16 @@ export class WipDashboard {
     saveOrder('piq.dashboard.wip.bottomOrder', this.bottomOrder);
   }
 
+  /** Stat card layout (labels, icons); values stay 0 until the WIP API is wired. */
   wipStatCards: WipStatCard[] = reorderByKey([
-    {
-      label: 'Total Jobs',
-      value: 182,
-      icon: 'jobs',
-      trend: 'up',
-      delta: '+22',
-    },
-    {
-      label: 'In Progress',
-      value: 63,
-      icon: 'progress',
-      trend: 'up',
-      delta: '+11',
-    },
-    {
-      label: 'Completed today',
-      value: 18,
-      icon: 'completed',
-      trend: 'up',
-      delta: '+2',
-    },
-    {
-      label: 'SLA Breached',
-      value: 25,
-      icon: 'sla',
-      trend: 'down',
-      delta: '+7',
-    },
-    {
-      label: 'Planned',
-      value: 36,
-      icon: 'planned',
-      trend: 'up',
-      delta: '+4',
-    },
+    { label: 'Total Jobs', value: 0, icon: 'jobs', trend: 'neutral', delta: '' },
+    { label: 'In Progress', value: 0, icon: 'progress', trend: 'neutral', delta: '' },
+    { label: 'Completed today', value: 0, icon: 'completed', trend: 'neutral', delta: '' },
+    { label: 'SLA Breached', value: 0, icon: 'sla', trend: 'neutral', delta: '' },
+    { label: 'Planned', value: 0, icon: 'planned', trend: 'neutral', delta: '' },
   ], 'piq.dashboard.wip.statOrder', (c) => c.label);
 
-  wipTotalJobs = 182;
+  wipTotalJobs = 0;
 
   private readonly iconClassMap: Record<string, string> = {
     jobs: 'icon-purple',
@@ -131,70 +102,32 @@ export class WipDashboard {
     return this.iconClassMap[icon] || 'icon-purple';
   }
 
-  wipStatusDistribution: WipStatusDistribution[] = [
-    { label: 'In Progress', percent: 35, color: '#e391c9' },
-    { label: 'Planned',     percent: 20, color: '#4f2bd8' },
-    { label: 'Completed',   percent: 10, color: '#a8d5a2' },
-    { label: 'Delayed',     percent: 35, color: '#f08080' },
-  ];
+  wipStatusDistribution: WipStatusDistribution[] = [];
 
-  wipAlerts: WipAlert[] = [
-    {
-      title: 'Production delay on WIP-1001',
-      subtitle: 'Paint task',
-      time: '10 mins ago',
-      type: 'warning',
-    },
-    {
-      title: 'Critical situation on WIP-1003',
-      subtitle: '',
-      time: '15 mins ago',
-      type: 'danger',
-    },
-    {
-      title: 'SLA Breach on WIP-1002',
-      subtitle: 'calibration match',
-      time: '10 mins ago',
-      type: 'warning',
-    },
-  ];
+  /** Completion trend as SVG points in the 420x180 chart (y = 0 is 100%). Empty until the WIP API is wired. */
+  wipTrendPoints: { x: number; y: number }[] = [];
 
-  wipActiveJobs: WipActiveJob[] = [
-    {
-      id: 'WIP-1001',
-      asset: 'Employee',
-      status: 'In Progress',
-      statusClass: 'inprogress',
-      progress: 35,
-      assignedTo: 'emp01@fmail.com',
-      eta: 'Apr 25, 12:00',
-    },
-    {
-      id: 'WIP-1002',
-      asset: 'Contractor',
-      status: 'Planned',
-      statusClass: 'planned',
-      progress: 20,
-      assignedTo: 'emp02@fmail.com',
-      eta: 'Apr 25, 12:00',
-    },
-    {
-      id: 'WIP-1003',
-      asset: 'Visitor',
-      status: 'Completed',
-      statusClass: 'completed',
-      progress: 10,
-      assignedTo: 'emp03@fmail.com',
-      eta: 'Apr 25, 12:00',
-    },
-    {
-      id: 'WIP-1004',
-      asset: 'Other',
-      status: 'Delayed',
-      statusClass: 'delayed',
-      progress: 35,
-      assignedTo: 'emp04@fmail.com',
-      eta: 'Apr 25, 12:00',
-    },
-  ];
+  wipAlerts: WipAlert[] = [];
+
+  wipActiveJobs: WipActiveJob[] = [];
+
+  /** Donut segments from the distribution; grey ring when there is no data. */
+  get donutGradient(): string {
+    let acc = 0;
+    const stops = this.wipStatusDistribution.map((s) => {
+      const stop = `${s.color} ${acc}% ${acc + s.percent}%`;
+      acc += s.percent;
+      return stop;
+    });
+    return acc > 0 ? `conic-gradient(${stops.join(', ')}, #ede9f4 ${acc}% 100%)` : '#ede9f4';
+  }
+
+  get trendLine(): string {
+    return this.wipTrendPoints.map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.y}`).join(' ');
+  }
+
+  get trendArea(): string {
+    const pts = this.wipTrendPoints;
+    return pts.length ? `${this.trendLine} L${pts[pts.length - 1].x},180 L${pts[0].x},180 Z` : '';
+  }
 }

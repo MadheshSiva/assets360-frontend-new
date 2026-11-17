@@ -13,7 +13,7 @@ type Tab = 'basic';
   selector: 'app-update-source-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './update-source-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class UpdateSourceForm extends MasterForm<UpdateSourceRecord, Tab> {
   protected readonly store = inject(UpdateSourceService);
@@ -28,6 +28,7 @@ export class UpdateSourceForm extends MasterForm<UpdateSourceRecord, Tab> {
   protected validate(f: UpdateSourceRecord) {
     const errors: Record<string, string> = {};
     if (!f.type) errors['type'] = 'Select a type.';
+    if (!f.status) errors['status'] = 'Select a status.';
     return { errors };
   }
 

@@ -51,7 +51,7 @@
             <div class="field" [class.invalid]="errors.type">
               <label for="org-type"><span class="req">*</span> Type</label>
               <select id="org-type" name="type" [(ngModel)]="form.type">
-                <option value="" disabled>Select type</option>
+                <option value="" disabled>Select Type</option>
                 @for (t of types; track t) { <option [value]="t">{{ t }}</option> }
               </select>
               @if (errors.type) { <small>{{ errors.type }}</small> }
@@ -82,6 +82,7 @@
           <label for="org-parent">Parent Organization</label>
           <div class="clearable">
             <select id="org-parent" name="parentCode" [(ngModel)]="form.parentCode">
+              <option [ngValue]="null" disabled>Select Parent Organization</option>
               <option [ngValue]="null">No parent (top level)</option>
               @for (p of parentOptions; track p.code) { <option [ngValue]="p.code">{{ p.name }}</option> }
             </select>
@@ -141,6 +142,7 @@
           <div class="field">
             <label for="org-country">Country</label>
             <select id="org-country" name="country" [(ngModel)]="form.address.country">
+              <option value="" disabled>Select Country</option>
               @for (c of countries; track c.name) { <option [value]="c.name">{{ c.name }}</option> }
             </select>
           </div>
@@ -169,6 +171,7 @@
             <label for="org-phone">Phone</label>
             <div class="phone">
               <select name="phoneCountry" aria-label="Phone country" [(ngModel)]="form.contact.phoneCountry">
+                <option value="" disabled>Select Country Code</option>
                 @for (c of countries; track c.name) { <option [value]="c.name">{{ c.flag }} {{ c.dial }}</option> }
               </select>
               <input id="org-phone" name="phone" type="tel" placeholder="50 123 4567" [(ngModel)]="form.contact.phone" />
@@ -183,24 +186,28 @@
           <div class="field">
             <label for="org-currency">Default Currency</label>
             <select id="org-currency" name="currency" [(ngModel)]="form.settings.currency">
+              <option value="" disabled>Select Default Currency</option>
               @for (c of currencies; track c) { <option [value]="c">{{ c }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="org-tz">Default Time Zone</label>
             <select id="org-tz" name="timeZone" [(ngModel)]="form.settings.timeZone">
+              <option value="" disabled>Select Default Time Zone</option>
               @for (z of timeZones; track z) { <option [value]="z">{{ z }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="org-lang">Default Language</label>
             <select id="org-lang" name="language" [(ngModel)]="form.settings.language">
+              <option value="" disabled>Select Default Language</option>
               @for (l of languages; track l) { <option [value]="l">{{ l }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="org-datefmt">Date Format</label>
             <select id="org-datefmt" name="dateFormat" [(ngModel)]="form.settings.dateFormat">
+              <option value="" disabled>Select Date Format</option>
               @for (d of dateFormats; track d) { <option [value]="d">{{ d }}</option> }
             </select>
           </div>
@@ -238,7 +245,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary" [disabled]="saving">{{ saving ? 'Saving…' : 'Save' }}</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary" [disabled]="saving">{{ saving ? 'Saving…' : 'Save' }}</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

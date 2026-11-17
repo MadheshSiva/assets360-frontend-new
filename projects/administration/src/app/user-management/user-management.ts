@@ -16,6 +16,8 @@ import {
   Plus,
   Search,
   Upload,
+  Pencil,
+  Trash2,
   User,
   UserCog,
   Users
@@ -24,7 +26,8 @@ import { ADMIN_DEPARTMENTS, ADMIN_LOCATIONS, AdminPage, CURRENT_USER, avatarTone
 import { InviteDialog, InviteRequest } from './invite-dialog/invite-dialog';
 import { UserDrawer } from './user-drawer/user-drawer';
 import { downloadCsv, parseCsv } from './user-csv';
-import { LAST_MONTH, LOCATION_TIME_ZONES, USER_ROLES, blankUser, roleModules } from './user-management.data';
+import { RoleAccessService, adminApiError } from '../role-access-control/role-access.service';
+import { LAST_MONTH, LOCATION_TIME_ZONES, USER_ROLES, blankUser, roleModules, setUserRoles } from './user-management.data';
 import { AdminUser, UserStatus } from './user-management.model';
 import { UserAdminService, apiErrorMessage } from './user-management.service';
 import { loginLabel, roleOf } from './user-format';
@@ -53,7 +56,8 @@ export class UserManagementPage extends AdminPage {
   @ViewChild('importInput') importInput?: ElementRef<HTMLInputElement>;
 
   readonly service = inject(UserAdminService);
-  readonly icons = { ArrowDown, ArrowUp, Ban, ChevronLeft, ChevronRight, Clock, Download, Ellipsis, Mail, Plus, Search, Upload, User, UserCog, Users };
+  private readonly roleService = inject(RoleAccessService);
+  readonly icons = { ArrowDown, ArrowUp, Ban, ChevronLeft, ChevronRight, Clock, Download, Ellipsis, Mail, Pencil, Plus, Search, Trash2, Upload, User, UserCog, Users };
   readonly departments = ADMIN_DEPARTMENTS;
   readonly statuses: UserStatus[] = ['Active', 'Pending', 'Suspended'];
   readonly pageSizes = [10, 20, 50, 100];
@@ -71,13 +75,27 @@ export class UserManagementPage extends AdminPage {
   drawerMode: 'add' | 'edit' = 'edit';
   inviteOpen = false;
   pending: PendingAction | null = null;
+  /** A create/update request from the drawer is in flight */
+  saving = false;
 
   constructor() {
     super();
-    // Load failures from the Administration API show up as a toast
+    // Primary / secondary role options come from the Role & Access Control API, fetched fresh on each visit
+    this.roleService.load().subscribe({
+      next: (roles) => setUserRoles(roles),
+      error: (err) => this.notify(`Couldn't load roles: ${adminApiError(err, 'roles')}`, 'error')
+    });
+    // Load results from the Administration API show up as a toast
+    let announced = false;
     effect(() => {
       const error = this.service.error();
-      if (error) this.notify(error);
+      const loading = this.service.loading();
+      if (error) this.notify(error, 'error');
+      else if (!loading && !announced) {
+        announced = true;
+        const n = this.service.count();
+        this.notify(n ? `Loaded ${n} user${n === 1 ? '' : 's'} from the server.` : 'No users yet. Add the first user.', 'success');
+      }
     });
   }
 
@@ -259,34 +277,48 @@ export class UserManagementPage extends AdminPage {
 
   addUser(): void {
     this.drawerMode = 'add';
-    this.drawerUser = { ...blankUser(), employeeId: this.service.nextEmployeeId() };
+    // New users open with Location / Time Zone / Access Scope unselected
+    this.drawerUser = { ...blankUser(), employeeId: this.service.nextEmployeeId(), location: '', timeZone: '', accessScope: '' };
   }
 
   closeDrawer(): void {
     this.drawerUser = null;
   }
 
-  onSaved(event: { user: AdminUser; isNew: boolean }): void {
+  onSaved(event: { user: AdminUser; isNew: boolean; password?: string }): void {
+    if (this.saving) return;
+    this.saving = true;
     if (event.isNew) {
-      // DEMO MODE: the invitation email is sent by the identity service once connected
-      this.service.create({ ...event.user, status: 'Pending', lastLogin: null }).subscribe({
+      this.notify(`Adding ${event.user.name}...`);
+      // The admin sets the password, so the account is active straight away
+      this.service.create({ ...event.user, status: 'Active', lastLogin: null }, event.password ?? '').subscribe({
         next: (user) => {
-          this.notify(`${user.name} added. An invitation was sent to ${user.email}.`);
+          this.saving = false;
+          this.notify(`${user.name} added successfully. They can sign in with ${user.email} and the password you set.`, 'success');
           this.drawerMode = 'edit';
           this.drawerUser = user;
         },
-        error: (err) => this.notify(apiErrorMessage(err, `${event.user.name} could not be added.`))
+        error: (err) => {
+          this.saving = false;
+          this.notify(apiErrorMessage(err, `${event.user.name} could not be added.`), 'error');
+        }
       });
       return;
     }
     const before = this.service.find(event.user.id);
-    this.service.update(event.user).subscribe({
+    this.notify(`Saving ${event.user.name}...`);
+    this.service.update(event.user, event.password).subscribe({
       next: (user) => {
+        this.saving = false;
         this.drawerUser = user;
         const statusNote = before && before.status !== user.status ? ` Status is now ${user.status}.` : '';
-        this.notify(`${user.name} updated.${statusNote}`);
+        const passwordNote = event.password ? ' The new password is active.' : '';
+        this.notify(`${user.name} updated successfully.${statusNote}${passwordNote}`, 'success');
       },
-      error: (err) => this.notify(apiErrorMessage(err, `${event.user.name} could not be updated.`))
+      error: (err) => {
+        this.saving = false;
+        this.notify(apiErrorMessage(err, `${event.user.name} could not be updated.`), 'error');
+      }
     });
   }
 
@@ -326,7 +358,7 @@ export class UserManagementPage extends AdminPage {
     const reason = this.service.lockoutReason(u);
     if (reason) {
       this.menuFor = null;
-      this.notify(reason);
+      this.notify(reason, 'error');
       return;
     }
     this.ask({
@@ -365,11 +397,19 @@ export class UserManagementPage extends AdminPage {
     });
   }
 
-  remove(u: AdminUser): void {
+  /** Row action: open the user in the details drawer for editing */
+  editUser(u: AdminUser, e: Event): void {
+    e.stopPropagation();
+    this.menuFor = null;
+    this.open(u);
+  }
+
+  remove(u: AdminUser, e?: Event): void {
+    e?.stopPropagation();
     const reason = this.service.lockoutReason(u);
     if (reason) {
       this.menuFor = null;
-      this.notify(reason);
+      this.notify(reason, 'error');
       return;
     }
     this.ask({
@@ -385,6 +425,7 @@ export class UserManagementPage extends AdminPage {
   private doRemove(list: AdminUser[]): void {
     let removed = 0;
     const failed: string[] = [];
+    this.notify(list.length === 1 ? `Deleting ${list[0].name}...` : `Deleting ${list.length} users...`);
     from(list)
       .pipe(
         concatMap((u) =>
@@ -402,8 +443,8 @@ export class UserManagementPage extends AdminPage {
         ),
         finalize(() => {
           this.goTo(this.page);
-          if (!failed.length) this.notify(list.length === 1 ? `${list[0].name} deleted.` : `${list.length} users deleted.`);
-          else this.notify(`${removed} of ${list.length} deleted. ${failed[0]}`);
+          if (!failed.length) this.notify(list.length === 1 ? `${list[0].name} deleted successfully.` : `${list.length} users deleted successfully.`, 'success');
+          else this.notify(`${removed} of ${list.length} deleted. ${failed[0]}`, 'error');
         })
       )
       .subscribe();
@@ -413,6 +454,7 @@ export class UserManagementPage extends AdminPage {
   private setStatus(list: AdminUser[], status: UserStatus, suspendReason: string, done: () => string): void {
     let changed = 0;
     const failed: string[] = [];
+    this.notify(list.length === 1 ? `Updating ${list[0].name}...` : `Updating ${list.length} users...`);
     from(list)
       .pipe(
         concatMap((u) =>
@@ -427,7 +469,7 @@ export class UserManagementPage extends AdminPage {
             })
           )
         ),
-        finalize(() => this.notify(failed.length ? `${changed} of ${list.length} updated. ${failed[0]}` : done()))
+        finalize(() => (failed.length ? this.notify(`${changed} of ${list.length} updated. ${failed[0]}`, 'error') : this.notify(done(), 'success')))
       )
       .subscribe();
   }
@@ -447,7 +489,7 @@ export class UserManagementPage extends AdminPage {
   bulkActivate(): void {
     const list = this.checkedUsers().filter((u) => u.status === 'Suspended');
     if (!list.length) {
-      this.notify('None of the selected users are suspended.');
+      this.notify('None of the selected users are suspended.', 'error');
       return;
     }
     this.ask({
@@ -463,7 +505,7 @@ export class UserManagementPage extends AdminPage {
     const list = this.checkedUsers().filter((u) => u.status === 'Active');
     const blocked = this.bulkBlocker(list);
     if (!list.length || blocked) {
-      this.notify(blocked ?? 'None of the selected users are active.');
+      this.notify(blocked ?? 'None of the selected users are active.', 'error');
       return;
     }
     this.ask({
@@ -482,7 +524,7 @@ export class UserManagementPage extends AdminPage {
     const list = this.checkedUsers();
     const blocked = this.bulkBlocker(list);
     if (blocked) {
-      this.notify(blocked);
+      this.notify(blocked, 'error');
       return;
     }
     this.ask({
@@ -544,6 +586,7 @@ export class UserManagementPage extends AdminPage {
   private createAll(users: AdminUser[], message: (added: number, failed: string[]) => string): void {
     let added = 0;
     const failed: string[] = [];
+    this.notify(`Adding ${users.length} user${users.length === 1 ? '' : 's'}...`);
     from(users)
       .pipe(
         concatMap((u) =>
@@ -555,7 +598,7 @@ export class UserManagementPage extends AdminPage {
             })
           )
         ),
-        finalize(() => this.notify(message(added, failed)))
+        finalize(() => this.notify(message(added, failed), failed.length ? 'error' : 'success'))
       )
       .subscribe();
   }
@@ -570,7 +613,7 @@ export class UserManagementPage extends AdminPage {
         u.mfa ? 'On' : 'Off', u.lastLogin ? loginLabel(u.lastLogin, true) : '', u.status
       ])
     );
-    this.notify(`Exported ${rows.length} users.`);
+    this.notify(`Exported ${rows.length} users.`, 'success');
   }
 
   pickImport(): void {
@@ -605,7 +648,7 @@ export class UserManagementPage extends AdminPage {
       const e = get(email).toLowerCase();
       const empId = get(emp).toUpperCase();
       const roleOk = USER_ROLES.some((r) => r.name === get(role) && !r.secondaryOnly);
-      const location = ADMIN_LOCATIONS.includes(get(loc)) ? get(loc) : ADMIN_LOCATIONS[0];
+      const location = ADMIN_LOCATIONS.includes(get(loc)) ? get(loc) : ADMIN_LOCATIONS[0] ?? '';
       if (
         !EMAIL.test(e) || this.service.emailTaken(e, null) || inFile((u) => u.email, e) || !ADMIN_DEPARTMENTS.includes(get(dept)) || !roleOk ||
         (empId && (!/^EMP-\d{4,}$/.test(empId) || this.service.employeeIdTaken(empId, null) || inFile((u) => u.employeeId, empId)))

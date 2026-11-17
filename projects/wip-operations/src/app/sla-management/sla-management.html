@@ -4,9 +4,9 @@
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <a routerLink="/dashboard" aria-label="Home"><lucide-icon [img]="icons.House" [size]="16"></lucide-icon></a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <a routerLink="/wip-operations">WIP / Operations</a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <span class="crumb-current">SLA Management</span>
       </nav>
       <h1>SLA Management</h1>
@@ -43,8 +43,8 @@
             <h3 id="sla-pol">SLA Policies</h3>
             <div class="filters">
               <label class="search"><lucide-icon [img]="icons.Search" [size]="16"></lucide-icon><input type="search" [(ngModel)]="search" placeholder="Search policies..." aria-label="Search policies" /></label>
-              <label class="field"><span class="field-label">Scope</span><select class="control" [(ngModel)]="scopeFilter"><option value="">All</option><option *ngFor="let s of scopes" [value]="s">{{ s }}</option></select></label>
-              <label class="field"><span class="field-label">Status</span><select class="control" [(ngModel)]="statusFilter"><option value="">All</option><option value="Active">Active</option><option value="Draft">Draft</option><option value="Inactive">Inactive</option></select></label>
+              <label class="field"><span class="field-label">Scope</span><select class="control" [(ngModel)]="scopeFilter"><option value="">Select Scope</option><option *ngFor="let s of scopes" [value]="s">{{ s }}</option></select></label>
+              <label class="field"><span class="field-label">Status</span><select class="control" [(ngModel)]="statusFilter"><option value="">Select Status</option><option value="Active">Active</option><option value="Draft">Draft</option><option value="Inactive">Inactive</option></select></label>
             </div>
             <div class="table-wrap">
               <table class="wt">
@@ -77,6 +77,7 @@
                   <div class="mon-bar"><span class="mon-fill" [ngClass]="'fill--' + stateClass(state(t))" [style.width.%]="pct(t) > 100 ? 100 : pct(t)"></span></div>
                   <div class="mon-foot"><span [class.c-bad]="state(t) === 'Breached'"><lucide-icon [img]="icons.Clock" [size]="13"></lucide-icon> {{ remaining(t) }}</span><span class="muted">{{ pct(t) }}% elapsed</span></div>
                 </li>
+                <li *ngIf="!watched.length" class="empty">No active timers.</li>
               </ul>
               <button type="button" class="link-btn" (click)="showTimers('')">View all timers<lucide-icon [img]="icons.ArrowRight" [size]="15"></lucide-icon></button>
             </section>
@@ -116,23 +117,23 @@
             <form class="cfg-form" (ngSubmit)="savePolicy()">
               <div class="cfg-grid">
                 <label class="field span-2"><span class="field-label">Policy Name <em>*</em></span><input class="control" [(ngModel)]="draft.name" name="name" /></label>
-                <label class="field"><span class="field-label">Applies To</span><select class="control" [(ngModel)]="draft.appliesTo" (ngModelChange)="onAppliesTo()" name="appliesTo"><option *ngFor="let a of appliesToOptions" [value]="a">{{ a }}</option></select></label>
-                <label class="field"><span class="field-label">Priority</span><select class="control" [(ngModel)]="draft.priority" name="priority"><option *ngFor="let p of priorities" [value]="p">{{ p }}</option></select></label>
+                <label class="field"><span class="field-label">Applies To</span><select class="control" [(ngModel)]="draft.appliesTo" (ngModelChange)="onAppliesTo()" name="appliesTo"><option value="" disabled>Select Applies To</option><option *ngFor="let a of appliesToOptions" [value]="a">{{ a }}</option></select></label>
+                <label class="field"><span class="field-label">Priority</span><select class="control" [(ngModel)]="draft.priority" name="priority"><option value="" disabled>Select Priority</option><option *ngFor="let p of priorities" [value]="p">{{ p }}</option></select></label>
                 <label class="field"><span class="field-label">Response Target</span><span class="suffix-wrap"><input class="control" type="number" min="1" [(ngModel)]="draft.responseMin" name="responseMin" /><span class="suffix">minutes</span></span></label>
                 <label class="field"><span class="field-label">Completion Target</span>
                   <span class="unit-pair"><input class="control" type="number" min="1" [(ngModel)]="complValue" name="complValue" aria-label="Completion target" />
-                    <select class="control" [(ngModel)]="complUnit" name="complUnit" aria-label="Unit"><option value="hours">hours</option><option value="minutes">minutes</option></select></span></label>
-                <label class="field"><span class="field-label">Working Calendar</span><select class="control" [(ngModel)]="draft.calendar" name="calendar"><option *ngFor="let c of calendars" [value]="c.name">{{ c.name }}</option></select></label>
-                <label class="field"><span class="field-label">Time Zone</span><select class="control" [(ngModel)]="draft.timeZone" name="timeZone"><option *ngFor="let z of timeZones" [value]="z">{{ z }}</option></select></label>
+                    <select class="control" [(ngModel)]="complUnit" name="complUnit" aria-label="Unit"><option value="" disabled>Select Unit</option><option value="hours">hours</option><option value="minutes">minutes</option></select></span></label>
+                <label class="field"><span class="field-label">Working Calendar</span><select class="control" [(ngModel)]="draft.calendar" name="calendar"><option value="" disabled>Select Working Calendar</option><option *ngFor="let c of calendars" [value]="c.name">{{ c.name }}</option></select></label>
+                <label class="field"><span class="field-label">Time Zone</span><select class="control" [(ngModel)]="draft.timeZone" name="timeZone"><option value="" disabled>Select Time Zone</option><option *ngFor="let z of timeZones" [value]="z">{{ z }}</option></select></label>
               </div>
               <p class="hint cal-note"><lucide-icon [img]="icons.Info" [size]="14"></lucide-icon>{{ calendar(draft.calendar).note }}</p>
 
               <h4>Timer Rules</h4>
               <div class="cfg-grid">
-                <label class="field"><span class="field-label">Start Event</span><select class="control" [(ngModel)]="draft.startEvent" name="startEvent"><option *ngFor="let e of startEvents" [value]="e">{{ e }}</option></select></label>
-                <label class="field"><span class="field-label">Stop Event</span><select class="control" [(ngModel)]="draft.stopEvent" name="stopEvent"><option *ngFor="let e of stopEvents" [value]="e">{{ e }}</option></select></label>
+                <label class="field"><span class="field-label">Start Event</span><select class="control" [(ngModel)]="draft.startEvent" name="startEvent"><option value="" disabled>Select Start Event</option><option *ngFor="let e of startEvents" [value]="e">{{ e }}</option></select></label>
+                <label class="field"><span class="field-label">Stop Event</span><select class="control" [(ngModel)]="draft.stopEvent" name="stopEvent"><option value="" disabled>Select Stop Event</option><option *ngFor="let e of stopEvents" [value]="e">{{ e }}</option></select></label>
                 <label class="field"><span class="field-label">Pause States</span><input class="control" [(ngModel)]="draft.pauseStates" name="pauseStates" /></label>
-                <label class="field"><span class="field-label">Resume Event</span><select class="control" [(ngModel)]="draft.resumeEvent" name="resumeEvent"><option *ngFor="let e of resumeEvents" [value]="e">{{ e }}</option></select></label>
+                <label class="field"><span class="field-label">Resume Event</span><select class="control" [(ngModel)]="draft.resumeEvent" name="resumeEvent"><option value="" disabled>Select Resume Event</option><option *ngFor="let e of resumeEvents" [value]="e">{{ e }}</option></select></label>
               </div>
               <div class="cfg-switches">
                 <label class="switch switch--row"><span class="grow">Pause requires approval</span><input type="checkbox" [(ngModel)]="draft.pauseRequiresApproval" name="pra" /><span class="slider" aria-hidden="true"></span></label>
@@ -142,8 +143,8 @@
               <h4>Escalation &amp; Alerts</h4>
               <div class="cfg-grid">
                 <label class="field"><span class="field-label">Warning Threshold</span><span class="suffix-wrap"><input class="control" type="number" min="1" max="99" [(ngModel)]="draft.warningPct" name="warningPct" /><span class="suffix">% elapsed</span></span></label>
-                <label class="field"><span class="field-label">Escalation Matrix</span><select class="control" [(ngModel)]="draft.escalationMatrix" name="matrix"><option *ngFor="let m of matrices" [value]="m">{{ m }}</option></select></label>
-                <label class="field span-2"><span class="field-label">Notification Channels</span><select class="control" [(ngModel)]="draft.channels" name="channels"><option *ngFor="let c of channelOptions" [value]="c">{{ c }}</option></select></label>
+                <label class="field"><span class="field-label">Escalation Matrix</span><select class="control" [(ngModel)]="draft.escalationMatrix" name="matrix"><option value="" disabled>Select Escalation Matrix</option><option *ngFor="let m of matrices" [value]="m">{{ m }}</option></select></label>
+                <label class="field span-2"><span class="field-label">Notification Channels</span><select class="control" [(ngModel)]="draft.channels" name="channels"><option value="" disabled>Select Notification Channels</option><option *ngFor="let c of channelOptions" [value]="c">{{ c }}</option></select></label>
               </div>
 
               <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
@@ -179,8 +180,8 @@
       <section *ngIf="tab === 'timers'" class="box" aria-labelledby="sla-tm">
         <div class="box-head">
           <h3 id="sla-tm" class="grow">Active SLA Timers <span class="muted">{{ timerRows.length }} of {{ timers.length }}</span></h3>
-          <select class="control w-auto" [(ngModel)]="timerState" aria-label="State"><option value="">All states</option><option *ngFor="let s of states" [value]="s">{{ s }}</option></select>
-          <select class="control w-auto" [(ngModel)]="timerPolicy" aria-label="Policy"><option value="">All policies</option><option *ngFor="let p of policies" [value]="p.id">{{ p.name }}</option></select>
+          <select class="control w-auto" [(ngModel)]="timerState" aria-label="State"><option value="">Select State</option><option *ngFor="let s of states" [value]="s">{{ s }}</option></select>
+          <select class="control w-auto" [(ngModel)]="timerPolicy" aria-label="Policy"><option value="">Select Policy</option><option *ngFor="let p of policies" [value]="p.id">{{ p.name }}</option></select>
         </div>
         <div class="table-wrap">
           <table class="wt">
@@ -264,6 +265,7 @@
                 <td>{{ e.channel }}</td>
                 <td class="nowrap"><span *ngIf="e.acknowledged; else ackBtn">{{ e.acknowledged | date: 'HH:mm' }}</span><ng-template #ackBtn><button type="button" class="btn btn-outline btn-xs" (click)="acknowledge(e)">Acknowledge</button></ng-template></td>
               </tr>
+              <tr *ngIf="!escalations.length"><td colspan="7" class="empty">No escalations.</td></tr>
             </tbody>
           </table>
         </div>
@@ -285,6 +287,7 @@
                 <td class="nowrap">{{ r.done ? fmtTarget(r.avg) : '—' }}</td>
                 <td class="num" [class.c-bad]="r.breachedNow">{{ r.breachedNow }}</td>
               </tr>
+              <tr *ngIf="!performance.length"><td colspan="7" class="empty">No active policies.</td></tr>
             </tbody>
           </table>
         </div>
@@ -303,7 +306,7 @@
       <div *ngFor="let s of draft.ladder; let k = index" class="lad-edit">
         <span class="lad-num" [ngClass]="'lad-num--' + (k > 2 ? 2 : k)">{{ k + 1 }}</span>
         <input class="control lad-val" type="number" min="1" [(ngModel)]="s.value" [attr.aria-label]="'Step ' + (k + 1) + ' value'" />
-        <select class="control lad-trig" [(ngModel)]="s.trigger" [attr.aria-label]="'Step ' + (k + 1) + ' trigger'"><option value="pct">% elapsed</option><option value="overdue">min overdue</option></select>
+        <select class="control lad-trig" [(ngModel)]="s.trigger" [attr.aria-label]="'Step ' + (k + 1) + ' trigger'"><option value="" disabled>Select Trigger</option><option value="pct">% elapsed</option><option value="overdue">min overdue</option></select>
         <input class="control grow" [(ngModel)]="s.action" placeholder="Action, e.g. Notify supervisor" [attr.aria-label]="'Step ' + (k + 1) + ' action'" />
         <button type="button" class="icon-btn danger" (click)="removeStep(k)" [attr.aria-label]="'Remove step ' + (k + 1)"><lucide-icon [img]="icons.X" [size]="16"></lucide-icon></button>
       </div>

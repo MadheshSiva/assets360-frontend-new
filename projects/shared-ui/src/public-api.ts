@@ -19,4 +19,5 @@ export * from './lib/administration/administration-menu';
 export * from './lib/environment/environment';
 export * from './lib/auth/auth.model';
 export * from './lib/auth/auth.service';
+export * from './lib/auth/access.service';
 export * from './lib/reports-analytics/reports-analytics-menu';

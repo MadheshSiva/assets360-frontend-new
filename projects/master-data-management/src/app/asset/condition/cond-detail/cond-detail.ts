@@ -2,18 +2,12 @@ import { Component, EventEmitter, HostListener, Input, OnChanges, Output, inject
 import { DecimalPipe } from '@angular/common';
 import { Box, ChevronDown, Copy, LucideAngularModule, Pencil, Search, ShieldCheck, TriangleAlert, Wrench } from 'lucide-angular';
 import { formatDateTime } from '../../../organization/location/location.format';
-import { sampleTag } from '../../asset-model/asset-model.data';
-import { AssetModelService } from '../../asset-model/asset-model.service';
 import { LEVEL_ICONS } from '../../level-icons';
 import { ConditionRecord } from '../condition.model';
 import { ConditionService } from '../condition.service';
 import { CondFormTab } from '../cond-form/cond-form';
 
 type DetailTab = 'overview' | 'health' | 'usage' | 'assets' | 'documents' | 'activity' | 'settings';
-
-function seed(text: string): number {
-  return [...text].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
-}
 
 /** Panel under the list showing the selected condition. */
 @Component({
@@ -25,7 +19,8 @@ function seed(text: string): number {
     '../../../shared/styles/mdm-detail-extras.css',
     '../../asset-model/model-detail/model-detail.css',
     '../../asset-type/type-detail/type-detail.css',
-    '../../level-detail.css'
+    '../../level-detail.css',
+    '../../../shared/styles/mdm-purple-theme.css'
   ]
 })
 export class CondDetail implements OnChanges {
@@ -37,7 +32,6 @@ export class CondDetail implements OnChanges {
   @Output() remove = new EventEmitter<ConditionRecord>();
 
   readonly service = inject(ConditionService);
-  readonly models = inject(AssetModelService);
   readonly levelIcons = LEVEL_ICONS;
   readonly icons = { Pencil, Copy, Search, ChevronDown, Box, Wrench, TriangleAlert, ShieldCheck };
   readonly formatDateTime = formatDateTime;
@@ -69,33 +63,10 @@ export class CondDetail implements OnChanges {
     return codes.map((c) => this.service.nameOf(c)).join(', ') || 'None';
   }
 
-  // DEMO MODE: sample assets in this condition, taken from asset models that have assets
-  get sampleAssets() {
-    const withAssets = this.models.all().filter((m) => m.assetCount > 0);
-    const start = seed(this.condition.code) % Math.max(1, withAssets.length - 8);
-    return withAssets.slice(start, start + Math.min(8, this.condition.usage.assets)).map((m, i) => ({
-      tag: sampleTag(m.taggingFormat).replace(/\d+$/, (n) => String(Number(n) + i * 23).padStart(n.length, '0')),
-      model: m.name,
-      manufacturer: m.manufacturer,
-      type: m.assetType
-    }));
-  }
-
-  get documentRows() {
-    const c = this.condition;
-    const kinds = ['Condition Assessment Guide', 'Inspection Photo Examples'];
-    return kinds.slice(0, c.documents).map((kind, i) => ({ name: `${c.name} - ${kind}.pdf`, kind, date: (i % 2 ? c.updatedOn : c.createdOn).slice(0, 10) }));
-  }
-
-  get activity() {
-    const c = this.condition;
-    const list = [
-      { when: c.updatedOn, who: 'Rex Kumar', text: 'Updated transition rules' },
-      { when: c.createdOn, who: c.createdBy || 'Rex Kumar', text: `Created condition ${c.code}` }
-    ];
-    if (c.status === 'Inactive') list.unshift({ when: c.updatedOn, who: 'Rex Kumar', text: 'Marked condition as Inactive' });
-    return list;
-  }
+  // Asset rows, documents and the audit log are owned by other modules; empty until those APIs are wired
+  readonly assets: { tag: string; model: string; manufacturer: string; type: string }[] = [];
+  readonly documentRows: { name: string; kind: string; date: string }[] = [];
+  readonly activity: { when: string; who: string; text: string }[] = [];
 
   editAt(tab: CondFormTab): void {
     this.edit.emit({ condition: this.condition, tab });

@@ -310,9 +310,9 @@ export class UserService extends SecurityStore<UserRecord, UserDto> {
       mfaRequired: u.mfaRequired,
       mustChangePassword: u.mustChangePassword,
       sendInvite: u.sendInvite,
-      language: u.language,
-      timeZone: u.timeZone,
-      dateFormat: u.dateFormat,
+      language: u.language || null,
+      timeZone: u.timeZone || null,
+      dateFormat: u.dateFormat || null,
       emailNotifications: u.emailNotifications,
       smsNotifications: u.smsNotifications,
       status: u.status

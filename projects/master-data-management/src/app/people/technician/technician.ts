@@ -22,7 +22,7 @@ type SortKey = 'id' | 'name' | 'primarySkill' | 'team';
   selector: 'app-mdm-people-technician',
   imports: [FormsModule, RouterLink, LucideAngularModule, TechnicianForm],
   templateUrl: './technician.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../people.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../people.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class TechnicianPage extends ListPage<TechnicianRecord, TechnicianFilters, SortKey> {
   readonly service = inject(TechnicianService);

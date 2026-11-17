@@ -1,4 +1,4 @@
-import { BinRecord, ItemCategoryRecord, ItemRecord, StockStatusRecord, StockStatusType, StoreRecord, UomRecord, UomType, WarehouseRecord } from './inventory.model';
+import { BinRecord, ItemCategoryRecord, ItemRecord, RecordStatus, StockStatusRecord, StockStatusType, StoreRecord, UomRecord, UomType, WarehouseRecord } from './inventory.model';
 
 /* Option lists and blank records for the inventory masters. Items point at categories, units of measure and bins by code. */
 
@@ -10,23 +10,23 @@ export const STORE_TYPES = ['Spare Parts', 'Consumables', 'Tools', 'PPE', 'Chemi
 export const BIN_TYPES = ['Shelf', 'Rack', 'Drawer', 'Pallet', 'Cabinet', 'Floor', 'Hazmat Cabinet'];
 
 export function blankItemCategory(): ItemCategoryRecord {
-  return { code: '', name: '', parentCode: null, description: '', status: 'Active', defaultUom: 'NOS', valuationMethod: 'Weighted Average', inspectionOnReceipt: false, allowNegativeStock: false, createdOn: '', updatedOn: '' };
+  return { code: '', name: '', parentCode: null, description: '', status: '' as RecordStatus, defaultUom: '', valuationMethod: '', inspectionOnReceipt: false, allowNegativeStock: false, createdOn: '', updatedOn: '' };
 }
 
 export function blankUom(): UomRecord {
-  return { code: '', name: '', type: 'Discrete', symbol: '', baseUom: '', conversionFactor: 1, description: '', status: 'Active', allowDecimals: false, decimalPlaces: 0, createdOn: '', updatedOn: '' };
+  return { code: '', name: '', type: '' as UomType, symbol: '', baseUom: '', conversionFactor: 1, description: '', status: '' as RecordStatus, allowDecimals: false, decimalPlaces: 0, createdOn: '', updatedOn: '' };
 }
 
 export function blankStockStatus(): StockStatusRecord {
   return {
     code: '',
     name: '',
-    type: 'Available',
+    type: '' as StockStatusType,
     color: STATUS_COLORS[0],
     description: '',
     usage: '',
     isDefault: false,
-    status: 'Active',
+    status: '' as RecordStatus,
     canIssue: true,
     canReserve: true,
     countsAsAvailable: true,
@@ -45,8 +45,8 @@ export function blankWarehouse(): WarehouseRecord {
     location: '',
     managerId: '',
     description: '',
-    status: 'Active',
-    address: { line1: '', city: '', state: '', postalCode: '', country: 'UAE' },
+    status: '' as RecordStatus,
+    address: { line1: '', city: '', state: '', postalCode: '', country: '' },
     phone: '',
     email: '',
     areaSqm: null,
@@ -58,11 +58,11 @@ export function blankWarehouse(): WarehouseRecord {
 }
 
 export function blankStore(warehouseCode = ''): StoreRecord {
-  return { code: '', name: '', warehouseCode, storeType: 'General', keeperId: '', description: '', status: 'Active', temperatureControlled: false, restrictedAccess: false, createdOn: '', updatedOn: '' };
+  return { code: '', name: '', warehouseCode, storeType: '', keeperId: '', description: '', status: '' as RecordStatus, temperatureControlled: false, restrictedAccess: false, createdOn: '', updatedOn: '' };
 }
 
 export function blankBin(storeCode = ''): BinRecord {
-  return { code: '', storeCode, rack: '', shelf: '', binType: 'Shelf', capacity: null, description: '', status: 'Active', createdOn: '', updatedOn: '' };
+  return { code: '', storeCode, rack: '', shelf: '', binType: '', capacity: null, description: '', status: '' as RecordStatus, createdOn: '', updatedOn: '' };
 }
 
 export function blankItem(): ItemRecord {
@@ -74,7 +74,7 @@ export function blankItem(): ItemRecord {
     uom: '',
     description: '',
     image: null,
-    status: 'Active',
+    status: '' as RecordStatus,
     currentStock: 0,
     minStock: 0,
     reorderLevel: 0,
@@ -84,8 +84,8 @@ export function blankItem(): ItemRecord {
     storeCode: '',
     binCode: '',
     unitCost: null,
-    currency: 'AED - UAE Dirham',
-    valuationMethod: 'Weighted Average',
+    currency: '',
+    valuationMethod: '',
     manufacturer: '',
     specification: '',
     shelfLifeDays: null,

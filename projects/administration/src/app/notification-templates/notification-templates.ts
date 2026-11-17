@@ -265,13 +265,18 @@ export class NotificationTemplatesPage extends AdminPage {
     };
   }
 
+  /** New drafts (Create / library) open with their settings dropdowns unselected; imports keep the defaults. */
+  private unselected(t: NotificationTemplate): NotificationTemplate {
+    return { ...t, language: '', priority: '', deliveryTiming: '', retryPolicy: '' };
+  }
+
   /** Adds an empty draft and opens it; the user fills it in and saves. */
   create(): void {
     if (this.dirty) {
       this.notify('Save or cancel the current changes first.');
       return;
     }
-    const t = this.blank('New Template', this.categories[0]);
+    const t = this.unselected(this.blank('New Template', ''));
     this.service.save(t);
     this.clearFilters();
     this.search = '';
@@ -287,7 +292,7 @@ export class NotificationTemplatesPage extends AdminPage {
       this.notify('Save or cancel the current changes first.');
       return;
     }
-    const t = this.blank(item.name, item.category);
+    const t = this.unselected(this.blank(item.name, item.category));
     t.triggerEvent = item.trigger;
     t.email.subject = item.subject;
     t.email.body = item.body;

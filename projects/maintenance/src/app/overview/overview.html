@@ -60,7 +60,7 @@
         <input type="search" placeholder="Search by WO#, asset name, tag, etc..." [ngModel]="search()" (ngModelChange)="setFilter('search', $event)" />
       </label>
       <select class="control sel" [ngModel]="status()" (ngModelChange)="setFilter('status', $event)" aria-label="Status">
-        <option value="">All Status</option>
+        <option value="">Select Status</option>
         @for (s of statusOptions(); track s) { <option [value]="s">{{ s }}</option> }
       </select>
       <select class="control sel" [ngModel]="kind()" (ngModelChange)="setFilter('kind', $event)" [attr.aria-label]="kindOptions().label">
@@ -69,7 +69,7 @@
       </select>
       @if (tab() !== 'pdm') {
         <select class="control sel" [ngModel]="priority()" (ngModelChange)="setFilter('priority', $event)" aria-label="Priority">
-          <option value="">All Priorities</option>
+          <option value="">Select Priority</option>
           @for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }
         </select>
       }
@@ -80,7 +80,7 @@
       <div class="adv">
         <label class="field"><span class="field-label">Assigned To</span><input class="control" [ngModel]="assignee()" (ngModelChange)="setFilter('assignee', $event)" placeholder="Name" /></label>
         <label class="field"><span class="field-label">Site / Location</span>
-          <select class="control" [ngModel]="site()" (ngModelChange)="setFilter('site', $event)"><option value="">All Locations</option>@for (s of sites(); track s) { <option [value]="s">{{ s }}</option> }</select>
+          <select class="control" [ngModel]="site()" (ngModelChange)="setFilter('site', $event)"><option value="">Select Site / Location</option>@for (s of sites(); track s) { <option [value]="s">{{ s }}</option> }</select>
         </label>
       </div>
     }

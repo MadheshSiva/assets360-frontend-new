@@ -115,3 +115,8 @@ textarea.control { height: auto; min-height: 80px; padding: 8px 10px; resize: ve
 @media (max-width: 900px) {
   .form-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Breadcrumb: links and separators purple, current page keeps its color */
+.breadcrumb a { color: #6d28d9; }
+.breadcrumb a:hover { color: #4c1d95; }
+.breadcrumb .sep { color: #a78bfa; }

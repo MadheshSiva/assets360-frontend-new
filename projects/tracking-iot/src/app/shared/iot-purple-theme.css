@@ -1,0 +1,15 @@
+/* Breadcrumb: parent crumbs in accent, separators light violet, current page keeps its colour */
+.crumbs a,
+.crumbs .crumb-link,
+.crumbs .crumb-home,
+.crumbs > span:not(.sep):not(:last-child) {
+  color: #6d28d9;
+}
+
+.crumbs a:hover {
+  color: #4c1d95;
+}
+
+.crumbs .sep {
+  color: #a78bfa;
+}

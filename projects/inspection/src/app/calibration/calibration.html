@@ -2,7 +2,7 @@
   <header class="page-head">
     <div class="grow">
       <nav class="breadcrumb">
-        <a routerLink="/inspection/overview">Inspection</a><span>/</span><span class="current">Calibration</span>
+        <a routerLink="/inspection/overview">Inspection</a><span class="crumb-sep" aria-hidden="true">›</span><span class="current">Calibration</span>
       </nav>
       <h1>Calibration Management</h1>
       <p class="subtitle">Plan calibrations, record measurement results and maintain traceable certificates.</p>
@@ -47,11 +47,11 @@
             <input type="search" placeholder="Search instrument or serial number" [ngModel]="search()" (ngModelChange)="setFilter('search', $event)" />
           </label>
           <select class="control sel" [ngModel]="statusFilter()" (ngModelChange)="setFilter('statusFilter', $event)" aria-label="Status">
-            <option value="">All Statuses</option>
+            <option value="">Select Status</option>
             @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
           </select>
           <select class="control sel" [ngModel]="locationFilter()" (ngModelChange)="setFilter('locationFilter', $event)" aria-label="Location">
-            <option value="">All Locations</option>
+            <option value="">Select Location</option>
             @for (l of locations(); track l) { <option [value]="l">{{ l }}</option> }
           </select>
         </div>

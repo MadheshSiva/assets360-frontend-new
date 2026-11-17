@@ -1,11 +1,10 @@
 import { Injectable } from '@angular/core';
-import { seedWorkflows } from './workflow-builder.data';
 import { Workflow } from './workflow-builder.model';
 
-// DEMO MODE: workflows live in memory until the workflow engine API exists
+// Workflows are held in memory until the workflow engine API exists (starts empty)
 @Injectable({ providedIn: 'root' })
 export class WorkflowService {
-  private workflows: Workflow[] = seedWorkflows();
+  private workflows: Workflow[] = [];
   private nextId = this.workflows.length + 1;
 
   all(): Workflow[] {

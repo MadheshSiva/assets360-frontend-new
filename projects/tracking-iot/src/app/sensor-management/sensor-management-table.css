@@ -111,3 +111,6 @@
 @media (max-width: 760px) {
   .dt--sen, .dt--cal, .dt--map { min-width: 680px; }
 }
+.ps--inactive { background: #eef0f5; color: #4b5563; }
+.ps--inactive i { background: #9ca3af; }
+.menu button.danger { color: #b91c1c; }

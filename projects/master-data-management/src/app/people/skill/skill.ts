@@ -20,7 +20,7 @@ type SortKey = 'name' | 'code' | 'category';
   selector: 'app-mdm-people-skill',
   imports: [FormsModule, RouterLink, LucideAngularModule, SkillForm],
   templateUrl: './skill.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../people.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../people.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class SkillPage extends ListPage<SkillRecord, SkillFilters, SortKey> {
   readonly service = inject(SkillService);

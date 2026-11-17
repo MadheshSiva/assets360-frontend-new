@@ -66,9 +66,9 @@ export function blankOrganization(): OrganizationRecord {
     businessUnits: 0,
     sites: 0,
     status: 'Active',
-    address: { line1: '', line2: '', city: '', state: '', country: 'United Arab Emirates', postalCode: '' },
-    contact: { person: '', designation: '', email: '', phoneCountry: 'United Arab Emirates', phone: '' },
-    settings: { ...GULF_SETTINGS, effectiveFrom: new Date().toISOString().slice(0, 10) },
+    address: { line1: '', line2: '', city: '', state: '', country: '', postalCode: '' },
+    contact: { person: '', designation: '', email: '', phoneCountry: '', phone: '' },
+    settings: { ...GULF_SETTINGS, currency: '', timeZone: '', language: '', dateFormat: '', effectiveFrom: new Date().toISOString().slice(0, 10) },
     createdOn: '',
     updatedOn: ''
   };

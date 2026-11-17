@@ -4,7 +4,7 @@ import { AuthService } from 'shared-ui';
 
 /**
  * Sends signed-out users to /login, remembering where they were going.
- * DEMO MODE: not attached (see `canActivate` in app.routes.ts).
+ * Attached to the signed-in layout in app.routes.ts.
  */
 export const authGuard: CanActivateFn = (_route, state) => {
   if (inject(AuthService).isLoggedIn()) return true;

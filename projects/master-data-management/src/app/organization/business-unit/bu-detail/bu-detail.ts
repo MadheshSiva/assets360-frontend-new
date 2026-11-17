@@ -23,16 +23,12 @@ interface HierarchyRow {
 // Sites listed under the unit in the hierarchy card
 const SITE_PREVIEW = 4;
 
-function seed(text: string): number {
-  return [...text].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 29);
-}
-
 /** Panel under the list showing the selected business unit. */
 @Component({
   selector: 'app-bu-detail',
   imports: [DecimalPipe, LucideAngularModule],
   templateUrl: './bu-detail.html',
-  styleUrls: ['../../../shared/styles/mdm-detail.css', '../../../shared/styles/mdm-detail-extras.css']
+  styleUrls: ['../../../shared/styles/mdm-detail.css', '../../../shared/styles/mdm-detail-extras.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class BuDetail implements OnChanges {
   @Input({ required: true }) unit!: BusinessUnitRecord;
@@ -93,47 +89,15 @@ export class BuDetail implements OnChanges {
     return this.departmentService.ofBusinessUnit(this.unit.code);
   }
 
-  get assetRows() {
-    const s = seed(this.unit.code);
-    const names: [string, string][] = [['CNC Machine', 'Machining'], ['Forklift', 'Material Handling'], ['Chiller', 'HVAC'], ['Laptop', 'IT'], ['UPS', 'Electrical'], ['Fire Pump', 'Safety']];
-    return names.map(([name, category], i) => ({
-      tag: `AST-${((s + i * 7919) % 90000) + 10000}`,
-      name: `${name} ${i + 1}`,
-      category,
-      site: this.unitSites[i % Math.max(this.unitSites.length, 1)]?.name ?? '-'
-    }));
-  }
+  // Rows owned by other modules (Assets, People, Finance, Documents, audit log); empty until those APIs are wired
+  readonly assetRows: { tag: string; name: string; category: string; site: string }[] = [];
+  readonly peopleRows: { name: string; role: string; site: string }[] = [];
+  readonly documents: { name: string; kind: string; size: string; date: string }[] = [];
+  readonly activity: { when: string; who: string; text: string }[] = [];
 
-  get peopleRows() {
-    const s = seed(this.unit.code);
-    const people: [string, string][] = [[this.unit.head || 'Rex Kumar', 'Business Unit Head'], ['Omar Haddad', 'Operations Manager'], ['Priya Nair', 'Analyst'], ['Murugan S', 'Technician'], ['Fatima Ali', 'Engineer']];
-    return people.map(([name, role], i) => ({ name, role, site: this.unitSites[(s + i) % Math.max(this.unitSites.length, 1)]?.name ?? '-' }));
-  }
-
-  get costCenterRows() {
-    const main = this.unit.costCenter || `CC-${this.unit.code}-001`;
-    const prefix = main.replace(/-\d+$/, '');
-    return [
-      { code: main, name: `${this.unit.name} - Main`, budget: 250000 + (seed(main) % 20) * 25000 },
-      ...this.unitSites.slice(0, 3).map((site, i) => ({ code: `${prefix}-${String(i + 2).padStart(3, '0')}`, name: site.name, budget: 60000 + (seed(site.code) % 20) * 10000 }))
-    ];
-  }
-
-  get documents() {
-    return [
-      { name: `${this.unit.name} - Charter.pdf`, kind: 'Policy', size: '820 KB', date: this.unit.createdOn.slice(0, 10) },
-      { name: `${this.unit.name} - Budget ${new Date().getFullYear()}.xlsx`, kind: 'Budget', size: '1.4 MB', date: this.unit.updatedOn.slice(0, 10) },
-      { name: `${this.unit.name} - Org Chart.pdf`, kind: 'Org Chart', size: '360 KB', date: this.unit.updatedOn.slice(0, 10) }
-    ];
-  }
-
-  get activity() {
-    const list = [
-      { when: this.unit.updatedOn, who: 'Rex Kumar', text: 'Updated business unit details' },
-      { when: this.unit.createdOn, who: 'Aisha Rahman', text: `Created business unit ${this.unit.code}` }
-    ];
-    if (this.unit.status === 'Inactive') list.unshift({ when: this.unit.updatedOn, who: 'Rex Kumar', text: 'Marked business unit as Inactive' });
-    return list;
+  // The unit's own cost center from the record; budgets come from Finance
+  get costCenterRows(): { code: string; name: string; budget: number | null }[] {
+    return this.unit.costCenter ? [{ code: this.unit.costCenter, name: this.unit.name, budget: null }] : [];
   }
 
   @HostListener('document:click')

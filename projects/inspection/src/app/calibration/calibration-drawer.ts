@@ -55,7 +55,7 @@ export class CalibrationDrawer implements OnInit {
           tolerance: '',
           intervalMonths: 12,
           provider: '',
-          providerType: 'In-house',
+          providerType: '',
           assignedTo: '',
           lastCalibration: null,
           nextDue: null,

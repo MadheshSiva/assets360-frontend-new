@@ -28,14 +28,14 @@
         <label class="filter">
           <span>Role</span>
           <select name="role" [(ngModel)]="draft.role">
-            <option value="">All</option>
+            <option value="">Select Role</option>
             @for (r of roles.all(); track r.code) { <option [value]="r.code">{{ r.name }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Status</span>
           <select name="status" [(ngModel)]="draft.status">
-            <option value="">All</option>
+            <option value="">Select Status</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
           </select>

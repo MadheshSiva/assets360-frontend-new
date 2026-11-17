@@ -1,6 +1,5 @@
 import { Injectable } from '@angular/core';
 import { MdmAudit } from '../../shared/mdm-api';
-import { blankOrganization } from './organization.data';
 import { OrganizationFilters, OrganizationRecord, OrganizationStatus, OrganizationType } from './organization.model';
 import { StructureAddressDto, StructureContactDto, StructureReference, fromApiAddress, toLocalStamp } from '../structure-api';
 import { StructureStore } from '../structure-store';
@@ -85,7 +84,6 @@ export class OrganizationService extends StructureStore<OrganizationRecord, Orga
   }
 
   protected toRecord(dto: OrganizationDto): OrganizationRecord {
-    const blank = blankOrganization();
     const c = dto.contact;
     const s = dto.settings;
     const known = this.find(dto.code);
@@ -107,7 +105,7 @@ export class OrganizationService extends StructureStore<OrganizationRecord, Orga
         person: c?.name ?? '',
         designation: c?.designation ?? '',
         email: c?.email ?? '',
-        phoneCountry: c?.phoneCountry ?? blank.contact.phoneCountry,
+        phoneCountry: c?.phoneCountry ?? 'United Arab Emirates',
         phone: c?.phone ?? ''
       },
       settings: {

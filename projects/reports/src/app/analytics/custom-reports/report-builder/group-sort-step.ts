@@ -24,6 +24,7 @@ import { Aggregate, CustomReport, FieldDef, PreviewColumn } from '../custom-repo
       <div class="field">
         <label for="cr-agg">Aggregate numeric fields</label>
         <select id="cr-agg" [(ngModel)]="report.aggregate" [disabled]="!report.groupBy">
+          <option value="" disabled>Select Aggregate</option>
           @for (a of aggregates; track a) { <option [value]="a">{{ a }}</option> }
         </select>
       </div>
@@ -44,6 +45,7 @@ import { Aggregate, CustomReport, FieldDef, PreviewColumn } from '../custom-repo
       <div class="field">
         <label for="cr-limit">Row limit</label>
         <select id="cr-limit" [(ngModel)]="report.rowLimit">
+          <option [ngValue]="null" disabled>Select Row Limit</option>
           @for (n of limits; track n) { <option [ngValue]="n">{{ n }} rows</option> }
         </select>
       </div>

@@ -14,36 +14,42 @@
   <label class="filter filter--period">
     <span>Period</span>
     <select [(ngModel)]="period" (ngModelChange)="apply()">
+      <option value="">Select Period</option>
       @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Organization</span>
     <select [(ngModel)]="organization" (ngModelChange)="apply()">
+      <option value="">Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Plant</span>
     <select [(ngModel)]="plant" (ngModelChange)="apply()">
+      <option value="">Select Plant</option>
       @for (p of plants; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Production Line</span>
     <select [(ngModel)]="line" (ngModelChange)="apply()">
+      <option value="">Select Production Line</option>
       @for (l of lineOptions; track l) { <option [value]="l">{{ l }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Work Center</span>
     <select [(ngModel)]="workCenter" (ngModelChange)="apply()">
+      <option value="">Select Work Center</option>
       @for (c of workCenters; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Product</span>
     <select [(ngModel)]="product" (ngModelChange)="apply()">
+      <option value="">Select Product</option>
       @for (p of products; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>

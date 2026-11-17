@@ -28,21 +28,21 @@
         <label class="filter">
           <span>Asset Type</span>
           <select name="assetType" [(ngModel)]="draft.assetType">
-            <option value="">All</option>
+            <option value="">Select Asset Type</option>
             @for (t of assetTypes; track t) { <option [value]="t">{{ t }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Contract Type</span>
           <select name="contractType" [(ngModel)]="draft.contractType">
-            <option value="">All</option>
+            <option value="">Select Contract Type</option>
             @for (t of contractTypes; track t) { <option [value]="t">{{ t }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Status</span>
           <select name="status" [(ngModel)]="draft.status">
-            <option value="">All</option>
+            <option value="">Select Status</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
           </select>

@@ -44,7 +44,7 @@ export class MaintenanceAnalyticsPage extends ScopedAnalyticsPage {
   readonly percentFormat = (v: number) => `${v}%`;
   protected readonly fileStem = 'maintenance-analytics';
 
-  maintenanceType = ALL_MAINTENANCE_TYPES;
+  maintenanceType = '';
   view!: MaintenanceView;
   insights: RaInsight[] = [];
   backlogSort: BacklogSortKey = 'priority';
@@ -58,7 +58,7 @@ export class MaintenanceAnalyticsPage extends ScopedAnalyticsPage {
   }
 
   recompute(): void {
-    const v = buildMaintenance(this.scope, this.period, this.maintenanceType, this.compare);
+    const v = buildMaintenance(this.scope, this.period, this.maintenanceType || ALL_MAINTENANCE_TYPES, this.compare);
     this.view = v;
     this.kpis = [
       { id: 'cost', label: 'Maintenance Cost', value: money(v.cost), delta: MA_DELTAS.cost, lowerIsBetter: true, icon: Wrench, tone: 'purple' },
@@ -104,11 +104,11 @@ export class MaintenanceAnalyticsPage extends ScopedAnalyticsPage {
 
   protected override restoreFilters(f: Record<string, string>): void {
     super.restoreFilters(f);
-    this.maintenanceType = f['maintenanceType'] ?? ALL_MAINTENANCE_TYPES;
+    this.maintenanceType = f['maintenanceType'] ?? '';
   }
 
   override resetFilters(): void {
-    this.maintenanceType = ALL_MAINTENANCE_TYPES;
+    this.maintenanceType = '';
     super.resetFilters();
   }
 

@@ -81,15 +81,16 @@ select.control {
 .dm-layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(290px, 22vw, 340px); align-items: start; gap: 14px; }
 .dm-layout.no-panel { grid-template-columns: minmax(0, 1fr); }
 .dm-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.dm-work { display: grid; grid-template-columns: 250px minmax(0, 1fr); align-items: start; gap: 14px; }
+.dm-work { display: grid; grid-template-columns: 250px minmax(0, 1fr); align-items: stretch; gap: 14px; }
 
 /* ===== Device type list ===== */
-.types-card { display: flex; flex-direction: column; min-width: 0; padding: 12px 10px; }
+/* contain: size keeps the list out of the row-height calculation, so the card stretches to the models table's height and the list scrolls inside */
+.types-card { display: flex; flex-direction: column; min-width: 0; min-height: 260px; padding: 12px 10px; contain: size; }
 .types-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px 8px; }
 .types-head h2 { margin: 0; font-size: 14px; font-weight: 800; white-space: nowrap; }
 .add-type { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 26px; height: 26px; border: 0; border-radius: 7px; background: var(--dm-accent-soft); color: var(--dm-accent-2); cursor: pointer; }
 .add-type:hover { background: var(--dm-accent-2); color: #fff; }
-.type-list { display: flex; flex-direction: column; gap: 2px; max-height: 470px; overflow-y: auto; }
+.type-list { display: flex; flex: 1; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; }
 .type-item { position: relative; display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 8px 8px 10px; border: 0; border-radius: 8px; background: none; font: inherit; font-size: 12.5px; color: var(--dm-text-2); text-align: left; cursor: pointer; }
 .type-item:hover { background: #f8f7fc; }
 .type-item.is-on { background: var(--dm-accent-soft); font-weight: 700; color: var(--dm-accent); }
@@ -102,8 +103,8 @@ select.control {
 
 /* ≤1440px: the type list becomes a chip row above the table */
 @media (max-width: 1440px) {
-  .dm-work { grid-template-columns: minmax(0, 1fr); }
-  .types-card { flex-direction: row; align-items: center; gap: 10px; padding: 8px 10px; }
+  .dm-work { grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .types-card { flex-direction: row; align-items: center; gap: 10px; padding: 8px 10px; contain: none; min-height: 0; }
   .types-head { flex: 0 0 auto; gap: 6px; padding: 0; }
   .type-list { flex: 1; flex-direction: row; gap: 6px; max-height: none; padding-bottom: 2px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
   .type-item { flex: 0 0 auto; width: auto; gap: 6px; padding: 4px 8px 4px 5px; border: 1px solid var(--dm-border); border-radius: 999px; white-space: nowrap; }

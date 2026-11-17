@@ -1,15 +1,17 @@
 import { Component, EventEmitter, Input, OnChanges, Output, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Camera, LucideAngularModule, Plus, Trash2, X } from 'lucide-angular';
-import { ACCESS_ROLES, DESIGNATIONS, EMAIL, EMPLOYMENT_TYPES, PEOPLE_DEPARTMENTS, nowStamp, readPhoto } from '../../people.data';
+import { ACCESS_ROLES, DESIGNATIONS, EMAIL, EMPLOYMENT_TYPES, nowStamp, readPhoto } from '../../people.data';
+import { MasterLookups } from '../../name-lookup';
+import { SiteService } from '../../../organization/site/site.service';
 import { SkillService } from '../../skill/skill.service';
 import { TeamService } from '../../team/team.service';
-import { EMPLOYEE_SITES, NATIONALITIES, blankEmployee } from '../employee.data';
+import { NATIONALITIES, blankEmployee } from '../employee.data';
 import { EmployeeRecord } from '../employee.model';
 import { EmployeeService } from '../employee.service';
 
 type FormTab = 'basic' | 'employment' | 'contact' | 'skills' | 'access';
-type FieldKey = 'id' | 'name' | 'department' | 'designation' | 'email' | 'photo' | 'reportingManager' | 'certifications';
+type FieldKey = 'id' | 'name' | 'department' | 'designation' | 'email' | 'photo' | 'status' | 'reportingManager' | 'certifications';
 
 const TAB_OF: Record<FieldKey, FormTab> = {
   id: 'basic',
@@ -18,6 +20,7 @@ const TAB_OF: Record<FieldKey, FormTab> = {
   designation: 'basic',
   email: 'basic',
   photo: 'basic',
+  status: 'basic',
   reportingManager: 'employment',
   certifications: 'skills'
 };
@@ -27,7 +30,7 @@ const TAB_OF: Record<FieldKey, FormTab> = {
   selector: 'app-employee-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './employee-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../people-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../people-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class EmployeeForm implements OnChanges {
   // 'edit' changes `employee`; 'add' creates one, pre-filled from it (the page passes the next free ID)
@@ -39,12 +42,12 @@ export class EmployeeForm implements OnChanges {
   readonly service = inject(EmployeeService);
   readonly skillService = inject(SkillService);
   readonly teams = inject(TeamService);
+  private readonly lookups = inject(MasterLookups);
+  private readonly siteService = inject(SiteService);
   readonly icons = { X, Camera, Plus, Trash2 };
-  readonly departments = PEOPLE_DEPARTMENTS;
   readonly designations = DESIGNATIONS;
   readonly employmentTypes = EMPLOYMENT_TYPES;
   readonly accessRoles = ACCESS_ROLES;
-  readonly sites = EMPLOYEE_SITES;
   readonly nationalities = NATIONALITIES;
   readonly tabs: { id: FormTab; label: string }[] = [
     { id: 'basic', label: 'Basic Information' },
@@ -64,6 +67,18 @@ export class EmployeeForm implements OnChanges {
     this.form = this.employee ? structuredClone(this.employee) : blankEmployee(this.service.nextId());
     this.errors = {};
     this.tab = 'basic';
+  }
+
+  // Department names from the departments API, plus the current value so an edit keeps it
+  get departments(): string[] {
+    const names = this.lookups.departments.names;
+    return this.form.department && !names.includes(this.form.department) ? [this.form.department, ...names] : names;
+  }
+
+  // Names of sites already loaded from the sites API, plus the current value so an edit keeps it
+  get sites(): string[] {
+    const names = this.siteService.all().map((s) => s.name);
+    return this.form.site && !names.includes(this.form.site) ? [this.form.site, ...names] : names;
   }
 
   get isEdit(): boolean {
@@ -115,7 +130,23 @@ export class EmployeeForm implements OnChanges {
     );
   }
 
+  /** True on the final tab, where the primary button saves instead of advancing. */
+  get isLastTab(): boolean {
+    return this.tab === this.tabs[this.tabs.length - 1].id;
+  }
+
+  /** Move to the next tab. */
+  next(): void {
+    const i = this.tabs.findIndex((t) => t.id === this.tab);
+    if (i < this.tabs.length - 1) this.tab = this.tabs[i + 1].id;
+  }
+
   submit(): void {
+    // Enter key / primary button on earlier tabs just advances
+    if (!this.isLastTab) {
+      this.next();
+      return;
+    }
     const f = this.form;
     const originalId = this.original?.id ?? null;
     const errors: Partial<Record<FieldKey, string>> = {};
@@ -123,6 +154,7 @@ export class EmployeeForm implements OnChanges {
     else if (this.service.isIdTaken(f.id, originalId)) errors.id = `${f.id.trim()} is already used.`;
     if (!f.name.trim()) errors.name = 'Enter the full name.';
     if (!f.department) errors.department = 'Select a department.';
+    if (!f.status) errors.status = 'Select a status.';
     if (!f.designation) errors.designation = 'Select a designation.';
     if (!f.email.trim()) errors.email = 'Enter an email address.';
     else if (!EMAIL.test(f.email.trim())) errors.email = 'Enter a valid email address.';

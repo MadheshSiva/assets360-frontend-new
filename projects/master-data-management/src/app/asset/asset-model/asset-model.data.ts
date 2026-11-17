@@ -1,21 +1,5 @@
 import { AssetModelRecord, AssetTypeInfo, Criticality, ModelSpec, PmFrequency, TrackingMethod } from './asset-model.model';
 
-// Default cost center for new models of each category
-export const CATEGORY_COST_CENTERS: Record<string, string> = {
-  'IT Equipment': 'IT-001',
-  'Network Equipment': 'NET-001',
-  Machinery: 'MFG-001',
-  Vehicles: 'FLT-001',
-  HVAC: 'FM-001',
-  Electrical: 'ELE-001',
-  Facilities: 'FM-002',
-  'Safety & Security': 'HSE-001',
-  Security: 'SEC-001',
-  Tools: 'TLS-001',
-  Furniture: 'ADM-001'
-};
-export const MODEL_COST_CENTERS = Object.values(CATEGORY_COST_CENTERS);
-
 export const PM_FREQUENCIES: PmFrequency[] = ['Monthly', 'Quarterly', 'Half-yearly', 'Yearly', 'None'];
 export const CRITICALITIES: Criticality[] = ['Low', 'Medium', 'High', 'Critical'];
 export const TRACKING_METHODS: TrackingMethod[] = ['RFID', 'BLE', 'QR Code', 'Barcode', 'GPS'];

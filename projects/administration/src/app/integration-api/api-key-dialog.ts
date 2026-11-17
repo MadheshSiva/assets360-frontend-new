@@ -19,13 +19,17 @@ export interface ApiKeyRequest {
     <div class="overlay">
       <form class="confirm int-dialog" role="dialog" aria-modal="true" aria-labelledby="int-key-title" (ngSubmit)="submit()" novalidate>
         <h2 id="int-key-title">Create API Key</h2>
-        <div class="field">
+        <div class="field" [class.invalid]="submitted && !integrationId">
           <label for="int-key-int">Integration <span class="req">*</span></label>
           <select id="int-key-int" name="integration" [(ngModel)]="integrationId">
+            <option value="" disabled>Select Integration</option>
             @for (i of integrations; track i.id) {
               <option [value]="i.id">{{ i.name }} ({{ i.code }})</option>
             }
           </select>
+          @if (submitted && !integrationId) {
+            <small>Integration is required.</small>
+          }
         </div>
         <div class="field" [class.invalid]="submitted && !!nameError()">
           <label for="int-key-name">Key Name <span class="req">*</span></label>
@@ -45,14 +49,18 @@ export interface ApiKeyRequest {
             <small>Pick at least one scope.</small>
           }
         </div>
-        <div class="field">
-          <label for="int-key-exp">Expires In</label>
+        <div class="field" [class.invalid]="submitted && !days">
+          <label for="int-key-exp">Expires In <span class="req">*</span></label>
           <select id="int-key-exp" name="days" [(ngModel)]="days">
+            <option [ngValue]="null" disabled>Select Expires In</option>
             <option [ngValue]="30">30 days</option>
             <option [ngValue]="90">90 days</option>
             <option [ngValue]="180">180 days</option>
             <option [ngValue]="365">1 year</option>
           </select>
+          @if (submitted && !days) {
+            <small>Expiry is required.</small>
+          }
         </div>
         <div class="confirm__actions">
           <button type="button" class="btn" (click)="cancelled.emit()">Cancel</button>
@@ -72,11 +80,11 @@ export class ApiKeyDialog implements OnInit {
   integrationId = '';
   name = '';
   scopes: string[] = ['assets:read'];
-  days = 90;
+  days: number | null = null;
   submitted = false;
 
   ngOnInit(): void {
-    this.integrationId = this.initialId ?? this.integrations[0]?.id ?? '';
+    this.integrationId = this.initialId ?? '';
   }
 
   toggle(s: string): void {
@@ -93,7 +101,7 @@ export class ApiKeyDialog implements OnInit {
 
   submit(): void {
     this.submitted = true;
-    if (this.nameError() || !this.scopes.length || !this.integrationId) return;
+    if (this.nameError() || !this.scopes.length || !this.integrationId || !this.days) return;
     this.created.emit({ integrationId: this.integrationId, name: this.name.trim(), scopes: this.scopes, days: Number(this.days) });
   }
 }

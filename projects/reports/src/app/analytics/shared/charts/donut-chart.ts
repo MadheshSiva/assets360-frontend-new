@@ -39,7 +39,10 @@ const C = 2 * Math.PI * R;
           @if (centerLabel) { <span>{{ centerLabel }}</span> }
         </div>
       </div>
-      @if (legend !== 'none') {
+      @if (legend !== 'none' && !arcs.length) {
+        <p class="chart__empty chart__empty--inline">No data</p>
+      }
+      @if (legend !== 'none' && arcs.length) {
         <ul class="donut__legend">
           @for (a of arcs; track a.slice.name) {
             <li>
@@ -72,9 +75,10 @@ export class DonutChart implements OnChanges {
   arcs: Arc[] = [];
 
   ngOnChanges(): void {
-    this.total = sum(this.slices.map((s) => s.value));
+    const slices = (this.slices ?? []).map((s) => ({ ...s, value: Number.isFinite(s.value) && s.value > 0 ? s.value : 0 }));
+    this.total = sum(slices.map((s) => s.value));
     let start = 0;
-    this.arcs = this.slices.map((slice) => {
+    this.arcs = slices.map((slice) => {
       const share = this.total ? slice.value / this.total : 0;
       const len = share * C;
       const mid = (start + share / 2) * 2 * Math.PI - Math.PI / 2;

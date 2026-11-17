@@ -92,7 +92,7 @@
             <label class="field"><span class="field-label">Work order</span><input class="control" [(ngModel)]="actionForm.workOrder" placeholder="e.g. WO-00847" /></label>
             <label class="field"><span class="field-label">Work order status</span>
               <select class="control" [(ngModel)]="actionForm.workOrderStatus">
-                <option value="">—</option>
+                <option value="">Select Work Order Status</option>
                 @for (s of woStatuses; track s) { <option [value]="s">{{ s }}</option> }
               </select></label>
           </div>
@@ -144,7 +144,7 @@
     @if (reassigning()) {
       <div class="reassign">
         <select class="control" [(ngModel)]="newOwner" aria-label="New owner">
-          <option value="">Select owner</option>
+          <option value="">Select Owner</option>
           @for (p of people(); track p) { <option [value]="p">{{ p }}</option> }
         </select>
         <button type="button" class="btn btn-outline btn-sm" (click)="reassigning.set(false)">Cancel</button>

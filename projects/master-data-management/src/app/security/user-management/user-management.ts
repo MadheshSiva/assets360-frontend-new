@@ -24,7 +24,7 @@ interface Filters {
   selector: 'app-mdm-security-user-management',
   imports: [FormsModule, RouterLink, LucideAngularModule, UserForm],
   templateUrl: './user-management.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../security.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../security.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class UserManagementPage extends ListPage<UserRecord, Filters, SortKey> {
   readonly service = inject(UserService);

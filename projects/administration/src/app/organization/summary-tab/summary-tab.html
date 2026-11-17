@@ -22,11 +22,11 @@
         <input [placeholder]="'Search ' + tab.title.toLowerCase() + '...'" [attr.aria-label]="'Search ' + tab.title" [(ngModel)]="search" (ngModelChange)="onFilterChange()" />
       </label>
       <select class="select" [attr.aria-label]="filterLabel" [(ngModel)]="filter" (ngModelChange)="onFilterChange()">
-        <option value="">All {{ filterLabel }}</option>
+        <option value="">Select {{ filterLabel }}</option>
         @for (o of filterOptions; track o) { <option [value]="o">{{ o }}</option> }
       </select>
       <select class="select" aria-label="Status" [(ngModel)]="status" (ngModelChange)="onFilterChange()">
-        <option value="">All Statuses</option>
+        <option value="">Select Status</option>
         <option value="Active">Active</option>
         <option value="Inactive">Inactive</option>
       </select>

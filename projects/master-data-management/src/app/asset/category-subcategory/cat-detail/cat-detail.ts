@@ -32,7 +32,8 @@ interface HierarchyRow {
     '../../../shared/styles/mdm-drawer-extras.css',
     '../../asset-model/model-detail/model-detail.css',
     '../../level-detail.css',
-    './cat-detail.css'
+    './cat-detail.css',
+    '../../../shared/styles/mdm-purple-theme.css'
   ]
 })
 export class CatDetail implements OnChanges {
@@ -133,22 +134,9 @@ export class CatDetail implements OnChanges {
     this.subs.forEach((s) => (all ? this.picked.add(s.code) : this.picked.delete(s.code)));
   }
 
-  // DEMO MODE: sample rows for data owned by the Documents module
-  get documentRows() {
-    const c = this.category;
-    const kinds = ['Classification Policy', 'Capitalization Guideline', 'Tagging Standard', 'Disposal Procedure', 'Audit Checklist', 'Approval Matrix'];
-    return kinds.slice(0, c.documents).map((kind, i) => ({ name: `${c.name} - ${kind}.pdf`, kind, date: (i % 2 ? c.updatedOn : c.createdOn).slice(0, 10) }));
-  }
-
-  get activity() {
-    const c = this.category;
-    const list = [
-      { when: c.updatedOn, who: 'Rex Kumar', text: 'Updated subcategories' },
-      { when: c.createdOn, who: c.createdBy || 'Rex Kumar', text: `Created category ${c.code}` }
-    ];
-    if (c.status === 'Inactive') list.unshift({ when: c.updatedOn, who: 'Rex Kumar', text: 'Marked category as Inactive' });
-    return list;
-  }
+  // Documents and the audit log are owned by other modules; empty until those APIs are wired
+  readonly documentRows: { name: string; kind: string; date: string }[] = [];
+  readonly activity: { when: string; who: string; text: string }[] = [];
 
   editAt(tab: CatFormTab): void {
     this.edit.emit({ category: this.category, tab });

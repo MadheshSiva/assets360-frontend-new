@@ -1025,8 +1025,8 @@ export class Locating implements AfterViewInit, OnDestroy {
 
   isGeofenceModalOpen = false;
   newRuleZoneId = '';
-  newRuleTrigger: GeofenceTrigger = 'enter';
-  newRuleAction: GeofenceAction = 'notify';
+  newRuleTrigger: GeofenceTrigger | '' = '';
+  newRuleAction: GeofenceAction | '' = '';
 
   get geofenceRules(): GeofenceRule[] {
     return this.geofenceService.rules();
@@ -1046,7 +1046,7 @@ export class Locating implements AfterViewInit, OnDestroy {
 
   addGeofenceRule(): void {
     const zone = this.hierarchy.allZones().find((z) => z.id === this.newRuleZoneId);
-    if (!zone) return;
+    if (!zone || !this.newRuleTrigger || !this.newRuleAction) return;
     this.geofenceService.addRule({
       zoneId: zone.id,
       zoneName: zone.name,
@@ -1054,6 +1054,8 @@ export class Locating implements AfterViewInit, OnDestroy {
       action: this.newRuleAction,
     });
     this.newRuleZoneId = '';
+    this.newRuleTrigger = '';
+    this.newRuleAction = '';
   }
 
   toggleGeofenceRule(id: string): void {

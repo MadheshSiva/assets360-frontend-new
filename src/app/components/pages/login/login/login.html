@@ -18,6 +18,7 @@
 
     <!-- ===== Sign-in card ===== -->
     <section class="card" aria-labelledby="login-title">
+      <ng-container *ngIf="!challenge; else codeStep">
       <h2 id="login-title">Welcome to Asset<span>360</span></h2>
       <p class="card-sub">Sign in to your account</p>
 
@@ -103,6 +104,45 @@
       </div>
 
       <p class="card-foot">New to Asset360? Contact your administrator for access.</p>
+      </ng-container>
+
+      <!-- ===== Step 2: authenticator app / emailed code ===== -->
+      <ng-template #codeStep>
+        <ng-container *ngIf="challenge as c">
+          <h2 id="login-title">Two-Step <span>Verification</span></h2>
+          <p class="card-sub">{{ c.method === 'totp' ? (c.setupRequired ? 'Set up your authenticator app' : 'Enter your authenticator code') : 'Enter the code we emailed you' }}</p>
+
+          <div *ngIf="c.setupRequired && c.qrCodeImage" class="totp-setup">
+            <img class="totp-qr" [src]="c.qrCodeImage" alt="QR code to add Asset360 to your authenticator app" />
+            <ol class="totp-steps">
+              <li>Open <strong>Google Authenticator</strong> (or Microsoft Authenticator) on your phone.</li>
+              <li>Tap <strong>+</strong> and scan this QR code.</li>
+              <li>Enter the 6-digit code the app shows below.</li>
+            </ol>
+            <p *ngIf="c.manualEntryKey" class="totp-key">Can't scan? Enter this key: <code>{{ c.manualEntryKey }}</code></p>
+          </div>
+
+          <form (ngSubmit)="verifyCode()" class="form" novalidate>
+            <label class="field">
+              <span class="field-label">{{ c.method === 'totp' ? 'Authenticator code' : 'Code sent to ' + (c.maskedEmail || 'your email') }}</span>
+              <span class="input">
+                <lucide-icon [img]="c.method === 'totp' ? icons.ShieldCheck : icons.Mail" [size]="22"></lucide-icon>
+                <input class="code-input" type="text" inputmode="numeric" maxlength="7" autocomplete="one-time-code" [(ngModel)]="code" name="code" placeholder="6-digit code" autofocus />
+              </span>
+            </label>
+
+            <p *ngIf="infoMsg" class="msg msg--info" role="status">{{ infoMsg }}</p>
+            <p *ngIf="errorMsg" class="msg msg--error" role="alert">{{ errorMsg }}</p>
+
+            <button type="submit" class="submit" [disabled]="isLoading">
+              {{ isLoading ? 'Verifying...' : 'Verify & Sign In' }}
+              <lucide-icon [img]="icons.ArrowRight" [size]="19"></lucide-icon>
+            </button>
+          </form>
+
+          <p class="card-foot"><a class="link" href="#" (click)="$event.preventDefault(); backToPassword()">Back to sign in</a></p>
+        </ng-container>
+      </ng-template>
     </section>
   </div>
 

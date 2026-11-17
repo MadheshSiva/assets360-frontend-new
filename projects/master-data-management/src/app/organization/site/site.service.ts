@@ -6,7 +6,6 @@ import { BusinessUnitService } from '../business-unit/business-unit.service';
 import { DepartmentService } from '../department/department.service';
 import { OrganizationService } from '../organization/organization.service';
 import { StructureAddressDto, StructureContactDto, StructureReference, fromApiAddress, reference, toLocalStamp } from '../structure-api';
-import { blankSite } from './site.data';
 import { SiteContact, SiteFilters, SiteRecord, SiteStatus, SiteType } from './site.model';
 
 const RESOURCE = 'sites';
@@ -204,13 +203,12 @@ export class SiteService {
   }
 
   private toRecord(dto: SiteDto, previous?: SiteRecord): SiteRecord {
-    const blank = blankSite();
     const known = previous ?? this.find(dto.id);
     const contact = (c: StructureContactDto | null): SiteContact => ({
       name: c?.name ?? '',
       designation: c?.designation ?? '',
       email: c?.email ?? '',
-      phoneCountry: c?.phoneCountry ?? blank.manager.phoneCountry,
+      phoneCountry: c?.phoneCountry ?? 'United Arab Emirates',
       phone: c?.phone ?? ''
     });
     const address = fromApiAddress(dto.address);

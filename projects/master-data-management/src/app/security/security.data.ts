@@ -1,4 +1,4 @@
-import { ModuleRecord, PermissionRecord, PermissionType, RoleRecord, RoleType, UserRecord } from './security.model';
+import { ModuleRecord, PermissionRecord, PermissionType, RoleRecord, RoleType, SecurityStatus, UserRecord } from './security.model';
 
 // Option lists for the security masters; the records themselves come from the API.
 
@@ -12,15 +12,15 @@ export const LANGUAGES = ['English', 'Arabic', 'Hindi'];
 export const TIME_ZONES = ['(GMT+04:00) Dubai', '(GMT+03:00) Riyadh', '(GMT+05:30) Kolkata', '(GMT+00:00) London'];
 export const DATE_FORMATS = ['DD-MMM-YYYY', 'DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'];
 export function blankModule(): ModuleRecord {
-  return { code: '', name: '', category: '', description: '', icon: 'box', status: 'Active', createdOn: '', updatedOn: '' };
+  return { code: '', name: '', category: '', description: '', icon: 'box', status: '' as SecurityStatus, createdOn: '', updatedOn: '' };
 }
 
 export function blankPermission(): PermissionRecord {
-  return { code: '', name: '', module: '', type: 'Read', description: '', status: 'Active', createdOn: '', updatedOn: '' };
+  return { code: '', name: '', module: '', type: '' as PermissionType, description: '', status: '' as SecurityStatus, createdOn: '', updatedOn: '' };
 }
 
 export function blankRole(): RoleRecord {
-  return { code: '', name: '', type: 'Business', description: '', status: 'Active', permissions: [], modules: [], createdOn: '', updatedOn: '' };
+  return { code: '', name: '', type: '' as RoleType, description: '', status: '' as SecurityStatus, permissions: [], modules: [], createdOn: '', updatedOn: '' };
 }
 
 export function blankUser(): UserRecord {
@@ -34,16 +34,16 @@ export function blankUser(): UserRecord {
     additionalRoles: [],
     phone: '',
     photo: null,
-    status: 'Active',
+    status: '' as SecurityStatus,
     employeeId: '',
     sites: [],
     accountExpiry: '',
     mfaRequired: false,
     mustChangePassword: true,
     sendInvite: true,
-    language: 'English',
-    timeZone: TIME_ZONES[0],
-    dateFormat: DATE_FORMATS[0],
+    language: '',
+    timeZone: '',
+    dateFormat: '',
     emailNotifications: true,
     smsNotifications: false,
     lastLogin: '',

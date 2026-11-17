@@ -27,28 +27,28 @@ const IP_PREFIX = /^[0-9.]*$/;
         <div class="field">
           <label for="f-type">Event Type</label>
           <select id="f-type" name="eventType" [(ngModel)]="draft.eventType">
-            <option value="">All Types</option>
+            <option value="">Select Event Type</option>
             @for (t of eventTypes; track t) { <option [value]="t">{{ t }}</option> }
           </select>
         </div>
         <div class="field">
           <label for="f-module">Module</label>
           <select id="f-module" name="module" [(ngModel)]="draft.module">
-            <option value="">All Modules</option>
+            <option value="">Select Module</option>
             @for (m of modules; track m) { <option [value]="m">{{ m }}</option> }
           </select>
         </div>
         <div class="field">
           <label for="f-user">User</label>
           <select id="f-user" name="user" [(ngModel)]="draft.user">
-            <option value="">All Users</option>
+            <option value="">Select User</option>
             @for (u of users; track u) { <option [value]="u">{{ u }}</option> }
           </select>
         </div>
         <div class="field">
           <label for="f-sev">Severity</label>
           <select id="f-sev" name="severity" [(ngModel)]="draft.severity">
-            <option value="">All Severities</option>
+            <option value="">Select Severity</option>
             @for (s of severities; track s) { <option [value]="s">{{ s }}</option> }
           </select>
         </div>
@@ -60,7 +60,7 @@ const IP_PREFIX = /^[0-9.]*$/;
         <div class="field">
           <label for="f-out">Outcome</label>
           <select id="f-out" name="outcome" [(ngModel)]="draft.outcome">
-            <option value="">All Outcomes</option>
+            <option value="">Select Outcome</option>
             @for (o of outcomes; track o) { <option [value]="o">{{ o }}</option> }
           </select>
         </div>
@@ -73,7 +73,7 @@ const IP_PREFIX = /^[0-9.]*$/;
         <div class="filters__saved">
           <label for="f-saved">Saved filters</label>
           <select id="f-saved" class="select select--sm" name="saved" [ngModel]="''" (ngModelChange)="useSaved($event)">
-            <option value="">Choose a saved filter…</option>
+            <option value="">Select Saved Filter</option>
             @for (s of saved; track s.name) { <option [value]="s.name">{{ s.name }}</option> }
           </select>
         </div>

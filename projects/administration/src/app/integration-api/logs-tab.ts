@@ -21,7 +21,7 @@ const PAGE_SIZE = 10;
           <input type="search" placeholder="Search logs..." aria-label="Search logs" [(ngModel)]="query" (ngModelChange)="page = 1" />
         </label>
         <select class="select int-select-sm" aria-label="Level" [(ngModel)]="level" (ngModelChange)="page = 1">
-          <option value="">All levels</option>
+          <option value="">Select Level</option>
           @for (l of levels; track l) {
             <option [value]="l">{{ l }}</option>
           }

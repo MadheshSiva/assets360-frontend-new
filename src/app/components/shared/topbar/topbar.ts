@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, Output, EventEmitter } from '@angular/core';
+import { Component, ElementRef, HostListener, Output, EventEmitter, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -22,7 +22,7 @@ import {
 } from 'lucide-angular';
 import { Router, NavigationEnd, RouterModule } from '@angular/router';
 import { filter } from 'rxjs';
-import { AuthService } from 'shared-ui';
+import { AccessService, AuthService } from 'shared-ui';
 import { environment } from '../../../../environments/environment';
 import { NotificationService, AppNotification } from '../../services/notification.service';
 
@@ -105,7 +105,10 @@ export class Topbar {
 
   section: ProfileSection = '';
   dialog: ProfileDialog = '';
-  profile: Profile = readJson<Profile>(PROFILE_KEY, { displayName: '', phone: '' });
+  private readonly access = inject(AccessService);
+  // Saved per signed-in user, so one person's display name never shows for the next person on this browser
+  private readonly profileKey = `${PROFILE_KEY}:${(inject(AuthService).getUserEmail() ?? '').toLowerCase()}`;
+  profile: Profile = readJson<Profile>(this.profileKey, { displayName: '', phone: '' });
   profileForm: Profile = { ...this.profile };
   prefs: Preferences = readJson<Preferences>(PREFS_KEY, { landing: '/dashboard', timeFormat: '12h', notifySound: true });
   prefsForm: Preferences = { ...this.prefs };
@@ -162,23 +165,24 @@ export class Topbar {
     this.notificationService.markAllRead();
   }
 
-  /** Name shown in the header chip: the profile name, else the login name, else the email. */
+  /** Name shown in the header chip: the name you set in My Profile, else the name from User Management, else the login name. */
   get displayName(): string {
-    const name = this.profile.displayName.trim() || this.auth.getUser()?.userName || '';
+    const name = this.profile.displayName.trim() || this.access.access()?.displayName || this.auth.getUser()?.userName || '';
     return name ? name.charAt(0).toUpperCase() + name.slice(1) : this.displayEmail;
   }
 
   get displayEmail(): string {
-    return this.auth.getUserEmail() || environment.supportEmail;
+    return this.access.access()?.email || this.auth.getUserEmail() || environment.supportEmail;
   }
 
+  /** The user's primary role from User Management, else the sign-in role. */
   get roleName(): string {
-    return this.auth.getUser()?.roleName || 'Administrator';
+    return this.access.access()?.roleName || this.auth.getUser()?.roleName || 'User';
   }
 
   /** Two letters for the avatar, from the signed-in user's name. */
   get initials(): string {
-    const name = this.profile.displayName.trim() || this.auth.getUser()?.userName || this.displayEmail.split('@')[0];
+    const name = this.profile.displayName.trim() || this.access.access()?.displayName || this.auth.getUser()?.userName || this.displayEmail.split('@')[0];
     const parts = name.split(/[\s._-]+/).filter(Boolean);
     const letters = parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0, 2);
     return letters.toUpperCase() || 'AD';
@@ -239,7 +243,7 @@ export class Topbar {
 
   saveProfile(): void {
     this.profile = { displayName: this.profileForm.displayName.trim(), phone: this.profileForm.phone.trim() };
-    writeValue(PROFILE_KEY, this.profile);
+    writeValue(this.profileKey, this.profile);
     this.dialog = '';
     this.showToast('Profile updated.');
   }

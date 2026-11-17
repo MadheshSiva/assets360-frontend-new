@@ -30,7 +30,6 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-angular';
-import DATA from './issues.json';
 import { ActionStatus, CorrectiveAction, Issue, IssueStatus, Severity } from './issue.model';
 
 type Tab = 'register' | 'delays' | 'actions' | 'escalations' | 'history';
@@ -76,7 +75,8 @@ interface ActionRow {
   action: CorrectiveAction;
 }
 
-const CURRENT_USER = 'Sarah Khan';
+/** Signed-in user's display name; filled from the auth/user API once wired. */
+const CURRENT_USER = '';
 /** Workflow steps shown in the stepper, by status. */
 const STEPS: { label: string; status: IssueStatus }[] = [
   { label: 'Reported', status: 'Open' },
@@ -86,15 +86,13 @@ const STEPS: { label: string; status: IssueStatus }[] = [
   { label: 'Closed', status: 'Closed' },
 ];
 const OPEN_STATUSES: IssueStatus[] = ['Open', 'Investigating', 'Action in progress', 'Awaiting verification'];
-/** Job orders that exist on the Job Orders page. */
-const KNOWN_JOBS = ['JO-2026-00438', 'JO-2026-00431', 'JO-2026-00442'];
-/** Assets on the Asset Linking page. */
-const LINKED_ASSETS = ['AF-002', 'TT-008', 'PTB-003', 'LH-004'];
+/** Job orders that exist on the Job Orders page; filled from the API once wired. */
+const KNOWN_JOBS: string[] = [];
+/** Assets on the Asset Linking page; filled from the API once wired. */
+const LINKED_ASSETS: string[] = [];
 
-/** DEMO MODE: kept in memory until the shared issue service is wired up. */
-const SOURCE = DATA as unknown as { asOf: string; issues: Issue[] };
-const ISSUES: Issue[] = structuredClone(SOURCE.issues);
-let OPENED_AT = 0;
+/** Issues are kept in memory; empty until the shared issue service is wired up. */
+const ISSUES: Issue[] = [];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const stamp = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -114,7 +112,7 @@ const mins = (a: string, b: string) => Math.max(0, Math.round((parseLocal(b).get
   imports: [CommonModule, FormsModule, RouterModule, LucideAngularModule],
   templateUrl: './issues-delays.html',
   // Buttons, controls, tabs, switches, modal and toast come from the Job Templates stylesheet
-  styleUrls: ['../job-templates/job-templates.css', '../shared/wip-board.css', './issues-delays.css'],
+  styleUrls: ['../job-templates/job-templates.css', '../shared/wip-board.css', './issues-delays.css', '../shared/wip-purple-theme.css'],
 })
 export class IssuesDelays implements OnDestroy {
   readonly icons = {
@@ -132,7 +130,8 @@ export class IssuesDelays implements OnDestroy {
   readonly types = ['Equipment issue', 'Material shortage', 'Quality defect', 'Resource delay', 'Process deviation', 'Safety'];
   readonly severities: Severity[] = ['Critical', 'High', 'Medium', 'Low'];
   readonly priorities = ['Urgent', 'High', 'Normal', 'Low'];
-  readonly teams = ['Maintenance Team', 'Stores Team', 'Quality Team', 'Shift Supervisor', 'Engineering', 'Logistics', 'Procurement'];
+  /** Owner teams; filled from master data once the API is wired. */
+  readonly teams: string[] = [];
   readonly actionStatuses: ActionStatus[] = ['Pending', 'In progress', 'Done'];
   readonly levels = ['Level 1', 'Level 2', 'Level 3'];
 
@@ -142,7 +141,7 @@ export class IssuesDelays implements OnDestroy {
 
   // Filters
   search = '';
-  site = 'Dubai Factory';
+  site = ISSUES[0]?.site ?? '';
   type = '';
   severity: Severity | '' = '';
   /** "open" = every status before Closed. */
@@ -150,7 +149,7 @@ export class IssuesDelays implements OnDestroy {
   overdueOnly = false;
   blockingOnly = false;
 
-  selectedId = 'IS-0087';
+  selectedId = ISSUES[0]?.id ?? '';
 
   // Dialogs and inline forms
   reportForm: ReportForm | null = null;
@@ -170,7 +169,6 @@ export class IssuesDelays implements OnDestroy {
   private toastTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
-    if (!OPENED_AT) OPENED_AT = Date.now();
     // ?issue=IS-0087 opens an issue (links from other pages)
     inject(ActivatedRoute)
       .queryParamMap.pipe(takeUntilDestroyed(inject(DestroyRef)))
@@ -189,9 +187,8 @@ export class IssuesDelays implements OnDestroy {
     clearTimeout(this.toastTimer);
   }
 
-  /** Demo clock: the data's "as of" time plus the time this page has been open. */
   get now(): string {
-    return stamp(new Date(parseLocal(SOURCE.asOf).getTime() + (Date.now() - OPENED_AT)));
+    return stamp(new Date());
   }
 
   private get today(): string {
@@ -609,7 +606,7 @@ export class IssuesDelays implements OnDestroy {
   openReport(): void {
     this.reportError = '';
     this.reportForm = {
-      title: '', type: this.types[0], job: '', stage: '', task: '', asset: '', severity: 'Medium', priority: 'Normal', owner: this.teams[0], responsible: '',
+      title: '', type: this.types[0], job: '', stage: '', task: '', asset: '', severity: 'Medium', priority: 'Normal', owner: this.teams[0] ?? '', responsible: '',
       blocking: false, description: '',
     };
   }

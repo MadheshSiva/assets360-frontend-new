@@ -80,7 +80,7 @@ export class ChecklistTemplatesPage extends AdminPage {
 
   selectedId: string | null = null;
   /** Working copy; the builder, settings and drawer edit it and Save Draft / Publish store it */
-  draft: ChecklistTemplate;
+  draft!: ChecklistTemplate;
   isNew = false;
   dirty = false;
   showErrors = false;
@@ -98,11 +98,15 @@ export class ChecklistTemplatesPage extends AdminPage {
   constructor() {
     super();
     const first = this.service.templates()[0];
-    this.selectedId = first.id;
-    this.draft = structuredClone(first);
-    // Open the item shown in the design: "Inspect battery terminals for corrosion."
-    const electrical = this.draft.sections[2];
-    if (electrical?.items[0]) this.drawer = { sectionId: electrical.id, item: electrical.items[0], isNew: false };
+    if (first) {
+      this.selectedId = first.id;
+      this.draft = structuredClone(first);
+    } else {
+      // No templates yet: start on a blank, unsaved draft
+      this.createTemplate();
+      this.dirty = false;
+      this.toast = null;
+    }
     this.service.loadItems().subscribe({ error: (err: Error) => this.notify(`Saved checklist items could not be loaded. ${err.message}`) });
   }
 
@@ -193,7 +197,7 @@ export class ChecklistTemplatesPage extends AdminPage {
   get owners(): string[] {
     const set = new Set(ADMIN_PEOPLE);
     this.all.forEach((t) => set.add(t.owner));
-    return [...set].sort((a, b) => a.localeCompare(b));
+    return [...set].filter(Boolean).sort((a, b) => a.localeCompare(b));
   }
 
   get draftMaxScore(): number {
@@ -287,16 +291,16 @@ export class ChecklistTemplatesPage extends AdminPage {
     this.draft = {
       id: '',
       name: '',
-      code: this.service.nextCode('Maintenance'),
+      code: this.service.nextCode(''),
       version: 'v1.0',
-      category: 'Maintenance',
-      owner: CURRENT_USER.name,
+      category: '',
+      owner: '',
       updated: todayIso(),
       status: 'Draft',
       icon: 'file',
       tone: 'purple',
       description: '',
-      frequency: 'Monthly',
+      frequency: '',
       assetTypes: [],
       locations: [],
       teams: [],

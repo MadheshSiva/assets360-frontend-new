@@ -25,16 +25,12 @@ const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 // Sites listed under the department in the hierarchy card
 const SIBLING_PREVIEW = 4;
 
-function seed(text: string): number {
-  return [...text].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 23);
-}
-
 /** Panel under the list showing the selected site. */
 @Component({
   selector: 'app-site-detail',
   imports: [DecimalPipe, RouterLink, LucideAngularModule, SiteMap],
   templateUrl: './site-detail.html',
-  styleUrls: ['../../../shared/styles/mdm-detail.css', './site-detail.css']
+  styleUrls: ['../../../shared/styles/mdm-detail.css', './site-detail.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class SiteDetail implements OnChanges {
   @Input({ required: true }) site!: SiteRecord;
@@ -91,35 +87,11 @@ export class SiteDetail implements OnChanges {
     return COUNTRIES.find((c) => c.name === country)?.dial ?? '';
   }
 
-  // DEMO MODE: sample rows for tabs owned by other modules, derived from the site code
-  get sampleAssets() {
-    const s = seed(this.site.code);
-    const names: [string, string][] = [['Diesel Generator', 'Power'], ['Chiller', 'HVAC'], ['Forklift', 'Material Handling'], ['CCTV Camera', 'Security'], ['Fire Pump', 'Safety'], ['UPS', 'Electrical']];
-    return names.map(([name, category], i) => ({ tag: `AST-${((s + i * 7919) % 90000) + 10000}`, name: `${name} ${i + 1}`, category, status: ['In Use', 'In Use', 'Idle', 'Under Maintenance'][(s + i) % 4] }));
-  }
-
-  get sampleDepartments() {
-    const s = seed(this.site.code);
-    const all = [this.site.department, 'Maintenance', 'Quality', 'HSE', 'IT'].filter((d, i, a) => d && a.indexOf(d) === i);
-    return all.slice(0, 2 + (s % 3)).map((name, i) => ({ name, head: ['Rex Kumar', 'Aisha Rahman', 'Omar Haddad', 'Priya Nair'][(s + i) % 4], people: 6 + ((s + i * 17) % 80) }));
-  }
-
-  get sampleDocuments() {
-    return [
-      { name: `${this.site.name} - Site Plan.pdf`, kind: 'Drawing', size: '4.8 MB', date: this.site.updatedOn.slice(0, 10) },
-      { name: `${this.site.name} - Trade License.pdf`, kind: 'License', size: '310 KB', date: this.site.createdOn.slice(0, 10) },
-      { name: `${this.site.name} - Fire NOC.pdf`, kind: 'Certificate', size: '540 KB', date: this.site.updatedOn.slice(0, 10) }
-    ];
-  }
-
-  get activity() {
-    const list = [
-      { when: this.site.updatedOn, who: 'Rex Kumar', text: 'Updated site details' },
-      { when: this.site.createdOn, who: 'Aisha Rahman', text: `Created site ${this.site.code}` }
-    ];
-    if (this.site.status === 'Inactive') list.unshift({ when: this.site.updatedOn, who: 'Rex Kumar', text: 'Marked site as Inactive' });
-    return list;
-  }
+  // Rows for tabs owned by other modules (Assets, Departments, Documents, audit log); empty until those APIs are wired
+  readonly assets: { tag: string; name: string; category: string; status: string }[] = [];
+  readonly departments: { name: string; head: string; people: number }[] = [];
+  readonly documents: { name: string; kind: string; size: string; date: string }[] = [];
+  readonly activity: { when: string; who: string; text: string }[] = [];
 
   viewOnMap(): void {
     this.tab = 'map';

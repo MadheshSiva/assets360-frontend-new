@@ -28,6 +28,7 @@ interface Cell {
     <div class="nav">
       <button type="button" class="nav-btn" aria-label="Previous month" (click)="move(-1)"><lucide-icon [img]="icons.ChevronLeft" [size]="18"></lucide-icon></button>
       <select class="month-sel" [ngModel]="key()" (ngModelChange)="pick($event)" aria-label="Month">
+        <option value="" disabled>Select Month</option>
         @for (o of options(); track o.value) { <option [value]="o.value">{{ o.label }}</option> }
       </select>
       <button type="button" class="nav-btn" aria-label="Next month" (click)="move(1)"><lucide-icon [img]="icons.ChevronRight" [size]="18"></lucide-icon></button>

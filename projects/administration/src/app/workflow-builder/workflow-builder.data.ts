@@ -1,7 +1,7 @@
 import { ADMIN_PEOPLE } from '../shared/admin-common';
-import { NodeConfig, NodeType, Tone, WfEdge, WfGraph, WfNode, Workflow, WorkflowIcon, WorkflowStatus } from './workflow-builder.model';
+import { NodeConfig, NodeType, WfEdge, WfGraph, WfNode } from './workflow-builder.model';
 
-// DEMO MODE: seed workflows until the workflow engine API exists
+// Option lists, default node settings and starting templates for the Workflow Builder; workflows come from the workflow engine API
 
 export const WORKFLOW_CATEGORIES = [
   'Asset Management', 'Maintenance', 'Inventory', 'Compliance', 'Administration', 'Procurement',
@@ -48,7 +48,7 @@ export function defaultConfig(): NodeConfig {
     approvalType: APPROVAL_TYPES[0],
     approverSource: APPROVER_SOURCES[0],
     approverRole: APPROVER_ROLES[0],
-    approverUser: ADMIN_PEOPLE[0],
+    approverUser: ADMIN_PEOPLE[0] ?? '',
     slaHours: 24,
     escalationHours: 48,
     requiredApprovals: 1,
@@ -62,6 +62,27 @@ export function defaultConfig(): NodeConfig {
     recipient: 'Requestor',
     outcome: 'Completed',
     notifyRequestor: true
+  };
+}
+
+/** Settings a node added in the builder starts with: every dropdown unselected (templates keep defaultConfig). */
+export function blankConfig(): NodeConfig {
+  return {
+    ...defaultConfig(),
+    triggerEvent: '',
+    triggerModule: '',
+    conditionField: '',
+    operator: '',
+    approvalType: '',
+    approverSource: '',
+    approverRole: '',
+    approverUser: '',
+    actionType: '',
+    actionTarget: '',
+    template: '',
+    channel: '',
+    recipient: '',
+    outcome: ''
   };
 }
 
@@ -153,79 +174,6 @@ function linearGraph(name: string, category: string, index: number): WfGraph {
     ],
     edges: [e('n1', 'n2'), e('n2', 'n3'), e('n3', 'n4')]
   };
-}
-
-// name, category, owner, updated, status, running instances, pending approvals, icon, tone
-type Row = [string, string, string, string, WorkflowStatus, number, number, WorkflowIcon, Tone];
-const ROWS: Row[] = [
-  ['Asset Movement Approval', 'Asset Management', 'Sarah Ahmed', '2025-03-12', 'Active', 18, 3, 'zap', 'purple'],
-  ['Work Order Approval', 'Maintenance', 'James Wilson', '2025-03-10', 'Draft', 0, 0, 'circle', 'blue'],
-  ['Purchase Requisition', 'Inventory', 'Fatima Al Mansoori', '2025-03-08', 'Active', 14, 2, 'cart', 'green'],
-  ['Compliance Renewal', 'Compliance', 'Omar Hassan', '2025-03-05', 'Active', 9, 1, 'shield', 'pink'],
-  ['Inventory Reorder', 'Inventory', 'Priya Sharma', '2025-02-28', 'Inactive', 0, 0, 'package', 'orange'],
-  ['User Access Request', 'Administration', 'Ahmed Khan', '2025-02-25', 'Active', 11, 2, 'user', 'blue'],
-  ['Asset Disposal Approval', 'Asset Management', 'Michael Chen', '2025-02-22', 'Active', 4, 1, 'file', 'red'],
-  ['Preventive Maintenance Schedule', 'Maintenance', 'Daniel Kim', '2025-02-20', 'Active', 12, 0, 'wrench', 'blue'],
-  ['Asset Check-out Request', 'Asset Management', 'Lisa Wong', '2025-02-18', 'Active', 8, 1, 'truck', 'purple'],
-  ['Vendor Onboarding', 'Procurement', 'Rahul Mehta', '2025-02-15', 'Draft', 0, 0, 'clipboard', 'orange'],
-  ['Warranty Claim', 'Contracts & Warranty', 'John Mathew', '2025-02-13', 'Active', 3, 1, 'shield', 'green'],
-  ['Inspection Failure Escalation', 'Inspection', 'Aisha Rahman', '2025-02-11', 'Active', 5, 0, 'clipboard', 'red'],
-  ['Stock Transfer Approval', 'Inventory', 'Priya Nair', '2025-02-09', 'Active', 7, 1, 'package', 'green'],
-  ['Contract Renewal', 'Contracts & Warranty', 'Fatima Noor', '2025-02-06', 'Active', 2, 1, 'file', 'purple'],
-  ['Audit Finding Remediation', 'Compliance', 'Omar Khalid', '2025-02-04', 'Active', 6, 1, 'shield', 'pink'],
-  ['Asset Transfer Between Sites', 'Asset Management', 'Mohammed Ali', '2025-02-01', 'Draft', 0, 0, 'truck', 'blue'],
-  ['Spare Parts Request', 'Inventory', 'Daniel Tan', '2025-01-29', 'Active', 9, 1, 'cart', 'orange'],
-  ['Breakdown Work Order', 'Maintenance', 'James Tan', '2025-01-27', 'Active', 7, 0, 'wrench', 'red'],
-  ['Capex Request', 'Financial', 'Ahmed Al Marri', '2025-01-24', 'Active', 3, 1, 'file', 'green'],
-  ['Asset Registration', 'Asset Management', 'Sarah Khan', '2025-01-21', 'Active', 5, 0, 'zap', 'purple'],
-  ['Calibration Due Reminder', 'Maintenance', 'Priya Sharma', '2025-01-18', 'Active', 4, 0, 'wrench', 'orange'],
-  ['Role Change Approval', 'Administration', 'Sarah Ahmed', '2025-01-15', 'Draft', 0, 0, 'user', 'purple'],
-  ['Lost Asset Report', 'Asset Management', 'Fatima Ali', '2025-01-12', 'Active', 2, 1, 'circle', 'red'],
-  ['Insurance Claim', 'Financial', 'John Mathew', '2025-01-09', 'Active', 1, 0, 'shield', 'blue'],
-  ['Safety Permit to Work', 'Compliance', 'Omar Hassan', '2025-01-06', 'Active', 3, 1, 'clipboard', 'pink'],
-  ['Asset Revaluation', 'Financial', 'Michael Chen', '2025-01-03', 'Draft', 0, 0, 'file', 'orange'],
-  ['Goods Receipt Inspection', 'Inventory', 'Lisa Wong', '2024-12-30', 'Active', 2, 0, 'package', 'green'],
-  ['Tracking Device Alert', 'Tracking & IoT', 'Rahul Mehta', '2024-12-27', 'Active', 1, 0, 'zap', 'blue'],
-  ['Lease Termination', 'Contracts & Warranty', 'Daniel Kim', '2024-12-22', 'Active', 1, 0, 'file', 'pink'],
-  ['Data Import Approval', 'Administration', 'Ahmed Khan', '2024-12-18', 'Active', 0, 0, 'user', 'green']
-];
-
-const SEEDED_GRAPHS: Record<number, () => WfGraph> = { 0: assetMovementGraph, 1: workOrderGraph, 2: purchaseGraph, 3: complianceGraph };
-
-function codeFor(name: string, index: number): string {
-  const letters = name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 3);
-  return `WF-${letters}-${String(index + 1).padStart(3, '0')}`;
-}
-
-export function seedWorkflows(): Workflow[] {
-  return ROWS.map(([name, category, owner, updated, status, running, pending, icon, tone], i) => {
-    const graph = SEEDED_GRAPHS[i] ? SEEDED_GRAPHS[i]() : linearGraph(name, category, i);
-    const major = i === 0 ? 3 : 1 + (i % 3);
-    const minor = i === 0 ? 2 : i % 4;
-    const version = status === 'Draft' && i !== 1 ? 'v0.1' : `v${major}.${minor}`;
-    const versions = [];
-    // Older published versions keep a copy of the same graph so the selector has something to show
-    for (let m = minor; m >= 0 && versions.length < 3; m--) {
-      versions.push({ version: `v${major}.${m}`, publishedOn: updated, graph: structuredClone(graph) });
-    }
-    return {
-      id: `WF-${String(i + 1).padStart(4, '0')}`,
-      code: codeFor(name, i),
-      name,
-      category,
-      owner,
-      description: `${name} workflow for ${category.toLowerCase()} requests.`,
-      status,
-      updated,
-      version,
-      versions: version === 'v0.1' ? [] : versions,
-      graph,
-      runningInstances: running,
-      pendingApprovals: pending,
-      icon,
-      tone
-    };
-  });
 }
 
 /** Starting graphs offered by the "Templates" button. */

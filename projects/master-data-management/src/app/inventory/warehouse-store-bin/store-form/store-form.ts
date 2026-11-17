@@ -14,7 +14,7 @@ type Tab = 'basic' | 'settings';
   selector: 'app-store-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './store-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class StoreForm extends MasterForm<StoreRecord, Tab> {
   protected readonly store = inject(StoreService);
@@ -43,6 +43,7 @@ export class StoreForm extends MasterForm<StoreRecord, Tab> {
   protected validate(f: StoreRecord) {
     const errors: Record<string, string> = {};
     if (!f.warehouseCode) errors['warehouseCode'] = 'Select a warehouse.';
+    if (!f.status) errors['status'] = 'Select a status.';
     return { errors, tab: 'basic' as Tab };
   }
 

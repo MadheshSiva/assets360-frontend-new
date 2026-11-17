@@ -1,5 +1,5 @@
 <section class="dr-page">
-  <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep">/</span><strong>Device Replacement</strong></nav>
+  <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep" aria-hidden="true">›</span><strong>Device Replacement</strong></nav>
 
   <header class="dr-head">
     <div class="grow">
@@ -9,6 +9,9 @@
     <span *ngIf="draftNote && !done" class="draft-chip"><lucide-icon [img]="icons.FileText" [size]="14"></lucide-icon>{{ draftNote }}<button type="button" class="link-btn" (click)="discardDraft()">Discard</button></span>
   </header>
 
+  <p *ngIf="loadError" class="load-error" role="alert"><lucide-icon [img]="icons.CircleAlert" [size]="15"></lucide-icon>{{ loadError }} <button type="button" class="link-btn" (click)="load()">Retry</button></p>
+
+  <ng-container *ngIf="device.id; else emptyQueue">
   <!-- ===== Stepper ===== -->
   <nav class="card stepper" aria-label="Replacement steps">
     <ol>
@@ -41,18 +44,18 @@
               <span class="pick-title">Devices needing replacement ({{ queue.length }})</span>
               <button *ngFor="let d of queue" type="button" role="option" class="pick-item" [class.is-on]="d.id === device.id" [attr.aria-selected]="d.id === device.id" (click)="pickDevice(d)">
                 <span class="model-ic"><lucide-icon [img]="kindIcon(d.kind)" [size]="15"></lucide-icon></span>
-                <span class="grow"><strong>{{ d.id }}</strong><small>{{ d.type }} · {{ d.assetName }}</small></span>
-                <span class="hs" [ngClass]="healthClass(d.status)">{{ d.status }}</span>
+                <span class="grow"><strong>{{ d.id }}</strong><small>{{ d.type || '—' }} · {{ d.assetName || '—' }}</small></span>
+                <span class="hs" [ngClass]="healthClass(d.status)">{{ d.status || '—' }}</span>
               </button>
             </div>
           </span></div>
-        <div class="sf"><span class="sf-l">Device Type</span><span class="sf-v">{{ device.type }}</span></div>
-        <div class="sf"><span class="sf-l">Model</span><span class="sf-v">{{ device.model }}</span></div>
-        <div class="sf"><span class="sf-l">Linked Asset</span><a class="sf-v link">{{ device.assetName }}</a></div>
-        <div class="sf"><span class="sf-l">Location</span><span class="sf-v">{{ device.site }}<br />{{ device.zone }}</span></div>
-        <div class="sf"><span class="sf-l">Health Status</span><span class="hs" [ngClass]="healthClass(device.status)"><lucide-icon [img]="icons.Activity" [size]="13"></lucide-icon>{{ device.status }}</span></div>
+        <div class="sf"><span class="sf-l">Device Type</span><span class="sf-v">{{ device.type || '—' }}</span></div>
+        <div class="sf"><span class="sf-l">Model</span><span class="sf-v">{{ device.model || '—' }}</span></div>
+        <div class="sf"><span class="sf-l">Linked Asset</span><a class="sf-v link">{{ device.assetName || '—' }}</a></div>
+        <div class="sf"><span class="sf-l">Location</span><span class="sf-v">{{ location(device) }}</span></div>
+        <div class="sf"><span class="sf-l">Health Status</span><span class="hs" [ngClass]="healthClass(device.status)"><lucide-icon [img]="icons.Activity" [size]="13"></lucide-icon>{{ device.status || '—' }}</span></div>
         <div class="sf"><span class="sf-l">Replacement Reason</span>
-          <span class="sf-v">{{ reason }}</span>
+          <span class="sf-v">{{ reason || '—' }}</span>
         </div>
         <div class="sf"><span class="sf-l">Last Seen</span><span class="sf-v">{{ fmtDate(device.lastSeen) }}<br />{{ fmtTime(device.lastSeen) }}</span></div>
       </div>
@@ -66,16 +69,16 @@
       <div class="card-head card-head--grey"><span class="ch-ic"><lucide-icon [img]="kindIcon(device.kind)" [size]="15"></lucide-icon></span><h2>Existing Device <span class="ink">(To be Replaced)</span></h2></div>
       <dl class="kv">
         <div><dt>Device ID</dt><dd><strong>{{ device.id }}</strong></dd></div>
-        <div><dt>Device Type</dt><dd>{{ device.type }}</dd></div>
-        <div><dt>Model</dt><dd>{{ device.model }}</dd></div>
-        <div><dt>Protocol</dt><dd>{{ device.protocol }}</dd></div>
-        <div><dt>Battery Level</dt><dd [class.bad]="device.battery < 20" class="bat"><lucide-icon [img]="batteryIcon(device.battery)" [size]="16"></lucide-icon>{{ device.battery }}%</dd></div>
-        <div><dt>Current Status</dt><dd><span class="hs" [ngClass]="healthClass(device.status)"><lucide-icon [img]="icons.Activity" [size]="12"></lucide-icon>{{ device.status }}</span></dd></div>
-        <div><dt>Linked Asset</dt><dd><a class="link">{{ device.assetName }}</a></dd></div>
-        <div><dt>Location</dt><dd>{{ device.site }} / {{ device.zone }}</dd></div>
-        <div><dt>Gateway</dt><dd>{{ device.gateway }}</dd></div>
-        <div><dt>Firmware Version</dt><dd>{{ device.firmware }}</dd></div>
-        <div><dt>Sensor Channels</dt><dd>{{ device.channels.join(', ') }}</dd></div>
+        <div><dt>Device Type</dt><dd>{{ device.type || '—' }}</dd></div>
+        <div><dt>Model</dt><dd>{{ device.model || '—' }}</dd></div>
+        <div><dt>Protocol</dt><dd>{{ device.protocol || '—' }}</dd></div>
+        <div><dt>Battery Level</dt><dd *ngIf="device.battery !== null; else noBat" [class.bad]="device.battery < 20" class="bat"><lucide-icon [img]="batteryIcon(device.battery)" [size]="16"></lucide-icon>{{ device.battery }}%</dd><ng-template #noBat><dd>—</dd></ng-template></div>
+        <div><dt>Current Status</dt><dd><span class="hs" [ngClass]="healthClass(device.status)"><lucide-icon [img]="icons.Activity" [size]="12"></lucide-icon>{{ device.status || '—' }}</span></dd></div>
+        <div><dt>Linked Asset</dt><dd><a class="link">{{ device.assetName || '—' }}</a></dd></div>
+        <div><dt>Location</dt><dd>{{ location(device) }}</dd></div>
+        <div><dt>Gateway</dt><dd>{{ device.gateway || '—' }}</dd></div>
+        <div><dt>Firmware Version</dt><dd>{{ device.firmware || '—' }}</dd></div>
+        <div><dt>Sensor Channels</dt><dd>{{ device.channels.length ? device.channels.join(', ') : '—' }}</dd></div>
         <div><dt>Last Seen</dt><dd>{{ fmt(device.lastSeen) }}</dd></div>
       </dl>
     </section>
@@ -93,7 +96,7 @@
                 <td class="col-radio"><input type="radio" name="dr-cand" [checked]="c.id === candidateId" (change)="selectCandidate(c)" [attr.aria-label]="'Select ' + c.id" /></td>
                 <td><strong class="nowrap">{{ c.id }}</strong></td>
                 <td class="nowrap">{{ c.model }}</td>
-                <td><span class="avail"><i></i>Available</span></td>
+                <td><span class="avail" [class.avail--reserved]="c.availability === 'Reserved'"><i></i>{{ c.availability }}</span></td>
                 <td>
                   <span *ngIf="compat(c) === 'Compatible'" class="cp cp--ok"><lucide-icon [img]="icons.CircleCheck" [size]="14"></lucide-icon>Compatible</span>
                   <span *ngIf="compat(c) !== 'Compatible'" class="cp tip" [class.cp--warn]="compat(c) === 'Partial'" [class.cp--bad]="compat(c) === 'Incompatible'" tabindex="0" [attr.aria-label]="compat(c) + ': ' + compatTip(c)">
@@ -101,11 +104,11 @@
                     <span class="tip-box" role="tooltip">{{ compatTip(c) }}</span>
                   </span>
                 </td>
-                <td class="nowrap">{{ c.protocol }}</td>
-                <td><span class="bat bat--ok"><lucide-icon [img]="batteryIcon(c.battery)" [size]="16"></lucide-icon>{{ c.battery }}%</span></td>
-                <td class="nowrap">{{ c.location }}</td>
+                <td class="nowrap">{{ c.protocol || '—' }}</td>
+                <td><span *ngIf="c.battery !== null; else noCBat" class="bat bat--ok"><lucide-icon [img]="batteryIcon(c.battery)" [size]="16"></lucide-icon>{{ c.battery }}%</span><ng-template #noCBat>—</ng-template></td>
+                <td class="nowrap">{{ c.location || '—' }}</td>
               </tr>
-              <tr *ngIf="!filteredCandidates.length"><td colspan="8" class="empty">{{ candidates.length ? 'No available device matches “' + search + '”.' : 'No ' + device.type + ' devices in stock.' }}</td></tr>
+              <tr *ngIf="!filteredCandidates.length"><td colspan="8" class="empty">{{ loading ? 'Loading stock…' : candidates.length ? 'No available device matches “' + search + '”.' : 'No replacement devices available in stock.' }}</td></tr>
             </tbody>
           </table>
         </div>
@@ -144,14 +147,14 @@
           <span class="rel-ic"><lucide-icon [img]="icons.Box" [size]="18"></lucide-icon></span>
           <div class="rel-body">
             <div class="rel-top"><span><strong>Asset</strong><small>(remains unchanged)</small></span><span class="pill pill--ok">No Change</span></div>
-            <dl class="rel-kv"><div><dt>Asset ID</dt><dd>{{ device.assetId }}</dd></div><div><dt>Asset Name</dt><dd>{{ device.assetName }}</dd></div><div><dt>Location</dt><dd>{{ device.site }} / {{ device.zone }}</dd></div></dl>
+            <dl class="rel-kv"><div><dt>Asset ID</dt><dd>{{ device.assetId || '—' }}</dd></div><div><dt>Asset Name</dt><dd>{{ device.assetName || '—' }}</dd></div><div><dt>Location</dt><dd>{{ location(device) }}</dd></div></dl>
           </div>
         </div>
         <div class="rel">
           <span class="rel-ic rel-ic--red"><lucide-icon [img]="kindIcon(device.kind)" [size]="18"></lucide-icon></span>
           <div class="rel-body">
             <div class="rel-top"><span><strong>Current IoT Device</strong><small>{{ opts.endPrior ? '(assignment ends)' : '(assignment continues)' }}</small></span><span class="pill" [ngClass]="opts.endPrior ? 'pill--bad' : 'pill--warn'">{{ opts.endPrior ? 'Assignment Ends' : 'Stays Assigned' }}</span></div>
-            <dl class="rel-kv"><div><dt>Device ID</dt><dd>{{ device.id }}</dd></div><div><dt>Model</dt><dd>{{ device.model }}</dd></div>
+            <dl class="rel-kv"><div><dt>Device ID</dt><dd>{{ device.id }}</dd></div><div><dt>Model</dt><dd>{{ device.model || '—' }}</dd></div>
               <div><dt>Assignment</dt><dd>{{ opts.endPrior ? 'Will end at replacement time' : 'Must be ended manually' }}</dd></div><div><dt>Record</dt><dd>Kept in historical records</dd></div></dl>
           </div>
         </div>
@@ -161,7 +164,7 @@
             <div class="rel-top"><span><strong>New IoT Device</strong><small>(new assignment)</small></span><span class="pill" [ngClass]="candidate ? 'pill--ok' : 'pill--grey'">{{ candidate ? 'New Assignment' : 'Not selected' }}</span></div>
             <dl class="rel-kv"><div><dt>Device ID</dt><dd>{{ candidateLabel }}</dd></div><div><dt>Model</dt><dd>{{ candidateModel }}</dd></div>
               <div><dt>Assignment</dt><dd>Will be assigned to {{ device.assetName }}</dd></div>
-              <div><dt>Gateway</dt><dd>{{ opts.gateway ? device.gateway : 'Auto-assign on first uplink' }}</dd></div>
+              <div><dt>Gateway</dt><dd>{{ opts.gateway ? (device.gateway || '—') : 'Auto-assign on first uplink' }}</dd></div>
               <div><dt>Effective From</dt><dd>{{ todayLabel }} (upon confirmation)</dd></div></dl>
           </div>
         </div>
@@ -214,11 +217,11 @@
   <section *ngIf="step === 5 && !done" class="card panel confirm">
     <div class="sec-head"><h2 class="grow">Confirm &amp; Close</h2><span class="muted small">Review the replacement before it is applied.</span></div>
     <div class="swap">
-      <div class="swap-dev swap-dev--old"><small>Existing device</small><strong>{{ device.id }}</strong><span>{{ device.model }} · {{ device.protocol }}</span><span class="hs" [ngClass]="healthClass(device.status)">{{ device.status }}</span></div>
+      <div class="swap-dev swap-dev--old"><small>Existing device</small><strong>{{ device.id }}</strong><span>{{ device.model || '—' }} · {{ device.protocol || '—' }}</span><span class="hs" [ngClass]="healthClass(device.status)">{{ device.status || '—' }}</span></div>
       <lucide-icon class="swap-arrow" [img]="icons.ArrowRight" [size]="22"></lucide-icon>
       <div class="swap-dev swap-dev--new"><small>Replacement device</small><strong>{{ candidateLabel }}</strong><span>{{ candidateModel }}</span><span class="pill pill--ok">New Assignment</span></div>
-      <div class="swap-dev"><small>Asset (unchanged)</small><strong>{{ device.assetName }}</strong><span>{{ device.site }} / {{ device.zone }}</span>
-        <label class="reason-row"><span class="muted small">Reason</span><select class="control control-xs" [(ngModel)]="reason" aria-label="Replacement reason"><option *ngFor="let r of reasons" [value]="r">{{ r }}</option></select></label></div>
+      <div class="swap-dev"><small>Asset (unchanged)</small><strong>{{ device.assetName || '—' }}</strong><span>{{ location(device) }}</span>
+        <label class="reason-row"><span class="muted small">Reason</span><select class="control control-xs" [(ngModel)]="reason" aria-label="Replacement reason"><option value="" disabled>Select Replacement Reason</option><option *ngFor="let r of reasons" [value]="r">{{ r }}</option></select></label></div>
     </div>
     <div class="two-col">
       <div>
@@ -238,7 +241,7 @@
     <div class="actions">
       <button type="button" class="btn btn-ghost" (click)="back()"><lucide-icon [img]="icons.ArrowLeft" [size]="15"></lucide-icon>Back</button>
       <button type="button" class="btn btn-outline" (click)="saveDraft()"><lucide-icon [img]="icons.FileText" [size]="15"></lucide-icon>Save Draft</button>
-      <button type="button" class="btn btn-primary" [disabled]="!confirmChecked" (click)="confirm()"><lucide-icon [img]="icons.ShieldCheck" [size]="15"></lucide-icon>Confirm Replacement</button>
+      <button type="button" class="btn btn-primary" [disabled]="!confirmChecked || !reason || saving" (click)="confirm()"><lucide-icon [img]="icons.ShieldCheck" [size]="15"></lucide-icon>{{ saving ? 'Saving…' : 'Confirm Replacement' }}</button>
     </div>
   </section>
 
@@ -255,6 +258,10 @@
       <button type="button" class="btn btn-primary" (click)="viewHealth()">View in Device Health<lucide-icon [img]="icons.ArrowRight" [size]="15"></lucide-icon></button>
     </div>
   </section>
+  </ng-container>
+  <ng-template #emptyQueue>
+    <section class="card panel"><p class="muted small">{{ loading ? 'Loading devices…' : 'No devices awaiting replacement (no IoT device has Critical health).' }}<ng-container *ngIf="!loading"> {{ candidates.length }} spare device{{ candidates.length === 1 ? '' : 's' }} available in stock.</ng-container></p></section>
+  </ng-template>
 </section>
 
 <!-- ===== Device history ===== -->
@@ -262,12 +269,13 @@
   <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="dr-hist" (click)="$event.stopPropagation()">
     <div class="modal-head"><h2 id="dr-hist">Device History · {{ device.id }}</h2><button type="button" class="icon-btn" (click)="historyOpen = false" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
     <div class="modal-body">
-      <p class="muted small">{{ device.type }} · {{ device.model }} · linked to {{ device.assetName }}</p>
+      <p class="muted small">{{ device.type || '—' }} · {{ device.model || '—' }} · linked to {{ device.assetName || '—' }}</p>
       <ol class="timeline">
         <li *ngFor="let e of historyEvents" [ngClass]="'tl--' + e.kind">
           <span class="tl-dot"></span>
           <span class="tl-body"><small>{{ fmt(e.at) }}</small>{{ e.text }}</span>
         </li>
+        <li *ngIf="!historyEvents.length"><span class="tl-body">No history recorded for this device.</span></li>
       </ol>
       <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="historyOpen = false">Close</button></div>
     </div>

@@ -2,7 +2,10 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable, finalize, map, shareReplay, tap } from 'rxjs';
 import { AuthService, environment } from 'shared-ui';
-import { RoleRecord, RoleStatus, RoleType, blankRole } from './role-access.data';
+import { CellState, PermAction, RoleRecord, RoleStatus, RoleType, blankRole } from './role-access.data';
+
+/** Permission matrix as the API stores it: module -> action -> full | partial | none | na. */
+type PermissionsDto = Record<string, Partial<Record<PermAction, CellState>>>;
 
 /** Request body for POST {administrationApiUrl}api/roles */
 interface CreateRoleRequest {
@@ -14,10 +17,12 @@ interface CreateRoleRequest {
   createdBy: string | null;
   tenantId: string;
   clientId: string;
+  /** Drives which modules users with this role may open (role-based access) */
+  permissions: PermissionsDto;
 }
 
 /** Request body for PUT {administrationApiUrl}api/roles/{roleId} */
-type UpdateRoleRequest = Pick<CreateRoleRequest, 'roleName' | 'roleCode' | 'description' | 'roleType' | 'status'>;
+type UpdateRoleRequest = Pick<CreateRoleRequest, 'roleName' | 'roleCode' | 'description' | 'roleType' | 'status' | 'permissions'>;
 
 /** Raw shape returned by the roles API. */
 interface RoleDto {
@@ -33,6 +38,7 @@ interface RoleDto {
   updatedAt: string | null;
   tenantId: string | null;
   clientId: string | null;
+  permissions?: PermissionsDto | null;
 }
 
 /**
@@ -42,6 +48,17 @@ interface RoleDto {
  */
 function toAppRole(dto: RoleDto, extras?: RoleRecord): RoleRecord {
   const base = extras ? structuredClone(extras) : blankRole();
+  // The stored matrix wins; modules it doesn't mention keep the page's defaults
+  if (dto.permissions && Object.keys(dto.permissions).length) {
+    for (const [module, actions] of Object.entries(base.permissions)) {
+      const stored = dto.permissions[module];
+      if (!stored) continue;
+      for (const action of Object.keys(actions) as PermAction[]) {
+        const state = stored[action];
+        if (state && actions[action] !== 'na') actions[action] = state;
+      }
+    }
+  }
   return {
     ...base,
     id: dto.roleId,
@@ -66,7 +83,17 @@ export function adminApiError(err: unknown, service: string): string {
       if (first?.length) return first[0];
     }
     if (body?.message) return body.message;
-    if (err.status === 0) return `The ${service} service is unreachable.`;
+    if (typeof body === 'string' && body.trim() && body.length < 200) return body;
+    switch (err.status) {
+      case 0: return `The ${service} service is unreachable. Check that the backend is running.`;
+      case 401: return 'Your session has expired. Sign in again.';
+      case 403: return `You don't have permission to change ${service}.`;
+      case 404: return `It no longer exists on the server (404).`;
+      case 405: return `The server doesn't support this action for ${service} yet (405).`;
+      case 409: return `It conflicts with existing data (409).`;
+    }
+    if (err.status >= 500) return `The ${service} service had an internal error (${err.status}).`;
+    if (err.status) return `The ${service} service rejected the request (${err.status}).`;
   }
   return `The ${service} service returned an error.`;
 }
@@ -136,7 +163,8 @@ export class RoleAccessService {
         roleCode: role.code.trim().toUpperCase(),
         description: role.description.trim() || null,
         roleType: role.type,
-        status: role.status
+        status: role.status,
+        permissions: role.permissions
       };
       return this.http.put<RoleDto>(`${this.apiUrl}/${encodeURIComponent(role.id)}`, update).pipe(
         map((dto) => toAppRole(dto, role)),
@@ -151,7 +179,8 @@ export class RoleAccessService {
       status: role.status,
       createdBy: this.auth.getUserEmail(),
       tenantId: environment.tenantId,
-      clientId: environment.clientId
+      clientId: environment.clientId,
+      permissions: role.permissions
     };
     return this.http.post<RoleDto>(this.apiUrl, request).pipe(
       map((dto) => toAppRole(dto, role)),

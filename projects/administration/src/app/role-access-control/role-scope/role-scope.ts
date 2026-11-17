@@ -1,8 +1,8 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Building2, Info, LucideAngularModule, MapPin, Tags } from 'lucide-angular';
-import { ADMIN_DEPARTMENTS, ADMIN_LOCATIONS } from '../../shared/admin-common';
 import { ASSET_CATEGORIES, DATA_SCOPES, DataScope, RoleRecord } from '../role-access.data';
+import scopeOptions from '../role-scope-options.json';
 
 type ListKey = 'locations' | 'departments' | 'categories';
 
@@ -79,13 +79,13 @@ export class RoleScope {
 
   readonly icons = { MapPin, Building2, Tags, Info };
   readonly scopes = DATA_SCOPES;
-  readonly locations = ADMIN_LOCATIONS;
-  readonly departments = ADMIN_DEPARTMENTS;
+  readonly locations: string[] = scopeOptions.locations;
+  readonly departments: string[] = scopeOptions.departments;
   readonly categories = ASSET_CATEGORIES;
 
   setScope(scope: DataScope): void {
     this.role.dataScope = scope;
-    if (scope === 'All Locations') this.role.locations = [...ADMIN_LOCATIONS];
+    if (scope === 'All Locations') this.role.locations = [...this.locations];
     this.changed.emit();
   }
 

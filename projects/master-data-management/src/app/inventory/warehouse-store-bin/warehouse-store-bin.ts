@@ -16,7 +16,7 @@ type LocationTab = 'warehouse' | 'store' | 'bin';
   selector: 'app-mdm-inventory-warehouse-store-bin',
   imports: [RouterLink, LucideAngularModule, WarehouseList, StoreList, BinList],
   templateUrl: './warehouse-store-bin.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../inventory.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../inventory.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class WarehouseStoreBinPage {
   @ViewChild('list') list?: { addNew(): void };

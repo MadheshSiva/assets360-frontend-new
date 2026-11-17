@@ -1,4 +1,4 @@
-/** SLA policies, live timers and their history. DEMO MODE: loaded from sla.json and kept in memory. */
+/** SLA policies, live timers and their history.  */
 export type SlaScope = 'Job' | 'Stage' | 'Task' | 'Issue';
 export type PolicyStatus = 'Active' | 'Draft' | 'Inactive';
 export type TimerState = 'Within Target' | 'At Risk' | 'Breached' | 'Paused';

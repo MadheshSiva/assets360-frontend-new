@@ -11,14 +11,16 @@ import { TechnicianRecord } from '../technician.model';
 import { TechnicianService } from '../technician.service';
 
 type FormTab = 'basic' | 'skills' | 'employment' | 'contact' | 'settings';
-type FieldKey = 'id' | 'name' | 'email' | 'photo' | 'team' | 'certifications' | 'hourlyRate' | 'maxOpenWorkOrders';
+type FieldKey = 'id' | 'name' | 'email' | 'photo' | 'status' | 'team' | 'skillLevel' | 'certifications' | 'hourlyRate' | 'maxOpenWorkOrders';
 
 const TAB_OF: Record<FieldKey, FormTab> = {
   id: 'basic',
   name: 'basic',
   email: 'basic',
   photo: 'basic',
+  status: 'basic',
   team: 'basic',
+  skillLevel: 'skills',
   certifications: 'skills',
   hourlyRate: 'employment',
   maxOpenWorkOrders: 'settings'
@@ -29,7 +31,7 @@ const TAB_OF: Record<FieldKey, FormTab> = {
   selector: 'app-technician-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './technician-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../people-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../people-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class TechnicianForm implements OnChanges {
   // 'edit' changes `technician`; 'add' creates one, pre-filled from it (the page passes the next free ID)
@@ -144,7 +146,23 @@ export class TechnicianForm implements OnChanges {
     );
   }
 
+  /** True on the final tab, where the primary button saves instead of advancing. */
+  get isLastTab(): boolean {
+    return this.tab === this.tabs[this.tabs.length - 1].id;
+  }
+
+  /** Move to the next tab. */
+  next(): void {
+    const i = this.tabs.findIndex((t) => t.id === this.tab);
+    if (i < this.tabs.length - 1) this.tab = this.tabs[i + 1].id;
+  }
+
   submit(): void {
+    // Enter key / primary button on earlier tabs just advances
+    if (!this.isLastTab) {
+      this.next();
+      return;
+    }
     const f = this.form;
     const originalId = this.original?.id ?? null;
     const errors: Partial<Record<FieldKey, string>> = {};
@@ -154,6 +172,8 @@ export class TechnicianForm implements OnChanges {
     if (!f.email.trim()) errors.email = 'Enter an email address.';
     else if (!EMAIL.test(f.email.trim())) errors.email = 'Enter a valid email address.';
     else if (this.service.isEmailTaken(f.email, originalId)) errors.email = 'Another technician uses this email.';
+    if (!f.status) errors.status = 'Select a status.';
+    if (!f.skillLevel) errors.skillLevel = 'Select a skill level.';
     // A leader stays in the team they lead
     const led = originalId ? this.teams.teamsLedBy(originalId).find((t) => t.code === this.originalTeam) : undefined;
     if (led && this.teamCode !== this.originalTeam) errors.team = `${f.name.trim() || 'This technician'} leads ${led.name}. Choose another leader there first.`;

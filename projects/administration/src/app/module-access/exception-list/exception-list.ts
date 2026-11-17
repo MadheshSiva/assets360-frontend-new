@@ -35,7 +35,7 @@ export class ExceptionList {
   removing: AccessException | null = null;
 
   private blank(): Draft {
-    return { user: '', module: '', access: 'Read Only', reason: '', expires: '' };
+    return { user: '', module: '', access: '' as ExceptionAccess, reason: '', expires: '' };
   }
 
   startAdd(): void {
@@ -52,6 +52,7 @@ export class ExceptionList {
     const e: Partial<Record<keyof Draft, string>> = {};
     if (!this.draft.user) e.user = 'Pick a user.';
     if (!this.draft.module) e.module = 'Pick a module.';
+    if (!this.draft.access) e.access = 'Pick an access level.';
     if (this.draft.reason.trim().length < 5) e.reason = 'Give a reason (5+ characters).';
     if (this.draft.expires && this.draft.expires < this.today) e.expires = 'Expiry must be today or later.';
     if (!e.user && !e.module && this.policy.exceptions.some((x) => x.user === this.draft.user && x.module === this.draft.module)) {

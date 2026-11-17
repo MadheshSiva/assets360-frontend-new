@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a [routerLink]="basePath">Reports &amp; Analytics</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <strong>Compliance Analytics</strong>
 </nav>
 
@@ -28,36 +28,42 @@
   <label class="filter filter--period">
     <span>Period</span>
     <select [(ngModel)]="period" (ngModelChange)="apply()">
+      <option value="">Select Period</option>
       @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Organization</span>
     <select [(ngModel)]="organization" (ngModelChange)="apply()">
+      <option value="">Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Location</span>
     <select [(ngModel)]="location" (ngModelChange)="apply()">
+      <option value="">Select Location</option>
       @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Compliance Area</span>
     <select [(ngModel)]="area" (ngModelChange)="apply()">
+      <option value="">Select Compliance Area</option>
       @for (a of areas; track a) { <option [value]="a">{{ a }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Regulation</span>
     <select [(ngModel)]="regulation" (ngModelChange)="apply()">
+      <option value="">Select Regulation</option>
       @for (r of regulations; track r) { <option [value]="r">{{ r }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Risk Level</span>
     <select [(ngModel)]="risk" (ngModelChange)="apply()">
+      <option value="">Select Risk Level</option>
       @for (r of riskLevels; track r) { <option [value]="r">{{ r }}</option> }
     </select>
   </label>
@@ -130,6 +136,8 @@
           <button type="button" class="btn btn--sm btn--primary" (click)="insightAction(ins, ins.secondary.action)">{{ ins.secondary.label }}</button>
         </div>
       </article>
+    } @empty {
+      <div class="empty">No insights for the current filters.</div>
     }
   </aside>
 </div>
@@ -145,7 +153,7 @@
   <app-ra-action-plan-dialog [context]="plan.context" [defaultTitle]="plan.title" [defaultOwner]="plan.owner" (saved)="planSaved($event)" (closed)="plan = null" />
 }
 @if (saveOpen) {
-  <app-ra-save-view-dialog defaultName="Compliance Analytics – {{ location }}" (saved)="saveNamedView($event)" (closed)="saveOpen = false" />
+  <app-ra-save-view-dialog defaultName="Compliance Analytics – {{ locationLabel }}" (saved)="saveNamedView($event)" (closed)="saveOpen = false" />
 }
 @if (toast) {
   <div class="toast" role="status">{{ toast }}</div>

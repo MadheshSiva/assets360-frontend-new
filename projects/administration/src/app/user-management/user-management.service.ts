@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, map, tap } from 'rxjs';
 import { AuthService, environment } from 'shared-ui';
+import { adminApiError } from '../role-access-control/role-access.service';
 import { CURRENT_USER } from '../shared/admin-common';
 import { AdminUser, UserStatus } from './user-management.model';
 import { ALL_LOCATIONS, roleModules } from './user-management.data';
@@ -55,9 +56,11 @@ interface CreateUserRequest {
   createdBy: string;
   tenantId: string;
   clientId: string;
+  /** Sign-in password; the API hands it to the UserAccount service (hashed there) and never returns it */
+  password?: string;
 }
 
-/** Request body for PUT {administrationApiUrl}api/users/{userId} */
+/** Request body for PUT {administrationApiUrl}api/users/{userId}; a missing password keeps the current one */
 type UpdateUserRequest = Omit<CreateUserRequest, 'createdBy' | 'tenantId' | 'clientId'>;
 
 const STATUSES: UserStatus[] = ['Active', 'Pending', 'Suspended'];
@@ -118,7 +121,9 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
     const body = err.error;
     if (body?.errors) return (Object.values(body.errors) as string[][]).flat().join(' ');
     if (body?.message) return body.message;
-    if (err.status === 0) return 'The Administration service could not be reached.';
+    if (err.status === 0) return 'The Administration service could not be reached. Check that the backend is running.';
+    // say why the server refused it, e.g. an endpoint the backend doesn't have yet (405)
+    if (err.status) return `${fallback} ${adminApiError(err, 'users')}`;
   }
   return fallback;
 }
@@ -187,13 +192,14 @@ export class UserAdminService {
     return `EMP-${String(max + 1).padStart(4, '0')}`;
   }
 
-  /** POST /api/users. */
-  create(user: AdminUser): Observable<AdminUser> {
+  /** POST /api/users. With a password the user also gets a sign-in account (email + password). */
+  create(user: AdminUser, password?: string): Observable<AdminUser> {
     const request: CreateUserRequest = {
       ...toFields(user),
       createdBy: this.auth.getUserEmail() || 'unknown',
       tenantId: environment.tenantId,
-      clientId: environment.clientId
+      clientId: environment.clientId,
+      ...(password ? { password } : {})
     };
     return this.http.post<UserDto>(this.apiUrl, request).pipe(
       map(toAppUser),
@@ -205,8 +211,8 @@ export class UserAdminService {
    * PUT /api/users/{id}; the username follows the email as on create. The suspension reason and invitation date
    * aren't stored by the API, so the values sent are kept on the returned copy for this session.
    */
-  update(user: AdminUser): Observable<AdminUser> {
-    const request: UpdateUserRequest = toFields(user);
+  update(user: AdminUser, password?: string): Observable<AdminUser> {
+    const request: UpdateUserRequest = { ...toFields(user), ...(password ? { password } : {}) };
     return this.http.put<UserDto>(`${this.apiUrl}/${user.id}`, request).pipe(
       map((dto) => {
         const saved = toAppUser(dto);

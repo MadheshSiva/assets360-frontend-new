@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { availableFields, calcValue, formatCell, isNumeric, sampleValue } from '../custom-reports.engine';
-import { CalcField, CalcOperator, CustomReport, FieldDef, ReportRow } from '../custom-reports.model';
+import { availableFields, isNumeric } from '../custom-reports.engine';
+import { CalcField, CalcOperator, CustomReport, FieldDef } from '../custom-reports.model';
 
 /** Add calculated field: name + <numeric field> <operator> <numeric field>. */
 @Component({
@@ -26,28 +26,28 @@ import { CalcField, CalcOperator, CustomReport, FieldDef, ReportRow } from '../c
             <div class="field" [class.invalid]="submitted && !left">
               <label for="cr-calc-left">Field</label>
               <select id="cr-calc-left" name="left" [(ngModel)]="left">
-                <option value="">Select…</option>
+                <option value="">Select Field</option>
                 @for (f of numericFields; track f.key) { <option [value]="f.key">{{ f.label }}</option> }
               </select>
             </div>
-            <div class="field cr-calc-op">
+            <div class="field cr-calc-op" [class.invalid]="submitted && !op">
               <label for="cr-calc-op">Operator</label>
               <select id="cr-calc-op" name="op" [(ngModel)]="op">
+                <option value="" disabled>Select Operator</option>
                 @for (o of operators; track o) { <option [value]="o">{{ o }}</option> }
               </select>
             </div>
             <div class="field" [class.invalid]="submitted && !right">
               <label for="cr-calc-right">Field</label>
               <select id="cr-calc-right" name="right" [(ngModel)]="right">
-                <option value="">Select…</option>
+                <option value="">Select Field</option>
                 @for (f of numericFields; track f.key) { <option [value]="f.key">{{ f.label }}</option> }
               </select>
             </div>
           </div>
           @if (submitted && exprError) { <p class="cr-error">{{ exprError }}</p> }
           @if (left && right) {
-            <p class="cr-formula"><strong>{{ name || 'New field' }}</strong> = {{ labelOf(left) }} {{ op }} {{ labelOf(right) }}
-              <span class="muted">· first sample row: {{ sampleResult }}</span></p>
+            <p class="cr-formula"><strong>{{ name || 'New field' }}</strong> = {{ labelOf(left) }} {{ op }} {{ labelOf(right) }}</p>
           }
         }
 
@@ -69,7 +69,7 @@ export class CalcFieldDialog implements OnInit {
   numericFields: FieldDef[] = [];
   name = '';
   left = '';
-  op: CalcOperator = '÷';
+  op: CalcOperator | '' = '';
   right = '';
   submitted = false;
 
@@ -92,15 +92,9 @@ export class CalcFieldDialog implements OnInit {
 
   get exprError(): string {
     if (!this.left || !this.right) return 'Choose both fields.';
+    if (!this.op) return 'Choose an operator.';
     if (this.left === this.right && (this.op === '-' || this.op === '÷')) return 'Choose two different fields for this operator.';
     return '';
-  }
-
-  get sampleResult(): string {
-    const row: ReportRow = {};
-    for (const f of this.numericFields) row[f.key] = sampleValue(f, 0);
-    if (this.op === '÷' && !Number(row[this.right])) return 'n/a (division by zero shows 0)';
-    return formatCell('number', calcValue({ key: '', label: '', left: this.left, op: this.op, right: this.right }, row));
   }
 
   submit(): void {
@@ -110,6 +104,6 @@ export class CalcFieldDialog implements OnInit {
     let key = `calc:${slug}`;
     let i = 1;
     while (this.report.calcFields.some((c) => c.key === key)) key = `calc:${slug}-${++i}`;
-    this.save.emit({ key, label: this.name.trim(), left: this.left, op: this.op, right: this.right });
+    this.save.emit({ key, label: this.name.trim(), left: this.left, op: this.op as CalcOperator, right: this.right });
   }
 }

@@ -13,7 +13,7 @@ type Tab = 'basic' | 'hierarchy' | 'settings';
   selector: 'app-item-category-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './item-category-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class ItemCategoryForm extends MasterForm<ItemCategoryRecord, Tab> {
   // Items in the category being edited, shown on the Hierarchy tab
@@ -49,6 +49,7 @@ export class ItemCategoryForm extends MasterForm<ItemCategoryRecord, Tab> {
 
   protected validate(f: ItemCategoryRecord) {
     const errors: Record<string, string> = {};
+    if (!f.status) errors['status'] = 'Select a status.';
     if (f.status === 'Active' && f.parentCode && this.store.find(f.parentCode)?.status === 'Inactive') {
       errors['parentCode'] = 'The parent category is inactive.';
     }

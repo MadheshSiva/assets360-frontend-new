@@ -4,7 +4,7 @@
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <a routerLink="/wip-operations">WIP / Operations</a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <span class="crumb-current">Product &amp; Output</span>
       </nav>
       <h1>Product / Output</h1>
@@ -51,8 +51,8 @@
         <h3 id="po-reg">Output Register</h3>
         <div class="filters">
           <label class="search"><lucide-icon [img]="icons.Search" [size]="16"></lucide-icon><input type="search" [(ngModel)]="search" (ngModelChange)="onFilter()" placeholder="Search serial or batch..." aria-label="Search output" /></label>
-          <label class="field"><span class="field-label">Disposition</span><select class="control" [(ngModel)]="dispositionFilter" (ngModelChange)="onFilter()"><option value="">All</option><option *ngFor="let d of dispositions" [value]="d">{{ d }}</option></select></label>
-          <label class="field"><span class="field-label">Stage</span><select class="control" [(ngModel)]="stageFilter" (ngModelChange)="onFilter()"><option value="">All</option><option *ngFor="let s of lists.stages" [value]="s">{{ s }}</option></select></label>
+          <label class="field"><span class="field-label">Disposition</span><select class="control" [(ngModel)]="dispositionFilter" (ngModelChange)="onFilter()"><option value="">Select Disposition</option><option *ngFor="let d of dispositions" [value]="d">{{ d }}</option></select></label>
+          <label class="field"><span class="field-label">Stage</span><select class="control" [(ngModel)]="stageFilter" (ngModelChange)="onFilter()"><option value="">Select Stage</option><option *ngFor="let s of lists.stages" [value]="s">{{ s }}</option></select></label>
         </div>
         <div class="table-wrap reg-wrap">
           <table class="wt">
@@ -112,7 +112,7 @@
           <div class="ho-stat"><lucide-icon class="c-blue" [img]="icons.Box" [size]="24"></lucide-icon><span><small>Accepted</small><strong>{{ count('Accepted') }}</strong><small>units</small></span></div>
           <div class="ho-stat"><lucide-icon class="c-good" [img]="icons.Warehouse" [size]="24"></lucide-icon><span><small>Received into stock</small><strong>{{ receivedCount }}</strong><small>units</small></span></div>
           <div class="ho-stat"><lucide-icon class="c-warn" [img]="icons.Clock" [size]="24"></lucide-icon><span><small>Pending handover</small><strong>{{ pendingHandover.length }}</strong><small>units</small></span></div>
-          <label class="field"><span class="field-label">Destination Store</span><select class="control" [(ngModel)]="store"><option *ngFor="let s of lists.stores" [value]="s">{{ s }}</option></select></label>
+          <label class="field"><span class="field-label">Destination Store</span><select class="control" [(ngModel)]="store"><option value="" disabled>Select Destination Store</option><option *ngFor="let s of lists.stores" [value]="s">{{ s }}</option></select></label>
           <label class="field ref-field"><span class="field-label">Receipt Reference</span><input class="control" [(ngModel)]="receiptRef" /></label>
           <button type="button" class="btn btn-primary ho-btn" [disabled]="!pendingHandover.length" (click)="createHandover()">Create Handover</button>
         </div>
@@ -126,20 +126,20 @@
       <section class="box" aria-labelledby="po-rec">
         <h3 id="po-rec">Record Output</h3>
         <form class="rec-form" (ngSubmit)="submitOutput()">
-          <label class="field"><span class="field-label">Job <em>*</em></span><select class="control" name="job" disabled><option>{{ job.code }}</option></select></label>
-          <label class="field"><span class="field-label">Product <em>*</em></span><select class="control" name="product" disabled><option>{{ job.item }}</option></select></label>
-          <label class="field"><span class="field-label">Completed Stage <em>*</em></span><select class="control" name="stage" [(ngModel)]="form.stage"><option *ngFor="let s of lists.stages" [value]="s">{{ s }}</option></select></label>
+          <label class="field"><span class="field-label">Job <em>*</em></span><select class="control" name="job" disabled><option value="" disabled>Select Job</option><option>{{ job.code }}</option></select></label>
+          <label class="field"><span class="field-label">Product <em>*</em></span><select class="control" name="product" disabled><option value="" disabled>Select Product</option><option>{{ job.item }}</option></select></label>
+          <label class="field"><span class="field-label">Completed Stage <em>*</em></span><select class="control" name="stage" [(ngModel)]="form.stage"><option value="" disabled>Select Completed Stage</option><option *ngFor="let s of lists.stages" [value]="s">{{ s }}</option></select></label>
           <span class="qty-pair">
             <label class="field"><span class="field-label">Quantity <em>*</em></span><input class="control" type="number" min="1" [max]="remaining" name="qty" [(ngModel)]="form.quantity" /></label>
-            <label class="field"><span class="field-label">UOM</span><select class="control" name="uom" disabled><option>{{ job.uom }}</option></select></label>
+            <label class="field"><span class="field-label">UOM</span><select class="control" name="uom" disabled><option value="" disabled>Select UOM</option><option>{{ job.uom }}</option></select></label>
           </span>
           <label class="field"><span class="field-label">Batch <em>*</em></span><input class="control" name="batch" [(ngModel)]="form.batch" /></label>
           <label class="field"><span class="field-label">Serial Number <em>*</em></span><input class="control" name="serial" [(ngModel)]="form.serial" />
             <span *ngIf="formSerials.length > 1" class="hint">Creates {{ formSerials[0] }} – {{ formSerials[formSerials.length - 1] }}</span></label>
           <label class="field"><span class="field-label">Produced At <em>*</em></span><input class="control" type="datetime-local" name="at" [(ngModel)]="form.producedAt" /></label>
-          <label class="field"><span class="field-label">Operator <em>*</em></span><select class="control" name="op" [(ngModel)]="form.operator"><option *ngFor="let o of lists.operators" [value]="o">{{ o }}</option></select></label>
-          <label class="field"><span class="field-label">Initial Disposition <em>*</em></span><select class="control" name="disp" [(ngModel)]="form.disposition"><option *ngFor="let d of initialDispositions" [value]="d">{{ d }}</option></select></label>
-          <label class="field"><span class="field-label">Location <em>*</em></span><select class="control" name="loc" [(ngModel)]="form.location"><option *ngFor="let l of lists.locations" [value]="l">{{ l }}</option></select></label>
+          <label class="field"><span class="field-label">Operator <em>*</em></span><select class="control" name="op" [(ngModel)]="form.operator"><option value="" disabled>Select Operator</option><option *ngFor="let o of lists.operators" [value]="o">{{ o }}</option></select></label>
+          <label class="field"><span class="field-label">Initial Disposition <em>*</em></span><select class="control" name="disp" [(ngModel)]="form.disposition"><option value="" disabled>Select Initial Disposition</option><option *ngFor="let d of initialDispositions" [value]="d">{{ d }}</option></select></label>
+          <label class="field"><span class="field-label">Location <em>*</em></span><select class="control" name="loc" [(ngModel)]="form.location"><option value="" disabled>Select Location</option><option *ngFor="let l of lists.locations" [value]="l">{{ l }}</option></select></label>
           <label *ngIf="form.disposition === 'Rejected'" class="field span-2"><span class="field-label">Reject Reason <em>*</em></span><input class="control" name="rej" [(ngModel)]="form.rejectReason" /></label>
           <div class="field">
             <span class="field-label">Photo / Evidence</span>
@@ -214,6 +214,7 @@
             <td class="num">{{ o.evidence }}</td>
             <td>{{ o.rejectReason || o.notes || '—' }}</td>
           </tr>
+          <tr *ngIf="!outputs.length"><td colspan="10" class="empty">No output recorded yet.</td></tr>
         </tbody>
       </table>
     </div>
@@ -294,7 +295,7 @@
       <dl class="kv"><dt>Item</dt><dd>{{ job.item }}</dd><dt>Batch</dt><dd>{{ job.batch }}</dd><dt>Job</dt><dd>{{ job.code }} · {{ job.routing }}</dd></dl>
       <table class="wt">
         <thead><tr><th>Component</th><th>Lot / Serial</th></tr></thead>
-        <tbody><tr *ngFor="let c of components"><td>{{ c.part }}</td><td>{{ c.ref.endsWith('-') ? c.ref + s.serial.replace('P-', '') : c.ref }}</td></tr></tbody>
+        <tbody><tr *ngIf="!components.length"><td colspan="2" class="empty">No component records.</td></tr><tr *ngFor="let c of components"><td>{{ c.part }}</td><td>{{ c.ref.endsWith('-') ? c.ref + s.serial.replace('P-', '') : c.ref }}</td></tr></tbody>
       </table>
       <h4 class="gen-h">History</h4>
       <ul class="gen-hist"><li *ngFor="let h of s.history"><strong>{{ h.at | date: 'dd MMM HH:mm' }}</strong> {{ h.text }} <span class="muted">· {{ h.by }}</span></li></ul>
@@ -310,7 +311,7 @@
     <form class="modal-body" (ngSubmit)="saveReject()">
       <label class="field"><span class="field-label">Reason <em>*</em></span><textarea class="control" rows="3" [(ngModel)]="rejectReason" name="reason"></textarea></label>
       <label class="field"><span class="field-label">Authorized By <em>*</em></span>
-        <select class="control" [(ngModel)]="rejectBy" name="by"><option value="" disabled>Select authorizer</option><option value="Quality Supervisor">Quality Supervisor</option><option value="Quality Manager">Quality Manager</option></select></label>
+        <select class="control" [(ngModel)]="rejectBy" name="by"><option value="" disabled>Select Authorizer</option><option value="Quality Supervisor">Quality Supervisor</option><option value="Quality Manager">Quality Manager</option></select></label>
       <p class="hint">The unit moves to quarantine and stays on record with its serial.</p>
       <div class="modal-foot modal-foot--form"><button type="button" class="btn btn-outline" (click)="rejectFor = null">Cancel</button><button type="submit" class="btn btn-danger-outline" [disabled]="!rejectReason.trim() || !rejectBy">Reject Unit</button></div>
     </form>

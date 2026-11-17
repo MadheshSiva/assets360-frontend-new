@@ -19,7 +19,7 @@ type SortKey = 'name' | 'code' | 'category' | 'country' | 'rating';
   selector: 'app-mdm-vendor-supplier',
   imports: [FormsModule, RouterLink, LucideAngularModule, SupplierForm],
   templateUrl: './supplier.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../vendor.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../vendor.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class SupplierPage extends ListPage<SupplierRecord, SupplierFilters, SortKey> {
   readonly service = inject(SupplierService);

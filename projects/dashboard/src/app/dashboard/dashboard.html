@@ -164,7 +164,7 @@
             <div class="stat-copy">
               <span>{{ card.label }}</span>
               <strong>{{ card.value }}</strong>
-              <small [class.positive]="card.changeType === 'up'" [class.negative]="card.changeType === 'down'">
+              <small *ngIf="card.change" [class.positive]="card.changeType === 'up'" [class.negative]="card.changeType === 'down'">
                 {{ card.changeType === 'down' ? 'Down' : 'Up' }} {{ card.change }}
               </small>
             </div>
@@ -199,9 +199,9 @@
                 <g class="grid-lines">
                   <line *ngFor="let line of chartGrid" x1="30" [attr.y1]="line" x2="520" [attr.y2]="line" />
                 </g>
-                <polyline class="created" points="30,130 105,130 180,75 255,92 330,62 405,95 480,115 520,75" />
-                <polyline class="completed" points="30,160 105,148 180,118 255,135 330,108 405,130 480,145 520,128" />
-                <polyline class="overdue" points="30,190 105,182 180,170 255,168 330,188 405,172 480,172 520,172" />
+                <polyline *ngIf="createdPoints.length" class="created" [attr.points]="toPolyline(createdPoints)" />
+                <polyline *ngIf="completedPoints.length" class="completed" [attr.points]="toPolyline(completedPoints)" />
+                <polyline *ngIf="overduePoints.length" class="overdue" [attr.points]="toPolyline(overduePoints)" />
                 <g class="point-row created-points">
                   <circle *ngFor="let point of createdPoints" [attr.cx]="point.x" [attr.cy]="point.y" r="4" />
                 </g>
@@ -212,6 +212,7 @@
                   <circle *ngFor="let point of overduePoints" [attr.cx]="point.x" [attr.cy]="point.y" r="4" />
                 </g>
               </svg>
+              <p *ngIf="!createdPoints.length && !completedPoints.length && !overduePoints.length" class="widget-empty">No data</p>
               <div class="axis-labels">
                 <span *ngFor="let label of weekLabels">{{ label }}</span>
               </div>
@@ -223,8 +224,8 @@
             <h2><app-widget-drag-handle></app-widget-drag-handle>PM Compliance</h2>
             <div class="gauge">
               <div class="gauge-arc"></div>
-              <div class="gauge-needle"></div>
-              <strong>82%</strong>
+              <div *ngIf="pmCompliance !== null" class="gauge-needle" [style.transform]="'rotate(' + (pmCompliance * 1.8 - 180) + 'deg)'"></div>
+              <strong>{{ pmCompliance !== null ? pmCompliance + '%' : '—' }}</strong>
               <span>Compliance</span>
             </div>
             <p>Target: 90%</p>
@@ -233,13 +234,14 @@
           <article *ngSwitchCase="'workStatus'" cdkDrag class="panel work-status">
             <h2><app-widget-drag-handle></app-widget-drag-handle>Work Order Status</h2>
             <div class="donut-wrap">
-              <div class="donut-chart">
+              <div class="donut-chart" [style.background]="workStatusGradient">
                 <div>
-                  <strong>256</strong>
+                  <strong>{{ workOrderTotal }}</strong>
                   <span>Total</span>
                 </div>
               </div>
               <ul class="legend-list">
+                <li *ngIf="!workStatus.length" class="widget-empty">No data</li>
                 <li *ngFor="let item of workStatus">
                   <span class="legend-dot" [style.background]="item.color"></span>
                   <span>{{ item.label }}</span>
@@ -254,6 +256,7 @@
           <article *ngSwitchCase="'recent'" cdkDrag class="panel recent-panel">
             <h2><app-widget-drag-handle></app-widget-drag-handle>Recent Work Orders</h2>
             <div class="work-order-list">
+              <p *ngIf="!recentWorkOrders.length" class="widget-empty">No work orders yet</p>
               <div class="work-order" *ngFor="let order of recentWorkOrders; index as i">
                 <span class="order-rank">{{ i + 1 }}</span>
                 <div>
@@ -271,6 +274,7 @@
             <article class="panel" *ngIf="woHas('topAssets')">
               <h2><app-widget-drag-handle></app-widget-drag-handle>Top Assets by Work Orders</h2>
               <div class="asset-bars">
+                <p *ngIf="!topAssets.length" class="widget-empty">No data</p>
                 <div class="asset-bar" *ngFor="let asset of topAssets">
                   <span>{{ asset.name }}</span>
                   <div><i [style.width.%]="asset.percent"></i></div>
@@ -282,6 +286,7 @@
     
             <article class="panel cost-panel" *ngIf="woHas('costSummary')">
               <h2><app-widget-drag-handle *ngIf="!woHas('topAssets')"></app-widget-drag-handle>Maintenance Cost Summary</h2>
+              <p *ngIf="!costSummary.length" class="widget-empty">No data</p>
               <div class="cost-grid">
                 <div *ngFor="let item of costSummary">
                   <span>{{ item.label }}</span>
@@ -303,6 +308,7 @@
     
           <article *ngSwitchCase="'alerts'" cdkDrag class="panel alerts-panel">
             <h2><app-widget-drag-handle></app-widget-drag-handle>Alerts & Notifications</h2>
+            <p *ngIf="!alerts.length" class="widget-empty">No alerts</p>
             <div class="alert-row" *ngFor="let alert of alerts">
               <span [ngClass]="alert.type">!</span>
               <div>
@@ -316,6 +322,7 @@
     
           <article *ngSwitchCase="'workload'" cdkDrag class="panel workload-panel">
             <h2><app-widget-drag-handle></app-widget-drag-handle>Technician Workload</h2>
+            <p *ngIf="!technicians.length" class="widget-empty">No data</p>
             <div class="load-row" *ngFor="let tech of technicians">
               <span>{{ tech.name }}</span>
               <div><i [style.width.%]="tech.load" [class.warn]="tech.load < 70"></i></div>
@@ -346,6 +353,7 @@
                     <td><span class="pill" [ngClass]="item.priorityClass">{{ item.priority }}</span></td>
                     <td><span class="pill pending">Pending</span></td>
                   </tr>
+                  <tr *ngIf="!upcomingMaintenance.length"><td colspan="6" class="widget-empty">No upcoming maintenance</td></tr>
                 </tbody>
               </table>
             </div>
@@ -427,6 +435,7 @@
             <tr *ngFor="let row of cardPopup.rows">
               <td *ngFor="let column of cardPopup.columns">{{ row[column.key] }}</td>
             </tr>
+            <tr *ngIf="!cardPopup.rows.length"><td [attr.colspan]="cardPopup.columns.length" class="widget-empty">No records</td></tr>
           </tbody>
         </table>
       </div>

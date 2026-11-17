@@ -48,7 +48,7 @@ import { CONNECTION_TONES, MODULE_TONES, formatStamp } from './dx-format';
                 </td>
               </tr>
             } @empty {
-              <tr><td colspan="10" class="empty">No connections match “{{ search }}”.</td></tr>
+              <tr><td colspan="10" class="empty">{{ search ? 'No connections match “' + search + '”.' : 'No records found.' }}</td></tr>
             }
           </tbody>
         </table>
@@ -119,7 +119,7 @@ export class ConnectionsTab {
                 <td class="num">{{ d.rows.toLocaleString('en-US') }}</td>
                 <td class="num">{{ d.sizeGb }} GB</td>
                 <td>{{ stamp(d.refreshed) }}</td>
-                <td>{{ d.owner }}</td>
+                <td>{{ d.owner || '—' }}</td>
                 <td class="num">{{ exportCount(d) }}</td>
                 <td>
                   <span class="dx-actions">
@@ -147,7 +147,7 @@ export class ConnectionsTab {
       <div class="overlay" (click)="preview = null">
         <div class="dialog dialog--wide" role="dialog" aria-modal="true" aria-labelledby="dx-prev-title" (click)="$event.stopPropagation()">
           <h2 id="dx-prev-title">{{ preview.name }} — sample rows</h2>
-          <p class="muted">First {{ sample.rows.length }} of {{ preview.rows.toLocaleString('en-US') }} rows. DEMO MODE sample data.</p>
+          <p class="muted">First {{ sample.rows.length }} of {{ preview.rows.toLocaleString('en-US') }} rows.</p>
           <div class="table-wrap">
             <table class="table">
               <thead>
@@ -164,6 +164,8 @@ export class ConnectionsTab {
                       <td>{{ c }}</td>
                     }
                   </tr>
+                } @empty {
+                  <tr><td [attr.colspan]="sample.header.length || 1" class="empty">No data</td></tr>
                 }
               </tbody>
             </table>
@@ -213,7 +215,7 @@ export class DatasetsTab {
     return MODULE_TONES[m] ?? 'grey';
   }
 
-  stamp(s: string): string {
+  stamp(s: string | null): string {
     return formatStamp(s);
   }
 
@@ -243,7 +245,7 @@ const LOG_PAGE = 15;
           </span>
         }
         <select class="select dx-select-sm" [(ngModel)]="result" (ngModelChange)="page = 0" aria-label="Result">
-          <option value="">All results</option>
+          <option value="">Select Result</option>
           <option value="Success">Success</option>
           <option value="Failed">Failed</option>
           <option value="Denied">Denied</option>
@@ -269,7 +271,7 @@ const LOG_PAGE = 15;
                 <td><span class="pill" [attr.data-tone]="tone(l.result)"><i></i>{{ l.result }}</span></td>
               </tr>
             } @empty {
-              <tr><td colspan="7" class="empty">No log entries match the filters.</td></tr>
+              <tr><td colspan="7" class="empty">{{ service.logs.length ? 'No log entries match the filters.' : 'No records found.' }}</td></tr>
             }
           </tbody>
         </table>
@@ -286,7 +288,7 @@ const LOG_PAGE = 15;
   `
 })
 export class AccessLogsTab {
-  private readonly service = inject(DataExportService);
+  readonly service = inject(DataExportService);
   @Input() search = '';
   /** Pre-filter from "View logs" on an insight */
   @Input() resource = '';

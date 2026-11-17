@@ -55,21 +55,21 @@
         <label class="filter">
           <span>Site</span>
           <select name="site" [(ngModel)]="draft.siteId">
-            <option value="">All</option>
+            <option value="">Select Site</option>
             @for (s of service.sites(); track s.id) { <option [value]="s.id">{{ s.name }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Type</span>
           <select name="type" [(ngModel)]="draft.type">
-            <option value="">All</option>
+            <option value="">Select Type</option>
             @for (t of types; track t) { <option [value]="t">{{ t }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Status</span>
           <select name="status" [(ngModel)]="draft.status">
-            <option value="">All</option>
+            <option value="">Select Status</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
           </select>

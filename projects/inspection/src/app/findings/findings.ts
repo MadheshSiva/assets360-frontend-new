@@ -48,7 +48,7 @@ export class FindingsPage {
   readonly search = signal('');
   readonly severity = signal('');
   /** '' = all, 'Open' = anything not Closed, otherwise an exact status. */
-  readonly status = signal('Open');
+  readonly status = signal('');
   readonly overdueOnly = signal(false);
   readonly page = signal(1);
   readonly selectedId = signal<string | null>(null);

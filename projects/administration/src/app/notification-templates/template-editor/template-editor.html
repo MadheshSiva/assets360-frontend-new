@@ -45,6 +45,7 @@
         <div class="te-editor">
           <div class="te-toolbar">
             <select class="te-para" [(ngModel)]="paragraphStyle" aria-label="Paragraph style">
+              <option value="" disabled>Select Paragraph Style</option>
               @for (p of paragraphStyles; track p) { <option [value]="p">{{ p }}</option> }
             </select>
             <button type="button" (click)="wrap('**')" title="Bold"><lucide-icon [img]="icons.Bold" [size]="15"></lucide-icon></button>
@@ -61,6 +62,7 @@
             <button type="button" (click)="unsupported('Images')" title="Insert image"><lucide-icon [img]="icons.Image" [size]="15"></lucide-icon></button>
             <button type="button" (click)="unsupported('HTML source')" title="HTML source"><lucide-icon [img]="icons.Code" [size]="15"></lucide-icon></button>
             <select class="te-vars" (change)="insertFromSelect($event)" aria-label="Insert variable">
+              <option value="" disabled>Select Variable</option>
               <option value="">Variables</option>
               @for (g of variableGroups; track g.name) {
                 <optgroup [label]="g.name">

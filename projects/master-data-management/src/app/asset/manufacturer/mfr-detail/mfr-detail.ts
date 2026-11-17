@@ -21,7 +21,8 @@ type DetailTab = 'overview' | 'contact' | 'support' | 'defaults' | 'models' | 'a
     '../../../shared/styles/mdm-detail-extras.css',
     '../../asset-model/model-detail/model-detail.css',
     '../../asset-type/type-detail/type-detail.css',
-    './mfr-detail.css'
+    './mfr-detail.css',
+    '../../../shared/styles/mdm-purple-theme.css'
   ]
 })
 export class MfrDetail implements OnChanges {
@@ -68,14 +69,9 @@ export class MfrDetail implements OnChanges {
     return this.mine.reduce((sum, m) => sum + m.assetCount, 0);
   }
 
-  // DEMO MODE: asset status and warranty live in the Assets module; these shares match the design
-  get activeAssets(): number {
-    return Math.round(this.assetCount * 0.875);
-  }
-
-  get underWarranty(): number {
-    return Math.round(this.assetCount * 0.765625);
-  }
+  // Asset status and warranty live in the Assets module; unknown until that API is wired
+  readonly activeAssets: number | null = null;
+  readonly underWarranty: number | null = null;
 
   /** Assets of this manufacturer per asset type, largest first. */
   get byType() {
@@ -89,35 +85,9 @@ export class MfrDetail implements OnChanges {
     return [...totals.entries()].map(([type, t]) => ({ type, ...t })).sort((a, b) => b.assets - a.assets);
   }
 
-  // DEMO MODE: sample rows for data owned by the Documents module
-  get documentRows() {
-    const m = this.manufacturer;
-    const kinds: [string, string, string][] = [
-      ['Supplier Agreement', 'pdf', '1.4 MB'],
-      ['Warranty Policy', 'pdf', '320 KB'],
-      ['Price List 2026', 'xlsx', '210 KB'],
-      ['Support Escalation Matrix', 'pdf', '96 KB'],
-      ['ISO Certificate', 'pdf', '540 KB'],
-      ['Product Catalogue', 'pdf', '8.2 MB'],
-      ['Bank Details', 'pdf', '48 KB']
-    ];
-    return kinds.slice(0, m.documents).map(([name, ext, size], i) => ({
-      name: `${m.name} - ${name}.${ext}`,
-      kind: name,
-      size,
-      date: (i % 2 ? m.updatedOn : m.createdOn).slice(0, 10)
-    }));
-  }
-
-  get activity() {
-    const m = this.manufacturer;
-    const list = [
-      { when: m.updatedOn, who: 'Rex Kumar', text: 'Updated contact details' },
-      { when: m.createdOn, who: m.createdBy || 'Rex Kumar', text: `Created manufacturer ${m.code}` }
-    ];
-    if (m.status === 'Inactive') list.unshift({ when: m.updatedOn, who: 'Rex Kumar', text: 'Marked manufacturer as Inactive' });
-    return list;
-  }
+  // Documents and the audit log are owned by other modules; empty until those APIs are wired
+  readonly documentRows: { name: string; kind: string; size: string; date: string }[] = [];
+  readonly activity: { when: string; who: string; text: string }[] = [];
 
   editAt(tab: MfrFormTab): void {
     this.edit.emit({ manufacturer: this.manufacturer, tab });

@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a [routerLink]="basePath">Reports &amp; Analytics</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <strong>KPI Dashboard</strong>
 </nav>
 
@@ -27,6 +27,7 @@
   <label class="filter kd-dashboard">
     <span>Dashboard</span>
     <select [ngModel]="activeKey" (ngModelChange)="selectView($event)" aria-label="Dashboard">
+      <option value="" disabled>Select Dashboard</option>
       @for (v of views; track v.key) { <option [value]="v.key">{{ v.dashboard }}</option> }
     </select>
   </label>
@@ -55,24 +56,28 @@
   <label class="filter filter--period">
     <span>Period</span>
     <select [(ngModel)]="period" (ngModelChange)="apply()">
+      <option value="">Select Period</option>
       @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Organization</span>
     <select [(ngModel)]="organization" (ngModelChange)="apply()">
+      <option value="">Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Location</span>
     <select [(ngModel)]="location" (ngModelChange)="apply()">
+      <option value="">Select Location</option>
       @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Business Unit</span>
     <select [(ngModel)]="businessUnit" (ngModelChange)="apply()">
+      <option value="">Select Business Unit</option>
       @for (b of businessUnits; track b) { <option [value]="b">{{ b }}</option> }
     </select>
   </label>
@@ -96,6 +101,7 @@
     <div class="widgets">
       <app-ra-widget class="span-3" title="KPI Performance Trend" info="Average attainment vs target of the KPIs in this view (100% = on target)" (exportCsv)="exportTrend()">
         <select widget-tools class="select kd-small-select" aria-label="Trend granularity" [(ngModel)]="granularity" (ngModelChange)="setGranularity()">
+          <option value="" disabled>Select Trend Granularity</option>
           @for (g of granularities; track g) { <option [value]="g">{{ g }}</option> }
         </select>
         <ra-cartesian-chart [labels]="trendLabels" [series]="trendSeries" kind="line" [height]="240" [min]="80" [max]="120" [format]="percentFormat"
@@ -113,6 +119,7 @@
 
       <app-ra-widget class="span-6" title="KPI Exceptions" info="KPIs in this view that are not on track" (exportCsv)="exportExceptions()">
         <select widget-tools class="select kd-small-select" aria-label="Exception status" [(ngModel)]="exceptionStatus" (ngModelChange)="filterExceptions()">
+          <option value="" disabled>Select Exception Status</option>
           @for (s of exceptionStatuses; track s) { <option [value]="s">{{ s }}</option> }
         </select>
         <app-ra-kpi-exceptions-table [rows]="exceptions" (view)="openDetail($event)" />
@@ -136,6 +143,8 @@
             <button type="button" class="btn btn--sm btn--outline" (click)="insightAction(ins)">{{ ins.action.label }}</button>
           </div>
         </article>
+      } @empty {
+        <div class="empty">No insights for the current filters.</div>
       }
     </section>
 

@@ -32,6 +32,12 @@
 .ao-cat-bar { width: 32%; }
 .ao-cat-bar span { display: block; height: 12px; overflow: hidden; border-radius: 3px; background: #e8ebf3; }
 .ao-cat-bar i { display: block; height: 100%; border-radius: 3px; }
+/* sub-category lines under each category: indented past the icon, smaller and muted */
+.ao-cat-sub td { padding-top: 1px; padding-bottom: 1px; font-size: 12px; color: var(--io-text-2); }
+.ao-cat-sub-name { display: block; padding-left: 34px; position: relative; }
+.ao-cat-sub-name::before { content: ''; position: absolute; left: 12px; top: 50%; width: 12px; border-top: 1px solid var(--io-border); }
+.ao-cat-sub .ao-cat-bar span { height: 6px; }
+.ao-cat-sub .ao-cat-bar i { opacity: .6; }
 
 /* ===== Health distribution ===== */
 .ao-health { display: flex; align-items: center; gap: 12px; }
@@ -91,6 +97,10 @@
 :host ::ng-deep .ao-site-card.is-dim { opacity: 0.55; }
 :host ::ng-deep .ao-site-health { display: inline-flex; align-items: center; gap: 4px; color: #15803d; }
 :host ::ng-deep .ao-site-health b { font-size: 12px; }
+.ao-map-note {
+  position: absolute; left: 50%; top: 50%; z-index: 500; transform: translate(-50%, -50%); margin: 0; padding: 6px 12px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92); color: #6b7280; font-size: 12.5px; text-align: center; pointer-events: none;
+}
 
 /* ===== Aging ===== */
 .ao-aging svg { display: block; width: 100%; height: auto; }
@@ -143,3 +153,6 @@
 @media (max-width: 800px) {
   .ao-health { flex-direction: column; }
 }
+
+/* Low criticality pill in the critical-assets table */
+.ao-table .sev--low { background: #dcfce7; color: #15803d; }

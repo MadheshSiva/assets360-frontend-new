@@ -33,7 +33,7 @@
             @if (form.photo) { <button type="button" class="btn btn--link" (click)="removePhoto()">Remove photo</button> }
           </div>
         } @else {
-          <span class="muted">New users get an email invitation to set up their own sign-in.</span>
+          <span class="muted">New users sign in with their email address and the password you set here.</span>
         }
       </div>
     </div>
@@ -52,6 +52,37 @@
           <input id="u-email" name="email" type="email" [(ngModel)]="form.email" maxlength="120" autocomplete="off" />
           @if (errors['email']) { <small>{{ errors['email'] }}</small> }
         </div>
+        <div class="field" [class.invalid]="errors['password']">
+          <label for="u-password">{{ isAdd ? 'Password' : 'New Password' }} @if (isAdd) { <span class="req">*</span> }</label>
+          <span class="pw-input">
+            <input
+              id="u-password"
+              name="password"
+              [type]="showPassword ? 'text' : 'password'"
+              [(ngModel)]="password"
+              maxlength="64"
+              autocomplete="new-password"
+              [placeholder]="isAdd ? 'At least ' + minPassword + ' characters' : 'Leave blank to keep current'"
+            />
+            <button type="button" class="pw-toggle" [attr.aria-label]="showPassword ? 'Hide password' : 'Show password'" (click)="showPassword = !showPassword">
+              <lucide-icon [img]="showPassword ? icons.EyeOff : icons.Eye" [size]="16"></lucide-icon>
+            </button>
+          </span>
+          @if (errors['password']) { <small>{{ errors['password'] }}</small> }
+        </div>
+        <div class="field" [class.invalid]="errors['confirmPassword']">
+          <label for="u-password2">Confirm Password @if (isAdd) { <span class="req">*</span> }</label>
+          <input
+            id="u-password2"
+            name="confirmPassword"
+            [type]="showPassword ? 'text' : 'password'"
+            [(ngModel)]="confirmPassword"
+            maxlength="64"
+            autocomplete="new-password"
+            [disabled]="!isAdd && !password"
+          />
+          @if (errors['confirmPassword']) { <small>{{ errors['confirmPassword'] }}</small> }
+        </div>
         <div class="field" [class.invalid]="errors['employeeId']">
           <label for="u-emp">Employee ID <span class="req">*</span></label>
           <input id="u-emp" name="employeeId" [(ngModel)]="form.employeeId" maxlength="12" />
@@ -60,7 +91,7 @@
         <div class="field" [class.invalid]="errors['department']">
           <label for="u-dept">Department <span class="req">*</span></label>
           <select id="u-dept" name="department" [(ngModel)]="form.department">
-            <option value="">Select...</option>
+            <option value="" disabled>Select Department</option>
             @for (d of departments; track d) { <option [value]="d">{{ d }}</option> }
           </select>
           @if (errors['department']) { <small>{{ errors['department'] }}</small> }
@@ -77,12 +108,14 @@
         <div class="field">
           <label for="u-loc">Location</label>
           <select id="u-loc" name="location" [(ngModel)]="form.location" (ngModelChange)="onLocationChange()">
+            <option value="" disabled>Select Location</option>
             @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
           </select>
         </div>
         <div class="field">
           <label for="u-tz">Time Zone</label>
           <select id="u-tz" name="timeZone" [(ngModel)]="form.timeZone">
+            <option value="" disabled>Select Time Zone</option>
             @for (z of timeZones; track z) { <option [value]="z">{{ z }}</option> }
           </select>
         </div>
@@ -103,8 +136,9 @@
     <div class="row-field" [class.invalid]="errors['primaryRole']">
       <label for="u-role">Primary Role</label>
       <select id="u-role" name="primaryRole" [(ngModel)]="form.primaryRole" (ngModelChange)="onPrimaryChange()">
-        <option value="">Select...</option>
+        <option value="" disabled>Select Primary Role</option>
         @for (r of primaryOptions; track r.name) { <option [value]="r.name">{{ r.name }}</option> }
+        @empty { <option value="" disabled>No active roles. Create one in Role &amp; Access Control.</option> }
       </select>
     </div>
     @if (errors['primaryRole']) { <p class="field-error">{{ errors['primaryRole'] }}</p> }
@@ -120,19 +154,22 @@
           </div>
         }
         <select id="u-roles" (change)="addSecondary($event)">
-          <option value="">Add a role...</option>
+          <option value="" disabled>Select Secondary Roles</option>
           @for (r of secondaryOptions; track r.name) { <option [value]="r.name">{{ r.name }}</option> }
+          @empty { <option value="" disabled>No other roles available</option> }
         </select>
       </div>
     </div>
 
-    <div class="row-field">
+    <div class="row-field" [class.invalid]="errors['accessScope']">
       <label for="u-scope">Access Scope</label>
       <select id="u-scope" name="accessScope" [(ngModel)]="form.accessScope">
+        <option value="" disabled>Select Access Scope</option>
         <option [value]="allLocations">{{ allLocations }}</option>
         @for (l of locations; track l) { <option [value]="l">{{ l }} only</option> }
       </select>
     </div>
+    @if (errors['accessScope']) { <p class="field-error">{{ errors['accessScope'] }}</p> }
 
     <div class="row-field">
       <span class="row-label">Multi-Factor Authentication</span>
@@ -146,9 +183,10 @@
     <div class="row-field" [class.invalid]="errors['status']">
       <label for="u-status">Account Status</label>
       @if (isAdd) {
-        <span class="muted">Pending until the invitation is accepted</span>
+        <span class="muted">Active: the user can sign in with their email and password</span>
       } @else {
         <select id="u-status" name="status" [(ngModel)]="form.status" [disabled]="isSelf">
+          <option value="" disabled>Select Account Status</option>
           @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
         </select>
       }

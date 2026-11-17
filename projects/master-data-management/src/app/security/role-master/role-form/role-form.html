@@ -20,7 +20,7 @@
     <div class="field" [class.invalid]="errors['type']">
       <label for="role-type"><span class="req">*</span> Type</label>
       <select id="role-type" name="type" [(ngModel)]="form.type">
-        <option value="" disabled>Select role type</option>
+        <option value="" disabled>Select Role Type</option>
         @for (t of types; track t) { <option [value]="t">{{ t }}</option> }
       </select>
       @if (errors['type']) { <small>{{ errors['type'] }}</small> }
@@ -32,16 +32,17 @@
     <div class="field">
       <label for="role-copy">Copy From Role</label>
       <select id="role-copy" name="copyFrom" [(ngModel)]="copyFrom" (ngModelChange)="onCopyFrom()">
-        <option value="">Select role (optional)</option>
+        <option value="">Select Role</option>
         @for (r of otherRoles; track r.code) { <option [value]="r.code">{{ r.name }}</option> }
       </select>
       <small class="hint">Replaces the permissions and module access below with that role's.</small>
     </div>
     <div class="field" [class.invalid]="errors['status']">
-      <label for="role-status">Status</label>
+      <label for="role-status"><span class="req">*</span> Status</label>
       <div class="status-select">
         <i [attr.data-status]="form.status"></i>
         <select id="role-status" name="status" [(ngModel)]="form.status">
+          <option value="" disabled>Select Status</option>
           <option value="Active">Active</option>
           <option value="Inactive">Inactive</option>
         </select>
@@ -114,7 +115,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

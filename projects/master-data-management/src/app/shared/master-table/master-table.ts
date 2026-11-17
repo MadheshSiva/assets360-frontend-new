@@ -12,7 +12,7 @@ import { MasterField, MasterRecord, MasterTableConfig, MasterValue } from './mas
   selector: 'app-master-table',
   imports: [FormsModule, RowActions],
   templateUrl: './master-table.html',
-  styleUrl: './master-table.css'
+  styleUrls: ['./master-table.css', '../styles/mdm-purple-theme.css']
 })
 export class MasterTable implements OnInit {
   @Input({ required: true }) config!: MasterTableConfig;
@@ -125,6 +125,10 @@ export class MasterTable implements OnInit {
       this.formError = `${missing.label} is required.`;
       return;
     }
+    if (!this.form.status) {
+      this.formError = 'Status is required.';
+      return;
+    }
     const record: MasterRecord = { ...this.form, code: String(this.form.code ?? '').trim() || this.nextCode() };
     const clash = this.rows.some((r) => r.code === record.code && r.code !== this.editingCode);
     if (clash) {
@@ -160,9 +164,9 @@ export class MasterTable implements OnInit {
   }
 
   private emptyRecord(): MasterRecord {
-    const record: MasterRecord = { code: '', status: 'Active' };
+    const record: MasterRecord = { code: '', status: '' as MasterRecord['status'] };
     for (const field of this.config?.fields ?? []) {
-      record[field.key] = field.type === 'boolean' ? false : field.type === 'select' ? (field.options?.[0] ?? '') : '';
+      record[field.key] = field.type === 'boolean' ? false : '';
     }
     return record;
   }

@@ -21,7 +21,8 @@ type DetailTab = 'overview' | 'subcategories' | 'assets' | 'fields' | 'defaults'
     '../../../shared/styles/mdm-detail.css',
     '../../../shared/styles/mdm-detail-extras.css',
     '../../asset-model/model-detail/model-detail.css',
-    './type-detail.css'
+    './type-detail.css',
+    '../../../shared/styles/mdm-purple-theme.css'
   ]
 })
 export class TypeDetail implements OnChanges {
@@ -86,37 +87,9 @@ export class TypeDetail implements OnChanges {
     }));
   }
 
-  // DEMO MODE: sample rows for data owned by the Documents module
-  get documentRows() {
-    const t = this.type;
-    const kinds: [string, string, string][] = [
-      ['Specification Sheet', 'pdf', '1.2 MB'],
-      ['Maintenance Checklist', 'pdf', '420 KB'],
-      ['Warranty Terms', 'pdf', '310 KB'],
-      ['Depreciation Policy', 'docx', '96 KB'],
-      ['Safety Instructions', 'pdf', '780 KB'],
-      ['Approved Vendors', 'xlsx', '64 KB'],
-      ['Disposal Procedure', 'pdf', '210 KB'],
-      ['Tagging Guide', 'pdf', '150 KB'],
-      ['Inspection Template', 'xlsx', '58 KB']
-    ];
-    return kinds.slice(0, t.documents).map(([name, ext, size], i) => ({
-      name: `${t.name} - ${name}.${ext}`,
-      kind: name,
-      size,
-      date: (i % 2 ? t.updatedOn : t.createdOn).slice(0, 10)
-    }));
-  }
-
-  get activity() {
-    const t = this.type;
-    const list = [
-      { when: t.updatedOn, who: 'Rex Kumar', text: 'Updated asset type defaults' },
-      { when: t.createdOn, who: t.createdBy || 'Rex Kumar', text: `Created asset type ${t.code}` }
-    ];
-    if (t.status === 'Inactive') list.unshift({ when: t.updatedOn, who: 'Rex Kumar', text: 'Marked asset type as Inactive' });
-    return list;
-  }
+  // Documents and the audit log are owned by other modules; empty until those APIs are wired
+  readonly documentRows: { name: string; kind: string; size: string; date: string }[] = [];
+  readonly activity: { when: string; who: string; text: string }[] = [];
 
   editAt(tab: TypeFormTab): void {
     this.edit.emit({ type: this.type, tab });

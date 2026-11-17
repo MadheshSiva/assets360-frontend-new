@@ -2,7 +2,7 @@
   <div class="page-head">
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a routerLink="/inspection/overview">Inspection</a><span>/</span><span>Configuration</span><span>/</span>
+        <a routerLink="/inspection/overview">Inspection</a><span class="crumb-sep" aria-hidden="true">›</span><span>Configuration</span><span class="crumb-sep" aria-hidden="true">›</span>
         <span class="current">Holiday &amp; Working Calendar</span>
       </nav>
       <h1>Holiday &amp; Working Calendar</h1>
@@ -38,6 +38,7 @@
           @if (store.items().length > 1) {
             <label class="field"><span class="field-label">Calendar</span>
               <select class="control" [ngModel]="d.id" (ngModelChange)="switchTo($event)">
+                <option value="" disabled>Select Calendar</option>
                 @for (c of store.items(); track c.id) { <option [value]="c.id">{{ c.calendarName }}</option> }
               </select></label>
           }
@@ -45,10 +46,12 @@
             <input class="control" [(ngModel)]="d.calendarName" (ngModelChange)="touch()" /></label>
           <label class="field"><span class="field-label">Site</span>
             <select class="control" [(ngModel)]="d.siteName" (ngModelChange)="touch()">
+              <option value="" disabled>Select Site</option>
               @for (s of sites(); track s) { <option [value]="s">{{ s }}</option> }
             </select></label>
           <label class="field"><span class="field-label">Timezone</span>
             <select class="control" [(ngModel)]="d.timezone" (ngModelChange)="touch()">
+              <option value="" disabled>Select Timezone</option>
               @for (t of timezones; track t) { <option [value]="t">{{ t }}</option> }
             </select></label>
           <label class="field"><span class="field-label">Effective from</span>
@@ -128,14 +131,17 @@
           <div class="card-body stack">
             <label class="field"><span class="field-label">If inspection falls on non-working day</span>
               <select class="control" [(ngModel)]="d.nonWorkingDayRule" (ngModelChange)="touch()">
+                <option value="" disabled>Select Non Working Day Rule</option>
                 @for (r of rules; track r) { <option [value]="r">{{ r }}</option> }
               </select></label>
             <label class="field"><span class="field-label">Due-date calculation</span>
               <select class="control" [(ngModel)]="d.dueDateCalculation" (ngModelChange)="touch()">
+                <option value="" disabled>Select Due-date Calculation</option>
                 @for (r of dueCalcs; track r) { <option [value]="r">{{ r }}</option> }
               </select></label>
             <label class="field"><span class="field-label">SLA calendar</span>
               <select class="control" [(ngModel)]="d.slaCalendar" (ngModelChange)="touch()">
+                <option value="" disabled>Select SLA Calendar</option>
                 @for (r of slaOptions(d); track r) { <option [value]="r">{{ r }}</option> }
               </select></label>
             <div class="tg"><span>Skip holidays</span><label class="toggle"><input type="checkbox" [(ngModel)]="d.skipHolidays" (ngModelChange)="touch()" /><span></span></label></div>
@@ -211,6 +217,7 @@
           <input class="control" [(ngModel)]="f.description" placeholder="e.g. National Day" /></label>
         <label class="field"><span class="field-label">Type</span>
           <select class="control" [(ngModel)]="f.type">
+            <option value="" disabled>Select Type</option>
             @for (t of exceptionTypes; track t) { <option [value]="t">{{ t }}</option> }
           </select></label>
         <label class="check"><input type="checkbox" [(ngModel)]="f.fullDay" />Full day</label>
@@ -225,7 +232,7 @@
       </div>
       <div class="drawer-foot">
         <button type="button" class="btn btn-outline" (click)="form = null">Cancel</button>
-        <button type="button" class="btn btn-primary" [disabled]="!f.date || !f.description.trim()" (click)="saveException()">
+        <button type="button" class="btn btn-primary" [disabled]="!f.date || !f.description.trim() || !f.type" (click)="saveException()">
           {{ f.index === null ? 'Add Exception' : 'Update Exception' }}</button>
       </div>
     </aside>

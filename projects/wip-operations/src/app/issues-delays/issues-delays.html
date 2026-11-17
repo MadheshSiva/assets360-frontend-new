@@ -4,9 +4,9 @@
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <a routerLink="/dashboard" aria-label="Home"><lucide-icon [img]="icons.House" [size]="16"></lucide-icon></a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <a routerLink="/wip-operations">WIP / Operations</a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <span class="crumb-current">Issues &amp; Delays</span>
       </nav>
       <h1>Issue / Delay Management</h1>
@@ -41,11 +41,11 @@
       <!-- Filters -->
       <div class="filters">
         <label class="search"><lucide-icon [img]="icons.Search" [size]="16"></lucide-icon><input type="search" [(ngModel)]="search" placeholder="Search issue, job or owner..." aria-label="Search issues" /></label>
-        <label class="field"><span class="field-label">Site</span><select class="control" [(ngModel)]="site"><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></label>
-        <label class="field"><span class="field-label">Type</span><select class="control" [(ngModel)]="type"><option value="">All</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
-        <label class="field"><span class="field-label">Severity</span><select class="control" [(ngModel)]="severity"><option value="">All</option><option *ngFor="let s of severities" [value]="s">{{ s }}</option></select></label>
+        <label class="field"><span class="field-label">Site</span><select class="control" [(ngModel)]="site"><option value="" disabled>Select Site</option><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></label>
+        <label class="field"><span class="field-label">Type</span><select class="control" [(ngModel)]="type"><option value="">Select Type</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
+        <label class="field"><span class="field-label">Severity</span><select class="control" [(ngModel)]="severity"><option value="">Select Severity</option><option *ngFor="let s of severities" [value]="s">{{ s }}</option></select></label>
         <label class="field"><span class="field-label">Status</span>
-          <select class="control" [(ngModel)]="status"><option value="open">Open</option><option value="">All</option><option *ngFor="let s of steps" [value]="s.status">{{ s.status }}</option></select></label>
+          <select class="control" [(ngModel)]="status"><option value="" disabled>Select Status</option><option value="open">Open</option><option value="">All</option><option *ngFor="let s of steps" [value]="s.status">{{ s.status }}</option></select></label>
       </div>
 
       <!-- =================== Issue register =================== -->
@@ -90,7 +90,7 @@
             </div>
           </section>
 
-          <div class="id-pair">
+          <div *ngIf="issues.length" class="id-pair">
             <!-- Impact & delay -->
             <section class="box" aria-labelledby="id-impact">
               <h3 id="id-impact">Impact &amp; Delay</h3>
@@ -135,6 +135,7 @@
                       <td class="nowrap" [class.c-bad]="isOverdue(a)">{{ a.due | date: (a.due.slice(0, 10) === now.slice(0, 10) ? 'HH:mm' : 'dd MMM HH:mm') }}<span *ngIf="isOverdue(a)" class="sub c-bad">Overdue</span></td>
                       <td>
                         <select *ngIf="isOpen(selected); else lockedStatus" class="control status-select" [ngClass]="actionClass(a.status)" [ngModel]="a.status" (ngModelChange)="setActionStatus(selected, a, $event)" [attr.aria-label]="'Status of ' + a.text">
+                          <option value="" disabled>Select Status</option>
                           <option *ngFor="let s of actionStatuses" [value]="s">{{ s }}</option>
                         </select>
                         <ng-template #lockedStatus><span [ngClass]="actionClass(a.status)">{{ a.status }}</span></ng-template>
@@ -148,7 +149,7 @@
 
               <form *ngIf="actionForm as f" class="action-form" (ngSubmit)="saveAction()">
                 <input class="control" [(ngModel)]="f.text" name="text" placeholder="Action" aria-label="Action" />
-                <select class="control" [(ngModel)]="f.owner" name="owner" aria-label="Owner"><option *ngFor="let t of teams" [value]="t">{{ t }}</option><option [value]="selected.responsible">{{ selected.responsible }}</option><option value="Quality Supervisor">Quality Supervisor</option></select>
+                <select class="control" [(ngModel)]="f.owner" name="owner" aria-label="Owner"><option value="" disabled>Select Owner</option><option *ngFor="let t of teams" [value]="t">{{ t }}</option><option [value]="selected.responsible">{{ selected.responsible }}</option><option value="Quality Supervisor">Quality Supervisor</option></select>
                 <input class="control" type="time" [(ngModel)]="f.due" name="due" aria-label="Due time" />
                 <label class="check"><input type="checkbox" [(ngModel)]="f.mandatory" name="mandatory" />Mandatory</label>
                 <span class="action-form-btns"><button type="button" class="btn btn-outline btn-sm" (click)="actionForm = null">Cancel</button><button type="submit" class="btn btn-primary btn-sm">Add</button></span>
@@ -172,7 +173,7 @@
         </div>
 
         <!-- ===== Right column ===== -->
-        <div class="col">
+        <div *ngIf="issues.length" class="col">
           <section class="box" aria-labelledby="id-det">
             <div class="box-head"><h3 id="id-det" class="grow">Issue Details</h3></div>
             <div class="det-title">
@@ -213,7 +214,7 @@
               <label class="field"><span class="field-label">Resolution Summary</span>
                 <textarea class="control" rows="3" [(ngModel)]="selected.resolution" placeholder="What was done to resolve the issue"></textarea></label>
               <label class="field"><span class="field-label">Verification Owner</span>
-                <select class="control" [(ngModel)]="selected.verificationOwner"><option value="Quality Supervisor">Quality Supervisor</option><option value="Shift Supervisor">Shift Supervisor</option><option value="Maintenance Supervisor">Maintenance Supervisor</option></select></label>
+                <select class="control" [(ngModel)]="selected.verificationOwner"><option value="" disabled>Select Verification Owner</option><option value="Quality Supervisor">Quality Supervisor</option><option value="Shift Supervisor">Shift Supervisor</option><option value="Maintenance Supervisor">Maintenance Supervisor</option></select></label>
               <div class="checks-row">
                 <label class="check"><input type="checkbox" [(ngModel)]="selected.retestPassed" />Retest passed</label>
                 <label class="check"><input type="checkbox" [(ngModel)]="selected.evidenceReviewed" />Evidence reviewed</label>
@@ -289,6 +290,7 @@
                 <td>{{ r.action.owner }}</td>
                 <td class="nowrap" [class.c-bad]="isOverdue(r.action)">{{ r.action.due | date: 'dd MMM HH:mm' }}<span *ngIf="isOverdue(r.action)" class="sub c-bad">Overdue</span></td>
                 <td><select class="control status-select" [ngClass]="actionClass(r.action.status)" [ngModel]="r.action.status" (ngModelChange)="setActionStatus(r.issue, r.action, $event)" [attr.aria-label]="'Status of ' + r.action.text">
+                  <option value="" disabled>Select Status</option>
                   <option *ngFor="let s of actionStatuses" [value]="s">{{ s }}</option></select></td>
               </tr>
               <tr *ngIf="!actionTable.length"><td colspan="6" class="empty">{{ overdueOnly ? 'No overdue actions.' : 'No actions on open issues.' }}</td></tr>
@@ -389,14 +391,14 @@
     <form class="modal-body" (ngSubmit)="saveReport()">
       <div class="grid-3">
         <label class="field grid-span-2"><span class="field-label">Issue Title <em>*</em></span><input class="control" [(ngModel)]="f.title" name="title" /></label>
-        <label class="field"><span class="field-label">Type</span><select class="control" [(ngModel)]="f.type" name="type"><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
+        <label class="field"><span class="field-label">Type</span><select class="control" [(ngModel)]="f.type" name="type"><option value="" disabled>Select Type</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
         <label class="field"><span class="field-label">Job Order <em>*</em></span><input class="control" [(ngModel)]="f.job" name="job" placeholder="JO-2026-00438" /></label>
         <label class="field"><span class="field-label">Stage <em>*</em></span><input class="control" [(ngModel)]="f.stage" name="stage" placeholder="Testing" /></label>
         <label class="field"><span class="field-label">Task</span><input class="control" [(ngModel)]="f.task" name="task" /></label>
         <label class="field"><span class="field-label">Asset</span><input class="control" [(ngModel)]="f.asset" name="asset" placeholder="PTB-003" /></label>
-        <label class="field"><span class="field-label">Severity</span><select class="control" [(ngModel)]="f.severity" name="severity"><option *ngFor="let s of severities" [value]="s">{{ s }}</option></select></label>
-        <label class="field"><span class="field-label">Priority</span><select class="control" [(ngModel)]="f.priority" name="priority"><option *ngFor="let p of priorities" [value]="p">{{ p }}</option></select></label>
-        <label class="field"><span class="field-label">Assigned Team</span><select class="control" [(ngModel)]="f.owner" name="owner"><option *ngFor="let t of teams" [value]="t">{{ t }}</option></select></label>
+        <label class="field"><span class="field-label">Severity</span><select class="control" [(ngModel)]="f.severity" name="severity"><option value="" disabled>Select Severity</option><option *ngFor="let s of severities" [value]="s">{{ s }}</option></select></label>
+        <label class="field"><span class="field-label">Priority</span><select class="control" [(ngModel)]="f.priority" name="priority"><option value="" disabled>Select Priority</option><option *ngFor="let p of priorities" [value]="p">{{ p }}</option></select></label>
+        <label class="field"><span class="field-label">Assigned Team</span><select class="control" [(ngModel)]="f.owner" name="owner"><option value="" disabled>Select Assigned Team</option><option *ngFor="let t of teams" [value]="t">{{ t }}</option></select></label>
         <label class="field"><span class="field-label">Responsible Owner</span><input class="control" [(ngModel)]="f.responsible" name="responsible" /></label>
         <label class="switch switch--field"><input type="checkbox" [(ngModel)]="f.blocking" name="blocking" /><span class="slider" aria-hidden="true"></span>Blocks the stage</label>
         <label class="field" style="grid-column: 1 / -1"><span class="field-label">Description</span><textarea class="control" rows="3" [(ngModel)]="f.description" name="description"></textarea></label>
@@ -427,7 +429,7 @@
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="id-esc-title" (click)="$event.stopPropagation()">
     <div class="modal-head"><h2 id="id-esc-title">Escalate {{ f.issue.id }}</h2><button type="button" class="icon-btn" (click)="escalateForm = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
     <form class="modal-body" (ngSubmit)="saveEscalate()">
-      <label class="field"><span class="field-label">Level</span><select class="control" [(ngModel)]="f.level" name="level"><option *ngFor="let l of levels" [value]="l">{{ l }}</option></select></label>
+      <label class="field"><span class="field-label">Level</span><select class="control" [(ngModel)]="f.level" name="level"><option value="" disabled>Select Level</option><option *ngFor="let l of levels" [value]="l">{{ l }}</option></select></label>
       <label class="field"><span class="field-label">Escalate To <em>*</em></span><input class="control" [(ngModel)]="f.to" name="to" placeholder="e.g. Operations Manager" /></label>
       <label class="field"><span class="field-label">Reason <em>*</em></span><textarea class="control" rows="2" [(ngModel)]="f.reason" name="reason"></textarea></label>
       <div class="modal-foot modal-foot--form"><button type="button" class="btn btn-outline" (click)="escalateForm = null">Cancel</button><button type="submit" class="btn btn-primary" [disabled]="!f.to.trim() || !f.reason.trim()">Escalate</button></div>

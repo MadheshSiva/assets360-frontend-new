@@ -66,11 +66,13 @@ export const ROLE_MODULES: { name: string; na: PermAction[] }[] = [
   { name: 'Maintenance', na: [] },
   { name: 'Inspection', na: [] },
   { name: 'Inventory', na: [] },
+  { name: 'WIP / Operations', na: [] },
   { name: 'Compliance', na: [] },
   { name: 'Contracts & Warranty', na: [] },
   { name: 'Financial', na: [] },
   { name: 'Reports & Analytics', na: ['approve'] },
-  { name: 'Administration', na: ['approve'] }
+  { name: 'Administration', na: ['approve'] },
+  { name: 'Master Data Management', na: [] }
 ];
 
 export const ROLE_TYPES: RoleType[] = ['Custom', 'System'];
@@ -80,13 +82,13 @@ export const DATA_SCOPES: { id: DataScope; hint: string }[] = [
   { id: 'Own Department', hint: "Records owned by the user's department" },
   { id: 'Own Records', hint: 'Only records the user created or holds' }
 ];
-export const ASSET_CATEGORIES = ['IT Equipment', 'Vehicles', 'Furniture', 'Machinery', 'Medical Equipment', 'HVAC', 'Tools', 'Facilities'];
+/** Asset categories come from Master Data (empty until wired). */
+export const ASSET_CATEGORIES: string[] = [];
 export const SESSION_TIMEOUTS = ['30 minutes', '1 hour', '2 hours', '4 hours', '8 hours', '12 hours'];
 export const APPROVAL_LEVELS = ['Level 1', 'Level 2', 'Level 3', 'Final'];
-export const ROLE_TEMPLATES = ['', 'System Administrator', 'Operations Manager', 'Maintenance Lead', 'Inventory Manager', 'Compliance Officer', 'Report Viewer'];
 
-/** Users counted last month, for the "Users Assigned" trend */
-export const USERS_LAST_MONTH = 221;
+/** Users counted last month, for the "Users Assigned" trend (no history API yet) */
+export const USERS_LAST_MONTH = 0;
 
 const APPROVAL_TYPES: { type: string; module: string; monetary: boolean }[] = [
   { type: 'Asset Purchase Request', module: 'Assets', monetary: true },
@@ -97,21 +99,6 @@ const APPROVAL_TYPES: { type: string; module: string; monetary: boolean }[] = [
   { type: 'Contract Renewal', module: 'Contracts & Warranty', monetary: true },
   { type: 'Audit Finding Closure', module: 'Compliance', monetary: false }
 ];
-
-const FIRST = ['Ali', 'Maya', 'Hassan', 'Nadia', 'Ravi', 'Grace', 'Yusuf', 'Leena', 'Carlos', 'Hana', 'Tariq', 'Sofia', 'Imran', 'Elena', 'Kareem', 'Anjali', 'Victor', 'Noura', 'Sam', 'Zara'];
-const LAST = ['Haddad', 'Pereira', 'Qureshi', 'Saleh', 'Iyer', 'Okafor', 'Farouk', 'Menon', 'Ortiz', 'Suzuki', 'Rashid', 'Costa', 'Malik', 'Petrova', 'Nasser', 'Kapoor'];
-
-/** Deterministic demo user names for a role or policy (no backend user list yet). */
-export function demoUsers(seed: string, count: number): string[] {
-  let h = 7;
-  for (const c of seed) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  const names: string[] = [];
-  for (let i = 0; i < count; i++) {
-    const n = h + i * 7;
-    names.push(`${FIRST[n % FIRST.length]} ${LAST[Math.floor(n / FIRST.length + i) % LAST.length]}`);
-  }
-  return names;
-}
 
 type Level = 'admin' | 'manager' | 'lead' | 'operator' | 'viewer' | 'none';
 

@@ -20,7 +20,7 @@ import { calibrationStatus } from './calibration-utils';
       @if (error()) { <div class="alert">{{ error() }}</div> }
       <label class="field"><span class="field-label">Instrument <span class="req">*</span></span>
         <select class="control" [(ngModel)]="instrumentKey">
-          <option value="">Select instrument</option>
+          <option value="">Select Instrument</option>
           @for (i of api.instruments.items(); track i.id) { <option [value]="i.id">{{ i.instrumentCode }} — {{ i.instrumentName }}</option> }
         </select></label>
       <label class="field"><span class="field-label">Calibration date <span class="req">*</span></span>

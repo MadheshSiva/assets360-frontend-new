@@ -41,6 +41,7 @@ function norm(s: string): string {
               <td><lucide-icon [img]="icons.ArrowRight" [size]="14"></lucide-icon></td>
               <td>
                 <select class="select select--sm" [name]="'map' + $index" [(ngModel)]="m.target" (ngModelChange)="dirty = true">
+                  <option value="" disabled>Select Target</option>
                   <option value="">— Do not {{ job.type === 'Import' ? 'import' : 'export' }} —</option>
                   @for (f of fields; track f.label) { <option [value]="f.label">{{ f.label }}</option> }
                 </select>

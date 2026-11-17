@@ -22,7 +22,7 @@
 
     <section class="panel storage">
       <b>Storage &amp; Usage</b>
-      <div class="storage__meta"><span>{{ usedGb }} GB of {{ totalGb }} GB used</span><span>{{ storagePct }}%</span></div>
+      <div class="storage__meta"><span>{{ usedLabel }} of {{ totalGb }} GB used</span><span>{{ storagePct }}%</span></div>
       <div class="progress"><i [style.width.%]="storagePct" style="background: var(--adm-purple)"></i></div>
     </section>
   </aside>
@@ -33,7 +33,7 @@
         <lucide-icon [img]="icons.MousePointer2" [size]="15"></lucide-icon> Select
       </button>
       <div class="dd">
-        <button type="button" class="btn" [disabled]="!store.editing" aria-haspopup="menu" [attr.aria-expanded]="drawOpen" (click)="toggleDraw($event)">
+        <button type="button" class="btn" [disabled]="!store.editing || store.working || store.creatingPlan || !store.canDraw" aria-haspopup="menu" [attr.aria-expanded]="drawOpen" (click)="toggleDraw($event)">
           <lucide-icon [img]="icons.Hexagon" [size]="15"></lucide-icon> Draw Zone <lucide-icon [img]="icons.ChevronDown" [size]="14"></lucide-icon>
         </button>
         @if (drawOpen) {
@@ -44,10 +44,10 @@
           </div>
         }
       </div>
-      <button type="button" class="btn" [class.on]="placing === 'device'" [disabled]="!store.editing" (click)="startPlacing('device')">
+      <button type="button" class="btn" [class.on]="placing === 'device'" [disabled]="!store.editing || store.working || store.creatingPlan || !store.canDraw" (click)="startPlacing('device')">
         <lucide-icon [img]="icons.Cpu" [size]="15"></lucide-icon> Plot Device
       </button>
-      <button type="button" class="btn" [class.on]="placing === 'asset'" [disabled]="!store.editing" (click)="startPlacing('asset')">
+      <button type="button" class="btn" [class.on]="placing === 'asset'" [disabled]="!store.editing || store.working || store.creatingPlan || !store.canDraw" (click)="startPlacing('asset')">
         <lucide-icon [img]="icons.Package" [size]="15"></lucide-icon> Plot Asset
       </button>
     </ng-container>
@@ -64,6 +64,9 @@
       [selectedZoneId]="store.selectedZoneId"
       [selectedItemId]="store.selectedItemId"
       [placing]="!!placing"
+      [drawShape]="drawing"
+      (zoneDrawn)="zoneDrawn($event)"
+      (drawCancel)="drawing = null"
       (zoneSelect)="selectZone($event)"
       (itemSelect)="selectItem($event)"
       (place)="place($event)"
@@ -92,7 +95,7 @@
         <div class="rform">
           @for (l of store.layers; track l.id) {
             <label class="check-row">
-              <input type="checkbox" [(ngModel)]="l.enabled" [disabled]="l.locked" />
+              <input type="checkbox" [ngModel]="l.enabled" (ngModelChange)="store.setLayerEnabled(l.id, $event)" [disabled]="l.locked || store.working" />
               <lucide-icon [img]="l.icon" [size]="15"></lucide-icon>
               {{ l.name }}
             </label>
@@ -104,19 +107,19 @@
         @if (store.currentPlan; as p) {
           <dl class="rows">
             <dt>Name</dt><dd>{{ p.name }}</dd>
-            <dt>Location</dt><dd>{{ store.locationLabel() }}</dd>
+            <dt>Location</dt><dd>{{ store.planLocation(p) }}</dd>
             <dt>Type</dt><dd>{{ p.type }}</dd>
             <dt>File</dt><dd>{{ p.fileName }} ({{ p.sizeMb }} MB)</dd>
             <dt>Version</dt><dd>{{ p.version }}</dd>
             <dt>Status</dt><dd>{{ p.status }}</dd>
             <dt>Dimensions</dt><dd>{{ p.dimensions }}</dd>
             <dt>Scale</dt><dd>{{ p.scale }}</dd>
-            <dt>Updated</dt><dd>{{ date(p.updated) }} by {{ p.updatedBy }}</dd>
+            <dt>Updated</dt><dd>{{ date(p.updated) }}{{ p.updatedBy ? ' by ' + p.updatedBy : '' }}</dd>
             <dt>Zones</dt><dd>{{ store.zones.length }}</dd>
             <dt>Plotted</dt><dd>{{ store.plotted.length }} of {{ store.items.length }} items</dd>
           </dl>
         } @else {
-          <p class="empty">No floor plan for this location.</p>
+          <p class="empty">{{ store.plansLoading ? 'Loading…' : 'No floor plan for this location - use Upload Map to add one.' }}</p>
         }
       }
     }
@@ -124,5 +127,5 @@
 </div>
 
 @if (uploadOpen) {
-  <app-upload-dialog (done)="uploaded($event)" (cancel)="uploadOpen = false"></app-upload-dialog>
+  <app-upload-dialog (done)="uploaded()" (cancel)="uploadOpen = false"></app-upload-dialog>
 }

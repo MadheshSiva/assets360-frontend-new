@@ -32,7 +32,7 @@
         <div class="field">
           <label for="wh-manager">Manager</label>
           <select id="wh-manager" name="managerId" [(ngModel)]="form.managerId">
-            <option value="">Select manager</option>
+            <option value="">Select Manager</option>
             @for (e of managers; track e.id) { <option [value]="e.id">{{ e.name }} ({{ e.id }})</option> }
           </select>
         </div>
@@ -40,15 +40,17 @@
           <label for="wh-desc">Description</label>
           <textarea id="wh-desc" name="description" rows="2" placeholder="Enter description" [(ngModel)]="form.description"></textarea>
         </div>
-        <div class="field">
-          <label for="wh-status">Status</label>
+        <div class="field" [class.invalid]="errors['status']">
+          <label for="wh-status"><span class="req">*</span> Status</label>
           <div class="status-select">
             <i [attr.data-status]="form.status"></i>
             <select id="wh-status" name="status" [(ngModel)]="form.status">
+              <option value="" disabled>Select Status</option>
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
             </select>
           </div>
+          @if (errors['status']) { <small>{{ errors['status'] }}</small> }
         </div>
       }
 
@@ -73,6 +75,7 @@
           <div class="field">
             <label for="wh-country">Country</label>
             <select id="wh-country" name="country" [(ngModel)]="form.address.country">
+              <option value="" disabled>Select Country</option>
               @for (c of countries; track c.name) { <option [value]="c.name">{{ c.flag }} {{ c.name }}</option> }
             </select>
           </div>
@@ -114,7 +117,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

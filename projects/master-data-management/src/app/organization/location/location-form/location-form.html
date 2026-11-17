@@ -42,7 +42,7 @@
             <div class="field" [class.invalid]="errors.siteId">
               <label for="loc-site"><span class="req">*</span> Site</label>
               <select id="loc-site" name="siteId" [(ngModel)]="form.siteId" (ngModelChange)="onSiteChange()">
-                <option value="" disabled>Select site</option>
+                <option value="" disabled>Select Site</option>
                 @for (s of service.sites(); track s.id) { <option [value]="s.id">{{ s.name }}</option> }
               </select>
               @if (errors.siteId) { <small>{{ errors.siteId }}</small> }
@@ -57,7 +57,7 @@
           <div class="field" [class.invalid]="errors.type">
             <label for="loc-type"><span class="req">*</span> Location Type</label>
             <select id="loc-type" name="type" [(ngModel)]="form.type">
-              <option value="" disabled>Select type</option>
+              <option value="" disabled>Select Type</option>
               @for (t of types; track t) { <option [value]="t">{{ t }}</option> }
             </select>
             @if (errors.type) { <small>{{ errors.type }}</small> }
@@ -89,7 +89,7 @@
           <div class="field" [class.invalid]="errors.siteId">
             <label for="loc-site-h"><span class="req">*</span> Site</label>
             <select id="loc-site-h" name="siteIdH" [(ngModel)]="form.siteId" (ngModelChange)="onSiteChange()">
-              <option value="" disabled>Select site</option>
+              <option value="" disabled>Select Site</option>
               @for (s of service.sites(); track s.id) { <option [value]="s.id">{{ s.name }}</option> }
             </select>
             @if (errors.siteId) { <small>{{ errors.siteId }}</small> }
@@ -110,7 +110,7 @@
           <div class="field" [class.invalid]="errors.type">
             <label for="loc-type-t"><span class="req">*</span> Location Type</label>
             <select id="loc-type-t" name="typeT" [(ngModel)]="form.type">
-              <option value="" disabled>Select type</option>
+              <option value="" disabled>Select Type</option>
               @for (t of types; track t) { <option [value]="t">{{ t }}</option> }
             </select>
             @if (errors.type) { <small>{{ errors.type }}</small> }
@@ -175,7 +175,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" [disabled]="saving" class="btn btn--primary">{{ saving ? 'Saving…' : 'Save' }}</button>
+      @if (isLastTab) {
+        <button type="submit" [disabled]="saving" class="btn btn--primary">{{ saving ? 'Saving…' : 'Save' }}</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>
@@ -185,7 +189,7 @@
   <div class="field" [class.invalid]="errors.buildingCode">
     <label for="loc-building"><span class="req">*</span> Building</label>
     <select id="loc-building" name="buildingCode" [(ngModel)]="form.buildingCode" (ngModelChange)="onBuildingChange()" [disabled]="!form.siteId">
-      <option value="" disabled>Select building</option>
+      <option value="" disabled>Select Building</option>
       @for (b of service.buildings(form.siteId); track b.code) { <option [value]="b.code">{{ b.code }} - {{ b.name }}</option> }
     </select>
     @if (errors.buildingCode) { <small>{{ errors.buildingCode }}</small> }
@@ -193,7 +197,7 @@
   <div class="field" [class.invalid]="errors.floorCode">
     <label for="loc-floor"><span class="req">*</span> Floor</label>
     <select id="loc-floor" name="floorCode" [(ngModel)]="form.floorCode" (ngModelChange)="onFloorChange()" [disabled]="!form.buildingCode">
-      <option value="" disabled>Select floor</option>
+      <option value="" disabled>Select Floor</option>
       @for (f of service.floors(form.buildingCode); track f.code) { <option [value]="f.code">{{ f.name }} ({{ f.code }})</option> }
     </select>
     @if (errors.floorCode) { <small>{{ errors.floorCode }}</small> }
@@ -201,14 +205,14 @@
   <div class="field">
     <label for="loc-zone">Zone</label>
     <select id="loc-zone" name="zoneCode" [(ngModel)]="form.zoneCode" (ngModelChange)="onZoneChange()" [disabled]="!form.floorCode">
-      <option value="">Select zone</option>
+      <option value="">Select Zone</option>
       @for (z of service.zones(form.buildingCode, form.floorCode); track z.code) { <option [value]="z.code">{{ z.name }} ({{ z.code }})</option> }
     </select>
   </div>
   <div class="field">
     <label for="loc-parent">Parent Location</label>
     <select id="loc-parent" name="parentCode" [(ngModel)]="form.parentCode" [disabled]="!form.floorCode">
-      <option [ngValue]="null">Select parent location (optional)</option>
+      <option [ngValue]="null">Select Parent Location</option>
       @for (p of parentOptions; track p.code) { <option [ngValue]="p.code">{{ p.name }} ({{ p.code }})</option> }
     </select>
   </div>

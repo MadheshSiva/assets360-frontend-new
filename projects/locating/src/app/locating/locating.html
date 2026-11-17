@@ -6,7 +6,7 @@
     <div class="header-toolbar" *ngIf="showFloorPlan && floorFilters as filters">
       <div class="select-pill">
         <select [(ngModel)]="filters.parameter" (ngModelChange)="onParameterChange(filters)">
-          <option value="" disabled>Select Parameter</option>
+          <option value="">Select Parameter</option>
           <option *ngFor="let p of parameters" [value]="p.value">{{ p.label }}</option>
         </select>
       </div>
@@ -27,7 +27,7 @@
 
       <div class="select-pill">
         <select [(ngModel)]="timeRange">
-          <option value="" disabled>Time Range</option>
+          <option value="">Select Time Range</option>
           <option *ngFor="let t of timeRangeOptions" [value]="t.value">{{ t.label }}</option>
         </select>
       </div>
@@ -38,7 +38,7 @@
         </button>
         <div class="select-pill select-pill--compact">
           <select [(ngModel)]="duration">
-            <option value="" disabled>Duration</option>
+            <option value="">Select Duration</option>
             <option *ngFor="let d of durationOptions" [value]="d.value">{{ d.label }}</option>
           </select>
         </div>
@@ -177,6 +177,7 @@
         </div>
 
         <select class="filter-select stats-period-select" [(ngModel)]="selectedPeriod">
+          <option value="" disabled>Select Period</option>
           <option value="week">Week</option>
           <option value="month">Month</option>
         </select>
@@ -398,17 +399,19 @@
         <div class="stats-modal-body">
           <div class="geofence-form">
             <select class="filter-select" [(ngModel)]="newRuleZoneId">
-              <option value="" disabled>-- Select zone --</option>
+              <option value="" disabled>Select Zone</option>
               <option *ngFor="let z of zoneFilterOptions" [value]="z.id">{{ z.name }}</option>
             </select>
             <select class="filter-select" [(ngModel)]="newRuleTrigger">
+              <option value="" disabled>Select Trigger</option>
               <option value="enter">On enter</option>
               <option value="exit">On exit</option>
             </select>
             <select class="filter-select" [(ngModel)]="newRuleAction">
+              <option value="" disabled>Select Action</option>
               <option *ngFor="let a of geofenceActions" [value]="a">{{ geofenceActionLabels[a] }}</option>
             </select>
-            <button type="button" class="btn-save" [disabled]="!newRuleZoneId" (click)="addGeofenceRule()">Add rule</button>
+            <button type="button" class="btn-save" [disabled]="!newRuleZoneId || !newRuleTrigger || !newRuleAction" (click)="addGeofenceRule()">Add rule</button>
           </div>
 
           <table class="pin-popup-table geofence-table" *ngIf="geofenceRules.length">

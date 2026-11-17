@@ -6,13 +6,19 @@ import { CONDITION_TYPES, blankCondition } from '../condition.data';
 import { ConditionRecord } from '../condition.model';
 import { ConditionService } from '../condition.service';
 
+/** A new condition starts with its Type dropdown empty so the user picks it. */
+function newCondition(): ConditionRecord {
+  return { ...blankCondition(), type: '' as ConditionRecord['type'] };
+}
+
 export type CondFormTab = 'basic' | 'health' | 'usage' | 'settings';
-type FieldKey = 'name' | 'code' | 'color' | 'image' | 'isDefault' | 'healthScore' | 'displayOrder';
+type FieldKey = 'name' | 'code' | 'type' | 'color' | 'image' | 'isDefault' | 'healthScore' | 'displayOrder';
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const TAB_OF: Record<FieldKey, CondFormTab> = {
   name: 'basic',
   code: 'basic',
+  type: 'basic',
   color: 'basic',
   image: 'basic',
   isDefault: 'basic',
@@ -25,7 +31,7 @@ const TAB_OF: Record<FieldKey, CondFormTab> = {
   selector: 'app-cond-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './cond-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../level-form.css', './cond-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../level-form.css', './cond-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class CondForm implements OnChanges {
   // 'edit' changes `condition`; 'add' creates a new one, pre-filled from it if given (Duplicate)
@@ -55,13 +61,13 @@ export class CondForm implements OnChanges {
   ];
 
   tab: CondFormTab = 'basic';
-  form: ConditionRecord = blankCondition();
+  form: ConditionRecord = newCondition();
   errors: Partial<Record<FieldKey, string>> = {};
   private original: ConditionRecord | null = null;
 
   ngOnChanges(): void {
     this.original = this.mode === 'edit' ? this.condition : null;
-    this.form = this.condition ? structuredClone(this.condition) : blankCondition();
+    this.form = this.condition ? structuredClone(this.condition) : newCondition();
     if (!this.form.displayOrder) this.form.displayOrder = this.service.all().length + 1;
     this.errors = {};
     this.tab = this.startTab;
@@ -115,13 +121,30 @@ export class CondForm implements OnChanges {
     this.form.image = null;
   }
 
+  /** True on the final tab, where the primary button saves instead of advancing. */
+  get isLastTab(): boolean {
+    return this.tab === this.tabs[this.tabs.length - 1].id;
+  }
+
+  /** Move to the next tab. */
+  next(): void {
+    const i = this.tabs.findIndex((t) => t.id === this.tab);
+    if (i < this.tabs.length - 1) this.tab = this.tabs[i + 1].id;
+  }
+
   submit(): void {
+    // Enter key / primary button on earlier tabs just advances
+    if (!this.isLastTab) {
+      this.next();
+      return;
+    }
     const f = this.form;
     const errors: Partial<Record<FieldKey, string>> = {};
     if (!f.name.trim()) errors.name = 'Enter a condition name.';
     else if (this.service.isNameTaken(f.name, this.original?.code ?? null)) errors.name = `${f.name.trim()} already exists.`;
     if (!f.code.trim()) errors.code = 'Enter a code.';
     else if (this.service.isCodeTaken(f.code, this.original?.code ?? null)) errors.code = `${f.code.trim()} is already used.`;
+    if (!f.type) errors.type = 'Select a type.';
     if (!HEX_COLOR.test(f.color.trim())) errors.color = 'Enter a colour like #4CAF50.';
     if (this.original?.isDefault && !f.isDefault) errors.isDefault = 'Make another condition the default instead.';
     else if (f.isDefault && f.status !== 'Active') errors.isDefault = 'The default condition must be active.';
@@ -147,7 +170,7 @@ export class CondForm implements OnChanges {
         description: f.description.trim(),
         triggerCriteria: f.triggerCriteria.trim(),
         createdOn: this.original?.createdOn ?? stamp,
-        createdBy: this.original?.createdBy ?? 'Rex Kumar',
+        createdBy: this.original?.createdBy ?? '',
         updatedOn: stamp
       },
       originalCode: this.original?.code ?? null

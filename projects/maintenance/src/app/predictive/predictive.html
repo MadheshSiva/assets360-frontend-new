@@ -60,19 +60,19 @@
         <input type="search" placeholder="Search by asset name, tag, location..." [ngModel]="search()" (ngModelChange)="set('search', $event)" />
       </label>
       <select class="control sel" [ngModel]="risk()" (ngModelChange)="set('risk', $event)" aria-label="Risk level">
-        <option value="">All Risk Levels</option>
+        <option value="">Select Risk Level</option>
         @for (r of risks; track r) { <option [value]="r">{{ r }}</option> }
       </select>
       <select class="control sel" [ngModel]="assetType()" (ngModelChange)="set('assetType', $event)" aria-label="Asset type">
-        <option value="">All Asset Types</option>
+        <option value="">Select Asset Type</option>
         @for (t of assetTypes(); track t) { <option [value]="t">{{ t }}</option> }
       </select>
       <select class="control sel" [ngModel]="location()" (ngModelChange)="set('location', $event)" aria-label="Location">
-        <option value="">All Locations</option>
+        <option value="">Select Location</option>
         @for (l of locations(); track l) { <option [value]="l">{{ l }}</option> }
       </select>
       <select class="control sel" [ngModel]="model()" (ngModelChange)="set('model', $event)" aria-label="Model">
-        <option value="">All Models</option>
+        <option value="">Select Model</option>
         @for (m of models(); track m) { <option [value]="m">{{ m }}</option> }
       </select>
       <button type="button" class="btn btn-accent-outline" (click)="advanced.set(!advanced())"><lucide-icon [img]="icons.Filter" [size]="16"></lucide-icon>Advanced Filters</button>
@@ -80,10 +80,10 @@
     @if (advanced()) {
       <div class="adv">
         <label class="field"><span class="field-label">Sensor Type</span>
-          <select class="control" [ngModel]="sensor()" (ngModelChange)="set('sensor', $event)"><option value="">All Sensors</option>@for (s of sensors; track s) { <option [value]="s">{{ s }}</option> }</select>
+          <select class="control" [ngModel]="sensor()" (ngModelChange)="set('sensor', $event)"><option value="">Select Sensor Type</option>@for (s of sensors; track s) { <option [value]="s">{{ s }}</option> }</select>
         </label>
         <label class="field"><span class="field-label">Status</span>
-          <select class="control" [ngModel]="status()" (ngModelChange)="set('status', $event)"><option value="">All Statuses</option>@for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }</select>
+          <select class="control" [ngModel]="status()" (ngModelChange)="set('status', $event)"><option value="">Select Status</option>@for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }</select>
         </label>
         <label class="check" style="align-self: end; height: 40px"><input type="checkbox" [ngModel]="includeResolved()" (ngModelChange)="includeResolved.set($event); table.reset()" />Include resolved predictions</label>
         <div class="field"><span class="field-label">&nbsp;</span><button type="button" class="btn btn-outline" (click)="export()">Export (CSV)</button></div>
@@ -282,11 +282,11 @@
             <datalist id="pdm-models">@for (m of models(); track m) { <option [value]="m"></option> }</datalist>
           </label>
           <label class="field"><span class="field-label">Sensor Type <span class="req">*</span></span>
-            <select class="control" name="sensorType" [(ngModel)]="form.sensorType">@for (s of sensors; track s) { <option [value]="s">{{ s }}</option> }</select>
+            <select class="control" name="sensorType" [(ngModel)]="form.sensorType"><option value="" disabled>Select Sensor Type</option>@for (s of sensors; track s) { <option [value]="s">{{ s }}</option> }</select>
           </label>
           <label class="field"><span class="field-label">Data Source Device</span><input class="control" name="device" [(ngModel)]="form.dataSourceDeviceId" placeholder="e.g. VIB-SNS-012" /></label>
           <label class="field"><span class="field-label">Alert Condition</span>
-            <select class="control" name="alertCondition" [(ngModel)]="form.alertCondition">@for (c of conditions; track c) { <option [value]="c">{{ c }}</option> }</select>
+            <select class="control" name="alertCondition" [(ngModel)]="form.alertCondition"><option value="" disabled>Select Alert Condition</option>@for (c of conditions; track c) { <option [value]="c">{{ c }}</option> }</select>
           </label>
           <label class="field"><span class="field-label">Threshold ({{ unit(form.sensorType) }}) <span class="req">*</span></span><input class="control" type="number" step="any" name="threshold" [(ngModel)]="form.thresholdValue" /></label>
           <label class="field"><span class="field-label">Last Reading ({{ unit(form.sensorType) }})</span><input class="control" type="number" step="any" name="reading" [(ngModel)]="form.lastReading" />
@@ -296,14 +296,14 @@
           <h3 class="form-section">Prediction</h3>
           <label class="field"><span class="field-label">Health Score (0-100)</span><input class="control" type="number" min="0" max="100" name="health" [ngModel]="form.healthScore" (ngModelChange)="onHealth($event)" /></label>
           <label class="field"><span class="field-label">Risk Level</span>
-            <select class="control" name="riskLevel" [(ngModel)]="form.riskLevel">@for (r of risks; track r) { <option [value]="r">{{ r }}</option> }</select>
+            <select class="control" name="riskLevel" [(ngModel)]="form.riskLevel"><option value="" disabled>Select Risk Level</option>@for (r of risks; track r) { <option [value]="r">{{ r }}</option> }</select>
             <span class="field-hint">Suggested from the health score: below 50 High, below 70 At Risk.</span>
           </label>
           <label class="field"><span class="field-label">Predicted Issue</span><input class="control" name="issue" [(ngModel)]="form.predictedIssue" placeholder="e.g. Bearing Wear" /></label>
           <label class="field"><span class="field-label">Predicted Failure Date</span><input class="control" type="date" name="predictedDate" [(ngModel)]="form.predictedFailureDate" /></label>
           <label class="field"><span class="field-label">Confidence (%)</span><input class="control" type="number" min="0" max="100" name="confidence" [(ngModel)]="form.confidence" /></label>
           <label class="field"><span class="field-label">Status</span>
-            <select class="control" name="status" [(ngModel)]="form.status">@for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }</select>
+            <select class="control" name="status" [(ngModel)]="form.status"><option value="" disabled>Select Status</option>@for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }</select>
           </label>
           <label class="field span-2"><span class="field-label">Recommended Action</span><input class="control" name="action" [(ngModel)]="form.recommendedAction" placeholder="e.g. Inspect bearings" /></label>
           <label class="field span-2"><span class="field-label">Model Output</span><textarea class="control" name="output" rows="3" [(ngModel)]="form.predictionModelOutput"></textarea></label>

@@ -4,9 +4,9 @@
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <a routerLink="/wip-operations">WIP / Operations</a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <a routerLink="/wip-operations/job-templates">Job Templates</a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <span class="menu-wrap">
           <button type="button" class="crumb-btn" (click)="toggleSwitcher($event)" [attr.aria-expanded]="switcherOpen" aria-haspopup="menu" title="Switch template">
             {{ t.code }}<lucide-icon [img]="icons.ChevronDown" [size]="14"></lucide-icon>
@@ -21,7 +21,7 @@
       <h1>Job Master Template</h1>
       <p class="subtitle">Define reusable job settings, routing and execution rules</p>
     </div>
-    <div class="head-actions">
+    <div *ngIf="templateList.length" class="head-actions">
       <button type="button" class="btn btn-outline" (click)="previewOpen = true"><lucide-icon [img]="icons.Eye" [size]="18"></lucide-icon>Preview</button>
       <button type="button" class="btn btn-outline" (click)="saveDraft()"><lucide-icon [img]="icons.FileText" [size]="18"></lucide-icon>Save Draft</button>
       <button type="button" class="btn btn-primary" (click)="publish()"><lucide-icon [img]="icons.Send" [size]="18"></lucide-icon>Publish Template</button>
@@ -34,7 +34,7 @@
     <button type="button" class="icon-btn" (click)="bannerOpen = false" aria-label="Dismiss"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button>
   </div>
 
-  <div class="layout">
+  <div *ngIf="templateList.length; else noTemplates" class="layout">
     <!-- ===== Main column ===== -->
     <div class="main">
       <div class="card">
@@ -62,32 +62,32 @@
             <label class="field"><span class="field-label">Template Name <em>*</em></span><input class="control" [(ngModel)]="t.name" name="name" [class.is-invalid]="formError && !t.name.trim()" /></label>
             <label class="field"><span class="field-label">Template Code <em>*</em></span><input class="control" [ngModel]="t.code" name="code" readonly title="The code is fixed once a template is created" /></label>
             <label class="field"><span class="field-label">Job Category</span>
-              <select class="control" [(ngModel)]="t.general.jobCategory" name="jobCategory"><option *ngFor="let x of jobCategories" [value]="x">{{ x }}</option></select>
+              <select class="control" [(ngModel)]="t.general.jobCategory" name="jobCategory"><option value="" disabled>Select Job Category</option><option *ngFor="let x of jobCategories" [value]="x">{{ x }}</option></select>
             </label>
             <label class="field"><span class="field-label">Asset Type</span>
-              <select class="control" [(ngModel)]="t.general.assetType" name="assetType"><option *ngFor="let x of assetTypes" [value]="x">{{ x }}</option></select>
+              <select class="control" [(ngModel)]="t.general.assetType" name="assetType"><option value="" disabled>Select Asset Type</option><option *ngFor="let x of assetTypes" [value]="x">{{ x }}</option></select>
             </label>
             <label class="field"><span class="field-label">Organization</span>
-              <select class="control" [(ngModel)]="t.general.organization" name="organization"><option *ngFor="let x of organizations" [value]="x">{{ x }}</option></select>
+              <select class="control" [(ngModel)]="t.general.organization" name="organization"><option value="" disabled>Select Organization</option><option *ngFor="let x of organizations" [value]="x">{{ x }}</option></select>
             </label>
             <label class="field"><span class="field-label">Default Site</span>
-              <select class="control" [(ngModel)]="t.general.defaultSite" name="defaultSite"><option *ngFor="let x of sites" [value]="x">{{ x }}</option></select>
+              <select class="control" [(ngModel)]="t.general.defaultSite" name="defaultSite"><option value="" disabled>Select Default Site</option><option *ngFor="let x of sites" [value]="x">{{ x }}</option></select>
             </label>
             <label class="field"><span class="field-label">Output Item</span><input class="control" [(ngModel)]="t.general.outputItem" name="outputItem" /></label>
             <label class="field"><span class="field-label">Base Quantity</span><input type="number" class="control" [(ngModel)]="t.general.baseQuantity" name="baseQuantity" min="1" /></label>
             <label class="field"><span class="field-label">Unit of Measure</span>
-              <select class="control" [(ngModel)]="t.general.unit" name="unit"><option *ngFor="let x of units" [value]="x">{{ x }}</option></select>
+              <select class="control" [(ngModel)]="t.general.unit" name="unit"><option value="" disabled>Select Unit of Measure</option><option *ngFor="let x of units" [value]="x">{{ x }}</option></select>
             </label>
             <label class="field"><span class="field-label">Estimated Duration</span>
               <span class="suffix-wrap"><input type="number" class="control" [(ngModel)]="t.general.estimatedHours" name="estimatedHours" min="0" step="0.5" /><span class="suffix">hours</span></span>
               <small *ngIf="stagesHours !== t.general.estimatedHours" class="hint">Stages add up to {{ stagesHours }} hours.</small>
             </label>
             <label class="field"><span class="field-label">Default Priority</span>
-              <select class="control" [(ngModel)]="t.general.defaultPriority" name="defaultPriority"><option *ngFor="let x of priorities" [value]="x">{{ x }}</option></select>
+              <select class="control" [(ngModel)]="t.general.defaultPriority" name="defaultPriority"><option value="" disabled>Select Default Priority</option><option *ngFor="let x of priorities" [value]="x">{{ x }}</option></select>
             </label>
             <label class="field"><span class="field-label">Template Owner</span>
               <select class="control" [(ngModel)]="t.general.owner" name="owner">
-                <option value="">Select owner</option>
+                <option value="">Select Owner</option>
                 <option *ngFor="let x of roles" [value]="x">{{ x }}</option>
               </select>
             </label>
@@ -113,14 +113,14 @@
                   <td class="w-sm"><input type="number" class="control" [(ngModel)]="s.durationHours" min="0" step="0.5" [attr.aria-label]="'Duration of ' + s.name" /></td>
                   <td>
                     <select class="control" [(ngModel)]="s.resource" [attr.aria-label]="'Resource for ' + s.name">
-                      <option value="">None</option>
+                      <option value="">Select Resource</option>
                       <option *ngFor="let r of t.resources" [value]="r.name">{{ r.name }}</option>
                       <option *ngIf="s.resource && !hasResource(s.resource)" [value]="s.resource">{{ s.resource }}</option>
                     </select>
                   </td>
                   <td>
                     <select class="control" [(ngModel)]="s.checklist" [attr.aria-label]="'Checklist for ' + s.name">
-                      <option value="">None</option>
+                      <option value="">Select Checklist</option>
                       <option *ngFor="let c of t.checklists" [value]="c.name">{{ c.name }}</option>
                     </select>
                   </td>
@@ -147,7 +147,7 @@
               <thead><tr><th>Stage</th><th>Task</th><th>Duration (min)</th><th>Skill</th><th>Mandatory</th><th></th></tr></thead>
               <tbody>
                 <tr *ngFor="let x of t.tasks">
-                  <td class="w-md"><select class="control" [(ngModel)]="x.stage" aria-label="Stage"><option *ngFor="let n of stageNames" [value]="n">{{ n }}</option></select></td>
+                  <td class="w-md"><select class="control" [(ngModel)]="x.stage" aria-label="Stage"><option value="" disabled>Select Stage</option><option *ngFor="let n of stageNames" [value]="n">{{ n }}</option></select></td>
                   <td><input class="control" [(ngModel)]="x.name" aria-label="Task" placeholder="Task description" /></td>
                   <td class="w-sm"><input type="number" class="control" [(ngModel)]="x.durationMins" min="0" aria-label="Duration in minutes" /></td>
                   <td class="w-md"><input class="control" [(ngModel)]="x.skill" aria-label="Skill" /></td>
@@ -165,7 +165,7 @@
               <tbody>
                 <tr *ngFor="let x of t.checklists">
                   <td><input class="control" [(ngModel)]="x.name" aria-label="Checklist name" /></td>
-                  <td class="w-md"><select class="control" [(ngModel)]="x.stage" aria-label="Stage"><option *ngFor="let n of stageNames" [value]="n">{{ n }}</option></select></td>
+                  <td class="w-md"><select class="control" [(ngModel)]="x.stage" aria-label="Stage"><option value="" disabled>Select Stage</option><option *ngFor="let n of stageNames" [value]="n">{{ n }}</option></select></td>
                   <td class="w-sm"><input type="number" class="control" [(ngModel)]="x.items" min="1" aria-label="Number of items" /></td>
                   <td class="row-actions"><button type="button" class="icon-btn danger" (click)="remove('checklist', x.id)" aria-label="Delete checklist"><lucide-icon [img]="icons.Trash2" [size]="15"></lucide-icon></button></td>
                 </tr>
@@ -184,9 +184,9 @@
               <tbody>
                 <tr *ngFor="let x of t.resources">
                   <td><input class="control" [(ngModel)]="x.name" aria-label="Resource name" /></td>
-                  <td class="w-md"><select class="control" [(ngModel)]="x.type" aria-label="Type"><option *ngFor="let n of resourceTypes" [value]="n">{{ n }}</option></select></td>
+                  <td class="w-md"><select class="control" [(ngModel)]="x.type" aria-label="Type"><option value="" disabled>Select Type</option><option *ngFor="let n of resourceTypes" [value]="n">{{ n }}</option></select></td>
                   <td class="w-sm"><input type="number" class="control" [(ngModel)]="x.quantity" min="1" aria-label="Quantity" /></td>
-                  <td class="w-md"><select class="control" [(ngModel)]="x.stage" aria-label="Stage"><option *ngFor="let n of stageNames" [value]="n">{{ n }}</option></select></td>
+                  <td class="w-md"><select class="control" [(ngModel)]="x.stage" aria-label="Stage"><option value="" disabled>Select Stage</option><option *ngFor="let n of stageNames" [value]="n">{{ n }}</option></select></td>
                   <td class="row-actions"><button type="button" class="icon-btn danger" (click)="remove('resource', x.id)" aria-label="Delete resource"><lucide-icon [img]="icons.Trash2" [size]="15"></lucide-icon></button></td>
                 </tr>
                 <tr *ngIf="!t.resources.length"><td colspan="5" class="empty">No resources yet.</td></tr>
@@ -202,8 +202,8 @@
                   <td class="w-md"><input class="control" [(ngModel)]="x.code" aria-label="Item code" /></td>
                   <td><input class="control" [(ngModel)]="x.name" aria-label="Material" /></td>
                   <td class="w-sm"><input type="number" class="control" [(ngModel)]="x.quantity" min="0" step="0.1" aria-label="Quantity" /></td>
-                  <td class="w-sm"><select class="control" [(ngModel)]="x.unit" aria-label="Unit"><option *ngFor="let n of units" [value]="n">{{ n }}</option></select></td>
-                  <td class="w-md"><select class="control" [(ngModel)]="x.stage" aria-label="Stage"><option *ngFor="let n of stageNames" [value]="n">{{ n }}</option></select></td>
+                  <td class="w-sm"><select class="control" [(ngModel)]="x.unit" aria-label="Unit"><option value="" disabled>Select Unit</option><option *ngFor="let n of units" [value]="n">{{ n }}</option></select></td>
+                  <td class="w-md"><select class="control" [(ngModel)]="x.stage" aria-label="Stage"><option value="" disabled>Select Stage</option><option *ngFor="let n of stageNames" [value]="n">{{ n }}</option></select></td>
                   <td class="row-actions"><button type="button" class="icon-btn danger" (click)="remove('material', x.id)" aria-label="Delete material"><lucide-icon [img]="icons.Trash2" [size]="15"></lucide-icon></button></td>
                 </tr>
                 <tr *ngIf="!t.materials.length"><td colspan="6" class="empty">No materials yet.</td></tr>
@@ -221,7 +221,7 @@
               <tbody>
                 <tr *ngFor="let x of t.quality.checks">
                   <td class="w-lg"><input class="control" [(ngModel)]="x.name" aria-label="Check" /></td>
-                  <td class="w-md"><select class="control" [(ngModel)]="x.stage" aria-label="Stage"><option *ngFor="let n of stageNames" [value]="n">{{ n }}</option></select></td>
+                  <td class="w-md"><select class="control" [(ngModel)]="x.stage" aria-label="Stage"><option value="" disabled>Select Stage</option><option *ngFor="let n of stageNames" [value]="n">{{ n }}</option></select></td>
                   <td><input class="control" [(ngModel)]="x.criteria" aria-label="Acceptance criteria" /></td>
                   <td class="row-actions"><button type="button" class="icon-btn danger" (click)="remove('check', x.id)" aria-label="Delete check"><lucide-icon [img]="icons.Trash2" [size]="15"></lucide-icon></button></td>
                 </tr>
@@ -236,7 +236,7 @@
               <tbody>
                 <tr *ngFor="let x of t.quality.permits">
                   <td><input class="control" [(ngModel)]="x.name" aria-label="Permit" /></td>
-                  <td class="w-md"><select class="control" [(ngModel)]="x.stage" aria-label="Stage"><option *ngFor="let n of stageNames" [value]="n">{{ n }}</option></select></td>
+                  <td class="w-md"><select class="control" [(ngModel)]="x.stage" aria-label="Stage"><option value="" disabled>Select Stage</option><option *ngFor="let n of stageNames" [value]="n">{{ n }}</option></select></td>
                   <td class="w-md"><input class="control" [(ngModel)]="x.issuer" aria-label="Issued by" /></td>
                   <td class="row-actions"><button type="button" class="icon-btn danger" (click)="remove('permit', x.id)" aria-label="Delete permit rule"><lucide-icon [img]="icons.Trash2" [size]="15"></lucide-icon></button></td>
                 </tr>
@@ -277,7 +277,7 @@
               <span class="suffix-wrap"><input type="number" class="control" [(ngModel)]="t.sla.warningPercent" name="warningPercent" min="1" max="100" /><span class="suffix">% of target</span></span>
             </label>
             <label class="field"><span class="field-label">Escalate To</span>
-              <select class="control" [(ngModel)]="t.sla.escalateTo" name="escalateTo"><option *ngFor="let x of roles" [value]="x">{{ x }}</option></select>
+              <select class="control" [(ngModel)]="t.sla.escalateTo" name="escalateTo"><option value="" disabled>Select Escalate To</option><option *ngFor="let x of roles" [value]="x">{{ x }}</option></select>
             </label>
           </div>
           <p class="hint">A warning is raised after {{ (t.sla.targetHours * t.sla.warningPercent) / 100 | number: '1.0-1' }} hours; the SLA is breached after {{ t.sla.targetHours }} hours.</p>
@@ -289,7 +289,7 @@
                 <tr *ngFor="let x of t.sla.alerts">
                   <td><input class="control" [(ngModel)]="x.event" aria-label="Event" /></td>
                   <td class="w-md"><input class="control" [(ngModel)]="x.notify" aria-label="Notify" /></td>
-                  <td class="w-md"><select class="control" [(ngModel)]="x.channel" aria-label="Channel"><option *ngFor="let n of channels" [value]="n">{{ n }}</option></select></td>
+                  <td class="w-md"><select class="control" [(ngModel)]="x.channel" aria-label="Channel"><option value="" disabled>Select Channel</option><option *ngFor="let n of channels" [value]="n">{{ n }}</option></select></td>
                   <td class="row-actions"><button type="button" class="icon-btn danger" (click)="remove('alert', x.id)" aria-label="Delete alert"><lucide-icon [img]="icons.Trash2" [size]="15"></lucide-icon></button></td>
                 </tr>
                 <tr *ngIf="!t.sla.alerts.length"><td colspan="4" class="empty">No alert rules.</td></tr>
@@ -314,7 +314,7 @@
             </div>
           </ng-container>
           <label class="field"><span class="field-label">Release Workflow</span>
-            <select class="control w-select" [(ngModel)]="t.execution.workflow" name="workflow"><option value="">None</option><option *ngFor="let x of workflows" [value]="x">{{ x }}</option></select>
+            <select class="control w-select" [(ngModel)]="t.execution.workflow" name="workflow"><option value="">Select Release Workflow</option><option *ngFor="let x of workflows" [value]="x">{{ x }}</option></select>
           </label>
           <h3>Access</h3>
           <div class="field"><span class="field-label">Can edit</span>
@@ -414,8 +414,12 @@
     </aside>
   </div>
 
+  <ng-template #noTemplates>
+    <div class="card"><p class="empty">No job templates yet.</p></div>
+  </ng-template>
+
   <!-- ===== Footer ===== -->
-  <footer class="card foot">
+  <footer *ngIf="templateList.length" class="card foot">
     <span class="muted grow">Last updated {{ t.lastUpdated | date: 'dd MMM yyyy' }} by {{ t.lastUpdatedBy }} &bull; Changes apply to new job orders</span>
     <button type="button" class="btn btn-outline" (click)="cancel()">Cancel</button>
     <button type="button" class="btn btn-primary" (click)="saveDraft()"><lucide-icon [img]="icons.Save" [size]="16"></lucide-icon>Save Draft</button>

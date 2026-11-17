@@ -2,7 +2,7 @@
   <section class="dv-main">
     <header class="dv-head">
       <div class="grow">
-        <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep">/</span><strong>IoT Device Management</strong></nav>
+        <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep" aria-hidden="true">›</span><strong>IoT Device Management</strong></nav>
         <h1>IoT Device Management</h1>
         <p>Register connected devices, monitor device health and manage asset associations.</p>
       </div>
@@ -34,11 +34,13 @@
     <section class="card table-card" aria-label="Devices">
       <div class="filters">
         <label class="search"><lucide-icon [img]="icons.Search" [size]="17"></lucide-icon><input type="search" [(ngModel)]="search" (ngModelChange)="onFilter()" placeholder="Search device, serial, IMEI or asset" aria-label="Search devices" /></label>
-        <label class="lsel"><span>Device Type</span><select class="control" [(ngModel)]="typeFilter" (ngModelChange)="onFilter()"><option value="">All Types</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
-        <label class="lsel"><span>Connectivity</span><select class="control" [(ngModel)]="connFilter" (ngModelChange)="onFilter()"><option value="">All</option><option *ngFor="let c of conns" [value]="c">{{ c }}</option></select></label>
-        <label class="lsel"><span>Site</span><select class="control" [(ngModel)]="siteFilter" (ngModelChange)="onFilter()"><option value="">All Sites</option><option *ngFor="let s of sites" [value]="s.name">{{ s.name }}</option></select></label>
-        <label class="lsel"><span>Health</span><select class="control" [(ngModel)]="healthFilter" (ngModelChange)="onFilter()"><option value="">All Statuses</option><option *ngFor="let h of healths" [value]="h">{{ h }}</option></select></label>
+        <label class="lsel"><span>Device Type</span><select class="control" [(ngModel)]="typeFilter" (ngModelChange)="onFilter()"><option value="">Select Type</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
+        <label class="lsel"><span>Connectivity</span><select class="control" [(ngModel)]="connFilter" (ngModelChange)="onFilter()"><option value="">Select Connection</option><option *ngFor="let c of connectivityOptions" [value]="c">{{ c }}</option></select></label>
+        <label class="lsel"><span>Site</span><select class="control" [(ngModel)]="siteFilter" (ngModelChange)="onFilter()"><option value="">Select Site</option><option *ngFor="let s of sites" [value]="s.name">{{ s.name }}</option></select></label>
+        <label class="lsel"><span>Health</span><select class="control" [(ngModel)]="healthFilter" (ngModelChange)="onFilter()"><option value="">Select Health</option><option *ngFor="let h of healths" [value]="h">{{ h }}</option></select></label>
       </div>
+      <p *ngIf="loading" class="muted small" role="status">Loading devices…</p>
+      <p *ngIf="loadError" class="form-error" role="alert">{{ loadError }} <button type="button" class="link-btn" (click)="load()">Retry</button></p>
       <div *ngIf="hasFilters" class="chips-row"><span class="muted">{{ rows.length | number }} of {{ counts.total | number }} devices</span><button type="button" class="link-btn" (click)="clearFilters()">Clear filters</button></div>
 
       <div class="table-wrap">
@@ -53,16 +55,16 @@
               <td>{{ d.model }}</td>
               <td><span class="pill" [ngClass]="connClass(d)"><i></i>{{ d.conn }}</span></td>
               <td (click)="$event.stopPropagation()"><button *ngIf="d.asset as a; else noAsset" type="button" class="link" (click)="select(d); viewAsset(d)">{{ a.name }}</button><ng-template #noAsset><span class="muted">—</span></ng-template></td>
-              <td class="nowrap">{{ d.gateway }}</td>
+              <td class="nowrap">{{ d.gateway || '—' }}</td>
               <td>
                 <span *ngIf="d.battery !== null; else wired" class="bat" [ngClass]="batteryClass(d)"><lucide-icon [img]="batteryIcon(d)" [size]="18"></lucide-icon><span class="ink">{{ d.battery }}%</span></span>
-                <ng-template #wired><span class="bat"><lucide-icon [img]="icons.Plug" [size]="15"></lucide-icon>{{ d.power === 'PoE' ? 'PoE' : 'External power' }}</span></ng-template>
+                <ng-template #wired><span class="bat"><lucide-icon *ngIf="d.power !== 'Battery'" [img]="icons.Plug" [size]="15"></lucide-icon>{{ powerText(d) }}</span></ng-template>
               </td>
               <td>{{ ago(d.lastSeenSec) }}</td>
               <td><span class="pill" [ngClass]="healthClass(d)"><i></i>{{ d.health }}</span></td>
               <td class="col-act" (click)="$event.stopPropagation()"><button type="button" class="icon-btn" (click)="openMenu(d, $event)" aria-haspopup="menu" [attr.aria-expanded]="menuId === d.id" [attr.aria-label]="'Actions for ' + d.id"><lucide-icon [img]="icons.Ellipsis" [size]="19"></lucide-icon></button></td>
             </tr>
-            <tr *ngIf="!pageRows.length"><td colspan="10" class="empty">No devices match these filters. <button type="button" class="link-btn" (click)="clearFilters()">Clear filters</button></td></tr>
+            <tr *ngIf="!pageRows.length && !loading"><td colspan="10" class="empty"><ng-container *ngIf="hasFilters; else noDevices">No devices match these filters. <button type="button" class="link-btn" (click)="clearFilters()">Clear filters</button></ng-container><ng-template #noDevices>No devices found.</ng-template></td></tr>
           </tbody>
         </table>
       </div>
@@ -98,8 +100,8 @@
       <!-- Device health overview -->
       <section class="card health" aria-labelledby="dv-health">
         <div class="health-head">
-          <h2 id="dv-health" class="grow">Device Health Overview <small>{{ chartDevice.name }} · {{ chartDevice.id }}</small></h2>
-          <select class="control control-sm" [(ngModel)]="range" (ngModelChange)="hover = null" aria-label="Chart range"><option value="24h">Last 24 hours</option><option value="7d">Last 7 days</option></select>
+          <h2 id="dv-health" class="grow">Device Health Overview <small *ngIf="chartDevice as cd">{{ cd.name }} · {{ cd.id }}</small></h2>
+          <select class="control control-sm" [(ngModel)]="range" (ngModelChange)="hover = null" aria-label="Chart range"><option value="" disabled>Select Chart Range</option><option value="24h">Last 24 hours</option><option value="7d">Last 7 days</option></select>
         </div>
         <div class="legend">
           <span><i class="lg lg--sig"></i>Signal Strength (dBm)</span>
@@ -107,7 +109,7 @@
           <span><i class="lg lg--msg"></i>Last Communication</span>
         </div>
         <div class="chart-wrap" *ngIf="chart as c" (mouseleave)="hover = null">
-          <svg [attr.viewBox]="'0 0 ' + cw + ' ' + ch" class="chart" role="img" [attr.aria-label]="'Signal, battery and messages for ' + chartDevice.id">
+          <svg [attr.viewBox]="'0 0 ' + cw + ' ' + ch" class="chart" role="img" [attr.aria-label]="'Signal, battery and messages for ' + chartDevice?.id">
             <g class="grid">
               <line *ngFor="let t of sigTicks" [attr.x1]="cp.l" [attr.x2]="cw - cp.r" [attr.y1]="sigY(t)" [attr.y2]="sigY(t)"></line>
               <line *ngFor="let t of batTicks" [attr.x1]="cp.l" [attr.x2]="cw - cp.r" [attr.y1]="batY(t)" [attr.y2]="batY(t)"></line>
@@ -134,6 +136,7 @@
             <span><i class="lg lg--msg"></i>Messages<b>{{ c.pts[hover].msgs }}</b></span>
           </div>
         </div>
+        <p *ngIf="!chart" class="muted">{{ chartDevice ? "No health data reported for this device yet." : "Select a device to see its signal, battery and message history." }}</p>
       </section>
     </div>
   </section>
@@ -161,35 +164,35 @@
         <dl class="kv">
           <dt>Device Name</dt><dd>{{ d.name }}</dd>
           <dt>Device ID</dt><dd>{{ d.id }}</dd>
-          <dt>Serial Number</dt><dd>{{ d.serial }}</dd>
+          <dt>Serial Number</dt><dd>{{ d.serial || '—' }}</dd>
           <ng-container *ngIf="d.imei"><dt>IMEI</dt><dd>{{ d.imei }}</dd></ng-container>
           <dt>Device Type</dt><dd>{{ d.type }}</dd>
           <dt>Model</dt><dd>{{ d.model }}</dd>
-          <dt>Protocol</dt><dd>{{ d.protocol }}</dd>
-          <dt>Firmware Version</dt><dd>{{ d.firmware }}</dd>
+          <dt>Protocol</dt><dd>{{ d.protocol || '—' }}</dd>
+          <dt>Firmware Version</dt><dd>{{ d.firmware || '—' }}</dd>
         </dl>
         <h3>Association</h3>
         <dl class="kv">
           <dt>Linked Asset</dt>
           <dd><button *ngIf="d.asset as a; else noLink" type="button" class="link link--u" (click)="viewAsset(d)">{{ a.name }}</button>
             <ng-template #noLink><span class="muted">Not linked</span> <button type="button" class="link-btn" (click)="openLink(d)">Link asset</button></ng-template></dd>
-          <dt>Gateway</dt><dd><button type="button" class="link link--u" (click)="showGateway(d)">{{ d.gateway }}</button></dd>
+          <dt>Gateway</dt><dd><button *ngIf="d.gateway; else noGw" type="button" class="link link--u" (click)="showGateway(d)">{{ d.gateway }}</button><ng-template #noGw>—</ng-template></dd>
           <dt>Last Seen</dt><dd>{{ ago(d.lastSeenSec) }}<small class="block muted">{{ seenDate(d) }}</small></dd>
         </dl>
         <h3>Status</h3>
         <dl class="kv kv--status">
           <dt>Battery</dt>
           <dd><ng-container *ngIf="d.battery !== null; else noBat"><span class="bat" [ngClass]="batteryClass(d)"><lucide-icon [img]="batteryIcon(d)" [size]="18"></lucide-icon><span class="ink">{{ d.battery }}%</span></span><span class="pill pill--sq" [ngClass]="batteryWord(d).cls">{{ batteryWord(d).label }}</span></ng-container>
-            <ng-template #noBat><span class="bat"><lucide-icon [img]="icons.Plug" [size]="15"></lucide-icon>{{ d.power === 'PoE' ? 'PoE' : 'External power' }}</span></ng-template></dd>
-          <dt>Signal Strength</dt><dd><span class="bat" [ngClass]="signalClass(d.rssi)"><lucide-icon [img]="signalIcon(d.rssi)" [size]="17"></lucide-icon><span class="ink">{{ d.lastSeenSec === null ? '—' : d.rssi + ' dBm' }}</span></span></dd>
+            <ng-template #noBat><span class="bat"><lucide-icon *ngIf="d.power !== 'Battery'" [img]="icons.Plug" [size]="15"></lucide-icon>{{ powerText(d) }}</span></ng-template></dd>
+          <dt>Signal Strength</dt><dd><span class="bat" [ngClass]="signalClass(d.rssi)"><lucide-icon [img]="signalIcon(d.rssi)" [size]="17"></lucide-icon><span class="ink">{{ d.rssi === null ? '—' : d.rssi + ' dBm' }}</span></span></dd>
           <dt>Health</dt><dd><span class="pill" [ngClass]="healthClass(d)"><i></i>{{ d.health }}</span></dd>
         </dl>
       </ng-container>
 
       <ng-container *ngIf="tab === 'telemetry'">
         <div class="tiles">
-          <div class="tile"><span>Signal</span><strong [ngClass]="signalClass(d.rssi)">{{ d.lastSeenSec === null ? '—' : d.rssi + ' dBm' }}</strong></div>
-          <div class="tile"><span>Battery</span><strong [ngClass]="batteryClass(d)">{{ d.battery !== null ? d.battery + '%' : (d.power === 'PoE' ? 'PoE' : 'External') }}</strong></div>
+          <div class="tile"><span>Signal</span><strong [ngClass]="signalClass(d.rssi)">{{ d.rssi === null ? '—' : d.rssi + ' dBm' }}</strong></div>
+          <div class="tile"><span>Battery</span><strong [ngClass]="batteryClass(d)">{{ d.battery !== null ? d.battery + '%' : powerText(d) }}</strong></div>
           <div class="tile"><span>Messages ({{ range }})</span><strong>{{ msgCount(d) | number }}</strong></div>
           <div class="tile"><span>Uptime ({{ range }})</span><strong>{{ uptime(d) }}</strong></div>
         </div>
@@ -215,7 +218,7 @@
         <label class="field"><span class="field-label">Low-battery alert below (%)</span><input class="control" type="number" min="5" max="50" [(ngModel)]="settingsDraft.lowBattery" name="lb" [disabled]="d.battery === null" /></label>
         <label class="check"><input type="checkbox" [(ngModel)]="settingsDraft.alerts" name="al" />Send health alerts for this device</label>
         <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
-        <div class="settings-foot"><button type="button" class="btn btn-outline btn-sm" (click)="resetSettings()">Reset</button><button type="submit" class="btn btn-primary btn-sm">Save settings</button></div>
+        <div class="settings-foot"><button type="button" class="btn btn-outline btn-sm" (click)="resetSettings()">Reset</button><button type="submit" class="btn btn-primary btn-sm" title="Applies for this session only">Save settings</button></div>
       </form>
     </div>
 
@@ -235,6 +238,7 @@
   <button *ngIf="m.asset" type="button" role="menuitem" (click)="openLink(m)">Change linked asset</button>
   <button *ngIf="m.asset" type="button" role="menuitem" (click)="openUnlink(m)">Unlink asset</button>
   <button type="button" role="menuitem" class="danger" (click)="replace(m)">Replace device</button>
+  <button type="button" role="menuitem" class="danger" (click)="openDelete(m)">Delete device</button>
 </div>
 
 <!-- ===== Add device ===== -->
@@ -243,18 +247,23 @@
     <div class="modal-head"><h2 id="dv-add">Add Device</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
     <form class="modal-body" (ngSubmit)="saveAdd()">
       <div class="two">
-        <label class="field"><span class="field-label">Device type</span><select class="control" [(ngModel)]="dl.f.type" name="type" (ngModelChange)="onAddType(dl.f)"><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
-        <label class="field"><span class="field-label">Model</span><select class="control" [(ngModel)]="dl.f.model" name="model"><option *ngFor="let m of modelsFor(dl.f.type)" [value]="m">{{ m }}</option></select></label>
+        <label class="field"><span class="field-label">Device type</span><select class="control" [(ngModel)]="dl.f.type" name="type" (ngModelChange)="onAddType(dl.f)"><option value="" disabled>Select Device Type</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
+        <label class="field"><span class="field-label">Model</span><select class="control" [(ngModel)]="dl.f.model" name="model" (ngModelChange)="onAddModel(dl.f)"><option value="" disabled>Select Model</option><option *ngFor="let m of modelsFor(dl.f.type)" [value]="m">{{ m }}</option></select></label>
         <label class="field"><span class="field-label">Device name <em>*</em></span><input class="control" [(ngModel)]="dl.f.name" name="name" /></label>
         <label class="field"><span class="field-label">Device ID <em>*</em></span><input class="control" [(ngModel)]="dl.f.id" name="id" placeholder="e.g. BL-29901" /></label>
         <label class="field"><span class="field-label">Serial number <em>*</em></span><input class="control" [(ngModel)]="dl.f.serial" name="serial" placeholder="e.g. SN-BL-29901" /></label>
-        <label class="field"><span class="field-label">Connectivity</span><select class="control" [(ngModel)]="dl.f.protocol" name="proto"><option *ngFor="let p of protocols" [value]="p">{{ p }}</option></select></label>
-        <label class="field"><span class="field-label">Site</span><select class="control" [(ngModel)]="dl.f.site" name="site" (ngModelChange)="onAddSite(dl.f)"><option *ngFor="let s of sites" [value]="s.name">{{ s.name }}</option></select></label>
-        <label class="field"><span class="field-label">Gateway</span><select class="control" [(ngModel)]="dl.f.gateway" name="gw"><option *ngIf="dl.f.type === 'GPS / Cellular'" value="Cellular">Cellular</option><ng-container *ngIf="dl.f.type !== 'GPS / Cellular'"><option *ngFor="let g of gatewaysFor(dl.f.site)" [value]="g">{{ g }}</option></ng-container></select></label>
+        <label class="field"><span class="field-label">Connectivity</span><select class="control" [(ngModel)]="dl.f.protocol" name="proto"><option value="" disabled>Select Connectivity</option><option *ngFor="let p of protocols" [value]="p">{{ p }}</option></select></label>
+        <label class="field"><span class="field-label">Site</span><select class="control" [(ngModel)]="dl.f.site" name="site" (ngModelChange)="onAddSite(dl.f)"><option value="">Select Site</option><option *ngFor="let s of sites" [value]="s.name">{{ s.name }}</option></select></label>
+        <label class="field"><span class="field-label">Gateway</span><select class="control" [(ngModel)]="dl.f.gateway" name="gw"><option value="">Select Gateway</option><option *ngIf="cellular(dl.f)" value="Cellular">Cellular</option><option *ngFor="let g of gatewaysFor(dl.f.site)" [value]="g">{{ g }}</option></select></label>
       </div>
-      <label class="field"><span class="field-label">Link to asset (optional)</span><input class="control" [(ngModel)]="dl.f.asset" name="asset" list="dv-assets" placeholder="Asset code, e.g. FL-008" autocomplete="off" /></label>
+      <label class="field"><span class="field-label">Link to asset (optional)</span>
+        <select class="control" [(ngModel)]="dl.f.asset" name="asset">
+          <option value="">Select Asset</option>
+          <option *ngFor="let a of assetOptions" [value]="a.code">{{ assetOptionLabel(a) }}</option>
+        </select>
+        <small class="muted">{{ assetOptions.length ? 'Registered assets: name - asset ID.' : 'No registered assets found.' }}</small></label>
       <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
-      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-primary">Add Device</button></div>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-primary" [disabled]="saving">Add Device</button></div>
     </form>
   </div>
 </div>
@@ -264,7 +273,7 @@
   <div class="modal modal--lg" role="dialog" aria-modal="true" aria-labelledby="dv-imp" (click)="$event.stopPropagation()">
     <div class="modal-head"><h2 id="dv-imp">Import Devices</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
     <div class="modal-body">
-      <p class="muted small">Columns: Device ID, Name, Device Type, Model, Serial, Site, Gateway, Linked Asset. Rows with errors are skipped.</p>
+      <p class="muted small">Columns: Device ID, Name, Device Type, Model, Serial, Connectivity, Site, Gateway, Linked Asset. Rows with errors are skipped.</p>
       <div class="import-actions">
         <button type="button" class="btn btn-outline btn-sm" (click)="downloadTemplate()"><lucide-icon [img]="icons.Download" [size]="15"></lucide-icon>Download template</button>
         <label class="btn btn-primary btn-sm file-btn"><lucide-icon [img]="icons.Upload" [size]="15"></lucide-icon>Choose file<input type="file" accept=".xlsx,.xls,.csv" (change)="onImportFile($event)" /></label>
@@ -278,7 +287,7 @@
             <td><span *ngIf="!r.error" class="ok">Ready</span><span *ngIf="r.error" class="bad">{{ r.error }}</span></td></tr></tbody>
         </table>
       </div>
-      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-primary" [disabled]="!importValid" (click)="saveImport()">Import {{ importValid }} device{{ importValid === 1 ? '' : 's' }}</button></div>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-primary" [disabled]="!importValid || saving" (click)="saveImport()">Import {{ importValid }} device{{ importValid === 1 ? '' : 's' }}</button></div>
     </div>
   </div>
 </div>
@@ -289,9 +298,13 @@
     <div class="modal-head"><h2 id="dv-link">Link {{ dl.deviceId }} to an asset</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
     <form class="modal-body" (ngSubmit)="saveLink()">
       <p *ngIf="byId(dl.deviceId)?.asset as cur" class="muted small">Currently linked to <b>{{ cur.name }}</b>. The previous link stays in the device's events.</p>
-      <label class="field"><span class="field-label">Asset <em>*</em></span><input class="control" [(ngModel)]="dl.asset" name="asset" list="dv-assets" placeholder="Asset code, e.g. PMP-118" autocomplete="off" /></label>
+      <label class="field"><span class="field-label">Asset <em>*</em></span>
+        <select class="control" [(ngModel)]="dl.asset" name="asset">
+          <option value="">Select Asset</option>
+          <option *ngFor="let a of assetOptions" [value]="a.code">{{ assetOptionLabel(a) }}</option>
+        </select></label>
       <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
-      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-primary">Link</button></div>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-primary" [disabled]="saving">Link</button></div>
     </form>
   </div>
 </div>
@@ -303,11 +316,23 @@
     <form class="modal-body" (ngSubmit)="saveUnlink()">
       <p class="small">The device keeps reporting but is no longer associated with <b>{{ byId(dl.deviceId)?.asset?.name }}</b>. The asset's history is kept.</p>
       <label class="field"><span class="field-label">Reason</span><input class="control" [(ngModel)]="dl.reason" name="reason" placeholder="e.g. device moved to spare stock" /></label>
-      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-danger-solid">Unlink</button></div>
+      <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-danger-solid" [disabled]="saving">Unlink</button></div>
     </form>
   </div>
 </div>
 
-<datalist id="dv-assets"><option *ngFor="let a of assetOptions" [value]="a.code">{{ a.name }}</option></datalist>
+<!-- ===== Delete device ===== -->
+<div *ngIf="dlg('delete') as dl" class="overlay" (click)="dialog = null">
+  <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="dv-del" (click)="$event.stopPropagation()">
+    <div class="modal-head"><h2 id="dv-del">Delete {{ dl.deviceId }}</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+    <form class="modal-body" (ngSubmit)="saveDelete()">
+      <p class="small">The device record is removed{{ byId(dl.deviceId)?.asset ? ' and unlinked from ' + byId(dl.deviceId)?.asset?.name : '' }}. This cannot be undone.</p>
+      <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-danger-solid" [disabled]="saving">Delete</button></div>
+    </form>
+  </div>
+</div>
+
 
 <div *ngIf="toast" class="toast" role="status">{{ toast }}</div>

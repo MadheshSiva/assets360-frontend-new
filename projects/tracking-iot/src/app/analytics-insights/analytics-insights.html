@@ -1,5 +1,5 @@
 <section class="ai-page">
-  <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep">/</span><strong>Analytics &amp; Insights</strong></nav>
+  <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep" aria-hidden="true">›</span><strong>Analytics &amp; Insights</strong></nav>
   <header class="ai-head">
     <h1>Analytics &amp; Insights</h1>
     <p>Understand asset movement, device reliability and telemetry patterns across your connected estate.</p>
@@ -8,7 +8,7 @@
   <!-- ===== Filters ===== -->
   <div class="filters">
     <label class="field"><span class="field-label">Site</span>
-      <select class="control" [(ngModel)]="site"><option value="">All Sites</option><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></label>
+      <select class="control" [(ngModel)]="site"><option value="">Select Site</option><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></label>
     <div class="field field--range"><span class="field-label" id="ai-range">Date range</span>
       <span class="menu-wrap">
         <button type="button" class="control range-btn" aria-labelledby="ai-range" (click)="$event.stopPropagation(); rangeOpen = !rangeOpen; menuOpen = ''" [attr.aria-expanded]="rangeOpen">
@@ -27,9 +27,9 @@
       </span>
     </div>
     <label class="field"><span class="field-label">Asset Type</span>
-      <select class="control" [(ngModel)]="assetType"><option value="">All</option><option *ngFor="let t of assetTypes" [value]="t">{{ t }}</option></select></label>
+      <select class="control" [(ngModel)]="assetType"><option value="">Select Asset Type</option><option *ngFor="let t of assetTypes" [value]="t">{{ t }}</option></select></label>
     <label class="field"><span class="field-label">Device Technology</span>
-      <select class="control" [(ngModel)]="tech"><option value="">All</option><option *ngFor="let t of techs" [value]="t">{{ t }}</option></select></label>
+      <select class="control" [(ngModel)]="tech"><option value="">Select Device Technology</option><option *ngFor="let t of techs" [value]="t">{{ t }}</option></select></label>
     <div class="head-actions">
       <span class="menu-wrap">
         <button type="button" class="btn btn-outline" (click)="toggleMenu('views', $event)" [attr.aria-expanded]="menuOpen === 'views'"><lucide-icon [img]="icons.Bookmark" [size]="17"></lucide-icon>Save View</button>
@@ -57,33 +57,34 @@
     </div>
   </div>
 
-  <p *ngIf="!hasDevices" class="card empty-note">No devices match these filters. Change the site, asset type or technology.</p>
+  <p *ngIf="error" class="card empty-note" role="alert">{{ error }} <button type="button" class="link-btn" (click)="load(true)">Retry</button></p>
+  <p *ngIf="!error && (loading || !hasDevices)" class="card empty-note">{{ loading ? 'Loading analytics…' : 'No devices match these filters. Change the site, asset type or technology.' }}</p>
 
   <!-- ===== KPIs ===== -->
   <div class="kpis" *ngIf="a.kpi as k">
     <div class="card kpi">
       <span class="kpi-ic kpi-ic--violet"><lucide-icon [img]="icons.Activity" [size]="28"></lucide-icon></span>
       <div class="kpi-body"><span class="kpi-label">Average Device Uptime <lucide-icon class="info" [img]="icons.Info" [size]="14" title="Average share of time devices were connected in the period. Change is in percentage points."></lucide-icon></span>
-        <div class="kpi-line"><strong>{{ k.uptime | number: '1.1-1' }}%</strong><span class="delta" [class.up]="k.uptimeDelta >= 0" [class.down]="k.uptimeDelta < 0">{{ k.uptimeDelta >= 0 ? '▲' : '▼' }} {{ fmtDelta(k.uptimeDelta) }}</span></div>
-        <span class="kpi-note">vs previous {{ a.days.length }} days</span></div>
+        <div class="kpi-line"><strong>{{ k.uptime === null ? '—' : (k.uptime | number: '1.1-1') + '%' }}</strong><span *ngIf="k.uptimeDelta !== null" class="delta" [class.up]="k.uptimeDelta >= 0" [class.down]="k.uptimeDelta < 0">{{ k.uptimeDelta >= 0 ? '▲' : '▼' }} {{ fmtDelta(k.uptimeDelta) }}</span></div>
+        <span class="kpi-note">{{ loading ? 'Loading…' : 'vs previous ' + a.days.length + ' days' }}</span></div>
     </div>
     <div class="card kpi">
       <span class="kpi-ic kpi-ic--teal"><lucide-icon [img]="icons.MapPin" [size]="28"></lucide-icon></span>
       <div class="kpi-body"><span class="kpi-label">Location Coverage <lucide-icon class="info" [img]="icons.Info" [size]="14" title="Share of tracked assets with a valid location fix in the period. Change is in percentage points."></lucide-icon></span>
-        <div class="kpi-line"><strong>{{ k.coverage | number: '1.1-1' }}%</strong><span class="delta" [class.up]="k.coverageDelta >= 0" [class.down]="k.coverageDelta < 0">{{ k.coverageDelta >= 0 ? '▲' : '▼' }} {{ fmtDelta(k.coverageDelta) }}</span></div>
-        <span class="kpi-note">vs previous {{ a.days.length }} days</span></div>
+        <div class="kpi-line"><strong>{{ k.coverage === null ? '—' : (k.coverage | number: '1.1-1') + '%' }}</strong><span *ngIf="k.coverageDelta !== null" class="delta" [class.up]="k.coverageDelta >= 0" [class.down]="k.coverageDelta < 0">{{ k.coverageDelta >= 0 ? '▲' : '▼' }} {{ fmtDelta(k.coverageDelta) }}</span></div>
+        <span class="kpi-note">{{ loading ? 'Loading…' : 'vs previous ' + a.days.length + ' days' }}</span></div>
     </div>
     <div class="card kpi">
       <span class="kpi-ic kpi-ic--violet"><lucide-icon [img]="icons.Database" [size]="28"></lucide-icon></span>
       <div class="kpi-body"><span class="kpi-label">Telemetry Events <lucide-icon class="info" [img]="icons.Info" [size]="14" title="Messages received from devices (locations, sensor readings, heartbeats)."></lucide-icon></span>
-        <div class="kpi-line"><strong [title]="(k.events | number: '1.0-0') ?? ''">{{ fmtCompact(k.events) }}</strong><span class="delta" [class.up]="k.eventsDelta >= 0" [class.down]="k.eventsDelta < 0">{{ k.eventsDelta >= 0 ? '▲' : '▼' }} {{ fmtDelta(k.eventsDelta) }}</span></div>
-        <span class="kpi-note">vs previous {{ a.days.length }} days</span></div>
+        <div class="kpi-line"><strong [title]="k.events === null ? '' : (k.events | number: '1.0-0') ?? ''">{{ k.events === null ? '—' : fmtCompact(k.events) }}</strong><span *ngIf="k.eventsDelta !== null" class="delta" [class.up]="k.eventsDelta >= 0" [class.down]="k.eventsDelta < 0">{{ k.eventsDelta >= 0 ? '▲' : '▼' }} {{ fmtDelta(k.eventsDelta) }}</span></div>
+        <span class="kpi-note">{{ loading ? 'Loading…' : 'vs previous ' + a.days.length + ' days' }}</span></div>
     </div>
     <div class="card kpi">
       <span class="kpi-ic kpi-ic--teal"><lucide-icon [img]="icons.ShieldCheck" [size]="28"></lucide-icon></span>
       <div class="kpi-body"><span class="kpi-label">Alert Resolution <lucide-icon class="info" [img]="icons.Info" [size]="14" title="Alerts raised in the period that were acknowledged and closed. Change is in percentage points."></lucide-icon></span>
-        <div class="kpi-line"><strong>{{ k.resolution | number: '1.0-0' }}%</strong><span class="delta" [class.up]="k.resolutionDelta >= 0" [class.down]="k.resolutionDelta < 0">{{ k.resolutionDelta >= 0 ? '▲' : '▼' }} {{ fmtDelta(k.resolutionDelta) }}</span></div>
-        <span class="kpi-note">vs previous {{ a.days.length }} days</span></div>
+        <div class="kpi-line"><strong>{{ k.resolution === null ? '—' : (k.resolution | number: '1.0-0') + '%' }}</strong><span *ngIf="k.resolutionDelta !== null" class="delta" [class.up]="k.resolutionDelta >= 0" [class.down]="k.resolutionDelta < 0">{{ k.resolutionDelta >= 0 ? '▲' : '▼' }} {{ fmtDelta(k.resolutionDelta) }}</span></div>
+        <span class="kpi-note">{{ loading ? 'Loading…' : 'vs previous ' + a.days.length + ' days' }}</span></div>
     </div>
   </div>
 
@@ -93,6 +94,7 @@
     <section class="card chart-card" aria-labelledby="ai-conn">
       <div class="chart-head"><h2 id="ai-conn">Device Connectivity Trend <lucide-icon class="info" [img]="icons.Info" [size]="15" title="Devices online, in warning (weak signal / late heartbeat) and offline each day."></lucide-icon></h2>
         <span class="chart-date"><lucide-icon [img]="icons.CalendarDays" [size]="15"></lucide-icon>{{ rangeLabel }}</span></div>
+      <p *ngIf="!conn" class="muted">No connectivity history for this period.</p>
       <div class="chart-wrap" (mouseleave)="hoverDay = null" *ngIf="conn as c">
         <svg [attr.viewBox]="'0 0 ' + lw + ' ' + lh" class="chart" role="img" aria-label="Devices online, warning and offline per day">
           <g class="grid"><line *ngFor="let t of c.ticks" [attr.x1]="pad.l" [attr.x2]="lw - pad.r" [attr.y1]="t.y" [attr.y2]="t.y"></line></g>
@@ -144,7 +146,7 @@
     <section class="card chart-card" aria-labelledby="ai-tel">
       <div class="chart-head"><h2 id="ai-tel">Telemetry Parameter Trends <lucide-icon class="info" [img]="icons.Info" [size]="15" title="Daily fleet average of the selected sensor reading."></lucide-icon></h2>
         <span class="chart-date"><lucide-icon [img]="icons.CalendarDays" [size]="15"></lucide-icon>{{ rangeLabel }}</span></div>
-      <select class="control control-sm tel-select" [(ngModel)]="param" aria-label="Telemetry parameter"><option *ngFor="let p of params" [value]="p.key">{{ p.label }}</option></select>
+      <select class="control control-sm tel-select" [(ngModel)]="param" aria-label="Telemetry parameter"><option value="" disabled>Select Telemetry Parameter</option><option *ngFor="let p of params" [value]="p.key">{{ p.label }}</option></select>
       <div class="chart-wrap" (mouseleave)="hoverTel = null" *ngIf="tel as t">
         <svg [attr.viewBox]="'0 0 ' + tw + ' ' + lh" class="chart" role="img" [attr.aria-label]="paramMeta.label + ' daily average'">
           <g class="grid"><line *ngFor="let k of t.ticks" [attr.x1]="pad.l" [attr.x2]="tw - pad.r" [attr.y1]="k.y" [attr.y2]="k.y"></line></g>
@@ -155,17 +157,17 @@
             <path class="tel-area" [attr.d]="t.area" [attr.fill]="paramMeta.color"></path>
             <path class="line" [attr.d]="t.d" [attr.stroke]="paramMeta.color"></path>
           </ng-container>
-          <text *ngIf="t.empty" class="axis" [attr.x]="tw / 2" [attr.y]="lh / 2" text-anchor="middle">No {{ paramMeta.label.toLowerCase() }} sensors in this selection</text>
+          <text *ngIf="t.empty" class="axis" [attr.x]="tw / 2" [attr.y]="lh / 2" text-anchor="middle">No {{ paramMeta.label.toLowerCase() }} readings in this selection</text>
           <ng-container *ngIf="hoverTel !== null && !t.empty">
             <line class="crosshair" [attr.x1]="t.xs[hoverTel]" [attr.x2]="t.xs[hoverTel]" [attr.y1]="pad.t" [attr.y2]="lh - pad.b"></line>
             <circle class="dot" [attr.cx]="t.xs[hoverTel]" [attr.cy]="t.ys[hoverTel]" r="4" [attr.fill]="paramMeta.color"></circle>
           </ng-container>
           <rect *ngFor="let x of t.xs; let i = index" class="hit" [attr.x]="x - (t.xs.length > 1 ? (t.xs[1] - t.xs[0]) / 2 : 10)" [attr.y]="pad.t" [attr.width]="t.xs.length > 1 ? t.xs[1] - t.xs[0] : 20" [attr.height]="lh - pad.t - pad.b" (mouseenter)="hoverTel = i"></rect>
         </svg>
-        <div *ngIf="hoverTel !== null && !t.empty" class="tip" [style.left.%]="(t.xs[hoverTel] / tw) * 100"><strong>{{ fmtDate(a.days[hoverTel]) }}</strong><span>{{ paramMeta.label }}<b>{{ a.telemetry[param][hoverTel] }} {{ paramMeta.unit }}</b></span></div>
+        <div *ngIf="hoverTel !== null && !t.empty" class="tip" [style.left.%]="(t.xs[hoverTel] / tw) * 100"><strong>{{ fmtDate(a.days[hoverTel]) }}</strong><span>{{ paramMeta.label }}<b>{{ a.telemetry[param][hoverTel] === null ? 'No data' : a.telemetry[param][hoverTel] + ' ' + paramMeta.unit }}</b></span></div>
       </div>
       <div class="legend legend--params">
-        <button type="button" *ngFor="let p of params" [class.is-on]="param === p.key" (click)="param = p.key" [attr.aria-pressed]="param === p.key"><i [style.background]="p.color"></i>{{ p.label }} (avg {{ a.telemetryAvg[p.key] }} {{ p.unit }})</button>
+        <button type="button" *ngFor="let p of params" [class.is-on]="param === p.key" (click)="param = p.key" [attr.aria-pressed]="param === p.key"><i [style.background]="p.color"></i>{{ p.label }} (avg {{ a.telemetryAvg[p.key] === null ? '—' : a.telemetryAvg[p.key] + ' ' + p.unit }})</button>
       </div>
     </section>
   </div>
@@ -199,6 +201,7 @@
       <div class="chart-head"><h2 id="ai-alerts">Top Alert Categories <lucide-icon class="info" [img]="icons.Info" [size]="15" title="Alerts raised in the period, by category."></lucide-icon></h2>
         <span class="chart-date"><lucide-icon [img]="icons.CalendarDays" [size]="15"></lucide-icon>{{ rangeLabel }}</span></div>
       <div class="bars" (mouseleave)="hoverAlert = null">
+        <p *ngIf="!alertBars.length" class="muted">No alerts raised in this period.</p>
         <div *ngFor="let b of alertBars; let i = index" class="bar-row" (mouseenter)="hoverAlert = i" [class.is-dim]="hoverAlert !== null && hoverAlert !== i">
           <span class="bar-label">{{ b.category }}</span>
           <span class="bar-track"><span class="bar" [style.width.%]="b.width" [style.background]="b.color"></span><span class="bar-val" [style.left.%]="b.width">{{ b.count | number }}</span></span>
@@ -217,9 +220,9 @@
           <tbody>
             <tr *ngFor="let s of a.sites; let i = index" (click)="site = s.name" [class.is-on]="site === s.name" title="Filter to this site">
               <td>{{ i + 1 }}</td><td class="site-name">{{ s.name }}</td>
-              <td class="num rate" [ngClass]="uptimeClass(s.uptime)">{{ s.devices ? (s.uptime | number: '1.1-1') + '%' : '—' }}</td>
+              <td class="num rate" [ngClass]="uptimeClass(s.uptime)">{{ s.uptime === null ? '—' : (s.uptime | number: '1.1-1') + '%' }}</td>
               <td class="num">{{ s.devices | number }}</td><td class="num">{{ s.alerts | number }}</td>
-              <td class="num rate" [ngClass]="coverageClass(s.coverage)">{{ s.devices ? (s.coverage | number: '1.1-1') + '%' : '—' }}</td></tr>
+              <td class="num rate" [ngClass]="coverageClass(s.coverage)">{{ s.coverage === null ? '—' : (s.coverage | number: '1.1-1') + '%' }}</td></tr>
           </tbody>
         </table>
       </div>

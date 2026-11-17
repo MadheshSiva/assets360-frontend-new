@@ -28,14 +28,14 @@
         <label class="filter">
           <span>Category</span>
           <select name="category" [(ngModel)]="draft.category">
-            <option value="">All</option>
+            <option value="">Select Category</option>
             @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Type</span>
           <select name="type" [(ngModel)]="draft.type">
-            <option value="">All</option>
+            <option value="">Select Type</option>
             <option value="Hard Skill">Hard Skill</option>
             <option value="Soft Skill">Soft Skill</option>
           </select>

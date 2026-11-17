@@ -4,9 +4,9 @@
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <a routerLink="/wip-operations">WIP / Operations</a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <a routerLink="/wip-operations/task-master">Task Master</a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <span class="menu-wrap">
           <button type="button" class="crumb-btn" (click)="toggleSwitcher($event)" [attr.aria-expanded]="switcherOpen" aria-haspopup="menu" title="Switch task">
             {{ t.code }}<lucide-icon [img]="icons.ChevronDown" [size]="14"></lucide-icon>
@@ -19,13 +19,14 @@
       <h1>Task Master</h1>
       <p class="subtitle">Define reusable task instructions, requirements and completion criteria</p>
     </div>
-    <div class="head-actions">
+    <div *ngIf="taskList.length" class="head-actions">
       <button type="button" class="btn btn-outline" (click)="previewOpen = true"><lucide-icon [img]="icons.Eye" [size]="18"></lucide-icon>Preview</button>
       <button type="button" class="btn btn-outline" (click)="saveDraft()"><lucide-icon [img]="icons.FileText" [size]="18"></lucide-icon>Save Draft</button>
       <button type="button" class="btn btn-primary" (click)="publish()"><lucide-icon [img]="icons.Send" [size]="18"></lucide-icon>Publish Task</button>
     </div>
   </div>
 
+  <ng-container *ngIf="taskList.length; else noTasks">
   <div class="card">
     <div class="tpl-head">
       <span class="tpl-icon"><lucide-icon [img]="icons.ClipboardList" [size]="28"></lucide-icon></span>
@@ -66,19 +67,19 @@
         <div class="grid-3">
           <label class="field"><span class="field-label">Task Name <em>*</em></span><input class="control" [(ngModel)]="t.name" name="name" /></label>
           <label class="field"><span class="field-label">Task Code <em>*</em></span><input class="control" [ngModel]="t.code" name="code" readonly /></label>
-          <label class="field"><span class="field-label">Task Category</span><select class="control" [(ngModel)]="t.general.category" name="category"><option *ngFor="let x of categories" [value]="x">{{ x }}</option></select></label>
-          <label class="field"><span class="field-label">Task Type</span><select class="control" [(ngModel)]="t.general.taskType" name="taskType"><option *ngFor="let x of taskTypes" [value]="x">{{ x }}</option></select></label>
-          <label class="field"><span class="field-label">Applicable Asset Type</span><select class="control" [(ngModel)]="t.general.assetType" name="assetType"><option *ngFor="let x of assetTypes" [value]="x">{{ x }}</option></select></label>
+          <label class="field"><span class="field-label">Task Category</span><select class="control" [(ngModel)]="t.general.category" name="category"><option value="" disabled>Select Task Category</option><option *ngFor="let x of categories" [value]="x">{{ x }}</option></select></label>
+          <label class="field"><span class="field-label">Task Type</span><select class="control" [(ngModel)]="t.general.taskType" name="taskType"><option value="" disabled>Select Task Type</option><option *ngFor="let x of taskTypes" [value]="x">{{ x }}</option></select></label>
+          <label class="field"><span class="field-label">Applicable Asset Type</span><select class="control" [(ngModel)]="t.general.assetType" name="assetType"><option value="" disabled>Select Applicable Asset Type</option><option *ngFor="let x of assetTypes" [value]="x">{{ x }}</option></select></label>
           <label class="field"><span class="field-label">Estimated Duration</span>
             <span class="suffix-wrap"><input type="number" class="control" [(ngModel)]="t.general.durationMins" name="duration" min="1" /><span class="suffix">minutes</span></span>
           </label>
           <label class="field"><span class="field-label">Default Priority</span>
             <span class="prio-wrap"><span class="prio-dot" [ngClass]="'prio--' + t.general.priority.toLowerCase()"></span>
-              <select class="control prio-select" [(ngModel)]="t.general.priority" name="priority"><option *ngFor="let x of priorities" [value]="x">{{ x }}</option></select></span>
+              <select class="control prio-select" [(ngModel)]="t.general.priority" name="priority"><option value="" disabled>Select Default Priority</option><option *ngFor="let x of priorities" [value]="x">{{ x }}</option></select></span>
           </label>
-          <label class="field"><span class="field-label">Responsible Role</span><select class="control" [(ngModel)]="t.general.responsibleRole" name="role"><option *ngFor="let x of roles" [value]="x">{{ x }}</option></select></label>
+          <label class="field"><span class="field-label">Responsible Role</span><select class="control" [(ngModel)]="t.general.responsibleRole" name="role"><option value="" disabled>Select Responsible Role</option><option *ngFor="let x of roles" [value]="x">{{ x }}</option></select></label>
           <label class="field"><span class="field-label">Task Owner</span>
-            <select class="control" [(ngModel)]="t.general.owner" name="owner"><option value="">Select owner</option><option *ngFor="let x of roles" [value]="x">{{ x }}</option></select>
+            <select class="control" [(ngModel)]="t.general.owner" name="owner"><option value="">Select Owner</option><option *ngFor="let x of roles" [value]="x">{{ x }}</option></select>
           </label>
         </div>
         <label class="field gap"><span class="field-label">Description</span><textarea class="control" rows="2" [(ngModel)]="t.general.description" name="description"></textarea></label>
@@ -120,10 +121,10 @@
       <section class="card panel" aria-labelledby="tm-rt">
         <h3 id="tm-rt">Resources &amp; Tools</h3>
         <div class="grid-2">
-          <label class="field"><span class="field-label">Required Skill</span><select class="control" [(ngModel)]="t.resources.skill" name="skill"><option *ngFor="let x of skills" [value]="x">{{ x }}</option></select></label>
-          <label class="field"><span class="field-label">Resource Type</span><select class="control" [(ngModel)]="t.resources.resourceType" name="resourceType"><option *ngFor="let x of resourceTypes" [value]="x">{{ x }}</option></select></label>
-          <label class="field"><span class="field-label">Default Asset</span><select class="control" [(ngModel)]="t.resources.defaultAsset" name="defaultAsset"><option *ngFor="let x of assets" [value]="x">{{ x || 'None' }}</option></select></label>
-          <label class="field"><span class="field-label">Crew Size</span><select class="control" [(ngModel)]="t.resources.crewSize" name="crewSize"><option *ngFor="let x of crewSizes" [value]="x">{{ x }}</option></select></label>
+          <label class="field"><span class="field-label">Required Skill</span><select class="control" [(ngModel)]="t.resources.skill" name="skill"><option value="" disabled>Select Required Skill</option><option *ngFor="let x of skills" [value]="x">{{ x }}</option></select></label>
+          <label class="field"><span class="field-label">Resource Type</span><select class="control" [(ngModel)]="t.resources.resourceType" name="resourceType"><option value="" disabled>Select Resource Type</option><option *ngFor="let x of resourceTypes" [value]="x">{{ x }}</option></select></label>
+          <label class="field"><span class="field-label">Default Asset</span><select class="control" [(ngModel)]="t.resources.defaultAsset" name="defaultAsset"><option value="" disabled>Select Default Asset</option><option *ngFor="let x of assets" [value]="x">{{ x || 'None' }}</option></select></label>
+          <label class="field"><span class="field-label">Crew Size</span><select class="control" [(ngModel)]="t.resources.crewSize" name="crewSize"><option value="" disabled>Select Crew Size</option><option *ngFor="let x of crewSizes" [value]="x">{{ x }}</option></select></label>
         </div>
         <div class="field gap"><span class="field-label">Tools</span>
           <span class="control tools-line" (click)="tab = 'resources'" role="button" tabindex="0" (keydown.enter)="tab = 'resources'">{{ t.resources.tools.join(', ') || 'No tools — add on the Resources & Tools tab' }}</span>
@@ -134,11 +135,11 @@
         <h3 id="tm-ce">Checklist &amp; Evidence</h3>
         <div class="grid-2">
           <label class="field"><span class="field-label">Checklist</span>
-            <select class="control" [(ngModel)]="t.checklist.name" name="checklistName"><option value="">None</option><option *ngFor="let x of checklists" [value]="x">{{ x }}</option></select>
+            <select class="control" [(ngModel)]="t.checklist.name" name="checklistName"><option value="">Select Checklist</option><option *ngFor="let x of checklists" [value]="x">{{ x }}</option></select>
           </label>
-          <label class="field"><span class="field-label">Photo Evidence</span><select class="control" [(ngModel)]="t.checklist.photoEvidence" name="photo"><option *ngFor="let x of evidenceOptions" [value]="x">{{ x }}</option></select></label>
-          <label class="field"><span class="field-label">Signature</span><select class="control" [(ngModel)]="t.checklist.signature" name="signature"><option *ngFor="let x of signatureOptions" [value]="x">{{ x }}</option></select></label>
-          <label class="field"><span class="field-label">Attachment</span><select class="control" [(ngModel)]="t.checklist.attachment" name="attachment"><option *ngFor="let x of evidenceOptions" [value]="x">{{ x }}</option></select></label>
+          <label class="field"><span class="field-label">Photo Evidence</span><select class="control" [(ngModel)]="t.checklist.photoEvidence" name="photo"><option value="" disabled>Select Photo Evidence</option><option *ngFor="let x of evidenceOptions" [value]="x">{{ x }}</option></select></label>
+          <label class="field"><span class="field-label">Signature</span><select class="control" [(ngModel)]="t.checklist.signature" name="signature"><option value="" disabled>Select Signature</option><option *ngFor="let x of signatureOptions" [value]="x">{{ x }}</option></select></label>
+          <label class="field"><span class="field-label">Attachment</span><select class="control" [(ngModel)]="t.checklist.attachment" name="attachment"><option value="" disabled>Select Attachment</option><option *ngFor="let x of evidenceOptions" [value]="x">{{ x }}</option></select></label>
         </div>
       </section>
 
@@ -146,7 +147,7 @@
         <h3 id="tm-cr">Completion Rules</h3>
         <label *ngFor="let r of t.completion.rules" class="rule"><input type="checkbox" [(ngModel)]="r.on" [name]="'rule-' + r.key" />{{ r.label }}</label>
         <label class="field field--inline"><span class="field-label">Failure Action</span>
-          <select class="control" [(ngModel)]="t.completion.failureAction" name="failureAction"><option *ngFor="let x of failureActions" [value]="x">{{ x }}</option></select>
+          <select class="control" [(ngModel)]="t.completion.failureAction" name="failureAction"><option value="" disabled>Select Failure Action</option><option *ngFor="let x of failureActions" [value]="x">{{ x }}</option></select>
         </label>
       </section>
 
@@ -194,11 +195,11 @@
   <!-- =================== Checklist & evidence =================== -->
   <section *ngIf="tab === 'checklist'" class="card panel">
     <div class="grid-3">
-      <label class="field"><span class="field-label">Checklist</span><select class="control" [(ngModel)]="t.checklist.name" name="checklistName2"><option value="">None</option><option *ngFor="let x of checklists" [value]="x">{{ x }}</option></select></label>
-      <label class="field"><span class="field-label">Photo Evidence</span><select class="control" [(ngModel)]="t.checklist.photoEvidence" name="photo2"><option *ngFor="let x of evidenceOptions" [value]="x">{{ x }}</option></select></label>
+      <label class="field"><span class="field-label">Checklist</span><select class="control" [(ngModel)]="t.checklist.name" name="checklistName2"><option value="">Select Checklist</option><option *ngFor="let x of checklists" [value]="x">{{ x }}</option></select></label>
+      <label class="field"><span class="field-label">Photo Evidence</span><select class="control" [(ngModel)]="t.checklist.photoEvidence" name="photo2"><option value="" disabled>Select Photo Evidence</option><option *ngFor="let x of evidenceOptions" [value]="x">{{ x }}</option></select></label>
       <label class="field"><span class="field-label">Minimum Photos</span><input type="number" class="control" [(ngModel)]="t.checklist.minPhotos" name="minPhotos" min="0" [disabled]="t.checklist.photoEvidence !== 'Required'" /></label>
-      <label class="field"><span class="field-label">Signature</span><select class="control" [(ngModel)]="t.checklist.signature" name="signature2"><option *ngFor="let x of signatureOptions" [value]="x">{{ x }}</option></select></label>
-      <label class="field"><span class="field-label">Attachment</span><select class="control" [(ngModel)]="t.checklist.attachment" name="attachment2"><option *ngFor="let x of evidenceOptions" [value]="x">{{ x }}</option></select></label>
+      <label class="field"><span class="field-label">Signature</span><select class="control" [(ngModel)]="t.checklist.signature" name="signature2"><option value="" disabled>Select Signature</option><option *ngFor="let x of signatureOptions" [value]="x">{{ x }}</option></select></label>
+      <label class="field"><span class="field-label">Attachment</span><select class="control" [(ngModel)]="t.checklist.attachment" name="attachment2"><option value="" disabled>Select Attachment</option><option *ngFor="let x of evidenceOptions" [value]="x">{{ x }}</option></select></label>
     </div>
     <div class="section-head gap-top"><h3 class="grow">Checklist Items ({{ t.checklist.items.length }})</h3><button type="button" class="btn btn-outline btn-sm" (click)="addChecklistItem()"><lucide-icon [img]="icons.Plus" [size]="15"></lucide-icon>Add Item</button></div>
     <table class="edit-table">
@@ -218,10 +219,10 @@
   <!-- =================== Resources & tools =================== -->
   <section *ngIf="tab === 'resources'" class="card panel">
     <div class="grid-3">
-      <label class="field"><span class="field-label">Required Skill</span><select class="control" [(ngModel)]="t.resources.skill" name="skill2"><option *ngFor="let x of skills" [value]="x">{{ x }}</option></select></label>
-      <label class="field"><span class="field-label">Resource Type</span><select class="control" [(ngModel)]="t.resources.resourceType" name="resourceType2"><option *ngFor="let x of resourceTypes" [value]="x">{{ x }}</option></select></label>
-      <label class="field"><span class="field-label">Default Asset</span><select class="control" [(ngModel)]="t.resources.defaultAsset" name="defaultAsset2"><option *ngFor="let x of assets" [value]="x">{{ x || 'None' }}</option></select></label>
-      <label class="field"><span class="field-label">Crew Size</span><select class="control" [(ngModel)]="t.resources.crewSize" name="crewSize2"><option *ngFor="let x of crewSizes" [value]="x">{{ x }}</option></select></label>
+      <label class="field"><span class="field-label">Required Skill</span><select class="control" [(ngModel)]="t.resources.skill" name="skill2"><option value="" disabled>Select Required Skill</option><option *ngFor="let x of skills" [value]="x">{{ x }}</option></select></label>
+      <label class="field"><span class="field-label">Resource Type</span><select class="control" [(ngModel)]="t.resources.resourceType" name="resourceType2"><option value="" disabled>Select Resource Type</option><option *ngFor="let x of resourceTypes" [value]="x">{{ x }}</option></select></label>
+      <label class="field"><span class="field-label">Default Asset</span><select class="control" [(ngModel)]="t.resources.defaultAsset" name="defaultAsset2"><option value="" disabled>Select Default Asset</option><option *ngFor="let x of assets" [value]="x">{{ x || 'None' }}</option></select></label>
+      <label class="field"><span class="field-label">Crew Size</span><select class="control" [(ngModel)]="t.resources.crewSize" name="crewSize2"><option value="" disabled>Select Crew Size</option><option *ngFor="let x of crewSizes" [value]="x">{{ x }}</option></select></label>
     </div>
     <h3 class="gap-top">Tools</h3>
     <div class="tag-edit">
@@ -241,7 +242,7 @@
           <td class="w-md"><input class="control" [(ngModel)]="m.code" aria-label="Item code" /></td>
           <td><input class="control" [(ngModel)]="m.name" aria-label="Material" /></td>
           <td class="w-sm"><input type="number" class="control" [(ngModel)]="m.quantity" min="0" step="0.1" aria-label="Quantity" /></td>
-          <td class="w-sm"><select class="control" [(ngModel)]="m.unit" aria-label="Unit"><option *ngFor="let u of units" [value]="u">{{ u }}</option></select></td>
+          <td class="w-sm"><select class="control" [(ngModel)]="m.unit" aria-label="Unit"><option value="" disabled>Select Unit</option><option *ngFor="let u of units" [value]="u">{{ u }}</option></select></td>
           <td class="center"><input type="checkbox" [(ngModel)]="m.optional" aria-label="Optional" /></td>
           <td class="row-actions"><button type="button" class="icon-btn danger" (click)="removeMaterial(m.id)" aria-label="Delete material"><lucide-icon [img]="icons.Trash2" [size]="15"></lucide-icon></button></td>
         </tr>
@@ -301,9 +302,9 @@
     <p class="hint">Estimated {{ t.general.durationMins }} min · warning after {{ (t.controls.slaMins * t.notifications.warnPercent) / 100 | number: '1.0-0' }} min · breach after {{ t.controls.slaMins }} min.</p>
     <h3 class="gap-top">Notify</h3>
     <div class="grid-3">
-      <label class="field"><span class="field-label">When completed</span><select class="control" [(ngModel)]="t.notifications.onComplete" name="onComplete"><option value="">Nobody</option><option *ngFor="let x of roles" [value]="x">{{ x }}</option></select></label>
-      <label class="field"><span class="field-label">When failed</span><select class="control" [(ngModel)]="t.notifications.onFail" name="onFail"><option value="">Nobody</option><option *ngFor="let x of roles" [value]="x">{{ x }}</option></select></label>
-      <label class="field"><span class="field-label">When overdue</span><select class="control" [(ngModel)]="t.notifications.onOverdue" name="onOverdue"><option value="">Nobody</option><option *ngFor="let x of roles" [value]="x">{{ x }}</option></select></label>
+      <label class="field"><span class="field-label">When completed</span><select class="control" [(ngModel)]="t.notifications.onComplete" name="onComplete"><option value="" disabled>Select When Completed</option><option value="">Nobody</option><option *ngFor="let x of roles" [value]="x">{{ x }}</option></select></label>
+      <label class="field"><span class="field-label">When failed</span><select class="control" [(ngModel)]="t.notifications.onFail" name="onFail"><option value="" disabled>Select When Failed</option><option value="">Nobody</option><option *ngFor="let x of roles" [value]="x">{{ x }}</option></select></label>
+      <label class="field"><span class="field-label">When overdue</span><select class="control" [(ngModel)]="t.notifications.onOverdue" name="onOverdue"><option value="" disabled>Select When Overdue</option><option value="">Nobody</option><option *ngFor="let x of roles" [value]="x">{{ x }}</option></select></label>
     </div>
   </section>
 
@@ -328,6 +329,11 @@
     <button type="button" class="btn btn-outline" (click)="cancel()">Cancel</button>
     <button type="button" class="btn btn-primary" (click)="saveDraft()"><lucide-icon [img]="icons.Save" [size]="16"></lucide-icon>Save Draft</button>
   </footer>
+  </ng-container>
+
+  <ng-template #noTasks>
+    <div class="card"><p class="empty">No tasks yet.</p></div>
+  </ng-template>
 </section>
 
 <!-- ===== Used in ===== -->

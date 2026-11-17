@@ -21,7 +21,7 @@ const EMPTY_FILTERS: CategoryFilters = { search: '', status: '', assetType: '' }
   selector: 'app-mdm-asset-category-subcategory',
   imports: [FormsModule, RouterLink, DecimalPipe, LucideAngularModule, CatForm, CatDetail],
   templateUrl: './category-subcategory.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../asset-model/asset-model.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../asset-model/asset-model.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class CategorySubcategoryPage implements OnInit {
   readonly service = inject(CategoryService);

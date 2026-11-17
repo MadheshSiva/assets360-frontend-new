@@ -59,7 +59,7 @@
           <div class="field" [class.invalid]="errors.buildingCode">
             <label for="bfz-building"><span class="req">*</span> Building</label>
             <select id="bfz-building" name="buildingCode" [(ngModel)]="form.buildingCode" (ngModelChange)="onBuildingChange()">
-              <option [ngValue]="null" disabled>Select building</option>
+              <option [ngValue]="null" disabled>Select Building</option>
               @for (b of service.buildings(); track b.code) { <option [ngValue]="b.code">{{ service.label(b) }} - {{ service.siteName(b.siteId) }}</option> }
             </select>
             @if (errors.buildingCode) { <small>{{ errors.buildingCode }}</small> }
@@ -70,7 +70,7 @@
             <div class="field" [class.invalid]="errors.buildingCode">
               <label for="bfz-building-z"><span class="req">*</span> Building</label>
               <select id="bfz-building-z" name="buildingCodeZ" [(ngModel)]="form.buildingCode" (ngModelChange)="onBuildingChange()">
-                <option [ngValue]="null" disabled>Select building</option>
+                <option [ngValue]="null" disabled>Select Building</option>
                 @for (b of service.buildings(); track b.code) { <option [ngValue]="b.code">{{ service.label(b) }}</option> }
               </select>
               @if (errors.buildingCode) { <small>{{ errors.buildingCode }}</small> }
@@ -78,7 +78,7 @@
             <div class="field" [class.invalid]="errors.floorCode">
               <label for="bfz-floor"><span class="req">*</span> Floor</label>
               <select id="bfz-floor" name="floorCode" [(ngModel)]="form.floorCode" [disabled]="!form.buildingCode">
-                <option [ngValue]="null" disabled>Select floor</option>
+                <option [ngValue]="null" disabled>Select Floor</option>
                 @for (fl of floorOptions; track fl.code) { <option [ngValue]="fl.code">{{ service.label(fl) }}</option> }
               </select>
               @if (errors.floorCode) { <small>{{ errors.floorCode }}</small> }
@@ -89,7 +89,7 @@
         <div class="field" [class.invalid]="errors.siteId">
           <label for="bfz-site"><span class="req">*</span> Site</label>
           <select id="bfz-site" name="siteId" [(ngModel)]="form.siteId" [disabled]="form.type !== 'Building'">
-            <option value="" disabled>{{ form.type === 'Building' ? 'Select site' : 'Filled from the building' }}</option>
+            <option value="" disabled>{{ form.type === 'Building' ? 'Select Site' : 'Filled from the building' }}</option>
             @for (s of service.sites(); track s.id) { <option [value]="s.id">{{ s.name }}</option> }
           </select>
           @if (errors.siteId) { <small>{{ errors.siteId }}</small> }
@@ -148,7 +148,7 @@
             <div class="field">
               <label for="bfz-bcat">Building Category</label>
               <select id="bfz-bcat" name="category" [(ngModel)]="form.category">
-                <option value="">Select category</option>
+                <option value="">Select Building Category</option>
                 @for (c of buildingCategories; track c) { <option [value]="c">{{ c }}</option> }
               </select>
             </div>
@@ -171,7 +171,7 @@
               <div class="field">
                 <label for="bfz-zcat">Zone Category</label>
                 <select id="bfz-zcat" name="zoneCategory" [(ngModel)]="form.category">
-                  <option value="">Select category</option>
+                  <option value="">Select Zone Category</option>
                   @for (c of zoneCategories; track c) { <option [value]="c">{{ c }}</option> }
                 </select>
               </div>
@@ -207,7 +207,7 @@
             <div class="field">
               <label for="bfz-country">Country</label>
               <select id="bfz-country" name="country" [(ngModel)]="form.address.country">
-                <option value="">Select country</option>
+                <option value="">Select Country</option>
                 @for (c of countries; track c) { <option [value]="c">{{ c }}</option> }
               </select>
             </div>
@@ -255,7 +255,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" [disabled]="saving" class="btn btn--primary">{{ saving ? 'Saving…' : 'Save' }}</button>
+      @if (isLastTab) {
+        <button type="submit" [disabled]="saving" class="btn btn--primary">{{ saving ? 'Saving…' : 'Save' }}</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

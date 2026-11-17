@@ -1,8 +1,6 @@
 import { Injectable } from '@angular/core';
 import { CURRENT_USER } from '../shared/analytics-common';
-import {
-  DATASETS, NEXT_BY_FREQUENCY, buildConnections, buildJobs, buildLogs, buildRunStats, datasetFields, localStamp, sampleValue
-} from './data-export-api.data';
+import { DATASETS, NEXT_BY_FREQUENCY, datasetFields, emptyRunStats, localStamp } from './data-export-api.data';
 import {
   AccessLog, ApiConnection, ConnectionType, Dataset, DatasetField, ExportDraft, ExportJob, ExportStatus, LogResult
 } from './data-export-api.model';
@@ -19,24 +17,25 @@ export interface ConnectionForm {
 
 export const DESTINATION_LABEL: Record<string, string> = { S3: 'S3', 'Secure FTP': 'SFTP', Email: 'Email', API: 'API' };
 
-// DEMO MODE: export jobs, connections and access logs live in memory; runs and connection tests are simulated
+// Export jobs, connections and access logs live in memory and start empty until the API supplies them;
+// runs and connection tests triggered from the UI are still simulated client-side.
 @Injectable({ providedIn: 'root' })
 export class DataExportService {
   readonly datasets: Dataset[] = DATASETS;
-  jobs: ExportJob[] = buildJobs();
-  connections: ApiConnection[] = buildConnections();
-  logs: AccessLog[] = buildLogs();
-  readonly stats7 = buildRunStats(7);
-  readonly stats30 = buildRunStats(30);
+  jobs: ExportJob[] = [];
+  connections: ApiConnection[] = [];
+  logs: AccessLog[] = [];
+  readonly stats7 = emptyRunStats();
+  readonly stats30 = emptyRunStats();
   /** Data delivered over the last 30 days, in TB */
-  deliveredTb = 4.8;
-  apiKeys = 8;
-  allowlistedIps = 12;
-  roles = 5;
+  deliveredTb = 0;
+  apiKeys = 0;
+  allowlistedIps = 0;
+  roles = 0;
 
-  private seq = 1009;
-  private logSeq = 5281;
-  private conSeq = 6;
+  private seq = 1;
+  private logSeq = 1;
+  private conSeq = 1;
 
   dataset(id: string): Dataset | undefined {
     return this.datasets.find((d) => d.id === id);
@@ -65,7 +64,7 @@ export class DataExportService {
       action,
       resource,
       client,
-      ip: '10.20.4.18',
+      ip: '—',
       result
     });
   }
@@ -105,7 +104,7 @@ export class DataExportService {
       nextRun: null,
       status,
       owner: CURRENT_USER.name,
-      sizeGb: Math.max(0.01, Number(((ds.sizeGb * draft.fields.length) / Math.max(1, this.fields(ds.id).length)).toFixed(2)))
+      sizeGb: Number(((ds.sizeGb * draft.fields.length) / Math.max(1, this.fields(ds.id).length)).toFixed(2))
     };
     job.nextRun = this.nextRun(job);
     this.jobs.unshift(job);
@@ -127,17 +126,20 @@ export class DataExportService {
     job.nextRun = this.nextRun(job);
     const last = this.stats7.success.length - 1;
     const last30 = this.stats30.success.length - 1;
+    const bump = (arr: number[], i: number) => {
+      if (i >= 0) arr[i]++;
+    };
     if (ok) {
       job.status = job.frequency === 'Real-time' ? 'Scheduled' : 'Success';
-      this.stats7.success[last]++;
-      this.stats30.success[last30]++;
+      bump(this.stats7.success, last);
+      bump(this.stats30.success, last30);
       this.deliveredTb = Number((this.deliveredTb + job.sizeGb / 1000).toFixed(3));
       this.log('Export delivered', job.name, job.destination);
     } else {
       job.status = 'Failed';
       job.lastError = `${con?.name} is disconnected. Test the connection and retry.`;
-      this.stats7.failed[last]++;
-      this.stats30.failed[last30]++;
+      bump(this.stats7.failed, last);
+      bump(this.stats30.failed, last30);
       this.log('Export failed', job.name, job.destination, 'Failed');
     }
   }
@@ -166,13 +168,11 @@ export class DataExportService {
     return localStamp(new Date(Date.now() + step));
   }
 
-  /** Header + 12 deterministic sample rows for a dataset (optionally limited to some fields). */
-  sample(datasetId: string, fieldNames: string[] | null, rows = 12): { header: string[]; rows: (string | number)[][] } {
+  /** Header + sample rows for a dataset (optionally limited to some fields). Rows are empty until the API supplies data. */
+  sample(datasetId: string, fieldNames: string[] | null, _rows = 12): { header: string[]; rows: (string | number)[][] } {
     let fields = this.fields(datasetId);
     if (fieldNames && fieldNames.length) fields = fields.filter((x) => fieldNames.includes(x.name));
-    const out: (string | number)[][] = [];
-    for (let i = 0; i < rows; i++) out.push(fields.map((x) => sampleValue(x, i)));
-    return { header: fields.map((x) => x.name), rows: out };
+    return { header: fields.map((x) => x.name), rows: [] };
   }
 
   // ----- Connections -----
@@ -239,14 +239,14 @@ export class DataExportService {
     return this.jobs.filter((j) => j.frequency !== 'On demand' && j.status !== 'Paused' && j.status !== 'Draft').length;
   }
 
-  /** Share of successful runs over the last 30 days */
-  get successRate(): number {
+  /** Share of successful runs over the last 30 days; null when there are no runs */
+  get successRate(): number | null {
     let ok = 0;
     let all = 0;
     this.stats30.success.forEach((v, i) => {
       ok += v;
       all += v + this.stats30.failed[i];
     });
-    return all ? (ok / all) * 100 : 100;
+    return all ? (ok / all) * 100 : null;
   }
 }

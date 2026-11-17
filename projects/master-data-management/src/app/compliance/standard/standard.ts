@@ -24,7 +24,7 @@ interface Filters {
   selector: 'app-mdm-compliance-standard',
   imports: [FormsModule, RouterLink, LucideAngularModule, StandardForm],
   templateUrl: './standard.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../compliance.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../compliance.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class StandardPage extends ListPage<StandardRecord, Filters, SortKey> implements OnInit {
   readonly service = inject(StandardService);

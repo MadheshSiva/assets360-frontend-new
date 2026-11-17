@@ -48,7 +48,7 @@ export class PlansSchedulesPage {
   })();
 
   readonly search = signal('');
-  readonly statusFilter = signal<'Active' | 'Inactive' | 'All'>('Active');
+  readonly statusFilter = signal<'Active' | 'Inactive' | ''>('');
   readonly selectedId = signal<string | null>(null);
   readonly menuId = signal<string | null>(null);
   readonly confirmDeleteId = signal<string | null>(null);

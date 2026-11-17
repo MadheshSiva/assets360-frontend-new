@@ -15,18 +15,21 @@
   <div class="field" [class.invalid]="showErrors && !section">
     <label for="it-section">Section <span class="req">*</span></label>
     <select id="it-section" [(ngModel)]="section">
+      <option value="" disabled>Select Section</option>
       @for (s of sections; track s.id; let i = $index) { <option [value]="s.id">{{ sectionLabel(s, i) }}</option> }
     </select>
   </div>
 
-  <div class="field">
+  <div class="field" [class.invalid]="err('responseType')">
     <label for="it-type">Response Type <span class="req">*</span></label>
     <div class="type-select" [attr.data-tone]="tone(edit.responseType)">
       <i></i>
       <select id="it-type" [(ngModel)]="edit.responseType">
+        <option value="" disabled>Select Response Type</option>
         @for (t of responseTypes; track t) { <option [value]="t">{{ t === 'Yes/No' ? 'Yes / No' : t === 'Pass/Fail' ? 'Pass / Fail' : t }}</option> }
       </select>
     </div>
+    @if (err('responseType'); as e) { <small>{{ e }}</small> }
   </div>
 
   <div class="toggle">
@@ -66,6 +69,7 @@
   <div class="field">
     <label for="it-fail">Failure Action</label>
     <select id="it-fail" [(ngModel)]="edit.failureAction">
+      <option value="" disabled>Select Failure Action</option>
       @for (a of failureActions; track a) { <option [value]="a">{{ a }}</option> }
     </select>
   </div>

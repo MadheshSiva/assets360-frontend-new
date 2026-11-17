@@ -76,8 +76,8 @@ export class ReportCalendar implements OnChanges {
   readonly icons = { ChevronLeft, ChevronRight };
   readonly weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  year = 2026;
-  month = 9;
+  year = new Date().getFullYear();
+  month = new Date().getMonth();
   cells: CalendarCell[] = [];
 
   get title(): string {

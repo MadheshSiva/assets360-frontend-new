@@ -2,7 +2,7 @@
   <div class="page-head">
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a routerLink="/inspection/overview">Inspection</a><span>/</span><span>Configuration</span><span>/</span>
+        <a routerLink="/inspection/overview">Inspection</a><span class="crumb-sep" aria-hidden="true">›</span><span>Configuration</span><span class="crumb-sep" aria-hidden="true">›</span>
         <span class="current">Signature &amp; Stamp</span>
       </nav>
       <h1>Signature &amp; Stamp</h1>
@@ -195,11 +195,13 @@
             <label class="field"><span class="field-label">Signature name</span><input class="control" [(ngModel)]="f.signatureName" placeholder="Name as signed" /></label>
             <label class="field"><span class="field-label">Role</span>
               <select class="control" [(ngModel)]="f.role">
+                <option value="" disabled>Select Role</option>
                 @if (f.role && !roles.includes(f.role)) { <option [value]="f.role">{{ f.role }}</option> }
                 @for (r of roles; track r) { <option [value]="r">{{ r }}</option> }
               </select></label>
             <label class="field"><span class="field-label">Authorized role</span>
               <select class="control" [(ngModel)]="f.authorizedRole">
+                <option value="" disabled>Select Authorized Role</option>
                 @if (f.authorizedRole && !roles.includes(f.authorizedRole)) { <option [value]="f.authorizedRole">{{ f.authorizedRole }}</option> }
                 @for (r of roles; track r) { <option [value]="r">{{ r }}</option> }
               </select></label>

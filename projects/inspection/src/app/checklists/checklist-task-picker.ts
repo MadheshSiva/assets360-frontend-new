@@ -14,6 +14,7 @@ import { InspectionTask } from '../shared/inspection.models';
       <strong class="grow">Add tasks from the library</strong>
       <label class="sec">Into
         <select class="ctl" aria-label="Target section" [ngModel]="section()" (ngModelChange)="section.set($event)">
+          <option [ngValue]="null" disabled>Select Target Section</option>
           @for (s of sectionNames(); track $index) { <option [ngValue]="$index">{{ s }}</option> }
         </select>
       </label>
@@ -24,7 +25,7 @@ import { InspectionTask } from '../shared/inspection.models';
     <ul>
       @for (t of pickable(); track t.id) {
         <li><span class="code">{{ t.taskCode }}</span><span class="grow">{{ t.taskTitle }} <span class="muted">· {{ t.taskCategory }}</span></span>
-          <button type="button" class="add" (click)="add.emit(t)"><lucide-icon [img]="icons.Plus" [size]="14"></lucide-icon>Add</button></li>
+          <button type="button" class="add" [disabled]="section() === null" [title]="section() === null ? 'Select a target section first' : ''" (click)="add.emit(t)"><lucide-icon [img]="icons.Plus" [size]="14"></lucide-icon>Add</button></li>
       } @empty {
         <li class="muted">{{ api.tasks.loading() ? 'Loading tasks…' : 'No more active tasks to add.' }}</li>
       }
@@ -55,7 +56,7 @@ export class ChecklistTaskPicker {
   readonly sectionNames = input.required<string[]>();
   /** Task codes already in the checklist. */
   readonly usedCodes = input.required<string[]>();
-  readonly section = model(0);
+  readonly section = model<number | null>(null);
   readonly add = output<InspectionTask>();
   readonly closed = output<void>();
   query = '';

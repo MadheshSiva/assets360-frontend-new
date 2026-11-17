@@ -42,7 +42,7 @@ export class IntegrationStatusCard {
       { label: 'Exports', icon: FileText, ok: !jobs.some((j) => j.status === 'Failed') },
       { label: 'API Connections', icon: Plug, ok: !cons.some((c) => c.status === 'Warning' || c.status === 'Disconnected') },
       { label: 'Scheduled Jobs', icon: CalendarClock, ok: true },
-      { label: 'Data Delivery', icon: Database, ok: this.service.successRate >= 95 },
+      { label: 'Data Delivery', icon: Database, ok: (this.service.successRate ?? 100) >= 95 },
       { label: 'External Systems', icon: ChartColumn, ok: !cons.some((c) => c.status === 'Disconnected') },
       { label: 'Storage & Queues', icon: Layers, ok: true }
     ];
@@ -137,7 +137,7 @@ interface Insight {
             </div>
           </div>
         } @empty {
-          <p class="empty">All exports and connections are healthy.</p>
+          <p class="empty">{{ hasData ? 'All exports and connections are healthy.' : 'No integration activity yet.' }}</p>
         }
       </div>
     </section>
@@ -147,6 +147,10 @@ export class IntegrationInsights {
   private readonly service = inject(DataExportService);
   @Output() act = new EventEmitter<InsightEvent>();
   @Output() viewAll = new EventEmitter<void>();
+
+  get hasData(): boolean {
+    return this.service.jobs.length > 0 || this.service.connections.length > 0;
+  }
 
   get insights(): Insight[] {
     const out: Insight[] = [];

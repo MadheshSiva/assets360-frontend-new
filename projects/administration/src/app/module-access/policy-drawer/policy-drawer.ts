@@ -3,12 +3,11 @@ import { FormsModule } from '@angular/forms';
 import { ChartColumn, LucideAngularModule, X } from 'lucide-angular';
 import { avatarTone, initials } from '../../shared/admin-common';
 import { ChipSelect } from '../../role-access-control/chip-select/chip-select';
-import { demoUsers } from '../../role-access-control/role-access.data';
 import { RoleAccessService } from '../../role-access-control/role-access.service';
 import { AccessSummary, POLICY_SCOPES, POLICY_TYPES, PolicyRecord, accessSummary } from '../module-access.data';
 import { ModuleAccessService } from '../module-access.service';
 
-export type PolicyErrors = Partial<Record<'name' | 'code' | 'description' | 'roles' | 'landingModule' | 'sessionTimeout', string>>;
+export type PolicyErrors = Partial<Record<'name' | 'code' | 'description' | 'roles' | 'dataScope' | 'landingModule' | 'sessionTimeout', string>>;
 
 /** Validation shared by the drawer (inline messages) and the page (blocks Save). */
 export function policyErrors(p: PolicyRecord, codeTaken: boolean, nameTaken: boolean): PolicyErrors {
@@ -20,8 +19,10 @@ export function policyErrors(p: PolicyRecord, codeTaken: boolean, nameTaken: boo
   else if (codeTaken) e.code = 'Another policy already uses this code.';
   if (p.description.length > 500) e.description = 'Keep it under 500 characters.';
   if (p.type === 'Role' && !p.roles.length) e.roles = 'Role policies need at least one role.';
+  if (!p.dataScope) e.dataScope = 'Data scope is required.';
   const landing = p.grants.find((g) => g.module === p.landingModule);
-  if (!landing || !landing.enabled) e.landingModule = 'Pick a module that is enabled in this policy.';
+  if (!p.landingModule) e.landingModule = 'Default landing module is required.';
+  else if (!landing || !landing.enabled) e.landingModule = 'Pick a module that is enabled in this policy.';
   if (!Number.isInteger(p.sessionTimeout) || p.sessionTimeout < 5 || p.sessionTimeout > 1440) e.sessionTimeout = 'Enter 5 to 1440 minutes.';
   return e;
 }
@@ -52,7 +53,7 @@ export class PolicyDrawer implements OnChanges {
   avatars: string[] = [];
 
   ngOnChanges(): void {
-    this.avatars = demoUsers(this.policy.id || this.policy.name, Math.min(this.policy.users, 3));
+    this.avatars = []; // member names come from the users API once wired
   }
 
   get roleOptions(): string[] {
@@ -79,7 +80,7 @@ export class PolicyDrawer implements OnChanges {
   show(key: keyof PolicyErrors): string | null {
     const msg = this.errors[key];
     if (!msg) return null;
-    if (this.submitted || key === 'description' || key === 'landingModule') return msg;
+    if (this.submitted || key === 'description' || (key === 'landingModule' && this.policy.landingModule)) return msg;
     return key === 'name' ? (this.policy.name ? msg : null) : key === 'code' ? (this.policy.code ? msg : null) : null;
   }
 

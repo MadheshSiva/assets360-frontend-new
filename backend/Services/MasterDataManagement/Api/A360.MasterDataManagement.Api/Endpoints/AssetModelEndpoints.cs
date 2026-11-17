@@ -93,7 +93,7 @@ public static class AssetModelEndpoints
         IAssetModelRepository repository,
         IManufacturerRepository manufacturers,
         IAssetTypeRepository assetTypes,
-        IAssetCategoryRepository categories,
+        ISharedAssetCategoryRepository categories,
         IEventLogger eventLogger,
         CancellationToken cancellationToken)
     {
@@ -151,7 +151,7 @@ public static class AssetModelEndpoints
         IAssetModelRepository repository,
         IManufacturerRepository manufacturers,
         IAssetTypeRepository assetTypes,
-        IAssetCategoryRepository categories,
+        ISharedAssetCategoryRepository categories,
         IEventLogger eventLogger,
         CancellationToken cancellationToken)
     {
@@ -324,7 +324,7 @@ public static class AssetModelEndpoints
         AssetModelEntity model,
         IManufacturerRepository manufacturers,
         IAssetTypeRepository assetTypes,
-        IAssetCategoryRepository categories,
+        ISharedAssetCategoryRepository categories,
         CancellationToken cancellationToken)
     {
         if (model.Manufacturer is not null)

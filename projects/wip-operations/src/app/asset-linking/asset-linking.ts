@@ -33,8 +33,6 @@ import {
   Wrench,
   X,
 } from 'lucide-angular';
-import DATA from './asset-links.json';
-import JOBS from '../job-orders/job-orders.json';
 import { Allocation, AssetLink, JobRef, LinkHistory, RegisterAsset } from './asset-link.model';
 
 type Tab = 'linked' | 'available' | 'history' | 'readiness';
@@ -65,29 +63,20 @@ interface ConfigDraft {
   releaseOnCompletion: boolean;
 }
 
-const CURRENT_USER = 'Ahmed Khan';
-/** Job orders that exist on the Job Orders page. */
-const KNOWN_JOBS = ['JO-2026-00438', 'JO-2026-00431', 'JO-2026-00442'];
-/** Capabilities each stage needs from linked assets. */
-const STAGE_NEEDS: Record<string, string[]> = {
-  Preparation: ['Lift up to 1 t'],
-  Assembly: ['Pump assembly fixture', 'Torque 10–200 Nm', 'Shaft alignment'],
-  Testing: ['Pressure test (0–25 bar)', 'Leak test'],
-  Inspection: ['Dimensional inspection'],
-  Packing: ['Pack & wrap', 'Lift up to 2.5 t'],
-  'Seat Leak Test': ['Seat leak test', 'Stroke test'],
-};
+/** Signed-in user's display name; filled from the auth/user API once wired. */
+const CURRENT_USER = '';
+/** Job orders that exist on the Job Orders page; filled from the API once wired. */
+const KNOWN_JOBS: string[] = [];
+/** Capabilities each stage needs from linked assets; filled from the template/routing API once wired. */
+const STAGE_NEEDS: Record<string, string[]> = {};
 
-/** DEMO MODE: kept in memory until the shared asset register API is wired up. */
-const SOURCE = DATA as unknown as { asOf: string; assets: RegisterAsset[]; links: AssetLink[]; history: LinkHistory[] };
-const ASSETS: RegisterAsset[] = structuredClone(SOURCE.assets);
-let LINKS: AssetLink[] = structuredClone(SOURCE.links);
-const HISTORY: LinkHistory[] = structuredClone(SOURCE.history);
-const JOB_LIST = (JOBS as unknown as JobRef[]).map((j) => ({
-  code: j.code, name: j.name, status: j.status, site: j.site, templateCode: j.templateCode, templateVersion: j.templateVersion,
-  stages: j.stages.map((s) => ({ name: s.name, status: s.status, tasks: s.tasks.map((t) => ({ name: t.name })) })),
-}));
-let OPENED_AT = 0;
+/** Asset register, links, history and job list are kept in memory; empty until the asset register and WIP APIs are wired up. */
+const ASSETS: RegisterAsset[] = [];
+let LINKS: AssetLink[] = [];
+const HISTORY: LinkHistory[] = [];
+const JOB_LIST: JobRef[] = [];
+/** Placeholder job while no job orders exist. */
+const NO_JOB: JobRef = { code: '', name: '', status: '', site: '', templateCode: '', templateVersion: '', stages: [] };
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const stamp = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -112,7 +101,7 @@ const overlaps = (a: { start: string; end: string }, b: { start: string; end: st
   imports: [CommonModule, FormsModule, RouterModule, LucideAngularModule],
   templateUrl: './asset-linking.html',
   // Buttons, controls, tabs, switches, modal and toast come from the Job Templates stylesheet
-  styleUrls: ['../job-templates/job-templates.css', '../shared/wip-board.css', './asset-linking.css'],
+  styleUrls: ['../job-templates/job-templates.css', '../shared/wip-board.css', './asset-linking.css', '../shared/wip-purple-theme.css'],
 })
 export class AssetLinking implements OnDestroy {
   readonly icons = {
@@ -131,7 +120,7 @@ export class AssetLinking implements OnDestroy {
 
   @ViewChild('assetInput') assetInput?: ElementRef<HTMLInputElement>;
 
-  jobCode = 'JO-2026-00438';
+  jobCode = JOB_LIST[0]?.code ?? '';
   tab: Tab = 'linked';
 
   // Linked table filters
@@ -142,8 +131,8 @@ export class AssetLinking implements OnDestroy {
   availSearch = '';
   availCategory = '';
 
-  selectedId = 3;
-  draft: ConfigDraft = this.toDraft(this.link(3)!);
+  selectedId = 0;
+  draft: ConfigDraft = { role: '', stage: '', task: '', start: '', end: '', allocation: 'Exclusive', requiredForStart: false, releaseOnCompletion: true };
   configError = '';
   /** Link Configuration shows values until Edit is clicked. */
   editingConfig = false;
@@ -167,7 +156,6 @@ export class AssetLinking implements OnDestroy {
   private toastTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
-    if (!OPENED_AT) OPENED_AT = Date.now();
     // ?asset=PTB-003 (and optional ?job=) opens a link (links from other pages)
     inject(ActivatedRoute)
       .queryParamMap.pipe(takeUntilDestroyed(inject(DestroyRef)))
@@ -191,9 +179,8 @@ export class AssetLinking implements OnDestroy {
     clearTimeout(this.toastTimer);
   }
 
-  /** Demo clock: the data's "as of" time plus the time this page has been open. */
   get now(): string {
-    return stamp(new Date(parseLocal(SOURCE.asOf).getTime() + (Date.now() - OPENED_AT)));
+    return stamp(new Date());
   }
 
   isKnownJob(job: string): boolean {
@@ -202,8 +189,8 @@ export class AssetLinking implements OnDestroy {
 
   // ===== Job =====
 
-  get job(): (typeof JOB_LIST)[number] {
-    return this.jobs.find((j) => j.code === this.jobCode) ?? this.jobs[0];
+  get job(): JobRef {
+    return this.jobs.find((j) => j.code === this.jobCode) ?? this.jobs[0] ?? NO_JOB;
   }
 
   setJob(code: string): void {
@@ -486,7 +473,7 @@ export class AssetLinking implements OnDestroy {
 
   private blankForm(): LinkForm {
     const testing = this.stageNamesOf(this.jobCode).includes('Testing') ? 'Testing' : this.stageNamesOf(this.jobCode)[0] ?? '';
-    const date = SOURCE.asOf.slice(0, 10);
+    const date = stamp(new Date()).slice(0, 10);
     return { query: '', role: '', stage: testing, task: '', start: `${date}T12:30`, end: `${date}T14:30` };
   }
 

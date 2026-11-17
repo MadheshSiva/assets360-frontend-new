@@ -1,6 +1,6 @@
-import { Injectable } from '@angular/core';
-import { Observable, map, throwError } from 'rxjs';
-import { MdmAudit, inSequence } from '../../shared/mdm-api';
+import { Injectable, inject } from '@angular/core';
+import { Observable, map, of, switchMap, throwError } from 'rxjs';
+import { AssetServiceApi, MdmAudit, inSequence } from '../../shared/mdm-api';
 import { AssetModelIcon } from '../asset-model/asset-model.icons';
 import { AssetCondition, DepreciationMethod, TrackingMethod } from '../asset-model/asset-model.model';
 import { CustomField, CustomFieldType } from '../asset-type/asset-type.model';
@@ -8,16 +8,11 @@ import { AssetStore, activeStatus, localStamp } from '../asset-store';
 import { blankCategory } from './category.data';
 import { CategoryFilters, CategoryRecord, SubcategoryRecord } from './category.model';
 
-/** Asset category as `/api/master-data/asset-categories` returns it. Subcategories are kept inside it. */
-interface CategoryDto extends MdmAudit {
-  categoryName: string;
-  code: string;
+/** Master Data's settings for a category, stored by the Asset service as `details`. */
+interface CategoryDetailsDto {
   assetType: string | null;
-  description: string | null;
-  parentCategory: { id: string | null; name: string } | null;
   icon: string | null;
   color: string | null;
-  image: string | null;
   subcategories: { code: string; name: string; icon: string | null; color: string | null; status: string | null }[] | null;
   depreciationMethod: string | null;
   usefulLifeYears: number | null;
@@ -25,23 +20,94 @@ interface CategoryDto extends MdmAudit {
   tagPrefix: string | null;
   trackingMethod: string | null;
   defaultCondition: string | null;
-  customFields: { name: string; type: string | null; required: boolean }[] | null;
   subcategoryRequired: boolean;
   showInMobile: boolean;
   includeInReports: boolean;
   approvalForNewAssets: boolean;
 }
 
+/** A custom field as the Asset service lists it (fields inherited from parent categories included). */
+interface CategoryFieldDto {
+  id: string;
+  fieldName: string;
+  type: string;
+  required: boolean;
+  inherited: boolean;
+}
+
 /**
- * Asset categories and their subcategories from the master data API. A category's parent is stored
- * by id on the server and shown by code here; subcategories are saved by saving their category.
+ * Asset category as the Asset service's `/api/asset-categories` returns it: the one list shared by the Assets pages,
+ * Asset Registration and this page. Master Data's own settings come back in `details`.
+ */
+interface CategoryDto extends MdmAudit {
+  parentCategoryId: string | null;
+  parentCategoryName: string | null;
+  name: string;
+  code: string;
+  description: string | null;
+  imageUrl: string | null;
+  customFields: CategoryFieldDto[] | null;
+  details: CategoryDetailsDto | null;
+}
+
+/** Master Data's custom field types ↔ the Asset service's ('Yes / No' is a 'Checkbox' there). */
+const toAssetFieldType = (type: CustomFieldType): string => (type === 'Yes / No' ? 'Checkbox' : type);
+const fromAssetFieldType = (type: string): CustomFieldType => (type === 'Checkbox' ? 'Yes / No' : ((type as CustomFieldType) || 'Text'));
+
+/**
+ * Asset categories and their subcategories, kept by the Asset service (`/api/asset-categories`) so every page uses the
+ * same list. A category's parent is stored by id on the server and shown by code here; subcategories are saved by
+ * saving their category; custom fields are saved through the category's custom-field endpoints.
  */
 @Injectable({ providedIn: 'root' })
 export class CategoryService extends AssetStore<CategoryRecord, CategoryDto> {
   protected readonly resource = 'asset-categories';
+  protected override readonly api = inject(AssetServiceApi);
+  /** The category's own custom fields on the server (by code, then lower-case field name → field). */
+  private ownFields = new Map<string, Map<string, CategoryFieldDto>>();
 
   constructor() {
     super();
+  }
+
+  /** Saves the category, then adds / removes its custom fields to match the form. */
+  override persist(record: CategoryRecord, originalCode: string | null): Observable<CategoryRecord> {
+    return super.persist(record, originalCode).pipe(switchMap((saved) => this.syncCustomFields(record, saved)));
+  }
+
+  /** The Asset service has no status endpoint: a status change is an ordinary update. */
+  override setStatus(record: CategoryRecord & { status: string }, status: string): Observable<CategoryRecord> {
+    return this.persist({ ...record, status: activeStatus(status) }, record.code);
+  }
+
+  private syncCustomFields(wanted: CategoryRecord, saved: CategoryRecord): Observable<CategoryRecord> {
+    const id = this.idOf(saved.code);
+    if (!id) return of(saved);
+    const current = this.ownFields.get(saved.code) ?? new Map<string, CategoryFieldDto>();
+    const desired = new Map(wanted.customFields.filter((f) => f.name.trim()).map((f) => [f.name.trim().toLowerCase(), f]));
+    const calls: Observable<unknown>[] = [];
+    // Fields are added and removed (the API has no edit): a changed type or required flag is a remove + add
+    for (const [key, field] of current) {
+      const want = desired.get(key);
+      if (!want || toAssetFieldType(want.type) !== field.type || want.required !== field.required) {
+        calls.push(this.api.remove(`${this.resource}/${id}/custom-fields`, field.id));
+      }
+    }
+    for (const [key, field] of desired) {
+      const have = current.get(key);
+      if (!have || toAssetFieldType(field.type) !== have.type || field.required !== have.required) {
+        calls.push(this.api.create(`${this.resource}/${id}/custom-fields`, { fieldName: field.name.trim(), type: toAssetFieldType(field.type), required: field.required }));
+      }
+    }
+    if (!calls.length) return of(saved);
+    return inSequence(calls).pipe(
+      switchMap(() => this.api.get<CategoryDto>(this.resource, id)),
+      map((dto) => {
+        const fresh = this.toRecord(dto);
+        this.save(fresh, saved.code);
+        return fresh;
+      })
+    );
   }
 
   /** Fills the list; parents are resolved from ids to codes once every category is known. */
@@ -145,20 +211,24 @@ export class CategoryService extends AssetStore<CategoryRecord, CategoryDto> {
 
   protected toRecord(dto: CategoryDto): CategoryRecord {
     const blank = blankCategory();
-    const parentId = dto.parentCategory?.id ?? null;
+    const d = dto.details;
+    const parentId = dto.parentCategoryId ?? null;
+    // Only the category's own fields are edited here; fields inherited from a parent belong to that parent
+    const own = (dto.customFields ?? []).filter((f) => !f.inherited);
+    this.ownFields.set(dto.code, new Map(own.map((f) => [f.fieldName.trim().toLowerCase(), f])));
     return {
       ...blank,
       code: dto.code,
-      name: dto.categoryName,
-      assetType: dto.assetType ?? '',
-      icon: (dto.icon as AssetModelIcon) ?? blank.icon,
-      color: dto.color ?? blank.color,
-      image: dto.image,
+      name: dto.name,
+      assetType: d?.assetType ?? '',
+      icon: (d?.icon as AssetModelIcon) ?? blank.icon,
+      color: d?.color ?? blank.color,
+      image: dto.imageUrl,
       description: dto.description ?? '',
       // Until every category is loaded the parent may still be its id; load() resolves it
       parentCode: this.codeOfId(parentId) ?? parentId,
       status: activeStatus(dto.status),
-      subcategories: (dto.subcategories ?? []).map((s) => ({
+      subcategories: (d?.subcategories ?? []).map((s) => ({
         code: s.code,
         name: s.name,
         icon: (s.icon as AssetModelIcon) ?? blank.icon,
@@ -166,34 +236,30 @@ export class CategoryService extends AssetStore<CategoryRecord, CategoryDto> {
         status: activeStatus(s.status),
         assets: 0
       })),
-      depreciationMethod: (dto.depreciationMethod as DepreciationMethod) ?? blank.depreciationMethod,
-      usefulLifeYears: dto.usefulLifeYears ?? blank.usefulLifeYears,
-      costCenter: dto.costCenter ?? '',
-      tagPrefix: dto.tagPrefix ?? '',
-      trackingMethod: (dto.trackingMethod as TrackingMethod) ?? blank.trackingMethod,
-      defaultCondition: (dto.defaultCondition as AssetCondition) ?? blank.defaultCondition,
-      customFields: (dto.customFields ?? []).map((f): CustomField => ({ name: f.name, type: (f.type as CustomFieldType) ?? 'Text', required: f.required })),
-      subcategoryRequired: dto.subcategoryRequired,
-      showInMobile: dto.showInMobile,
-      includeInReports: dto.includeInReports,
-      approvalForNewAssets: dto.approvalForNewAssets,
+      depreciationMethod: (d?.depreciationMethod as DepreciationMethod) ?? blank.depreciationMethod,
+      usefulLifeYears: d?.usefulLifeYears ?? blank.usefulLifeYears,
+      costCenter: d?.costCenter ?? '',
+      tagPrefix: d?.tagPrefix ?? '',
+      trackingMethod: (d?.trackingMethod as TrackingMethod) ?? blank.trackingMethod,
+      defaultCondition: (d?.defaultCondition as AssetCondition) ?? blank.defaultCondition,
+      customFields: own.map((f): CustomField => ({ name: f.fieldName, type: fromAssetFieldType(f.type), required: f.required })),
+      subcategoryRequired: d?.subcategoryRequired ?? blank.subcategoryRequired,
+      showInMobile: d?.showInMobile ?? blank.showInMobile,
+      includeInReports: d?.includeInReports ?? blank.includeInReports,
+      approvalForNewAssets: d?.approvalForNewAssets ?? blank.approvalForNewAssets,
       createdOn: localStamp(dto.createdAt),
       createdBy: dto.createdBy ?? '',
       updatedOn: localStamp(dto.updatedAt ?? dto.createdAt)
     };
   }
 
+  /** Body for POST / PUT `/api/asset-categories`; custom fields are saved separately (see persist). */
   protected toRequest(r: CategoryRecord): object {
     const parent = this.find(r.parentCode);
-    return {
-      categoryName: r.name,
-      code: r.code,
-      assetType: r.assetType,
-      description: r.description,
-      parentCategory: parent ? { id: this.idOf(parent.code) ?? null, name: parent.name } : null,
+    const details: CategoryDetailsDto = {
+      assetType: r.assetType || null,
       icon: r.icon,
       color: r.color,
-      image: r.image,
       subcategories: r.subcategories.map(({ code, name, icon, color, status }) => ({ code, name, icon, color, status })),
       depreciationMethod: r.depreciationMethod,
       usefulLifeYears: r.usefulLifeYears,
@@ -201,12 +267,19 @@ export class CategoryService extends AssetStore<CategoryRecord, CategoryDto> {
       tagPrefix: r.tagPrefix,
       trackingMethod: r.trackingMethod,
       defaultCondition: r.defaultCondition,
-      customFields: r.customFields,
       subcategoryRequired: r.subcategoryRequired,
       showInMobile: r.showInMobile,
       includeInReports: r.includeInReports,
-      approvalForNewAssets: r.approvalForNewAssets,
-      status: r.status
+      approvalForNewAssets: r.approvalForNewAssets
+    };
+    return {
+      parentCategoryId: parent ? (this.idOf(parent.code) ?? null) : null,
+      name: r.name,
+      code: r.code,
+      description: r.description,
+      status: r.status,
+      imageUrl: r.image,
+      details
     };
   }
 }

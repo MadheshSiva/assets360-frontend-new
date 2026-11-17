@@ -20,7 +20,7 @@ interface Filters {
   selector: 'app-mdm-inventory-stock-status',
   imports: [FormsModule, RouterLink, LucideAngularModule, StockStatusForm],
   templateUrl: './stock-status.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../inventory.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../inventory.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class StockStatusPage extends ListPage<StockStatusRecord, Filters, SortKey> {
   readonly service = inject(StockStatusService);

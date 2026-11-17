@@ -66,22 +66,15 @@ type DateCell = {
   isToday: boolean;
 };
 
-interface AssetsData {
-  statCards: AssetsStatCard[];
-  workStatus: WorkStatusItem[];
-  chartGrid: number[];
-  weekLabels: string[];
-  createdPoints: Point[];
-  completedPoints: Point[];
-  overduePoints: Point[];
-  upcomingMaintenance: MaintenanceItem[];
-  recentWorkOrders: WorkOrder[];
-  topAssets: AssetBar[];
-  costSummary: CostItem[];
-  quickActions: string[];
-  alerts: AlertItem[];
-  technicians: Technician[];
-}
+/** Work Order stat card layout (labels, icons, colours); values stay 0 until a data source is wired. */
+const WORK_ORDER_STAT_SHELLS: AssetsStatCard[] = [
+  { label: 'Total Work Orders', value: '0', icon: 'clipboard', iconBg: '#2563eb', change: '', changeType: 'neutral' },
+  { label: 'Completed', value: '0', icon: 'check', iconBg: '#22c55e', change: '', changeType: 'neutral' },
+  { label: 'In Progress', value: '0', icon: 'clock', iconBg: '#f59e0b', change: '', changeType: 'neutral' },
+  { label: 'Overdue', value: '0', icon: 'alert', iconBg: '#ef4444', change: '', changeType: 'neutral' },
+  { label: 'PM Due This Week', value: '0', icon: 'calendar', iconBg: '#7c3aed', change: '', changeType: 'neutral', link: 'View schedule' },
+  { label: 'Maintenance Cost', value: '$0', icon: 'dollar', iconBg: '#0891b2', change: '', changeType: 'neutral' },
+];
 
 @Component({
   standalone: true,
@@ -291,12 +284,7 @@ export class Dashboard implements OnInit, OnDestroy {
     saveOrder('piq.dashboard.assets.statOrder', this.statCards.map((c) => c.label));
   }
   cardPopup: CardPopup | null = null;
-  mapPins: MapPin[] = [
-    { lat: 40.7168, lng: -74.001, color: '#2563eb', label: 'WO-2456 · Air Compressor AC-04' },
-    { lat: 40.7118, lng: -74.012, color: '#f97316', label: 'WO-2455 · HVAC System' },
-    { lat: 40.7098, lng: -73.998, color: '#22c55e', label: 'WO-2454 · Generator GEN-12' },
-    { lat: 40.7138, lng: -74.008, color: '#ef4444', label: 'WO-2452 · Forklift FL-07' },
-  ];
+  mapPins: MapPin[] = [];
 
   openCardPopup(card: AssetsStatCard): void {
     this.closePicker();
@@ -424,16 +412,7 @@ export class Dashboard implements OnInit, OnDestroy {
         status: order.status,
       }));
 
-    return rows.length
-      ? rows
-      : [
-          {
-            id: 'No records',
-            title: 'No matching work orders found',
-            asset: '-',
-            status: '-',
-          },
-        ];
+    return rows;
   }
 
   private getMaintenanceRows(): PopupRow[] {
@@ -462,10 +441,10 @@ export class Dashboard implements OnInit, OnDestroy {
 
   // ===== Date Range Picker State =====
   isPickerOpen = false;
-  startDate: Date | null = new Date(2024, 4, 22); // May 22, 2024
-  endDate: Date | null = new Date(2024, 4, 28); // May 28, 2024;
+  startDate: Date | null = null;
+  endDate: Date | null = null;
   // The month that the LEFT calendar is showing
-  viewMonth: Date = new Date(2024, 4, 1);
+  viewMonth: Date = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   // The selection stage: 'start' or 'end'
   selecting: 'start' | 'end' = 'start';
   // Hover preview of the end date
@@ -536,7 +515,8 @@ export class Dashboard implements OnInit, OnDestroy {
   // ===== Data Properties =====
   statCards: AssetsStatCard[] = [];
   workStatus: WorkStatusItem[] = [];
-  chartGrid: number[] = [];
+  /** Y positions of the timeline chart's grid lines (chart layout). */
+  chartGrid: number[] = [42, 78, 114, 150, 186];
   weekLabels: string[] = [];
   createdPoints: Point[] = [];
   completedPoints: Point[] = [];
@@ -545,9 +525,34 @@ export class Dashboard implements OnInit, OnDestroy {
   recentWorkOrders: WorkOrder[] = [];
   topAssets: AssetBar[] = [];
   costSummary: CostItem[] = [];
-  quickActions: string[] = [];
+  /** Quick action links (UI config, not data). */
+  quickActions: string[] = ['Create Work Order', 'Schedule Preventive Maintenance', 'Add New Asset', 'Purchase Request'];
   alerts: AlertItem[] = [];
   technicians: Technician[] = [];
+  /** PM compliance %, null until a data source is wired. */
+  pmCompliance: number | null = null;
+
+  /** Total shown in the Work Order Status donut (the Total Work Orders stat card value). */
+  get workOrderTotal(): string {
+    return this.statCards.find((c) => c.label === 'Total Work Orders')?.value ?? '0';
+  }
+
+  /** Donut segments from the "(nn%)" share in each work status value; grey ring when there is no data. */
+  get workStatusGradient(): string {
+    let acc = 0;
+    const stops = this.workStatus.map((item) => {
+      const p = parseFloat(this.extractPercent(item.value)) || 0;
+      const stop = `${item.color} ${acc}% ${acc + p}%`;
+      acc += p;
+      return stop;
+    });
+    return acc > 0 ? `conic-gradient(${stops.join(', ')}, #f1f5f9 ${acc}% 100%)` : '#f1f5f9';
+  }
+
+  /** SVG polyline points for a line series. */
+  toPolyline(points: Point[]): string {
+    return points.map((p) => `${p.x},${p.y}`).join(' ');
+  }
 
   constructor(
     private host: ElementRef<HTMLElement>,
@@ -560,22 +565,8 @@ export class Dashboard implements OnInit, OnDestroy {
     // Widget selection flow (commented out): load the user's saved widgets from this device, then the server.
     // this.setSelection(loadSelectedWidgets());
     // void this.loadServerWidgets();
-    const response = await fetch('/assets/data/assets-data.json');
-    const data: AssetsData = await response.json();
-    this.statCards = reorderByKey(data.statCards, 'piq.dashboard.assets.statOrder', (c) => c.label);
-    this.workStatus = data.workStatus;
-    this.chartGrid = data.chartGrid;
-    this.weekLabels = data.weekLabels;
-    this.createdPoints = data.createdPoints;
-    this.completedPoints = data.completedPoints;
-    this.overduePoints = data.overduePoints;
-    this.upcomingMaintenance = data.upcomingMaintenance;
-    this.recentWorkOrders = data.recentWorkOrders;
-    this.topAssets = data.topAssets;
-    this.costSummary = data.costSummary;
-    this.quickActions = data.quickActions;
-    this.alerts = data.alerts;
-    this.technicians = data.technicians;
+    // No work order data source yet: stat cards keep their labels with zero values, the other widgets render empty
+    this.statCards = reorderByKey(WORK_ORDER_STAT_SHELLS.map((c) => ({ ...c })), 'piq.dashboard.assets.statOrder', (c) => c.label);
   }
 
   // ===== Picker Open/Close =====

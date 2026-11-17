@@ -15,11 +15,11 @@
         </span>
       </span>
       <label class="io-filter"><span>Site</span>
-        <select class="control" [(ngModel)]="site" (ngModelChange)="apply()"><option value="">All Sites</option><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></label>
+        <select class="control" [(ngModel)]="site" (ngModelChange)="apply()"><option value="">Select Site</option><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></label>
       <label class="io-filter"><span>Asset Type</span>
-        <select class="control" [(ngModel)]="type" (ngModelChange)="apply()"><option value="">All Types</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
+        <select class="control" [(ngModel)]="type" (ngModelChange)="apply()"><option value="">Select Type</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
       <label class="io-filter"><span>Status</span>
-        <select class="control" [(ngModel)]="status" (ngModelChange)="apply()"><option value="">All Statuses</option><option *ngFor="let s of statuses" [value]="s">{{ s }}</option></select></label>
+        <select class="control" [(ngModel)]="status" (ngModelChange)="apply()"><option value="">Select Status</option><option *ngFor="let s of statuses" [value]="s">{{ s }}</option></select></label>
       <button type="button" class="btn btn-primary" (click)="exportReport()"><lucide-icon [img]="icons.Download" [size]="17"></lucide-icon>Export Report</button>
     </div>
   </header>
@@ -79,19 +79,19 @@
           <div class="io-sub-head"><h3><lucide-icon [img]="icons.MapPin" [size]="16"></lucide-icon>Top Active Sites</h3>
             <button type="button" class="io-link" (click)="showAllSites = !showAllSites">{{ showAllSites ? 'Show Top 3' : 'View All' }}</button></div>
           <ul>
-            <li *ngFor="let s of siteStats" [class.is-on]="site === s.site.name" (click)="openSite(s.site.name)" title="Show site details">
+            <li *ngFor="let s of siteStats" [class.is-on]="site === s.site.name" (click)="openSite(s.site.name, s.site.id)" title="Show site details">
               <div class="io-site-row">
                 <span class="io-site-img" [style.background]="s.site.color + '1f'" [style.color]="s.site.color"><lucide-icon [img]="s.site.image === 'factory' ? icons.Cog : icons.Warehouse" [size]="26"></lucide-icon></span>
                 <span class="grow"><strong>{{ s.site.name }}</strong><small>{{ s.total | number }} assets</small></span>
                 <span class="io-site-pct"><b>{{ s.onlinePct }}%</b><small>Online</small></span>
               </div>
               <div class="io-stack" role="img" [attr.aria-label]="s.online + ' online, ' + s.idle + ' idle, ' + s.offline + ' offline'">
-                <span class="st-on" [style.flex-grow]="s.online">{{ s.online }}</span>
+                <span *ngIf="s.online" class="st-on" [style.flex-grow]="s.online">{{ s.online }}</span>
                 <span *ngIf="s.idle" class="st-idle" [style.flex-grow]="s.idle">{{ s.idle }}</span>
                 <span *ngIf="s.offline" class="st-off" [style.flex-grow]="s.offline">{{ s.offline }}</span>
               </div>
             </li>
-            <li *ngIf="!siteStats.length" class="muted">No assets match the filters.</li>
+            <li *ngIf="!siteStats.length" class="muted">{{ sitesLoading ? 'Loading sites…' : 'No sites with assets.' }}</li>
           </ul>
         </div>
       </div>
@@ -104,24 +104,28 @@
         <div>
           <h3>Device Connectivity</h3>
           <div class="io-donut" *ngIf="connectivity as c">
-            <svg viewBox="0 0 120 120" role="img" [attr.aria-label]="kpis.onlinePct + '% online'" (mouseleave)="hoverStatus = null">
+            <svg viewBox="0 0 120 120" role="img" [attr.aria-label]="c.centrePercent + '% online'" (mouseleave)="hoverStatus = null">
               <circle cx="60" cy="60" r="48" fill="none" stroke="#eef0f4" stroke-width="14"></circle>
               <ng-container *ngFor="let r of c.rows">
                 <circle *ngIf="r.count" cx="60" cy="60" r="48" fill="none" [attr.stroke]="r.color" [attr.stroke-width]="hoverStatus === r.status ? 18 : 14"
                   [attr.stroke-dasharray]="r.dash" [attr.stroke-dashoffset]="r.offset" transform="rotate(-90 60 60)" (mouseenter)="hoverStatus = r.status" (click)="openStatus(r.status)" class="io-click"></circle>
               </ng-container>
-              <text x="60" y="60" class="io-donut-num">{{ hoverStatus ? (c.rows[statuses.indexOf(hoverStatus)].count | number) : kpis.onlinePct + '%' }}</text>
+              <text x="60" y="60" class="io-donut-num">{{ hoverStatus ? (c.rows[statuses.indexOf(hoverStatus)].count | number) : c.centrePercent + '%' }}</text>
               <text x="60" y="76" class="io-donut-cap">{{ hoverStatus ?? 'Online' }}</text>
             </svg>
             <ul class="io-legend">
-              <li *ngFor="let r of c.rows" class="io-click" (mouseenter)="hoverStatus = r.status" (mouseleave)="hoverStatus = null" (click)="openStatus(r.status)"><i [style.background]="r.color"></i><span class="grow">{{ r.status }}</span><b>{{ r.count | number }}</b></li>
+              <li *ngFor="let r of c.rows" class="io-click" (mouseenter)="hoverStatus = r.status" (mouseleave)="hoverStatus = null" (click)="openStatus(r.status)"><i [style.background]="r.color"></i><span class="grow">{{ r.status }}</span><b>{{ r.count | number }}</b><small class="muted">{{ r.percent }}%</small></li>
             </ul>
           </div>
         </div>
-        <div class="io-fw io-click" *ngIf="firmware as f" role="button" tabindex="0" (click)="openFirmware()" (keydown.enter)="openFirmware()">
+        <div class="io-fw" *ngIf="!firmware.total">
+          <div class="io-fw-head"><strong>Firmware Updates</strong></div>
+          <p class="io-empty">No data</p>
+        </div>
+        <div class="io-fw io-click" *ngIf="firmware.total ? firmware : null as f" role="button" tabindex="0" (click)="openFirmware()" (keydown.enter)="openFirmware()">
           <div class="io-fw-head"><strong>Firmware Updates</strong><b>{{ f.pct }}%</b></div>
           <div class="io-bar"><span [style.width.%]="f.pct"></span></div>
-          <small class="muted">{{ f.latest | number }} of {{ f.total | number }} devices on latest firmware ({{ latestFirmware }})</small>
+          <small class="muted">{{ f.latest | number }} of {{ f.total | number }} devices on latest firmware<ng-container *ngIf="latestFirmware"> ({{ latestFirmware }})</ng-container></small>
         </div>
       </div>
     </section>
@@ -133,7 +137,8 @@
       <div class="io-hu-row">
         <div>
           <h3>Asset Health Score</h3>
-          <div class="io-donut io-donut--sm" *ngIf="health as h">
+          <p *ngIf="!hasHealthData" class="io-empty">No data</p>
+          <div class="io-donut io-donut--sm" *ngIf="hasHealthData ? health : null as h">
             <svg viewBox="0 0 120 120" role="img" [attr.aria-label]="h.healthyPct + '% healthy'" (mouseleave)="hoverHealth = null">
               <circle cx="60" cy="60" r="48" fill="none" stroke="#eef0f4" stroke-width="14"></circle>
               <ng-container *ngFor="let r of h.rows">
@@ -150,14 +155,15 @@
         </div>
         <div class="io-util">
           <h3>Utilization Rate (by Asset Type)</h3>
-          <ul>
-            <li *ngFor="let u of utilization" [class.is-on]="type === u.type" (click)="openType(u.type)" [title]="u.count + ' assets · ' + u.running + '% running, ' + u.idle + '% idle'">
+          <p *ngIf="!utilizationRows.length" class="io-empty">No data</p>
+          <ul *ngIf="utilizationRows.length">
+            <li *ngFor="let u of utilizationRows" [class.is-on]="type === u.type" (click)="openType(u.type)" [title]="u.count + ' assets · ' + u.running + '% running, ' + u.idle + '% idle'">
               <span class="io-util-label">{{ u.type }}</span>
               <span class="io-util-bar"><span class="run" [style.width.%]="u.running"></span><span class="idle" [style.width.%]="u.idle"></span></span>
               <b>{{ u.running }}%</b>
             </li>
           </ul>
-          <p class="io-util-key"><span><i class="run"></i>Running</span><span><i class="idle"></i>Idle</span></p>
+          <p class="io-util-key" *ngIf="utilizationRows.length"><span><i class="run"></i>Running</span><span><i class="idle"></i>Idle</span></p>
         </div>
       </div>
     </section>
@@ -165,8 +171,11 @@
     <!-- ===== Events timeline ===== -->
     <section class="card io-pad io-events io-span-2" aria-labelledby="io-ev">
       <div class="io-sub-head"><h2 id="io-ev" class="io-title"><lucide-icon [img]="icons.Download" [size]="18"></lucide-icon>IoT Events Timeline</h2>
-        <select class="control io-ev-period" [(ngModel)]="timelinePeriod" aria-label="Timeline period"><option value="7">Last 7 Days</option><option value="30">Last 30 Days</option><option value="90">Last 90 Days</option></select></div>
-      <div #chartEl class="io-chart" *ngIf="timeline as t" (mouseleave)="hoverDay = null">
+        <select class="control io-ev-period" [(ngModel)]="timelinePeriod" (ngModelChange)="loadTimeline()" aria-label="Timeline period"><option value="" disabled>Select Timeline Period</option><option value="7">Last 7 Days</option><option value="30">Last 30 Days</option><option value="90">Last 90 Days</option></select></div>
+      <!-- #chartEl stays rendered so the resize observer can size the chart once data arrives -->
+      <div #chartEl class="io-chart" (mouseleave)="hoverDay = null">
+        <p *ngIf="!timeline" class="io-empty">{{ timelineLoading ? 'Loading…' : 'No location updates in this period' }}</p>
+        <ng-container *ngIf="timeline as t">
         <svg [attr.viewBox]="'0 0 ' + tw + ' ' + th" role="img" [attr.aria-label]="'IoT events per day, last ' + timelinePeriod + ' days'">
           <g class="grid"><line *ngFor="let k of t.ticks" [attr.x1]="tp.l" [attr.x2]="tw - tp.r" [attr.y1]="k.y" [attr.y2]="k.y"></line></g>
           <g class="axis"><text *ngFor="let k of t.ticks" [attr.x]="tp.l - 5" [attr.y]="k.y + 3" text-anchor="end">{{ k.label }}</text>
@@ -182,18 +191,19 @@
           <strong>{{ fmtDate(v.date) }}</strong>
           <span *ngFor="let s of t.lines"><i [style.background]="s.color"></i>{{ s.label }}<b>{{ $any(v)[s.key] }}</b></span>
         </div>
+        </ng-container>
       </div>
-      <p class="io-series">
-        <button *ngFor="let s of series" type="button" [class.is-off]="hiddenSeries.has(s.key)" (click)="toggleSeries(s.key)" [attr.aria-pressed]="!hiddenSeries.has(s.key)"><i [style.background]="s.color"></i>{{ s.label }}</button>
+      <p class="io-series" *ngIf="timeline">
+        <button *ngFor="let s of timelineSeries" type="button" [class.is-off]="hiddenSeries.has(s.key)" (click)="toggleSeries(s.key)" [attr.aria-pressed]="!hiddenSeries.has(s.key)"><i [style.background]="s.color"></i>{{ s.label }}</button>
       </p>
     </section>
 
     <!-- ===== Attention & quick actions ===== -->
     <aside class="io-side io-span-1">
-      <button type="button" class="card io-attn" (click)="openAttention()">
+      <button type="button" class="card io-attn" [disabled]="!devices.length" (click)="openAttention()">
         <lucide-icon [img]="icons.TriangleAlert" [size]="20"></lucide-icon>
-        <span class="grow"><strong>Sensors Requiring Attention</strong><small>Sensors with abnormal readings</small></span>
-        <b>{{ attention }}</b>
+        <span class="grow"><strong>Sensors Requiring Attention</strong><small>{{ devices.length ? 'Sensors with abnormal readings' : 'No data' }}</small></span>
+        <b *ngIf="devices.length">{{ attention }}</b>
       </button>
 
       <section class="card io-pad" aria-labelledby="io-qa">
@@ -246,23 +256,31 @@
       </div>
     </section>
 
-    <!-- ===== Asset quick view ===== -->
+    <!-- ===== Asset quick view: registered assets from GET api/asset-registrations(/{id}) ===== -->
     <section class="card io-pad io-quick io-span-2 io-full-md" aria-labelledby="io-qv">
       <div class="io-sub-head"><h2 id="io-qv" class="io-title"><lucide-icon [img]="icons.ClipboardList" [size]="18"></lucide-icon>Asset Quick View</h2>
-        <button *ngIf="selected as d" type="button" class="icon-btn" (click)="locate(d)" aria-label="Show on map" title="Show on map"><lucide-icon [img]="icons.ExternalLink" [size]="16"></lucide-icon></button></div>
-      <ng-container *ngIf="selected as d; else noSel">
-        <div class="io-qv-head">
-          <img *ngIf="imageOf(d) as src; else qvIcon" [src]="src" [alt]="d.name" />
+        <div class="io-qv-nav">
+          <ng-container *ngIf="qv.items.length > 1">
+            <button type="button" class="icon-btn" (click)="quickTab = 'overview'; qv.step(-1)" aria-label="Previous asset" title="Previous asset"><lucide-icon [img]="icons.ChevronLeft" [size]="16"></lucide-icon></button>
+            <small class="muted">{{ qv.index + 1 }} / {{ qv.items.length }}</small>
+            <button type="button" class="icon-btn" (click)="quickTab = 'overview'; qv.step(1)" aria-label="Next asset" title="Next asset"><lucide-icon [img]="icons.ChevronRight" [size]="16"></lucide-icon></button>
+          </ng-container>
+          <button *ngIf="qv.asset as a" type="button" class="icon-btn" (click)="openDetails(a)" aria-label="Open asset details" title="Open asset details"><lucide-icon [img]="icons.ExternalLink" [size]="16"></lucide-icon></button>
+        </div></div>
+      <ng-container *ngIf="qv.asset as d; else noSel">
+        <div class="io-qv-head" [class.is-loading]="qv.loading">
+          <img *ngIf="d.image; else qvIcon" [src]="d.image" [alt]="d.name" />
           <ng-template #qvIcon><span class="io-qv-ic"><lucide-icon [img]="icons.Cog" [size]="34"></lucide-icon></span></ng-template>
           <div class="grow">
-            <div class="io-qv-title"><strong>{{ d.assetId }}</strong><span class="io-pill" [ngClass]="'pill--' + d.status.toLowerCase()">{{ d.status === 'Online' ? 'Active' : d.status }}</span></div>
-            <small>{{ d.name }}</small>
+            <div class="io-qv-title"><strong>{{ d.tag }}</strong><span *ngIf="d.status" class="io-pill" [ngClass]="'pill--' + pillOf(d.status)">{{ d.status }}</span></div>
+            <small>{{ d.name }}{{ d.model ? ' - ' + d.model : '' }}</small>
             <div class="io-qv-meta">
-              <span><lucide-icon [img]="icons.MapPin" [size]="13"></lucide-icon><small>Location</small>{{ d.site }}</span>
-              <span><lucide-icon class="heart" [img]="icons.Heart" [size]="13"></lucide-icon><small>Health Score</small><b [style.color]="healthColors[healthBand(d.health)]">{{ d.health ?? '-' }}{{ d.health !== null ? '%' : '' }}</b></span>
+              <span><lucide-icon [img]="icons.MapPin" [size]="13"></lucide-icon><small>Location</small>{{ d.site || '-' }}</span>
+              <span><lucide-icon class="heart" [img]="icons.TriangleAlert" [size]="13"></lucide-icon><small>Criticality</small><b [style.color]="d.criticality.toLowerCase() === 'critical' ? '#dc2626' : d.criticality.toLowerCase() === 'high' ? '#d97706' : null">{{ d.criticality || '-' }}</b></span>
             </div>
           </div>
         </div>
+        <p *ngIf="qv.error" class="io-bad">{{ qv.error }}</p>
         <nav class="io-qv-tabs" role="tablist" aria-label="Asset details">
           <button type="button" role="tab" [class.is-active]="quickTab === 'overview'" [attr.aria-selected]="quickTab === 'overview'" (click)="quickTab = 'overview'">Overview</button>
           <button type="button" role="tab" [class.is-active]="quickTab === 'location'" [attr.aria-selected]="quickTab === 'location'" (click)="quickTab = 'location'">Location</button>
@@ -270,32 +288,30 @@
           <button type="button" role="tab" [class.is-active]="quickTab === 'maintenance'" [attr.aria-selected]="quickTab === 'maintenance'" (click)="quickTab = 'maintenance'">Maintenance</button>
         </nav>
         <dl *ngIf="quickTab === 'overview'" class="io-qv-kv">
-          <dt>Asset Type</dt><dd>{{ d.type }}</dd><dt>Site</dt><dd>{{ d.site }}</dd>
-          <dt>Manufacturer</dt><dd>{{ d.manufacturer }}</dd><dt>Commissioned</dt><dd>{{ fmtDate(d.commissioned) }}</dd>
-          <dt>Model</dt><dd>{{ d.model }}</dd><dt>Connectivity</dt><dd><span class="io-conn" [style.color]="statusColors[d.status]"><lucide-icon [img]="d.status === 'Offline' || d.status === 'Unknown' ? icons.WifiOff : icons.Wifi" [size]="13"></lucide-icon>{{ d.status }}</span></dd>
-          <dt>Serial Number</dt><dd>{{ d.serial }}</dd><dt>Last Update</dt><dd>{{ fmtDateTime(d.lastUpdate) }}</dd>
+          <dt>Asset Type</dt><dd>{{ d.type || '-' }}</dd><dt>Site</dt><dd>{{ d.site || '-' }}</dd>
+          <dt>Manufacturer</dt><dd>{{ d.manufacturer || '-' }}</dd><dt>Commissioned</dt><dd>{{ qvDate(d.commissioned) }}</dd>
+          <dt>Model</dt><dd>{{ d.model || '-' }}</dd>
+          <dt>Connectivity</dt><dd><span class="io-conn" [style.color]="d.iot?.network?.toLowerCase() === 'online' ? '#16a34a' : '#6b7280'"><lucide-icon [img]="d.iot ? icons.Wifi : icons.WifiOff" [size]="13"></lucide-icon>{{ d.iot ? (d.iot.network | titlecase) : 'Not connected' }}</span></dd>
+          <dt>Serial Number</dt><dd>{{ d.serial || '-' }}</dd><dt>Last Update</dt><dd>{{ qvDateTime(d.iot?.lastSeen || d.lastUpdate) }}</dd>
         </dl>
         <dl *ngIf="quickTab === 'location'" class="io-qv-kv">
-          <dt>Site</dt><dd>{{ d.site }}</dd><dt>Last Seen</dt><dd>{{ ago(d.lastUpdate) }}</dd>
-          <dt>Latitude</dt><dd>{{ d.lat | number: '1.5-5' }}</dd><dt>Longitude</dt><dd>{{ d.lng | number: '1.5-5' }}</dd>
-          <dt>Device</dt><dd>{{ d.id }}</dd><dt>Geofence</dt><dd>Inside {{ d.site }}</dd>
+          <dt>Site</dt><dd>{{ d.site || '-' }}</dd><dt>Building</dt><dd>{{ d.building || '-' }}</dd>
+          <dt>Floor</dt><dd>{{ d.floor || '-' }}</dd><dt>Zone</dt><dd>{{ d.zone || '-' }}</dd>
+          <dt>Room</dt><dd>{{ d.room || '-' }}</dd><dt>Custodian</dt><dd [class.io-bad]="!d.custodian">{{ d.custodian || 'Not assigned' }}</dd>
         </dl>
         <dl *ngIf="quickTab === 'telemetry'" class="io-qv-kv">
-          <dt>Temperature</dt><dd>{{ d.temperature }} °C</dd><dt>Vibration</dt><dd [class.io-bad]="d.abnormal">{{ d.vibration }} mm/s</dd>
-          <dt>Battery</dt><dd>{{ d.battery }}%</dd><dt>Signal</dt><dd>{{ d.signal ? d.signal + ' dBm' : '-' }}</dd>
-          <dt>Firmware</dt><dd [class.io-bad]="!d.firmwareLatest">{{ d.firmware }}</dd><dt>Utilization</dt><dd>{{ d.utilization }}%</dd>
+          <ng-container *ngIf="d.iot as t; else noIot">
+            <dt>Network</dt><dd>{{ t.network | titlecase }}</dd><dt>Gateway</dt><dd>{{ t.gateway || '-' }}</dd>
+            <dt>Last Seen</dt><dd>{{ qvDateTime(t.lastSeen) }}</dd><dt>Readings</dt><dd>{{ t.readings | number }}</dd>
+          </ng-container>
+          <ng-template #noIot><dt>Device</dt><dd class="io-bad">No IoT device linked</dd></ng-template>
         </dl>
-        <div *ngIf="quickTab === 'maintenance'">
-          <dl class="io-qv-kv">
-            <dt>Last Service</dt><dd>{{ fmtDate(d.lastService) }}</dd><dt>Next Service</dt><dd>{{ fmtDate(d.nextService) }}</dd>
-          </dl>
-          <ul class="io-qv-alerts">
-            <li *ngFor="let a of alertsOf(d).slice(0, 3)" class="io-click" (click)="openAlert(a)"><span class="io-sev" [ngClass]="sevClass(a.severity)">{{ a.severity }}</span><span class="grow">{{ a.event }}</span><small class="muted">{{ fmtDate(a.at.slice(0, 10)) }}</small></li>
-            <li *ngIf="!alertsOf(d).length" class="muted">No alerts recorded.</li>
-          </ul>
-        </div>
+        <dl *ngIf="quickTab === 'maintenance'" class="io-qv-kv">
+          <dt>Last Service</dt><dd>{{ qvDate(d.lastService) }}</dd><dt>Next Service</dt><dd>{{ qvDate(d.nextService) }}</dd>
+          <dt>Frequency</dt><dd>{{ d.maintenanceFrequency || '-' }}</dd><dt>Condition</dt><dd>{{ d.condition || '-' }}</dd>
+        </dl>
       </ng-container>
-      <ng-template #noSel><p class="muted">Select an asset on the map or in the alerts.</p></ng-template>
+      <ng-template #noSel><p class="muted">{{ qv.loading ? 'Loading asset…' : qv.error || 'No registered assets yet.' }}</p></ng-template>
     </section>
   </div>
 </section>

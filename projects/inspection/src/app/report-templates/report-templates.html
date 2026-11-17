@@ -3,8 +3,8 @@
   <div class="page-head">
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a routerLink="/inspection/overview">Inspection</a><span aria-hidden="true">/</span>
-        <span>Configuration</span><span aria-hidden="true">/</span>
+        <a routerLink="/inspection/overview">Inspection</a><span class="crumb-sep" aria-hidden="true">›</span>
+        <span>Configuration</span><span class="crumb-sep" aria-hidden="true">›</span>
         <span class="current">Report Templates</span>
       </nav>
       <h1>Report Templates</h1>
@@ -96,18 +96,18 @@
           <div class="form-grid">
             <label class="field"><span class="field-label">Inspection type</span>
               <select class="control" [(ngModel)]="d.inspectionTypeName" [disabled]="locked">
-                <option value="">Any</option>
+                <option value="">Select Inspection Type</option>
                 @for (t of api.types.items(); track t.id) { <option [value]="t.inspectionTypeName">{{ t.inspectionTypeName }}</option> }
                 @if (d.inspectionTypeName && !api.types.items().length) { <option [value]="d.inspectionTypeName">{{ d.inspectionTypeName }}</option> }
               </select></label>
             <label class="field"><span class="field-label">Format</span>
-              <select class="control" [(ngModel)]="d.format" [disabled]="locked">@for (o of formats; track o) { <option [value]="o">{{ o }}</option> }</select></label>
+              <select class="control" [(ngModel)]="d.format" [disabled]="locked"><option value="" disabled>Select Format</option>@for (o of formats; track o) { <option [value]="o">{{ o }}</option> }</select></label>
             <label class="field"><span class="field-label">Page size</span>
-              <select class="control" [(ngModel)]="d.pageSize" [disabled]="locked">@for (o of pageSizes; track o) { <option [value]="o">{{ o }}</option> }</select></label>
+              <select class="control" [(ngModel)]="d.pageSize" [disabled]="locked"><option value="" disabled>Select Page Size</option>@for (o of pageSizes; track o) { <option [value]="o">{{ o }}</option> }</select></label>
             <label class="field"><span class="field-label">Orientation</span>
-              <select class="control" [(ngModel)]="d.orientation" [disabled]="locked">@for (o of orientations; track o) { <option [value]="o">{{ o }}</option> }</select></label>
+              <select class="control" [(ngModel)]="d.orientation" [disabled]="locked"><option value="" disabled>Select Orientation</option>@for (o of orientations; track o) { <option [value]="o">{{ o }}</option> }</select></label>
             <label class="field span-2"><span class="field-label">Language</span>
-              <select class="control" [(ngModel)]="d.language" [disabled]="locked">@for (o of languages; track o) { <option [value]="o">{{ o }}</option> }</select></label>
+              <select class="control" [(ngModel)]="d.language" [disabled]="locked"><option value="" disabled>Select Language</option>@for (o of languages; track o) { <option [value]="o">{{ o }}</option> }</select></label>
           </div>
 
           <h4 class="section-title">Branding</h4>
@@ -146,7 +146,7 @@
       <div class="pv-tools">
         <button type="button" class="icon-btn" aria-label="Zoom out" [disabled]="zoom <= zooms[0]!" (click)="zoomBy(-1)"><lucide-icon [img]="icons.ZoomOut" [size]="17"></lucide-icon></button>
         <button type="button" class="icon-btn" aria-label="Zoom in" [disabled]="zoom >= zooms[zooms.length - 1]!" (click)="zoomBy(1)"><lucide-icon [img]="icons.ZoomIn" [size]="17"></lucide-icon></button>
-        <select class="control zoom-sel" aria-label="Zoom" [(ngModel)]="zoom">@for (z of zooms; track z) { <option [ngValue]="z">{{ z }}%</option> }</select>
+        <select class="control zoom-sel" aria-label="Zoom" [(ngModel)]="zoom"><option [ngValue]="null" disabled>Select Zoom</option>@for (z of zooms; track z) { <option [ngValue]="z">{{ z }}%</option> }</select>
         <span class="grow"></span>
         <button type="button" class="icon-btn" aria-label="Previous page" [disabled]="page <= 1" (click)="page = page - 1"><lucide-icon [img]="icons.ChevronLeft" [size]="17"></lucide-icon></button>
         <span class="pg"><span class="pg-box">{{ page }}</span> / {{ pageCount() }}</span>
@@ -203,17 +203,17 @@
           <input class="control" [(ngModel)]="f.reportTitle" placeholder="e.g. Equipment Safety Report" /></label>
         <label class="field span-2"><span class="field-label">Inspection type</span>
           <select class="control" [(ngModel)]="f.inspectionTypeName">
-            <option value="">Any</option>
+            <option value="">Select Inspection Type</option>
             @for (t of api.types.items(); track t.id) { <option [value]="t.inspectionTypeName">{{ t.inspectionTypeName }}</option> }
           </select></label>
         <label class="field"><span class="field-label">Format</span>
-          <select class="control" [(ngModel)]="f.format">@for (o of formats; track o) { <option [value]="o">{{ o }}</option> }</select></label>
+          <select class="control" [(ngModel)]="f.format"><option value="" disabled>Select Format</option>@for (o of formats; track o) { <option [value]="o">{{ o }}</option> }</select></label>
         <label class="field"><span class="field-label">Page size</span>
-          <select class="control" [(ngModel)]="f.pageSize">@for (o of pageSizes; track o) { <option [value]="o">{{ o }}</option> }</select></label>
+          <select class="control" [(ngModel)]="f.pageSize"><option value="" disabled>Select Page Size</option>@for (o of pageSizes; track o) { <option [value]="o">{{ o }}</option> }</select></label>
         <label class="field"><span class="field-label">Orientation</span>
-          <select class="control" [(ngModel)]="f.orientation">@for (o of orientations; track o) { <option [value]="o">{{ o }}</option> }</select></label>
+          <select class="control" [(ngModel)]="f.orientation"><option value="" disabled>Select Orientation</option>@for (o of orientations; track o) { <option [value]="o">{{ o }}</option> }</select></label>
         <label class="field"><span class="field-label">Language</span>
-          <select class="control" [(ngModel)]="f.language">@for (o of languages; track o) { <option [value]="o">{{ o }}</option> }</select></label>
+          <select class="control" [(ngModel)]="f.language"><option value="" disabled>Select Language</option>@for (o of languages; track o) { <option [value]="o">{{ o }}</option> }</select></label>
       </div>
       <div class="note">The template starts as Draft v1.0 with the standard report sections. Adjust settings, then publish it.</div>
     </div>

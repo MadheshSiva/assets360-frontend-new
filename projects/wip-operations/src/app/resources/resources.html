@@ -4,7 +4,7 @@
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <a routerLink="/wip-operations">WIP / Operations</a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <span>Resources</span>
       </nav>
       <h1>Resource Management</h1>
@@ -52,14 +52,14 @@
             <input type="search" [(ngModel)]="search" (ngModelChange)="onFilterChange()" placeholder="Search resource name or code..." aria-label="Search resources" />
           </label>
           <label class="field"><span class="field-label">Resource Type</span>
-            <select class="control" [(ngModel)]="typeFilter" (ngModelChange)="onFilterChange()"><option value="">All</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select>
+            <select class="control" [(ngModel)]="typeFilter" (ngModelChange)="onFilterChange()"><option value="">Select Resource Type</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select>
           </label>
           <label class="field"><span class="field-label">Site</span>
-            <select class="control" [(ngModel)]="siteFilter" (ngModelChange)="onFilterChange()"><option value="">All Sites</option><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select>
+            <select class="control" [(ngModel)]="siteFilter" (ngModelChange)="onFilterChange()"><option value="">Select Site</option><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select>
           </label>
           <label class="field"><span class="field-label">Status</span>
             <select class="control" [(ngModel)]="statusFilter" (ngModelChange)="onFilterChange()">
-              <option value="">All</option><option value="Available">Available</option><option value="Assigned">Assigned</option><option value="Reserved">Reserved</option><option value="Unavailable">Unavailable</option>
+              <option value="">Select Status</option><option value="Available">Available</option><option value="Assigned">Assigned</option><option value="Reserved">Reserved</option><option value="Unavailable">Unavailable</option>
             </select>
           </label>
         </div>
@@ -137,6 +137,7 @@
                     </button>
                   </td>
                 </tr>
+                <tr *ngIf="!filtered.length"><td [attr.colspan]="weekDays.length + 1" class="empty">No resources match the filters.</td></tr>
               </tbody>
             </table>
           </div>
@@ -164,6 +165,7 @@
                     <button type="button" class="link-btn link-btn--danger" (click)="releaseBooking(a.r, a.b)">Release</button>
                   </td>
                 </tr>
+                <tr *ngIf="!assignments.length"><td colspan="7" class="empty">No job assignments.</td></tr>
               </tbody>
             </table>
           </div>
@@ -186,6 +188,7 @@
                     <span *ngIf="!r.certifications.length" class="muted">None recorded</span>
                   </td>
                 </tr>
+                <tr *ngIf="!certified.length"><td colspan="4" class="empty">No resources.</td></tr>
               </tbody>
             </table>
           </div>
@@ -210,6 +213,7 @@
                   <td>{{ r.name }}</td><td>{{ r.type }}</td><td class="nowrap">{{ r.capacity }}</td><td>{{ r.calendar }}</td>
                   <td><span class="util"><span class="bar"><span class="bar-fill" [ngClass]="'bar--' + utilTone(r.utilization)" [style.width.%]="r.utilization"></span></span>{{ r.utilization }}%</span></td>
                 </tr>
+                <tr *ngIf="!byUtilization.length"><td colspan="5" class="empty">No resources.</td></tr>
               </tbody>
             </table>
           </div>
@@ -320,16 +324,16 @@
       <div class="grid-2">
         <label class="field"><span class="field-label">Name <em>*</em></span><input class="control" [(ngModel)]="f.name" name="name" /></label>
         <label class="field"><span class="field-label">Type</span>
-          <select class="control" [(ngModel)]="f.type" (ngModelChange)="onFormType($event)" name="type" [disabled]="!!f.code"><option *ngFor="let t of types" [ngValue]="t">{{ t }}</option></select>
+          <select class="control" [(ngModel)]="f.type" (ngModelChange)="onFormType($event)" name="type" [disabled]="!!f.code"><option [ngValue]="null" disabled>Select Type</option><option *ngFor="let t of types" [ngValue]="t">{{ t }}</option></select>
         </label>
         <label class="field grid-span-2"><span class="field-label">Skills / Capability <small>(comma separated)</small></span><input class="control" [(ngModel)]="f.skills" name="skills" /></label>
         <label class="field"><span class="field-label">Capacity <em>*</em></span><input class="control" [(ngModel)]="f.capacity" name="capacity" /></label>
-        <label class="field"><span class="field-label">Calendar</span><select class="control" [(ngModel)]="f.calendar" name="calendar"><option *ngFor="let c of calendars" [value]="c">{{ c }}</option></select></label>
+        <label class="field"><span class="field-label">Calendar</span><select class="control" [(ngModel)]="f.calendar" name="calendar"><option value="" disabled>Select Calendar</option><option *ngFor="let c of calendars" [value]="c">{{ c }}</option></select></label>
         <label class="field"><span class="field-label">Site <em>*</em></span><input class="control" [(ngModel)]="f.site" name="site" list="res-sites" /></label>
         <label class="field"><span class="field-label">Location</span><input class="control" [(ngModel)]="f.location" name="location" /></label>
         <label class="field"><span class="field-label">Owner</span><input class="control" [(ngModel)]="f.owner" name="owner" /></label>
         <label class="field"><span class="field-label">Linked Asset</span>
-          <select class="control" [(ngModel)]="f.linkedAsset" name="linkedAsset"><option value="">None</option><option *ngFor="let a of assetOptions" [value]="a.tag">{{ a.tag }} · {{ a.name }}</option></select>
+          <select class="control" [(ngModel)]="f.linkedAsset" name="linkedAsset"><option value="">Select Linked Asset</option><option *ngFor="let a of assetOptions" [value]="a.tag">{{ a.tag }} · {{ a.name }}</option></select>
         </label>
       </div>
       <datalist id="res-sites"><option *ngFor="let s of sites" [value]="s"></option></datalist>

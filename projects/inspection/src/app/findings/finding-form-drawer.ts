@@ -31,6 +31,7 @@ const SEVERITIES = ['Critical', 'High', 'Medium', 'Low'];
             </select></label>
           <label class="field"><span class="field-label">Severity <span class="req">*</span></span>
             <select class="control" [(ngModel)]="form.severity">
+              <option value="" disabled>Select Severity</option>
               @for (s of severities; track s) { <option [value]="s">{{ s }}</option> }
             </select></label>
           <label class="field"><span class="field-label">Asset code</span><input class="control" [(ngModel)]="form.assetCode" placeholder="e.g. CNC-00123" /></label>
@@ -41,7 +42,7 @@ const SEVERITIES = ['Critical', 'High', 'Medium', 'Low'];
           <label class="field span-2"><span class="field-label">Observation</span><textarea class="control" rows="3" [(ngModel)]="form.observation"></textarea></label>
           <label class="field"><span class="field-label">Owner <span class="req">*</span></span>
             <select class="control" [(ngModel)]="form.owner">
-              <option value="">Select owner</option>
+              <option value="">Select Owner</option>
               @for (p of withCurrent(form.owner); track p) { <option [value]="p">{{ p }}</option> }
             </select></label>
           <label class="field"><span class="field-label">Due date</span><input class="control" type="date" [(ngModel)]="form.dueDate" /></label>
@@ -89,7 +90,7 @@ export class FindingFormDrawer implements OnInit {
           assetCode: '',
           assetName: '',
           sourceTask: '',
-          severity: 'Medium',
+          severity: '',
           owner: '',
           dueDate: null,
           recordedValue: '',
@@ -138,6 +139,7 @@ export class FindingFormDrawer implements OnInit {
   save(): void {
     const f = this.form;
     if (!f.title?.trim()) return this.error.set('Finding title is required.');
+    if (!f.severity) return this.error.set('Select a severity.');
     if (!f.owner) return this.error.set('Select an owner.');
     this.error.set(null);
     this.saving.set(true);

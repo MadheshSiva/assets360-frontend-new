@@ -1,7 +1,6 @@
-import { ADMIN_DEPARTMENTS, ADMIN_LOCATIONS, ADMIN_PEOPLE, formatDate } from '../shared/admin-common';
-import { LocationType, SummaryRow, SummaryTab } from './organization.model';
+import { LocationType, SummaryTab } from './organization.model';
 
-// Lookup lists for the location hierarchy. DEMO MODE: the master data summary tabs below are still generated in memory (no randomness)
+// Lookup lists for the location hierarchy and the layouts of the master data summary tabs
 
 export const LOCATION_TYPES: LocationType[] = ['Location', 'Building', 'Floor', 'Zone'];
 
@@ -49,236 +48,8 @@ export const TIME_ZONES = [
 const STATUS_TONES = { Active: 'green', Inactive: 'grey' } as const;
 const LEVEL_TONES = { Low: 'grey', Medium: 'blue', High: 'orange', Critical: 'red' } as const;
 
-const ASSET_CATALOG = [
-  ['Chiller Unit', 'HVAC', 'Carrier 30XA'],
-  ['Air Handling Unit', 'HVAC', 'Daikin AHU-200'],
-  ['Diesel Generator', 'Power', 'Caterpillar C18'],
-  ['UPS System', 'Power', 'APC Symmetra 80kVA'],
-  ['Passenger Lift', 'Vertical Transport', 'KONE MonoSpace'],
-  ['Fire Pump', 'Fire Safety', 'Grundfos NKF'],
-  ['CCTV Camera', 'Security', 'Axis P3265'],
-  ['Access Controller', 'Security', 'HID VertX V1000'],
-  ['Forklift', 'Material Handling', 'Toyota 8FBE18'],
-  ['Laptop', 'IT Equipment', 'Dell Latitude 7440'],
-  ['Core Switch', 'IT Equipment', 'Cisco C9300'],
-  ['Delivery Van', 'Fleet', 'Toyota Hiace 2024']
-];
-const LIFECYCLE = ['In Use', 'In Use', 'In Use', 'In Storage', 'Under Maintenance', 'Commissioning', 'In Use', 'Retired'];
-const CRITICALITY = ['Medium', 'High', 'Low', 'Critical', 'Medium', 'High', 'Low'];
-
-function assetRows(): SummaryRow[] {
-  const rows: SummaryRow[] = [];
-  for (let i = 0; i < 36; i++) {
-    const [name, category, model] = ASSET_CATALOG[i % ASSET_CATALOG.length];
-    const lifecycle = LIFECYCLE[(i * 3) % LIFECYCLE.length];
-    rows.push({
-      code: `AST-${String(1001 + i)}`,
-      name: `${name} ${String(Math.floor(i / ASSET_CATALOG.length) + 1).padStart(2, '0')}`,
-      category,
-      model,
-      serial: `SN-${(73519 + i * 2741).toString(36).toUpperCase()}`,
-      location: ADMIN_LOCATIONS[(i * 5) % ADMIN_LOCATIONS.length],
-      custodian: ADMIN_PEOPLE[(i * 4 + 2) % ADMIN_PEOPLE.length],
-      criticality: CRITICALITY[i % CRITICALITY.length],
-      lifecycle,
-      status: lifecycle === 'Retired' ? 'Inactive' : 'Active'
-    });
-  }
-  return rows;
-}
-
-const ROLES_BY_DEPT: Record<string, string> = {
-  Administration: 'Administrator',
-  Operations: 'Operations Manager',
-  Maintenance: 'Technician',
-  Finance: 'Finance Analyst',
-  IT: 'IT Engineer',
-  Compliance: 'Compliance Officer',
-  Inventory: 'Storekeeper',
-  HR: 'HR Officer',
-  Procurement: 'Buyer'
-};
-const SKILLS = ['HVAC Level 2', 'Electrical (LV)', 'First Aid', 'ISO 9001 Auditor', 'Forklift Licence', 'NEBOSH IGC', 'CCNA', '', 'IOSH Managing Safely'];
-const SHIFTS = ['Day (07:00-15:00)', 'Evening (15:00-23:00)', 'General (09:00-18:00)', 'Night (23:00-07:00)'];
-
-function peopleRows(assets: SummaryRow[]): SummaryRow[] {
-  return ADMIN_PEOPLE.map((name, i) => {
-    const department = ADMIN_DEPARTMENTS[(i * 4) % ADMIN_DEPARTMENTS.length];
-    return {
-      code: `EMP-${String(1001 + i * 7)}`,
-      name,
-      department,
-      role: ROLES_BY_DEPT[department],
-      skill: SKILLS[i % SKILLS.length] || '—',
-      shift: SHIFTS[i % SHIFTS.length],
-      assets: String(assets.filter((a) => a['custodian'] === name).length),
-      status: i % 9 === 8 ? 'Inactive' : 'Active'
-    };
-  });
-}
-
-const VENDORS = [
-  ['Emirates Cooling Services', 'Service Contractor', 'HVAC maintenance', 'Gold (4h)'],
-  ['Gulf Power Systems', 'Service Contractor', 'Generator & UPS service', 'Gold (4h)'],
-  ['KONE Middle East', 'OEM', 'Lift maintenance', 'Platinum (2h)'],
-  ['SafeGuard Fire Protection', 'Service Contractor', 'Fire system inspection', 'Silver (8h)'],
-  ['Axis Security Solutions', 'Supplier', 'CCTV & access control', 'Silver (8h)'],
-  ['Dell Technologies', 'OEM', 'IT hardware & warranty', 'Gold (4h)'],
-  ['Al Futtaim Logistics', 'Logistics', 'Freight & delivery', 'Bronze (24h)'],
-  ['CleanPro Facilities', 'Service Contractor', 'Cleaning & janitorial', 'Bronze (24h)'],
-  ['Office Supplies Co.', 'Supplier', 'Stationery & consumables', 'Standard'],
-  ['Desert Pest Control', 'Service Contractor', 'Pest control', 'Bronze (24h)'],
-  ['Toyota Material Handling', 'OEM', 'Forklift service', 'Silver (8h)'],
-  ['Bureau Veritas', 'Certification Body', 'Inspection & certification', 'Standard'],
-  ['Cisco Systems', 'OEM', 'Network equipment', 'Gold (4h)'],
-  ['Spare Parts Trading LLC', 'Supplier', 'Mechanical spares', 'Standard'],
-  ['Green Waste Management', 'Service Contractor', 'Waste disposal', 'Bronze (24h)'],
-  ['Prime Calibration Labs', 'Service Contractor', 'Instrument calibration', 'Silver (8h)']
-];
-
-function vendorRows(): SummaryRow[] {
-  return VENDORS.map(([name, type, services, sla], i) => ({
-    code: `VEN-${String(201 + i)}`,
-    name,
-    type,
-    services,
-    contact: ADMIN_PEOPLE[(i * 3 + 5) % ADMIN_PEOPLE.length],
-    sla,
-    rating: `${(3.6 + ((i * 7) % 14) / 10).toFixed(1)} / 5`,
-    status: i === 9 || i === 14 ? 'Inactive' : 'Active'
-  }));
-}
-
-const PLANS = [
-  ['Chiller Quarterly Service', 'Preventive', 'Mechanical', 'High', 'Quarterly', 'Chiller PM Checklist', '48h', 'Facilities Manager'],
-  ['AHU Filter Replacement', 'Preventive', 'Mechanical', 'Medium', 'Monthly', 'AHU Filter Checklist', '72h', 'Maintenance Lead'],
-  ['Generator Load Test', 'Preventive', 'Electrical', 'High', 'Monthly', 'Generator Load Test', '24h', 'Facilities Manager'],
-  ['UPS Battery Check', 'Preventive', 'Electrical', 'High', 'Quarterly', 'UPS Battery Checklist', '48h', 'Maintenance Lead'],
-  ['Lift Safety Inspection', 'Statutory', 'Vertical Transport', 'Critical', 'Monthly', 'Lift Safety Checklist', '8h', 'Operations Manager'],
-  ['Fire Pump Weekly Run', 'Statutory', 'Fire Safety', 'Critical', 'Weekly', 'Fire Pump Run Sheet', '8h', 'HSE Manager'],
-  ['CCTV Health Check', 'Preventive', 'Security', 'Low', 'Monthly', 'CCTV Checklist', '72h', 'Security Supervisor'],
-  ['Breakdown Repair', 'Corrective', 'General', 'High', 'On Demand', '—', '24h', 'Maintenance Lead'],
-  ['Forklift Daily Inspection', 'Inspection', 'Material Handling', 'Medium', 'Daily', 'Forklift Pre-use Checklist', '4h', 'Warehouse Supervisor'],
-  ['Thermal Imaging Survey', 'Predictive', 'Electrical', 'Medium', 'Half-yearly', 'Thermography Checklist', '5 days', 'Facilities Manager'],
-  ['Vibration Analysis', 'Predictive', 'Mechanical', 'Medium', 'Quarterly', 'Vibration Route', '5 days', 'Maintenance Lead'],
-  ['Water Tank Cleaning', 'Preventive', 'Plumbing', 'Low', 'Half-yearly', 'Tank Cleaning Checklist', '7 days', 'Facilities Manager'],
-  ['Emergency Lighting Test', 'Statutory', 'Fire Safety', 'High', 'Monthly', 'Emergency Lighting Checklist', '48h', 'HSE Manager'],
-  ['Server Room Cooling Check', 'Preventive', 'IT Infrastructure', 'High', 'Weekly', 'Server Room Checklist', '24h', 'IT Manager'],
-  ['Pest Control Visit', 'Preventive', 'Hygiene', 'Low', 'Monthly', '—', '7 days', 'Facilities Manager'],
-  ['Calibration of Gauges', 'Calibration', 'Instrumentation', 'Medium', 'Yearly', 'Calibration Record', '10 days', 'Quality Manager'],
-  ['Roof Inspection', 'Inspection', 'Civil', 'Low', 'Yearly', 'Roof Survey Checklist', '14 days', 'Facilities Manager'],
-  ['Fleet Service', 'Preventive', 'Fleet', 'Medium', 'Every 10,000 km', 'Vehicle Service Checklist', '72h', 'Fleet Coordinator']
-];
-
-function maintenanceRows(): SummaryRow[] {
-  return PLANS.map(([name, type, work, priority, frequency, checklist, sla, escalation], i) => ({
-    code: `MP-${String(301 + i)}`,
-    name,
-    type,
-    work,
-    priority,
-    frequency,
-    checklist,
-    sla,
-    escalation,
-    status: i === 16 ? 'Inactive' : 'Active'
-  }));
-}
-
-const ITEMS = [
-  ['Air Filter 24x24', 'HVAC Spares', 'Each'],
-  ['V-Belt B52', 'Mechanical Spares', 'Each'],
-  ['Engine Oil 15W-40', 'Lubricants', 'Litre'],
-  ['LED Tube 18W', 'Electrical', 'Each'],
-  ['Circuit Breaker 32A', 'Electrical', 'Each'],
-  ['Refrigerant R-410A', 'HVAC Spares', 'Kg'],
-  ['Safety Gloves', 'PPE', 'Pair'],
-  ['Hard Hat', 'PPE', 'Each'],
-  ['A4 Paper', 'Stationery', 'Ream'],
-  ['Cable Ties 300mm', 'Consumables', 'Pack'],
-  ['Hydraulic Hose 1/2"', 'Mechanical Spares', 'Metre'],
-  ['UPS Battery 12V 9Ah', 'Electrical', 'Each'],
-  ['Cleaning Detergent', 'Consumables', 'Litre'],
-  ['Fire Extinguisher 6kg', 'Fire Safety', 'Each']
-];
-const STORES = ['Main Store', 'Dubai HQ Store', 'Sharjah Warehouse', 'Abu Dhabi Store'];
-
-function inventoryRows(): SummaryRow[] {
-  const rows: SummaryRow[] = [];
-  for (let i = 0; i < 28; i++) {
-    const [item, category, uom] = ITEMS[i % ITEMS.length];
-    const store = STORES[(i * 3) % STORES.length];
-    const min = 10 + ((i * 7) % 5) * 10;
-    const max = min * 4;
-    const reorder = Math.round(min * 1.5);
-    // Every 9th item is out of stock, every 4th is below its reorder level
-    const onHand = i % 9 === 4 ? 0 : i % 4 === 1 ? Math.max(1, min - 3) : min * 2 + ((i * 13) % min);
-    const stock = onHand === 0 ? 'Out of Stock' : onHand <= reorder ? 'Low Stock' : 'In Stock';
-    rows.push({
-      code: `ITM-${String(5001 + i)}`,
-      item: i < ITEMS.length ? item : `${item} (${store.split(' ')[0]})`,
-      category,
-      uom,
-      levels: `${min} / ${max}`,
-      bin: `${store} / ${'ABCD'[i % 4]}-${String((i % 12) + 1).padStart(2, '0')}`,
-      store,
-      onHand: String(onHand),
-      stock,
-      reorder: String(reorder),
-      status: i === 27 ? 'Inactive' : 'Active'
-    });
-  }
-  return rows;
-}
-
-const OBLIGATIONS = [
-  ['UAE Civil Defence Code', 'NFPA 25', 'Fire System Completion Certificate', 'Fire Safety Permit'],
-  ['Dubai Municipality Lift Regulation', 'EN 81-20', 'Lift Inspection Certificate', 'Lift Operating Permit'],
-  ['Quality Management', 'ISO 9001:2015', 'ISO 9001 Certificate', '—'],
-  ['Environmental Management', 'ISO 14001:2015', 'ISO 14001 Certificate', '—'],
-  ['Occupational Health & Safety', 'ISO 45001:2018', 'ISO 45001 Certificate', '—'],
-  ['Information Security', 'ISO 27001:2022', 'ISO 27001 Certificate', '—'],
-  ['DEWA Generator Registration', 'DEWA Regulations', 'Generator Registration', 'Generator Operating Permit'],
-  ['RTA Vehicle Registration', 'UAE Traffic Law', 'Vehicle Registration Card', 'Vehicle Permit'],
-  ['Trade Licence', 'DED Regulations', 'Trade Licence', 'Commercial Licence'],
-  ['Pressure Vessel Inspection', 'ASME VIII', 'Pressure Vessel Certificate', 'Operating Permit'],
-  ['Waste Disposal', 'DM Waste Regulations', 'Waste Contractor Approval', 'Waste Transport Permit'],
-  ['Forklift Certification', 'LOLER', 'Thorough Examination Report', 'Equipment Permit'],
-  ['Food Safety (Pantry)', 'HACCP', 'Food Hygiene Certificate', 'Food Permit'],
-  ['Saudi Civil Defence', 'SBC 801', 'Civil Defence Certificate', 'Safety Permit']
-];
-
-function addDays(base: Date, days: number): Date {
-  const d = new Date(base);
-  d.setDate(d.getDate() + days);
-  return d;
-}
-
-function complianceRows(): SummaryRow[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  // Expiry offsets in days from today: a few expired, a few within 60 days, the rest later
-  const offsets = [210, 45, 320, -12, 540, 28, 190, -40, 400, 75, 15, 260, 600, 120];
-  return OBLIGATIONS.map(([regulation, standard, certificate, permit], i) => {
-    const expiry = addDays(today, offsets[i]);
-    const days = offsets[i];
-    return {
-      code: `CMP-${String(401 + i)}`,
-      regulation,
-      standard,
-      certificate,
-      permit,
-      expiry: formatDate(expiry.toISOString()),
-      validity: days < 0 ? 'Expired' : days <= 60 ? 'Expiring Soon' : 'Valid',
-      owner: ADMIN_PEOPLE[(i * 5 + 4) % ADMIN_PEOPLE.length],
-      reminder: `${days > 180 ? 60 : 30} days before expiry`,
-      status: i === 12 ? 'Inactive' : 'Active'
-    };
-  });
-}
-
+/** Summary tab layouts (columns + stat cards); the rows come from the master data APIs (empty until wired). */
 export function seedSummaryTabs(): SummaryTab[] {
-  const assets = assetRows();
   return [
     {
       id: 'asset',
@@ -304,7 +75,7 @@ export function seedSummaryTabs(): SummaryTab[] {
         { label: 'High / Critical', icon: 'ShieldCheck', tone: 'pink', kind: 'match', column: 'criticality', values: ['High', 'Critical'] },
         { label: 'Under Maintenance', icon: 'Wrench', tone: 'green', kind: 'match', column: 'lifecycle', values: ['Under Maintenance'] }
       ],
-      rows: assets
+      rows: []
     },
     {
       id: 'people',
@@ -328,7 +99,7 @@ export function seedSummaryTabs(): SummaryTab[] {
         { label: 'Assigned Assets', icon: 'Box', tone: 'pink', kind: 'sum', column: 'assets' },
         { label: 'Active', icon: 'ShieldCheck', tone: 'green', kind: 'match', column: 'status', values: ['Active'] }
       ],
-      rows: peopleRows(assets)
+      rows: []
     },
     {
       id: 'vendor',
@@ -352,7 +123,7 @@ export function seedSummaryTabs(): SummaryTab[] {
         { label: 'OEMs & Suppliers', icon: 'Package', tone: 'pink', kind: 'match', column: 'type', values: ['OEM', 'Supplier'] },
         { label: 'Active', icon: 'ShieldCheck', tone: 'green', kind: 'match', column: 'status', values: ['Active'] }
       ],
-      rows: vendorRows()
+      rows: []
     },
     {
       id: 'maintenance',
@@ -378,7 +149,7 @@ export function seedSummaryTabs(): SummaryTab[] {
         { label: 'Statutory', icon: 'ClipboardCheck', tone: 'pink', kind: 'match', column: 'type', values: ['Statutory'] },
         { label: 'High / Critical Priority', icon: 'Activity', tone: 'green', kind: 'match', column: 'priority', values: ['High', 'Critical'] }
       ],
-      rows: maintenanceRows()
+      rows: []
     },
     {
       id: 'inventory',
@@ -404,7 +175,7 @@ export function seedSummaryTabs(): SummaryTab[] {
         { label: 'Low Stock', icon: 'Activity', tone: 'pink', kind: 'match', column: 'stock', values: ['Low Stock'] },
         { label: 'Out of Stock', icon: 'Box', tone: 'green', kind: 'match', column: 'stock', values: ['Out of Stock'] }
       ],
-      rows: inventoryRows()
+      rows: []
     },
     {
       id: 'compliance',
@@ -430,7 +201,7 @@ export function seedSummaryTabs(): SummaryTab[] {
         { label: 'Expiring in 60 Days', icon: 'Activity', tone: 'pink', kind: 'match', column: 'validity', values: ['Expiring Soon'] },
         { label: 'Expired', icon: 'FileText', tone: 'green', kind: 'match', column: 'validity', values: ['Expired'] }
       ],
-      rows: complianceRows()
+      rows: []
     }
   ];
 }

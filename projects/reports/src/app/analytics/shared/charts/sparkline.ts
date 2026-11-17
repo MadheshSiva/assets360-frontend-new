@@ -24,11 +24,17 @@ export class Sparkline implements OnChanges {
   areaPath = '';
 
   ngOnChanges(): void {
-    const min = Math.min(...this.values);
-    const max = Math.max(...this.values);
+    const values = (this.values ?? []).filter((v) => Number.isFinite(v));
+    if (!values.length) {
+      this.path = '';
+      this.areaPath = '';
+      return;
+    }
+    const min = Math.min(...values);
+    const max = Math.max(...values);
     const span = max - min || 1;
-    const step = this.values.length > 1 ? (this.width - 4) / (this.values.length - 1) : 0;
-    const pts = this.values.map((v, i) => [2 + i * step, this.height - 3 - ((v - min) / span) * (this.height - 6)]);
+    const step = values.length > 1 ? (this.width - 4) / (values.length - 1) : 0;
+    const pts = values.map((v, i) => [2 + i * step, this.height - 3 - ((v - min) / span) * (this.height - 6)]);
     this.path = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
     this.areaPath = pts.length ? `${this.path} L${pts[pts.length - 1][0].toFixed(1)} ${this.height} L2 ${this.height} Z` : '';
   }

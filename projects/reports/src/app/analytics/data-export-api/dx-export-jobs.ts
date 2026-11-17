@@ -21,7 +21,7 @@ import { JOB_TONES, MODULE_TONES, destinationIcon, formatStamp, moduleIcon } fro
           </button>
         }
         <select class="select dx-select-sm" [(ngModel)]="module" aria-label="Data source">
-          <option value="">All data sources</option>
+          <option value="">Select Data Source</option>
           @for (m of modules; track m) {
             <option [value]="m">{{ m }}</option>
           }
@@ -112,7 +112,7 @@ import { JOB_TONES, MODULE_TONES, destinationIcon, formatStamp, moduleIcon } fro
                 </td>
               </tr>
             } @empty {
-              <tr><td colspan="11" class="empty">No export jobs match the current filters.</td></tr>
+              <tr><td colspan="11" class="empty">No export jobs found.</td></tr>
             }
           </tbody>
         </table>

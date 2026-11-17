@@ -2,13 +2,13 @@ import { RA_MONTH_LABELS } from '../shared/analytics-common';
 import { ChartSeries, HBarRow, RA_COLORS } from '../shared/charts';
 import { RA_ASSETS, RA_WORK_ORDERS, RaAsset, RaScope, RaSite, inScope, mean, periodMonths, round1 } from './kit/asset-universe';
 
-// DEMO MODE: Asset Performance figures are aggregated from the shared sample register in ./kit/asset-universe.
+// Asset Performance figures are aggregated from the asset register in ./kit/asset-universe (empty until the API exists).
 
 /** Average utilization each site is expected to reach. */
 export const UTILIZATION_TARGET = 75;
 
 /** Change vs the previous period shown on the KPI cards (%). */
-export const AP_DELTAS = { total: 8.4, health: 3.2, utilization: 5.6, availability: 1.8, mtbf: 12.5, mttr: -18.4 };
+export const AP_DELTAS = { total: 0, health: 0, utilization: 0, availability: 0, mtbf: 0, mttr: 0 };
 
 export interface ApLocationRow {
   site: RaSite;
@@ -176,7 +176,7 @@ export function buildAssetPerformance(scope: RaScope, period: string, compare: b
     availability: round1(avg(assets, (a) => a.availability)),
     mtbf,
     mttr,
-    labels: months.map((m) => RA_MONTH_LABELS[m]),
+    labels: total ? months.map((m) => RA_MONTH_LABELS[m]).filter((l) => l !== undefined) : [],
     healthTrend,
     categoryLabels: categories.map((c, i) => `${c}\n${active[i]}%`),
     categoryUtilization,

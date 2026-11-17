@@ -8,6 +8,7 @@ import { MdmRef } from './people.data';
  */
 class NameLookup {
   private byName = new Map<string, string>();
+  private nameList: string[] = [];
   private loaded = false;
 
   constructor(
@@ -20,9 +21,17 @@ class NameLookup {
     if (this.loaded) return;
     this.loaded = true;
     this.api.list<Record<string, unknown> & { id: string }>(this.resource).subscribe({
-      next: (dtos) => (this.byName = new Map(dtos.map((d) => [this.nameOf(d).toLowerCase(), d.id]))),
+      next: (dtos) => {
+        this.byName = new Map(dtos.map((d) => [this.nameOf(d).toLowerCase(), d.id]));
+        this.nameList = dtos.map((d) => this.nameOf(d)).filter(Boolean).sort((a, b) => a.localeCompare(b));
+      },
       error: () => (this.loaded = false)
     });
+  }
+
+  /** Names loaded from the API, for pick lists; empty until loaded. */
+  get names(): string[] {
+    return this.nameList;
   }
 
   ref(name: string | null | undefined): MdmRef | null {

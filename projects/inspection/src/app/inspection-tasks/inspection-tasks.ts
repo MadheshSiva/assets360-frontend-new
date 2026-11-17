@@ -40,7 +40,6 @@ import { Pager, pillClass } from '../shared/insp-utils';
 
 const RESPONSE_TYPES = ['Pass / Fail', 'Yes / No', 'Numeric', 'Text'];
 const SEVERITIES = ['Critical', 'High', 'Medium', 'Low'];
-const FALLBACK_CATEGORIES = ['Safety', 'Mechanical', 'Condition', 'Electrical', 'Instrumentation'];
 
 function blankTask(category: string): Partial<InspectionTask> {
   return {
@@ -105,8 +104,8 @@ export class InspectionTasksPage implements OnInit {
   readonly severities = SEVERITIES;
 
   readonly search = signal('');
-  readonly categoryFilter = signal('All');
-  readonly statusFilter = signal('All');
+  readonly categoryFilter = signal('');
+  readonly statusFilter = signal('');
   readonly selectedId = signal<string | null>(null);
   readonly menuId = signal<string | null>(null);
   readonly confirmId = signal<string | null>(null);
@@ -123,7 +122,7 @@ export class InspectionTasksPage implements OnInit {
     const fromStore = [...this.api.taskCategories.items()]
       .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
       .map((c) => c.categoryName);
-    const set = new Set(fromStore.length ? fromStore : FALLBACK_CATEGORIES);
+    const set = new Set(fromStore);
     this.store.items().forEach((t) => t.taskCategory && set.add(t.taskCategory));
     return [...set];
   });
@@ -157,8 +156,8 @@ export class InspectionTasksPage implements OnInit {
       .filter(
         (t) =>
           (!q || `${t.taskCode} ${t.taskTitle}`.toLowerCase().includes(q)) &&
-          (cat === 'All' || t.taskCategory === cat) &&
-          (st === 'All' || (st === 'Active') === t.isActive)
+          (!cat || t.taskCategory === cat) &&
+          (!st || (st === 'Active') === t.isActive)
       )
       .sort((a, b) => a.taskCode.localeCompare(b.taskCode, undefined, { numeric: true }));
   });
@@ -336,7 +335,7 @@ export class InspectionTasksPage implements OnInit {
 
   // ===== Drawer form =====
   openNew(): void {
-    this.form = blankTask(this.categoryFilter() !== 'All' ? this.categoryFilter() : (this.categories()[0] ?? ''));
+    this.form = { ...blankTask(this.categoryFilter()), responseType: '', defaultSeverity: '' };
     this.formError = '';
   }
 
@@ -357,6 +356,10 @@ export class InspectionTasksPage implements OnInit {
     const title = f.taskTitle?.trim();
     if (!title) {
       this.formError = 'Task name is required.';
+      return;
+    }
+    if (!f.responseType) {
+      this.formError = 'Select a response type.';
       return;
     }
     const numeric = f.responseType === 'Numeric';

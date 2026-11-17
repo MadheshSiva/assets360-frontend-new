@@ -6,13 +6,12 @@ import {
   ArrowDown, ArrowUp, ArrowUpDown, Bookmark, ChartColumn, Download, Ellipsis, GitCompareArrows, GripVertical, Info,
   LucideAngularModule, Maximize2, RadioTower, RefreshCw, Signal, TriangleAlert, Wifi, X
 } from 'lucide-angular';
-import { AnalyticsPage, RA_CATEGORIES, RA_PERIODS, downloadCsv, percent } from '../shared/analytics-common';
+import { AnalyticsPage, RA_CATEGORIES, downloadCsv, percent } from '../shared/analytics-common';
 import { CartesianChart, ChartSeries, ChartSlice, DonutChart, GaugeChart, RA_COLORS, Sparkline } from '../shared/charts';
 import { IotActionPlanDialog, ActionPlan } from './iot-action-plan/iot-action-plan';
 import { IotSiteMap, MapPoint } from './iot-site-map/iot-site-map';
 import {
-  CONNECTIVITY, Connectivity, DEVICE_TYPES, IOT_ALERTS, IOT_ASSETS, IOT_SITES, IotAlert, IotAsset, LIVE_AVAIL_STEPS, LIVE_UTIL_STEPS,
-  PERIOD_AVAIL_OFFSET, PERIOD_DELTAS, PERIOD_UTIL_OFFSET, agoText, hashUnit, periodWindow, telemetryTime
+  CONNECTIVITY, Connectivity, DEVICE_TYPES, IOT_ALERTS, IOT_ASSETS, IOT_SITES, IotAlert, IotAsset, agoText, telemetryTime
 } from './iot-utilization.data';
 
 type KpiKey = 'connected' | 'utilization' | 'availability' | 'alerts';
@@ -120,17 +119,14 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
   readonly agoText = agoText;
   readonly percent = percent;
 
-  category = this.categories[0];
-  deviceType = this.deviceTypes[0];
-  connectivity = this.statuses[0];
+  category = '';
+  deviceType = '';
+  connectivity = '';
   compare = false;
 
   // Live data: "Updated n sec ago" ticks every second; auto refresh nudges the live numbers every 30 s
   autoRefresh = true;
   updatedSeconds = 30;
-  private liveStep = 0;
-  private liveUtil = 0;
-  private liveAvail = 0;
   private secondTimer: ReturnType<typeof setInterval> | null = null;
   private autoTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -199,11 +195,8 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
     this.autoTimer = on ? setInterval(() => this.liveTick(), AUTO_REFRESH_MS) : null;
   }
 
-  // DEMO MODE: a new telemetry batch moves the live numbers a little (deterministic sequence)
+  // Re-aggregates the view model (live telemetry will come from the IoT API once wired)
   private liveTick(): void {
-    this.liveUtil = round1(this.liveUtil + LIVE_UTIL_STEPS[this.liveStep % LIVE_UTIL_STEPS.length]);
-    this.liveAvail = round1(this.liveAvail + LIVE_AVAIL_STEPS[this.liveStep % LIVE_AVAIL_STEPS.length]);
-    this.liveStep++;
     this.updatedSeconds = 0;
     this.recompute();
   }
@@ -213,12 +206,12 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
   }
 
   resetFilters(): void {
-    this.period = RA_PERIODS[0];
-    this.organization = this.organizations[0];
-    this.location = this.locations[0];
-    this.category = this.categories[0];
-    this.deviceType = this.deviceTypes[0];
-    this.connectivity = this.statuses[0];
+    this.period = '';
+    this.organization = '';
+    this.location = '';
+    this.category = '';
+    this.deviceType = '';
+    this.connectivity = '';
     this.recompute();
   }
 
@@ -227,34 +220,30 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
     this.recompute();
   }
 
-  // "Purple IQ Group" is the parent company, so it covers every site
+  // Asset matches every active filter
   private matches(a: IotAsset): boolean {
-    return (this.organization === this.organizations[0] || this.organization === 'Purple IQ Group' || a.org === this.organization)
-      && (this.location === this.locations[0] || a.site === this.location)
-      && (this.category === this.categories[0] || a.category === this.category)
-      && (this.deviceType === this.deviceTypes[0] || a.deviceType === this.deviceType)
-      && (this.connectivity === this.statuses[0] || a.status === this.connectivity);
-  }
-
-  private get periodIndex(): number {
-    return Math.max(0, RA_PERIODS.indexOf(this.period));
+    return (!this.organization || this.organization === this.organizations[0] || a.org === this.organization)
+      && (!this.location || this.location === this.locations[0] || a.site === this.location)
+      && (!this.category || this.category === this.categories[0] || a.category === this.category)
+      && (!this.deviceType || this.deviceType === this.deviceTypes[0] || a.deviceType === this.deviceType)
+      && (!this.connectivity || this.connectivity === this.statuses[0] || a.status === this.connectivity);
   }
 
   private recompute(): void {
-    const pi = this.periodIndex;
     this.assets = IOT_ASSETS.filter((a) => this.matches(a));
     const inScope = new Set(this.assets);
     this.alerts = IOT_ALERTS.filter((al) => inScope.has(al.asset));
     this.utilRows = this.assets
       .filter((a) => a.utilization !== null)
       .map((a) => {
-        const utilization = round1(Math.min(99.5, Math.max(0, (a.utilization ?? 0) + PERIOD_UTIL_OFFSET[pi])));
+        const utilization = round1(Math.min(100, Math.max(0, a.utilization ?? 0)));
         return { asset: a, utilization, variance: round1(utilization - a.target) };
       });
 
-    const avgUtil = round1(avg(this.utilRows.map((r) => r.utilization)) + this.liveUtil);
+    const avgUtil = round1(avg(this.utilRows.map((r) => r.utilization)));
     const avgAvail = this.availabilityOf(this.assets);
-    const [dConn, dUtil, dAvail, dAlerts] = PERIOD_DELTAS[pi];
+    // Period-over-period change needs previous-period figures from the API; none available yet
+    const [dConn, dUtil, dAvail, dAlerts] = [0, 0, 0, 0];
     const none = this.assets.length === 0;
     const prev = (v: number, d: number) => v / (1 + d / 100);
     this.kpis = [
@@ -264,7 +253,7 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
       { key: 'alerts', label: 'Active IoT Alerts', value: String(this.alerts.length), prev: String(Math.round(prev(this.alerts.length, dAlerts))), delta: dAlerts, good: dAlerts <= 0, tone: 'red', icon: TriangleAlert }
     ];
 
-    this.buildTrends(avgUtil, dUtil);
+    this.buildTrends();
     this.buildDistribution();
     this.buildMap();
     this.buildDevices();
@@ -274,57 +263,15 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
   private availabilityOf(assets: IotAsset[]): number {
     const values = assets.filter((a) => a.availability !== null).map((a) => a.availability ?? 0);
     if (!values.length) return 0;
-    return round1(Math.min(100, avg(values) + PERIOD_AVAIL_OFFSET[this.periodIndex] + this.liveAvail));
+    return round1(Math.min(100, avg(values)));
   }
 
-  private get filterKey(): string {
-    return [this.organization, this.location, this.category, this.deviceType, this.connectivity].join('|');
-  }
-
-  /** Utilization, telemetry and event trends for the period window; the last utilization point equals the KPI. */
-  private buildTrends(avgUtil: number, dUtil: number): void {
-    const win = periodWindow(this.period);
-    const h = hashUnit(this.filterKey);
-    // Position on the 12-month timeline (weeks of October sit just before index 11)
-    const t = win.months.map((m, i) => (win.weekly ? 11 - (win.months.length - 1 - i) * 0.23 : m));
-    const wave = (x: number) => Math.sin(x * 1.3 + h * 6) * 1.2;
-    const offlineShare = this.assets.length
-      ? (this.assets.filter((a) => a.status === 'Offline' || a.status === 'Never Connected').length / this.assets.length) * 100
-      : 0;
-
-    // Production + idle + maintenance + offline = 100% of the scheduled hours
-    const production = t.map((x) => round1(Math.max(0, avgUtil - (11 - x) * 0.6 + wave(x) - wave(11))));
-    const maintenance = production.map((p, i) => round1((100 - p) * (0.26 + 0.03 * Math.sin(t[i] + h))));
-    const offline = production.map((p, i) => round1(Math.max(0, Math.min((100 - p - maintenance[i]) * 0.5, offlineShare * 0.35 + Math.cos(t[i] * 0.8) * 0.6))));
-    const idle = production.map((p, i) => round1(100 - p - maintenance[i] - offline[i]));
-    this.trendLabels = win.labels;
-    this.trendSeries = [
-      { name: 'Production', values: production, color: RA_COLORS.purple },
-      { name: 'Idle', values: idle, color: RA_COLORS.blue },
-      { name: 'Maintenance', values: maintenance, color: RA_COLORS.orange },
-      { name: 'Offline', values: offline, color: RA_COLORS.red }
-    ];
-    if (this.compare) {
-      this.trendSeries.push({ name: 'Production (previous period)', values: production.map((p) => round1(p / (1 + dUtil / 100))), color: RA_COLORS.lavender, dashed: true });
-    }
-
-    const season = (x: number) => Math.cos(((x - 9) / 12) * 2 * Math.PI);
-    this.telemetrySeries = [
-      { name: 'Temperature', values: t.map((x) => round1(52 + 16 * season(x) + h * 4)), color: RA_COLORS.purple },
-      { name: 'Vibration', values: t.map((x) => round1(34 + 3 * Math.sin(x * 0.9 + h * 5) + (x - 2) * 0.5)), color: RA_COLORS.blue },
-      { name: 'Energy', values: t.map((x) => round1(60 + 12 * season(x) + x * 0.3)), color: RA_COLORS.green },
-      { name: 'Pressure', values: t.map((x) => round1(26 + 4 * Math.sin(x * 0.7 + h * 3))), color: RA_COLORS.orange }
-    ];
-
-    // Event volume scales with the number of assets in scope
-    const scale = this.assets.length / IOT_ASSETS.length;
-    const per = win.weekly ? 1 / 4.3 : 1;
-    const count = (v: number) => Math.max(0, Math.round(v * scale * per));
-    this.eventSeries = [
-      { name: 'Critical', values: t.map((x) => count(6 + 3 * Math.sin(x * 1.1 + h * 4) + (x >= 8 ? 2 : 0))), color: RA_COLORS.red },
-      { name: 'Warning', values: t.map((x) => count(18 + 6 * Math.sin(x * 0.8 + 1 + h * 3) + x * 0.6)), color: RA_COLORS.orange },
-      { name: 'Informational', values: t.map((x) => count(22 + 8 * Math.sin(x * 0.6 + 2) + x * 0.9)), color: RA_COLORS.blue }
-    ];
+  /** Utilization, telemetry and event trends: no time-series source yet, so these charts render empty. */
+  private buildTrends(): void {
+    this.trendLabels = [];
+    this.trendSeries = [];
+    this.telemetrySeries = [];
+    this.eventSeries = [];
   }
 
   private buildDistribution(): void {
@@ -453,10 +400,9 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
     return dbm >= -70 ? 'green' : dbm >= -75 ? 'orange' : 'red';
   }
 
-  /** 12 weeks of utilization for the detail dialog, ending at the asset's current figure */
-  sparkFor(row: UtilRow): number[] {
-    const h = hashUnit(row.asset.id);
-    return Array.from({ length: 12 }, (_, i) => round1(Math.max(0, row.utilization + (11 - i) * (h - 0.4) * 1.5 + Math.sin(i * 1.7 + h * 9) * 3 - Math.sin(11 * 1.7 + h * 9) * 3)));
+  /** Utilization history for the detail dialog (no history source yet) */
+  sparkFor(_row: UtilRow): number[] {
+    return [];
   }
 
   num(v: number): string {
@@ -549,7 +495,7 @@ export class IotUtilizationAnalyticsPage extends AnalyticsPage implements OnInit
 
   onPlanSaved(plan: ActionPlan): void {
     this.actionPlan = null;
-    this.notify(`DEMO MODE: action plan “${plan.title}” created and assigned to ${plan.owner} (due ${plan.due}).`);
+    this.notify(`Action plan “${plan.title}” created and assigned to ${plan.owner} (due ${plan.due}).`);
   }
 
   openDetailFor(asset: IotAsset): void {

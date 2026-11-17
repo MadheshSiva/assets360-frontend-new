@@ -13,7 +13,7 @@ type Tab = 'basic' | 'rules';
   selector: 'app-priority-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './priority-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../maintenance-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../maintenance-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class PriorityForm extends MasterForm<PriorityRecord, Tab> {
   protected readonly store = inject(PriorityService);
@@ -40,9 +40,10 @@ export class PriorityForm extends MasterForm<PriorityRecord, Tab> {
 
   protected validate(f: PriorityRecord) {
     const errors: Record<string, string> = {};
+    if (!f.status) errors['status'] = 'Select a status.';
     if (!f.appliesTo.length) errors['appliesTo'] = 'Pick at least one place this level is used.';
     if (f.escalateAfterHours !== null && !(Number.isInteger(f.escalateAfterHours) && f.escalateAfterHours > 0)) errors['escalate'] = 'Enter whole hours, or leave empty.';
-    return { errors, tab: 'rules' as Tab };
+    return { errors, tab: (errors['status'] ? 'basic' : 'rules') as Tab };
   }
 
   protected override tidy(f: PriorityRecord): PriorityRecord {

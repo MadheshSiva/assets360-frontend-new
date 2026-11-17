@@ -21,16 +21,20 @@
   <div class="row-field" [class.invalid]="err('module')">
     <label for="sd-module">Module <span class="req">*</span></label>
     <select id="sd-module" [(ngModel)]="sequence.module" (ngModelChange)="touch()">
+      <option value="" disabled>Select Module</option>
       @for (m of modules; track m) { <option [value]="m">{{ m }}</option> }
     </select>
   </div>
+  @if (err('module'); as e) { <small class="err">{{ e }}</small> }
 
   <div class="row-field" [class.invalid]="err('recordType')">
     <label for="sd-type">Record Type <span class="req">*</span></label>
     <select id="sd-type" [(ngModel)]="sequence.recordType" (ngModelChange)="touch()">
+      <option value="" disabled>Select Record Type</option>
       @for (r of recordTypes; track r) { <option [value]="r">{{ r }}</option> }
     </select>
   </div>
+  @if (err('recordType'); as e) { <small class="err">{{ e }}</small> }
 
   <div class="row-field">
     <label for="sd-prefix">Prefix <span class="req">*</span></label>
@@ -47,9 +51,11 @@
   <div class="row-field" [class.invalid]="err('numberLength')">
     <label for="sd-len">Number Length <span class="req">*</span></label>
     <select id="sd-len" [(ngModel)]="sequence.numberLength" (ngModelChange)="touch()">
+      <option [ngValue]="null" disabled>Select Number Length</option>
       @for (n of numberLengths; track n) { <option [ngValue]="n">{{ n }}</option> }
     </select>
   </div>
+  @if (err('numberLength'); as e) { <small class="err">{{ e }}</small> }
 
   <div class="row-field" [class.invalid]="err('startNumber')">
     <label for="sd-start">Start Number <span class="req">*</span></label>
@@ -63,19 +69,23 @@
   </div>
   @if (err('incrementBy'); as e) { <small class="err">{{ e }}</small> }
 
-  <div class="row-field">
+  <div class="row-field" [class.invalid]="err('resetRule')">
     <label for="sd-reset">Reset Frequency <span class="req">*</span></label>
     <select id="sd-reset" [(ngModel)]="sequence.resetRule" (ngModelChange)="touch()">
+      <option value="" disabled>Select Reset Frequency</option>
       @for (r of resetRules; track r) { <option [value]="r">{{ r }}</option> }
     </select>
   </div>
+  @if (err('resetRule'); as e) { <small class="err">{{ e }}</small> }
 
-  <div class="row-field">
+  <div class="row-field" [class.invalid]="err('scope')">
     <label for="sd-scope">Scope <span class="req">*</span></label>
     <select id="sd-scope" [(ngModel)]="sequence.scope" (ngModelChange)="touch()">
+      <option value="" disabled>Select Scope</option>
       @for (s of scopes; track s) { <option [value]="s">{{ s }}</option> }
     </select>
   </div>
+  @if (err('scope'); as e) { <small class="err">{{ e }}</small> }
 
   <div class="row-field">
     <label>Status</label>

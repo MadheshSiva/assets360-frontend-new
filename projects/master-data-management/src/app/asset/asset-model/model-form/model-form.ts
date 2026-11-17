@@ -1,12 +1,27 @@
-import { Component, EventEmitter, Input, OnChanges, Output, inject } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnInit, Output, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { LucideAngularModule, Plus, Trash2, X } from 'lucide-angular';
 import { CURRENCIES } from '../../../organization/organization/organization.data';
 import { AssetTypeService } from '../../asset-type/asset-type.service';
+import { CategoryService } from '../../category-subcategory/category.service';
 import { ManufacturerService } from '../../manufacturer/manufacturer.service';
-import { CRITICALITIES, MODEL_COST_CENTERS, PM_FREQUENCIES, TRACKING_METHODS, blankAssetModel, hasRunningNumber, sampleTag, specsFor } from '../asset-model.data';
+import { CRITICALITIES, PM_FREQUENCIES, TRACKING_METHODS, blankAssetModel, hasRunningNumber, sampleTag, specsFor } from '../asset-model.data';
 import { MODEL_ICONS } from '../asset-model.icons';
 import { AssetModelRecord } from '../asset-model.model';
+
+/** A new model starts with every dropdown empty so the user picks each value. */
+function newAssetModel(): AssetModelRecord {
+  return {
+    ...blankAssetModel(),
+    pmFrequency: '' as AssetModelRecord['pmFrequency'],
+    maintenanceStrategy: '' as AssetModelRecord['maintenanceStrategy'],
+    criticality: '' as AssetModelRecord['criticality'],
+    currency: '',
+    depreciationMethod: '' as AssetModelRecord['depreciationMethod'],
+    trackingMethod: '' as AssetModelRecord['trackingMethod'],
+    defaultCondition: '' as AssetModelRecord['defaultCondition']
+  };
+}
 import { AssetModelService } from '../asset-model.service';
 
 export type ModelFormTab = 'basic' | 'specs' | 'lifecycle' | 'financial' | 'defaults';
@@ -45,9 +60,9 @@ const TAB_OF: Record<FieldKey, ModelFormTab> = {
   selector: 'app-model-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './model-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', './model-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', './model-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
-export class ModelForm implements OnChanges {
+export class ModelForm implements OnInit, OnChanges {
   // 'edit' changes `model`; 'add' creates a new one, pre-filled from `model` if given (Duplicate)
   @Input() mode: 'add' | 'edit' = 'add';
   @Input() model: AssetModelRecord | null = null;
@@ -58,9 +73,9 @@ export class ModelForm implements OnChanges {
   readonly service = inject(AssetModelService);
   readonly types = inject(AssetTypeService);
   readonly makers = inject(ManufacturerService);
+  private readonly categoryStore = inject(CategoryService);
   readonly icons = { X, Plus, Trash2 };
   readonly modelIcons = MODEL_ICONS;
-  readonly costCenters = MODEL_COST_CENTERS;
   readonly currencies = CURRENCIES;
   readonly pmFrequencies = PM_FREQUENCIES;
   readonly criticalities = CRITICALITIES;
@@ -75,14 +90,30 @@ export class ModelForm implements OnChanges {
   ];
 
   tab: ModelFormTab = 'basic';
-  form: AssetModelRecord = blankAssetModel();
+  form: AssetModelRecord = newAssetModel();
   subcategoriesText = '';
   errors: Partial<Record<FieldKey, string>> = {};
   private original: AssetModelRecord | null = null;
 
+  /**
+   * Refreshes the Basic Information lists every time the form opens. The stores otherwise load once per session,
+   * so a first load that failed (e.g. before the token was ready) or masters added since would leave them empty or stale.
+   */
+  ngOnInit(): void {
+    // A failed load leaves the list as it was; the store records the error
+    const ignoreError = { error: () => undefined };
+    this.types.reload().subscribe(ignoreError);
+    this.makers.reload().subscribe(ignoreError);
+    this.categoryStore.reload().subscribe(ignoreError);
+  }
+
+  get listsLoading(): boolean {
+    return this.types.loading() || this.makers.loading() || this.categoryStore.loading();
+  }
+
   ngOnChanges(): void {
     this.original = this.mode === 'edit' ? this.model : null;
-    this.form = this.model ? structuredClone(this.model) : blankAssetModel();
+    this.form = this.model ? structuredClone(this.model) : newAssetModel();
     this.subcategoriesText = this.form.subcategories.join(', ');
     this.errors = {};
     this.tab = this.startTab;
@@ -107,7 +138,7 @@ export class ModelForm implements OnChanges {
 
   // Active types from the Asset Type master; the current one stays listed even if it was deactivated
   get typesInCategory() {
-    return this.types.all().filter((t) => (t.status === 'Active' || t.name === this.form.assetType) && (!this.form.category || t.category === this.form.category));
+    return this.types.all().filter((t) => (t.status === 'Active' || t.name === this.form.assetType) && (!this.form.category || !t.category || t.category === this.form.category));
   }
 
   get sample(): string {
@@ -140,6 +171,11 @@ export class ModelForm implements OnChanges {
       this.form.assignable = type.assignable;
     }
     if (!this.form.specs.length) this.loadTemplate();
+  }
+
+  // Cost centers already used on asset models, plus the current value
+  get costCenters(): string[] {
+    return [...new Set([this.form.costCenter, ...this.service.all().map((r) => r.costCenter)].filter(Boolean))];
   }
 
   // A category that no longer fits the chosen type clears the type
@@ -192,7 +228,23 @@ export class ModelForm implements OnChanges {
     this.form.image = null;
   }
 
+  /** True on the final tab, where the primary button saves instead of advancing. */
+  get isLastTab(): boolean {
+    return this.tab === this.tabs[this.tabs.length - 1].id;
+  }
+
+  /** Move to the next tab. */
+  next(): void {
+    const i = this.tabs.findIndex((t) => t.id === this.tab);
+    if (i < this.tabs.length - 1) this.tab = this.tabs[i + 1].id;
+  }
+
   submit(): void {
+    // Enter key / primary button on earlier tabs just advances
+    if (!this.isLastTab) {
+      this.next();
+      return;
+    }
     const f = this.form;
     const errors: Partial<Record<FieldKey, string>> = {};
     if (!f.name.trim()) errors.name = 'Enter a model name.';

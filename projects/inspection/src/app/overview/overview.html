@@ -3,7 +3,7 @@
   <div class="page-head">
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a routerLink="/inspection/overview">Inspection</a><span aria-hidden="true">/</span><span class="current">Overview</span>
+        <a routerLink="/inspection/overview">Inspection</a><span class="crumb-sep" aria-hidden="true">›</span><span class="current">Overview</span>
       </nav>
       <h1>Inspection</h1>
       <p class="subtitle">Plan inspections, capture findings and verify corrective actions.</p>
@@ -52,15 +52,15 @@
         <label class="search"><lucide-icon [img]="icons.Search" [size]="16"></lucide-icon>
           <input type="search" placeholder="Search by ID, asset, location..." aria-label="Search inspections" [ngModel]="search()" (ngModelChange)="setFilter('search', $event)" /></label>
         <select class="control w-sel" aria-label="Site" [ngModel]="site()" (ngModelChange)="setFilter('site', $event)">
-          <option value="">All Sites</option>
+          <option value="">Select Site</option>
           @for (s of sites(); track s) { <option [value]="s">{{ s }}</option> }
         </select>
         <select class="control w-sel" aria-label="Inspection type" [ngModel]="type()" (ngModelChange)="setFilter('type', $event)">
-          <option value="">Inspection Type</option>
+          <option value="">Select Inspection Type</option>
           @for (t of types(); track t) { <option [value]="t">{{ t }}</option> }
         </select>
         <select class="control w-sel" aria-label="Status" [ngModel]="status()" (ngModelChange)="setFilter('status', $event)">
-          <option value="">Status</option>
+          <option value="">Select Status</option>
           @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
         </select>
         <span class="range">

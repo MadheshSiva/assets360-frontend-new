@@ -154,6 +154,11 @@ export class JobDrawer implements OnChanges {
     if (!this.job.dataObject) e['object'] = 'Choose a data object.';
     if (this.isImport && !this.job.operation) e['operation'] = 'Choose an operation.';
     if (this.isImport && !this.job.fileName) e['file'] = 'Attach an .xlsx or .csv file.';
+    if (!this.job.fileFormat) e['format'] = this.isImport ? 'Choose a file format.' : 'Choose an export format.';
+    if (this.isImport && !this.job.duplicateHandling) e['duplicate'] = 'Choose how duplicates are handled.';
+    if (!this.job.dateFormat) e['dateFormat'] = 'Choose a date format.';
+    if (!this.job.delimiter) e['delimiter'] = 'Choose a delimiter.';
+    if (!this.job.encoding) e['encoding'] = 'Choose an encoding.';
     const batch = Number(this.job.batchSize);
     if (!Number.isInteger(batch) || batch < 1 || batch > 50000) e['batch'] = 'Batch size must be 1 – 50,000.';
     if (this.job.schedule.mode === 'once' && !this.job.schedule.date) e['schedule'] = 'Pick a run date on the Schedule tab.';

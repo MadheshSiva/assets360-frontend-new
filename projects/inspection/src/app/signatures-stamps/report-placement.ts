@@ -28,10 +28,12 @@ export const POSITIONS = ['Footer – left', 'Footer – center', 'Footer – ri
       </div>
       <label class="field"><span class="field-label">Signature position</span>
         <select class="control" [(ngModel)]="record().signaturePosition" (ngModelChange)="changed.emit()">
+          <option value="" disabled>Select Signature Position</option>
           @for (p of positionsFor(record().signaturePosition); track p) { <option [value]="p">{{ p }}</option> }
         </select></label>
       <label class="field"><span class="field-label">Stamp position</span>
         <select class="control" [(ngModel)]="record().stampPosition" (ngModelChange)="changed.emit()">
+          <option value="" disabled>Select Stamp Position</option>
           @for (p of positionsFor(record().stampPosition); track p) { <option [value]="p">{{ p }}</option> }
         </select></label>
       <div class="field"><span class="field-label">Include signer name &amp; date</span>

@@ -51,7 +51,7 @@
         <label class="filter">
           <span>Status</span>
           <select name="status" [(ngModel)]="draft.status">
-            <option value="">All</option>
+            <option value="">Select Status</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
           </select>
@@ -59,7 +59,7 @@
         <label class="filter">
           <span>Parent</span>
           <select name="organization" [(ngModel)]="draft.organizationCode">
-            <option value="">All</option>
+            <option value="">Select Organization</option>
             @for (o of organizations.all(); track o.code) { <option [value]="o.code">{{ o.name }}</option> }
           </select>
         </label>

@@ -139,14 +139,14 @@ export class WorkingCalendarPage implements OnInit {
       fullDay: !ex || ex.duration === 'Full day',
       start: times[0] ?? '08:00',
       end: times[1] ?? '17:00',
-      type: ex?.type ?? 'Holiday'
+      type: ex?.type ?? ''
     };
   }
 
   saveException(): void {
     const d = this.draft;
     const f = this.form;
-    if (!d || !f || !f.date || !f.description.trim()) return;
+    if (!d || !f || !f.date || !f.description.trim() || !f.type) return;
     const ex: CalendarException = {
       date: f.date,
       description: f.description.trim(),

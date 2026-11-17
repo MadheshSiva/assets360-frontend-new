@@ -22,7 +22,6 @@ import {
   Trash2,
   X,
 } from 'lucide-angular';
-import TASK_DATA from './task-master.json';
 import { TaskDef, TaskVersion } from './task.model';
 
 type Tab = 'general' | 'instructions' | 'checklist' | 'resources' | 'materials' | 'safety' | 'sla' | 'versions';
@@ -33,13 +32,31 @@ interface Check {
   tab: Tab;
 }
 
-const CURRENT_USER = 'Rex Kumar';
+/** Signed-in user's display name; filled from the auth/user API once wired. */
+const CURRENT_USER = '';
 
-/** DEMO MODE: tasks come from task-master.json and are kept in memory until the WIP API is wired up. */
-const TASKS: TaskDef[] = TASK_DATA as TaskDef[];
+/** Tasks are kept in memory; empty until the WIP API is wired up. */
+const TASKS: TaskDef[] = [];
+
+/** Empty task used while there are no tasks to edit. */
+function blankTask(): TaskDef {
+  return {
+    code: '', name: '', version: '0.1', status: 'Draft', lastUpdated: '', lastUpdatedBy: '', usedIn: [],
+    general: { category: '', taskType: '', assetType: '', durationMins: 0, priority: 'Medium', responsibleRole: '', owner: '', description: '' },
+    instructions: [], sop: null, measurements: [], captureReadings: false, requirePassFail: false,
+    resources: { skill: '', resourceType: '', defaultAsset: '', crewSize: '', tools: [] },
+    checklist: { name: '', items: [], photoEvidence: 'Optional', minPhotos: 0, signature: 'None', attachment: 'Optional' },
+    materials: [],
+    safety: { ppe: [], hazards: [], permitRequired: false, permitType: '', isolationRequired: false },
+    completion: { rules: [], failureAction: '' },
+    controls: { mandatory: false, allowSkip: false, approvalRequired: false, slaMins: 0 },
+    notifications: { warnPercent: 80, onComplete: '', onFail: '', onOverdue: '' },
+    versions: [],
+  };
+}
 const WORKING = new Map<string, TaskDef>();
 const SAVED = new Map<string, string>();
-/** SOP files picked in this session, by task code (sample tasks have none). */
+/** SOP files picked in this session, by task code. */
 const SOP_FILES = new Map<string, File>();
 
 const today = () => {
@@ -58,7 +75,7 @@ function nextVersion(v: string): string {
   imports: [CommonModule, FormsModule, RouterModule, LucideAngularModule],
   templateUrl: './task-master.html',
   // Buttons, controls, cards, tabs, switches, tables, modal and toast come from the Job Templates stylesheets
-  styleUrls: ['../job-templates/job-templates.css', '../job-templates/job-templates-tabs.css', './task-master.css'],
+  styleUrls: ['../job-templates/job-templates.css', '../job-templates/job-templates-tabs.css', './task-master.css', '../shared/wip-purple-theme.css'],
 })
 export class TaskMaster implements OnDestroy {
   readonly icons = { ArrowDown, ArrowUp, ChevronDown, CircleAlert, CircleCheck, ClipboardList, ExternalLink, Eye, FileText, Info, Paperclip, Plus, Save, Send, Trash2, X };
@@ -77,21 +94,22 @@ export class TaskMaster implements OnDestroy {
   // ===== Option lists =====
   readonly categories = ['Testing', 'Assembly', 'Inspection', 'Maintenance', 'Preparation', 'Packing'];
   readonly taskTypes = ['Measurement', 'Operation', 'Inspection', 'Approval', 'Data Entry'];
-  readonly assetTypes = ['Industrial Pump', 'Centrifugal Pump', 'Valve', 'Electric Motor', 'Gearbox', 'Compressor'];
+  // Asset types, default assets and named checklists come from master data once the API is wired
+  readonly assetTypes: string[] = [];
   readonly priorities = ['Low', 'Medium', 'High', 'Critical'];
   readonly roles = ['Test Technician', 'Fitter', 'QC Inspector', 'Electrician', 'Operator', 'Quality Supervisor', 'Production Manager', 'Process Engineer'];
   readonly skills = ['Pressure Testing', 'Mechanical Assembly', 'Electrical testing', 'Final QC', 'Valve repair', 'Welding'];
   readonly resourceTypes = ['Test Bench', 'Workstation', 'Equipment', 'Tool', 'Person', 'Team'];
-  readonly assets = ['', 'PTB-003', 'PTB-004', 'LT-02', 'MT-01', 'WS-02'];
+  readonly assets = [''];
   readonly crewSizes = ['1 technician', '2 technicians', '3 technicians', 'Team'];
-  readonly checklists = ['Pressure Test Checklist', 'Seal Fitting Checklist', 'Final QC Checklist', 'Electrical Safety Checklist'];
+  readonly checklists: string[] = [];
   readonly evidenceOptions = ['Required', 'Optional', 'Not needed'];
   readonly signatureOptions = ['Technician', 'Technician + Supervisor', 'Supervisor', 'None'];
   readonly failureActions = ['Create defect & route to rework', 'Repeat task', 'Hold job & notify supervisor', 'Scrap unit'];
   readonly units = ['Unit', 'Litre', 'Kg', 'Roll', 'Set', 'Metre'];
   readonly taskList = TASKS.map((t) => ({ code: t.code, name: t.name }));
 
-  t: TaskDef = this.working(TASKS[0].code);
+  t: TaskDef = TASKS.length ? this.working(TASKS[0].code) : blankTask();
   tab: Tab = 'general';
   switcherOpen = false;
   previewOpen = false;
@@ -114,7 +132,7 @@ export class TaskMaster implements OnDestroy {
       .queryParamMap.pipe(takeUntilDestroyed(inject(DestroyRef)))
       .subscribe((p) => {
         const code = p.get('code');
-        this.t = this.working(code && TASKS.some((x) => x.code === code) ? code : TASKS[0].code);
+        this.t = code && TASKS.some((x) => x.code === code) ? this.working(code) : TASKS.length ? this.working(TASKS[0].code) : blankTask();
         this.tab = 'general';
         this.formError = '';
         this.showChecks = this.previewOpen = this.usageOpen = this.switcherOpen = false;
@@ -137,6 +155,7 @@ export class TaskMaster implements OnDestroy {
   }
 
   get dirty(): boolean {
+    if (!SAVED.has(this.t.code)) return false;
     return JSON.stringify(this.t) !== SAVED.get(this.t.code);
   }
 

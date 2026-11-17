@@ -39,6 +39,7 @@ const PRESETS = ['Today', 'This week', 'This month', 'This quarter', 'This year'
         <label class="sr-tz">
           <lucide-icon [img]="icons.Globe" [size]="18" />
           <select aria-label="Time zone" [(ngModel)]="timeZone">
+            <option value="" disabled>Select Time Zone</option>
             @for (z of timeZones; track z.value) {
               <option [value]="z.value">{{ z.label }}</option>
             }

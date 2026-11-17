@@ -92,7 +92,7 @@ export class OrganizationService {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
-  // DEMO MODE: the master data summaries (Asset, People, Vendor, ...) still live in memory
+  // Master data summary tabs (Asset, People, Vendor, ...): layouts only, rows stay empty until their APIs are wired
   private readonly tabs: SummaryTab[] = seedSummaryTabs();
 
   constructor() {

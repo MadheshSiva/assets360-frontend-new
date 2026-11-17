@@ -75,6 +75,15 @@ interface DashboardData {
   topAssetsByDistance: DistanceAsset[];
 }
 
+/** Stat card layout (labels, colours, badges); values stay 0 until a data source is wired. */
+const STAT_CARD_SHELLS: StatCard[] = [
+  { label: 'Total Assets', value: '0', iconColor: '#2563eb' },
+  { label: 'Online / Moving', value: '0', iconColor: '#22c55e' },
+  { label: 'Idle Assets', value: '0', iconColor: '#8b5cf6' },
+  { label: 'Offline', value: '0', iconColor: '#f97316' },
+  { label: 'Alerts', value: '0', iconColor: '#ef4444', badge: 'Critical / High' },
+];
+
 @Component({
   standalone: true,
   selector: 'app-main-dashboard',
@@ -139,17 +148,15 @@ export class MainDashboard implements OnInit {
   onRow4Drop(event: CdkDragDrop<string[]>): void {
     this.persistDrop(event, this.row4Order, 'piq.dashboard.main.row4Order');
   }
-  // mapPins: MapPin[] = [
-  //   { lat: 40.7168, lng: -74.001, color: '#22c55e', label: 'Forklift FL-07' },
-  //   { lat: 40.7118, lng: -74.012, color: '#2563eb', label: 'Generator GEN-12' },
-  //   { lat: 40.7098, lng: -73.998, color: '#f97316', label: 'HVAC System' },
-  //   { lat: 40.7138, lng: -74.008, color: '#7c3aed', label: 'Compressor AC-04' },
-  //   { lat: 40.7078, lng: -74.005, color: '#ef4444', label: 'Server SRV-09' },
-  // ];
-  assetStatusDonut: DashboardData['assetStatusDonut'] = { total: '', totalLabel: '', legend: [] };
-  assetsByTypeDonut: DashboardData['assetsByTypeDonut'] = { total: '', totalLabel: '', legend: [] };
+  assetStatusDonut: DashboardData['assetStatusDonut'] = { total: '0', totalLabel: 'Total', legend: [] };
+  assetsByTypeDonut: DashboardData['assetsByTypeDonut'] = { total: '0', totalLabel: 'Total', legend: [] };
   recentAlerts: AlertItem[] = [];
-  utilizationData: DashboardData['utilizationChart'] = { yAxisLabels: [], xAxisLabels: [], peak: { value: '', x: 0, y: 0 }, linePoints: '' };
+  utilizationData: DashboardData['utilizationChart'] = {
+    yAxisLabels: ['100%', '75%', '50%', '25%', '0%'],
+    xAxisLabels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
+    peak: { value: '', x: 0, y: 0 },
+    linePoints: '',
+  };
   geofenceSummary: GeofenceItem[] = [];
   recentActivity: ActivityItem[] = [];
   topActiveAssets: ActiveAsset[] = [];
@@ -164,23 +171,11 @@ export class MainDashboard implements OnInit {
     private cd: ChangeDetectorRef,
     private router: Router,
   ) {}
-  async ngOnInit(): Promise<void> {
-    const response = await fetch('/assets/data/dashboard-data.json');
-
-    const data: DashboardData = await response.json();
-    console.log('Dashboard data loaded:', data);
-    this.statDataIndex = new Map((data?.statCards ?? []).map((c, i) => [c.label, i]));
-    this.statCards =reorderByKey(data?.statCards ?? [], 'piq.dashboard.main.statOrder', (c) => c.label);
-    this.assetStatusDonut = data?.assetStatusDonut;
-    this.assetsByTypeDonut = data?.assetsByTypeDonut;
-    this.recentAlerts = data?.recentAlerts;
-    this.utilizationData = data?.utilizationChart;
-    this.geofenceSummary = data?.geofenceSummary;
-    this.recentActivity = data?.recentActivity;
-    this.topActiveAssets = data?.topActiveAssets;
-    this.topAssetsByDistance = data?.topAssetsByDistance;
-
-    this.cd.detectChanges(); 
+  ngOnInit(): void {
+    // No data source yet: stat cards keep their labels with zero values and the widgets render empty
+    this.statDataIndex = new Map(STAT_CARD_SHELLS.map((c, i) => [c.label, i]));
+    this.statCards = reorderByKey(STAT_CARD_SHELLS.map((c) => ({ ...c })), 'piq.dashboard.main.statOrder', (c) => c.label);
+    this.cd.detectChanges();
   }
 
   getStatIconClass(index: number): string {

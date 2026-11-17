@@ -50,7 +50,7 @@ export interface AssetTypeRecord {
   allowTransfers: boolean;
   iotTracking: boolean;
   disposalApproval: boolean;
-  // DEMO MODE: counts owned by the Maintenance and Documents modules
+  // counts owned by the Maintenance and Documents modules
   openWorkOrders: number;
   documents: number;
   createdOn: string;

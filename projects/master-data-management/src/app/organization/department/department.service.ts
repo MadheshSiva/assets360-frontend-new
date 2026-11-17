@@ -125,7 +125,7 @@ export class DepartmentService extends StructureStore<DepartmentRecord, Departme
       // Work orders live in another module; not counted here
       openWorkOrders: known?.openWorkOrders ?? 0,
       email: dto.email ?? '',
-      phoneCountry: dto.phoneCountry ?? blank.phoneCountry,
+      phoneCountry: dto.phoneCountry ?? 'United Arab Emirates',
       phone: dto.phone ?? '',
       annualBudget: dto.annualBudget ?? null,
       currency: dto.currency ?? '',

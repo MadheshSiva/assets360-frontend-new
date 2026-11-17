@@ -21,7 +21,8 @@
 
 /* ===== Filters with labels above the selects ===== */
 .filters { grid-template-columns: minmax(200px, 1.5fr) repeat(4, minmax(130px, 1fr)); align-items: end; padding: 14px; }
-.search { height: 40px; }
+/* Same height as the labelled selects, so the search lines up with them */
+.search { box-sizing: border-box; height: 36px; }
 .lsel { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .lsel > span { font-size: 11.5px; color: var(--ti-text-2); }
 .lsel .control { height: 36px; font-size: 12.5px; }

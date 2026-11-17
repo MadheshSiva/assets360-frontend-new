@@ -32,6 +32,22 @@
   flex: 1;
 }
 
+/* Workspaces with a map fit the screen: the map fills the middle column and long side panels (zone form, lists)
+   scroll inside themselves instead of stretching the map card */
+.mws:has(> app-map-viewer) {
+  height: clamp(560px, calc(100vh - 230px), 960px);
+}
+
+.mws:has(> app-map-viewer) > * {
+  min-height: 0;
+}
+
+.mws:has(> app-map-viewer) > aside.panel,
+.mws:has(> app-map-viewer) > .side > .panel--grow {
+  overflow: auto;
+  min-height: 0;
+}
+
 /* Map viewer fills its grid cell; canvas area takes the spare height */
 app-map-viewer {
   display: flex;

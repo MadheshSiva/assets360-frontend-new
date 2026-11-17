@@ -28,21 +28,21 @@
         <label class="filter">
           <span>Organization</span>
           <select name="organization" [(ngModel)]="draft.organization">
-            <option value="">All</option>
+            <option value="">Select Organization</option>
             @for (o of standardOrganizations; track o) { <option [value]="o">{{ o }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Category</span>
           <select name="category" [(ngModel)]="draft.category">
-            <option value="">All</option>
+            <option value="">Select Category</option>
             @for (o of standardCategories; track o) { <option [value]="o">{{ o }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Status</span>
           <select name="status" [(ngModel)]="draft.status">
-            <option value="">All</option>
+            <option value="">Select Status</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
           </select>

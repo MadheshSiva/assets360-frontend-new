@@ -72,7 +72,7 @@ export class ChecklistDetail {
   menuKey = '';
   confirmDelete = false;
   picker = false;
-  pickerSection = 0;
+  pickerSection: number | null = null;
   newSectionName: string | null = null;
   busy = false;
   private sourceJson = '';
@@ -209,7 +209,7 @@ export class ChecklistDetail {
 
   openPicker(): void {
     if (!this.draft.sections.length) this.draft.sections.push({ sectionName: 'General', order: 1, tasks: [] });
-    this.pickerSection = Math.min(this.pickerSection, this.draft.sections.length - 1);
+    this.pickerSection = null;
     this.picker = true;
   }
 
@@ -222,6 +222,7 @@ export class ChecklistDetail {
   }
 
   addTask(t: InspectionTask): void {
+    if (this.pickerSection === null) return;
     const section = this.draft.sections[this.pickerSection];
     if (!section) return;
     section.tasks.push({

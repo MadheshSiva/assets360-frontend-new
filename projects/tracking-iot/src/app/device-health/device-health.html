@@ -1,6 +1,6 @@
 <div class="dh-layout" [class.no-panel]="!selected">
   <section class="dh-main">
-    <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep">/</span><strong>Device Health &amp; Status</strong></nav>
+    <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep" aria-hidden="true">›</span><strong>Device Health &amp; Status</strong></nav>
     <header class="dh-head">
       <div class="grow">
         <h1>Device Health &amp; Status</h1>
@@ -8,13 +8,17 @@
       </div>
       <div class="head-filters">
         <label class="ic-select"><lucide-icon [img]="icons.Building" [size]="16"></lucide-icon>
-          <select class="control" [(ngModel)]="site" (ngModelChange)="onFilter()" aria-label="Site"><option value="">All Sites</option>
-            @for (s of sites; track s.name) { <option [value]="s.name">{{ s.name }}</option> }</select></label>
+          <select class="control" [(ngModel)]="site" (ngModelChange)="onFilter()" aria-label="Site"><option value="">Select Site</option>
+            @for (s of sites; track s) { <option [value]="s">{{ s }}</option> }</select></label>
         <label class="ic-select"><lucide-icon [img]="icons.Calendar" [size]="16"></lucide-icon>
           <select class="control" [ngModel]="range" (ngModelChange)="setRange($event)" aria-label="Time range">
+            <option value="">Select Time Range</option>
             @for (r of ranges; track r.key) { <option [value]="r.key">{{ r.label }}</option> }</select></label>
+        <button type="button" class="btn btn-primary" (click)="openAdd()" [disabled]="loading || busy"><lucide-icon [img]="icons.Plus" [size]="16"></lucide-icon>Add Device Health</button>
       </div>
     </header>
+    @if (loading) { <p class="muted small">Loading device health…</p> }
+    @if (loadError) { <p class="form-error" role="alert">{{ loadError }} <button type="button" class="link-btn" (click)="load()">Retry</button></p> }
 
     <!-- KPIs -->
     @let c = counts;
@@ -45,27 +49,7 @@
             @for (r of ranges; track r.key) { <button type="button" [class.is-on]="range === r.key" (click)="setRange(r.key)">{{ r.key }}</button> }
           </div></div>
         @let tr = trend;
-        <div class="chart-wrap" (mouseleave)="hoverTrend = null">
-          <svg [attr.viewBox]="'0 0 ' + tw + ' ' + th" class="chart" role="img" aria-label="Online, warning and offline devices over the selected period">
-            <g class="grid">@for (t of tr.yTicks; track t.label) { <line [attr.x1]="tp.l" [attr.x2]="tw - tp.r" [attr.y1]="t.y" [attr.y2]="t.y"></line> }</g>
-            <g class="axis">
-              @for (t of tr.yTicks; track t.label) { <text [attr.x]="tp.l - 8" [attr.y]="t.y + 3.5" text-anchor="end">{{ t.label }}</text> }
-              @for (t of tr.xTicks; track t.x) { <text [attr.x]="t.x" [attr.y]="th - 7" text-anchor="middle">{{ t.label }}</text> }
-            </g>
-            @if (hoverTrend !== null) { <line class="crosshair" [attr.x1]="tr.xs[hoverTrend]" [attr.x2]="tr.xs[hoverTrend]" [attr.y1]="tp.t" [attr.y2]="th - tp.b"></line> }
-            @for (s of tr.series; track s.key) {
-              <path class="line" [attr.d]="s.d" [attr.stroke]="s.color"></path>
-              @for (p of s.pts; track $index) { <circle class="pt" [attr.cx]="p.x" [attr.cy]="p.y" [attr.r]="hoverTrend === $index ? trendR + 1.5 : trendR" [attr.stroke]="s.color"></circle> }
-            }
-            @for (x of tr.xs; track $index) { <rect class="hit" [attr.x]="x - tr.hitW / 2" [attr.y]="tp.t" [attr.width]="tr.hitW" [attr.height]="th - tp.t - tp.b" (mouseenter)="hoverTrend = $index"></rect> }
-          </svg>
-          @if (hoverTrend !== null) {
-            <div class="tip" [style.left.%]="(tr.xs[hoverTrend] / tw) * 100" [class.tip--left]="tr.xs[hoverTrend] > tw * 0.7" [class.tip--right]="tr.xs[hoverTrend] < tw * 0.25">
-              <strong>{{ trendLabel(hoverTrend) }}</strong>
-              @for (s of tr.series; track s.key) { <span><i [style.background]="s.color"></i>{{ s.label }}<b>{{ s.values[hoverTrend] | number }}</b></span> }
-            </div>
-          }
-        </div>
+        <div class="chart-wrap"><p class="muted small">No connectivity history is recorded yet. Current connectivity of the devices in scope:</p></div>
         <div class="legend">@for (s of tr.series; track s.key) { <span><i [style.background]="s.color"></i>{{ s.label }} ({{ s.last | number }})</span> }</div>
       </section>
 
@@ -103,12 +87,12 @@
       <div class="filters">
         <label class="search"><lucide-icon [img]="icons.Search" [size]="16"></lucide-icon><input type="search" [(ngModel)]="search" (ngModelChange)="onFilter()" placeholder="Search by Device ID, model, asset or site..." aria-label="Search devices" /></label>
         <select class="control" [(ngModel)]="statusFilter" (ngModelChange)="onFilter()" aria-label="Health status">
-          <option value="">All Statuses</option><option value="Healthy">Healthy</option><option value="attention">Attention Required</option><option value="Warning">Warning</option><option value="Critical">Critical</option><option value="Offline">Offline</option><option value="Maintenance">Maintenance</option>
+          <option value="">Select Health Status</option><option value="Healthy">Healthy</option><option value="attention">Attention Required</option><option value="Warning">Warning</option><option value="Critical">Critical</option><option value="Offline">Offline</option><option value="Maintenance">Maintenance</option>
         </select>
-        <select class="control" [(ngModel)]="typeFilter" (ngModelChange)="onFilter()" aria-label="Device type"><option value="">All Device Types</option>
+        <select class="control" [(ngModel)]="typeFilter" (ngModelChange)="onFilter()" aria-label="Device type"><option value="">Select Device Type</option>
           @for (t of types; track t) { <option [value]="t">{{ t }}</option> }</select>
-        <select class="control" [(ngModel)]="site" (ngModelChange)="onFilter()" aria-label="Site filter"><option value="">All Sites</option>
-          @for (s of sites; track s.name) { <option [value]="s.name">{{ s.name }}</option> }</select>
+        <select class="control" [(ngModel)]="site" (ngModelChange)="onFilter()" aria-label="Site filter"><option value="">Select Site</option>
+          @for (s of sites; track s) { <option [value]="s">{{ s }}</option> }</select>
         <span class="menu-wrap">
           <button type="button" class="btn btn-outline btn-filter" [class.is-on]="moreCount" (click)="$event.stopPropagation(); moreOpen = !moreOpen; menuId = ''" [attr.aria-expanded]="moreOpen">
             <lucide-icon [img]="icons.SlidersHorizontal" [size]="16"></lucide-icon>More Filters{{ moreCount ? ' (' + moreCount + ')' : '' }}</button>
@@ -137,7 +121,7 @@
                 <td class="col-site"><div class="cell-ic"><lucide-icon [img]="icons.MapPin" [size]="15"></lucide-icon><span class="nm">{{ d.site }}</span></div>
                   <div class="cell-ic sub"><lucide-icon [img]="icons.Wifi" [size]="13"></lucide-icon>{{ d.gateway }}</div></td>
                 <td><span class="pill" [ngClass]="connClass(d)"><i></i>{{ d.conn }}</span><small class="sub seen-inline">{{ ago(d.lastSeenMin) }}</small></td>
-                <td><div class="cell-ic" [ngClass]="qualityClass(d)"><lucide-icon [img]="signalIcon(d)" [size]="16"></lucide-icon><span class="ink nowrap">{{ d.rssi }} dBm</span></div><small class="sub q" [ngClass]="qualityClass(d)">{{ quality(d) }}</small></td>
+                <td>@if (d.rssi !== null) { <div class="cell-ic" [ngClass]="qualityClass(d)"><lucide-icon [img]="signalIcon(d)" [size]="16"></lucide-icon><span class="ink nowrap">{{ d.rssi }} dBm</span></div> } @else { <span class="muted">—</span> }<small class="sub q" [ngClass]="qualityClass(d)">{{ quality(d) }}</small></td>
                 <td>@if (d.battery !== null) { <div class="cell-ic" [ngClass]="batteryClass(d)"><lucide-icon [img]="batteryIcon(d)" [size]="17"></lucide-icon><span [class.ink]="d.battery >= 20">{{ d.battery }}%</span></div> }
                   @else { <div class="cell-ic"><lucide-icon [img]="icons.Plug" [size]="15"></lucide-icon><span class="nowrap">{{ d.power === 'PoE' ? 'PoE' : 'External power' }}</span></div> }</td>
                 <td class="col-seen nowrap">{{ ago(d.lastSeenMin) }}</td>
@@ -150,11 +134,13 @@
                       <button type="button" (click)="runDiagnostics(d)">Run diagnostics</button>
                       <button type="button" (click)="openConfig(d)">Open configuration</button>
                       <button type="button" (click)="openIssue(d)">Create issue</button>
+                      <button type="button" (click)="openEdit(d)">Edit health record</button>
+                      <button type="button" class="danger" (click)="deleteHealth(d)">Delete health record</button>
                     </div>
                   }
                 </span></td>
               </tr>
-            } @empty { <tr><td colspan="9" class="empty">No devices match the current filters.</td></tr> }
+            } @empty { <tr><td colspan="9" class="empty">{{ devices.length ? 'No devices match the current filters.' : 'No device health records yet.' }}</td></tr> }
           </tbody>
         </table>
       </div>
@@ -205,21 +191,21 @@
             <div class="tiles">
               <div class="tile"><span class="tile-ic" [ngClass]="d.conn === 'Offline' ? 'c-red' : d.conn === 'Warning' ? 'c-amber' : 'c-green'"><lucide-icon [img]="d.conn === 'Offline' ? icons.WifiOff : icons.Wifi" [size]="22"></lucide-icon></span>
                 <div class="tile-txt"><span class="p-label">Connectivity</span>
-                @if (d.conn === 'Offline') { <small>Offline since</small><strong class="c-red">{{ timeAt(d.sinceMin) }}</strong><small>({{ ago(d.sinceMin) }})</small> }
+                @if (d.conn === 'Offline') { <small>Last seen</small><strong class="c-red">{{ timeAt(d.lastSeenMin) }}</strong><small>({{ ago(d.lastSeenMin) }})</small> }
                 @else { <strong [class.c-green]="d.conn === 'Online'" [class.c-amber]="d.conn === 'Warning'">{{ d.conn }}</strong><small>Heartbeat {{ ago(d.lastSeenMin) }}</small> }</div></div>
               <div class="tile"><span class="tile-ic" [ngClass]="d.battery === null ? 'c-violet' : batteryClass(d)"><lucide-icon [img]="d.battery === null ? icons.Plug : batteryIcon(d)" [size]="22"></lucide-icon></span>
                 <div class="tile-txt"><span class="p-label">Battery Level</span>
                 @if (d.battery !== null) { @let bw = batteryWord(d); <strong [ngClass]="batteryClass(d)">{{ d.battery }}%</strong><span class="pill pill--sm" [ngClass]="'pill--' + bw.level">{{ bw.label }}</span> }
                 @else { <strong>{{ d.power === 'PoE' ? 'PoE' : 'External' }}</strong><small>No battery</small> }</div></div>
               <div class="tile">@let sw = signalWord(d); <span class="tile-ic" [ngClass]="qualityClass(d)"><lucide-icon [img]="icons.Signal" [size]="22"></lucide-icon></span>
-                <div class="tile-txt"><span class="p-label">Signal Strength</span><strong>{{ d.rssi }} dBm</strong><span class="pill pill--sm" [ngClass]="'pill--' + sw.level">{{ sw.label }}</span></div></div>
+                <div class="tile-txt"><span class="p-label">Signal Strength</span><strong>{{ d.rssi !== null ? d.rssi + ' dBm' : '—' }}</strong><span class="pill pill--sm" [ngClass]="'pill--' + sw.level">{{ sw.label }}</span></div></div>
               <div class="tile"><span class="tile-ic c-violet"><lucide-icon [img]="icons.FileText" [size]="22"></lucide-icon></span>
                 <div class="tile-txt"><span class="p-label">Last Payload</span><strong>{{ timeAt(d.lastSeenMin) }}</strong><small>({{ ago(d.lastSeenMin) }})</small></div></div>
               <div class="tile"><span class="tile-ic c-violet"><lucide-icon [img]="icons.RadioTower" [size]="22"></lucide-icon></span>
                 <div class="tile-txt"><span class="p-label">Gateway</span><strong>{{ d.gateway }}</strong><small>{{ d.site }}</small></div></div>
               <div class="tile"><span class="tile-ic c-violet"><lucide-icon [img]="icons.Cpu" [size]="22"></lucide-icon></span>
                 <div class="tile-txt"><span class="p-label">Firmware Version</span><strong>{{ d.firmware }}</strong>
-                @if (d.firmware === d.latestFirmware) { <span class="pill pill--sm pill--green">Up to date</span> } @else { <span class="pill pill--sm pill--purple">{{ d.latestFirmware }} available</span> }</div></div>
+                @if (d.latestFirmware && d.firmware !== '—') { @if (d.firmware.replace('v', '') === d.latestFirmware.replace('v', '')) { <span class="pill pill--sm pill--green">Up to date</span> } @else { <span class="pill pill--sm pill--purple">{{ d.latestFirmware }} available</span> } }</div></div>
             </div>
 
             @if (tele; as t) {
@@ -243,7 +229,7 @@
               </div>
 
               <div class="mini">
-                <div class="mini-head"><h3 class="grow">RSSI Trend <span>(Last 24 hours)</span></h3><b class="c-violet">{{ d.rssi }} dBm</b></div>
+                <div class="mini-head"><h3 class="grow">RSSI Trend <span>(Last 24 hours)</span></h3><b class="c-violet">{{ d.rssi !== null ? d.rssi + ' dBm' : '—' }}</b></div>
                 <div class="chart-wrap" (mouseleave)="hoverRssi = null">
                   <svg [attr.viewBox]="'0 0 ' + mw + ' ' + mh" class="chart" role="img" aria-label="Signal strength over the last 24 hours">
                     <g class="grid">@for (k of t.rTicks; track k.label) { <line [attr.x1]="mp.l" [attr.x2]="mw - mp.r" [attr.y1]="k.y" [attr.y2]="k.y"></line> }</g>
@@ -258,10 +244,11 @@
                   @if (hoverRssi !== null) { <div class="tip tip--sm" [style.left.%]="(t.xs[hoverRssi] / mw) * 100" [class.tip--left]="t.xs[hoverRssi] > mw * 0.7"><strong>{{ timeAt(t.mins[hoverRssi]) }}</strong><span>RSSI<b>{{ t.rssi[hoverRssi] }} dBm</b></span></div> }
                 </div>
               </div>
-            }
+            } @else { <p class="muted small">No battery or signal readings reported in the last 24 hours.</p> }
 
             <div class="mini-head"><h3 class="grow">Recent Events</h3><button type="button" class="link-btn" (click)="tab = 'events'">View All</button></div>
             <ul class="timeline timeline--line">
+              @if (!selEvents.length) { <li class="muted small">No events recorded.</li> }
               @for (e of selEvents.slice(0, 3); track $index) {
                 <li><span class="tl-dot" [ngClass]="'tl--' + e.level"></span><span class="min0 grow"><strong>{{ e.title }}</strong><small>{{ e.detail }}</small></span><time>{{ whenAt(e.min) }}</time></li>
               }
@@ -322,6 +309,44 @@
   }
 </div>
 
+@if (healthForm; as h) {
+  <div class="overlay" (click)="healthForm = null">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dh-form-title" (click)="$event.stopPropagation()">
+      <div class="modal-head"><h2 id="dh-form-title">{{ h.id ? 'Edit' : 'Add' }} Device Health</h2><button type="button" class="icon-btn" (click)="healthForm = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
+      <div class="modal-body">
+        <div class="two">
+          <label class="field"><span class="field-label">Device ID <em>*</em></span><input class="control" [ngModel]="h.deviceId" (ngModelChange)="onPickDevice($event)" list="dh-devices" maxlength="50" [disabled]="!!h.id" placeholder="Choose a registered device" />
+            <datalist id="dh-devices">@for (r of pickableDevices; track r.deviceId) { <option [value]="r.deviceId">{{ r.deviceName }} · {{ r.model }}</option> }</datalist></label>
+          <label class="field"><span class="field-label">Device model <em>*</em></span><input class="control" [(ngModel)]="h.deviceModel" maxlength="100" /></label>
+        </div>
+        <div class="two">
+          <label class="field"><span class="field-label">Linked asset ID</span><input class="control" [(ngModel)]="h.assetRegistrationId" maxlength="50" /></label>
+          <label class="field"><span class="field-label">Linked asset name</span><input class="control" [(ngModel)]="h.assetName" maxlength="100" /></label>
+        </div>
+        <div class="two">
+          <label class="field"><span class="field-label">Site</span><input class="control" [(ngModel)]="h.siteName" maxlength="100" /></label>
+          <label class="field"><span class="field-label">Gateway</span><input class="control" [(ngModel)]="h.gateway" maxlength="50" placeholder="e.g. GW-DXB-04 or Cellular" /></label>
+        </div>
+        <div class="two">
+          <label class="field"><span class="field-label">Connectivity</span><select class="control" [(ngModel)]="h.connectivity"><option value="" disabled>Select Connectivity</option>@for (c of connectivities; track c) { <option [value]="c">{{ c }}</option> }</select></label>
+          <label class="field"><span class="field-label">Health</span><select class="control" [(ngModel)]="h.health"><option value="" disabled>Select Health</option>@for (v of healthValues; track v) { <option [value]="v">{{ v }}</option> }</select></label>
+        </div>
+        <div class="two">
+          <label class="field"><span class="field-label">Signal (dBm)</span><input type="number" class="control" [(ngModel)]="h.signalStrengthDbm" min="-150" max="0" /></label>
+          <label class="field"><span class="field-label">SNR (dB)</span><input type="number" class="control" [(ngModel)]="h.snrDb" step="0.1" /></label>
+        </div>
+        <div class="two">
+          <label class="field"><span class="field-label">Power source</span><select class="control" [(ngModel)]="h.powerSource"><option value="" disabled>Select Power Source</option>@for (p of powerSources; track p) { <option [value]="p">{{ p }}</option> }</select></label>
+          <label class="field"><span class="field-label">Battery level (%)</span><input type="number" class="control" [(ngModel)]="h.batteryLevel" min="0" max="100" [disabled]="h.powerSource !== 'Battery'" /></label>
+        </div>
+        <label class="field"><span class="field-label">Last seen</span><input type="datetime-local" class="control" [(ngModel)]="h.lastSeen" /></label>
+        @if (formError) { <p class="form-error">{{ formError }}</p> }
+        <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="healthForm = null">Cancel</button><button type="button" class="btn btn-primary" [disabled]="busy" (click)="saveHealth()">Save</button></div>
+      </div>
+    </div>
+  </div>
+}
+
 @if (issueForm; as f) {
   <div class="overlay" (click)="issueForm = null">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dh-issue-title" (click)="$event.stopPropagation()">
@@ -330,8 +355,8 @@
         <p class="muted small">Device <b>{{ selectedId }}</b> · {{ callout.title }}</p>
         <label class="field"><span class="field-label">Title <em>*</em></span><input class="control" [(ngModel)]="f.title" /></label>
         <div class="two">
-          <label class="field"><span class="field-label">Priority</span><select class="control" [(ngModel)]="f.priority">@for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }</select></label>
-          <label class="field"><span class="field-label">Assignee</span><select class="control" [(ngModel)]="f.assignee">@for (a of assignees; track a) { <option [value]="a">{{ a }}</option> }</select></label>
+          <label class="field"><span class="field-label">Priority</span><select class="control" [(ngModel)]="f.priority"><option value="" disabled>Select Priority</option>@for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }</select></label>
+          <label class="field"><span class="field-label">Assignee</span><select class="control" [(ngModel)]="f.assignee"><option value="" disabled>Select Assignee</option>@for (a of assignees; track a) { <option [value]="a">{{ a }}</option> }</select></label>
         </div>
         <label class="field"><span class="field-label">Notes</span><textarea class="control control-area" rows="3" [(ngModel)]="f.notes" placeholder="Optional details for the assignee"></textarea></label>
         @if (formError) { <p class="form-error">{{ formError }}</p> }

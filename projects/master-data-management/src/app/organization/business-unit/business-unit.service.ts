@@ -98,7 +98,7 @@ export class BusinessUnitService extends StructureStore<BusinessUnitRecord, Busi
       status: (dto.status as BusinessUnitStatus) ?? 'Active',
       address: fromApiAddress(dto.address),
       contactEmail: dto.contactEmail ?? '',
-      phoneCountry: dto.phoneCountry ?? blank.phoneCountry,
+      phoneCountry: dto.phoneCountry ?? 'United Arab Emirates',
       phone: dto.phone ?? '',
       effectiveFrom: dto.effectiveFrom ?? '',
       effectiveTo: dto.effectiveTo ?? '',

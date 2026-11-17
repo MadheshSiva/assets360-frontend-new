@@ -17,8 +17,7 @@ export interface DeviceFix {
 /**
  * Live device positions for the map drawing tools. Connect the backend either by calling `push()` from a WebSocket /
  * SSE handler, or with `poll(url)` (or the `feedUrl` input of <app-map-draw-tools>). Devices that never get a real fix
- * are simulated by the drawing tools so the map stays alive in demo mode; a device switches to the live feed as soon
- * as its first real fix arrives.
+ * stay where they were placed.
  */
 @Injectable({ providedIn: 'root' })
 export class DevicePositionFeed {

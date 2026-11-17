@@ -52,11 +52,14 @@ export class ReportBuilder {
 
   /** Why a step can't be left yet, or '' */
   stepProblem(i: number): string {
+    if (i === 0 && !this.report.sourceKey) return 'Select a data source.';
+    if (i === 1 && !this.report.sourceKey) return 'Select a data source.';
     if (i === 1 && !this.report.fields.length) return 'Select at least one field.';
     if (i === 2) {
       const bad = this.report.filters.findIndex((f) => filterError(this.report, f));
       if (bad >= 0) return `Filter ${bad + 1}: ${filterError(this.report, this.report.filters[bad])}`;
     }
+    if (i === 3 && this.report.groupBy && !this.report.aggregate) return 'Select an aggregate.';
     return '';
   }
 
@@ -82,9 +85,9 @@ export class ReportBuilder {
   get groupSummary(): string {
     const g = this.report.groupBy ? fieldOf(this.report, this.report.groupBy)?.label : '';
     const s = this.report.sortBy ? (fieldOf(this.report, this.report.sortBy)?.label ?? '') : '';
-    const parts = [g ? `Grouped by ${g} (${this.report.aggregate.toLowerCase()})` : 'Not grouped'];
+    const parts = [g ? `Grouped by ${g} (${(this.report.aggregate || 'Sum').toLowerCase()})` : 'Not grouped'];
     if (s) parts.push(`sorted by ${s} ${this.report.sortDir === 'asc' ? '↑' : '↓'}`);
-    parts.push(`max ${this.report.rowLimit} rows`);
+    parts.push(this.report.rowLimit ? `max ${this.report.rowLimit} rows` : 'all rows');
     return parts.join(', ');
   }
 

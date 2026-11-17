@@ -55,7 +55,7 @@
         <label class="filter">
           <span>Status</span>
           <select name="status" [(ngModel)]="draft.status">
-            <option value="">All</option>
+            <option value="">Select Status</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
           </select>
@@ -63,14 +63,14 @@
         <label class="filter">
           <span>Site Type</span>
           <select name="siteType" [(ngModel)]="draft.siteType">
-            <option value="">All</option>
+            <option value="">Select Site Type</option>
             @for (t of siteTypes; track t) { <option [value]="t">{{ t }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Business Unit</span>
           <select name="businessUnit" [(ngModel)]="draft.businessUnit">
-            <option value="">All</option>
+            <option value="">Select Business Unit</option>
             @for (b of businessUnits.names(); track b) { <option [value]="b">{{ b }}</option> }
           </select>
         </label>

@@ -20,34 +20,42 @@
 
   @switch (draft.type) {
     @case ('trigger') {
-      <div class="field">
+      <div class="field" [class.invalid]="err('triggerEvent')">
         <label for="nc-event">Trigger Event <span class="req">*</span></label>
         <select id="nc-event" name="triggerEvent" [(ngModel)]="draft.config.triggerEvent">
+          <option value="" disabled>Select Trigger Event</option>
           @for (o of triggerEvents; track o) { <option [value]="o">{{ o }}</option> }
         </select>
+        @if (err('triggerEvent')) { <small>{{ err('triggerEvent') }}</small> }
       </div>
-      <div class="field">
-        <label for="nc-module">Source Module</label>
+      <div class="field" [class.invalid]="err('triggerModule')">
+        <label for="nc-module">Source Module <span class="req">*</span></label>
         <select id="nc-module" name="triggerModule" [(ngModel)]="draft.config.triggerModule">
+          <option value="" disabled>Select Source Module</option>
           @for (o of modules; track o) { <option [value]="o">{{ o }}</option> }
         </select>
+        @if (err('triggerModule')) { <small>{{ err('triggerModule') }}</small> }
         <small>The workflow starts each time this event is raised in the module.</small>
       </div>
     }
 
     @case ('condition') {
-      <div class="field">
+      <div class="field" [class.invalid]="err('conditionField')">
         <label for="nc-field">Field <span class="req">*</span></label>
         <select id="nc-field" name="conditionField" [(ngModel)]="draft.config.conditionField">
+          <option value="" disabled>Select Field</option>
           @for (o of conditionFields; track o) { <option [value]="o">{{ o }}</option> }
         </select>
+        @if (err('conditionField')) { <small>{{ err('conditionField') }}</small> }
       </div>
       <div class="grid2">
-        <div class="field">
-          <label for="nc-op">Operator</label>
+        <div class="field" [class.invalid]="err('operator')">
+          <label for="nc-op">Operator <span class="req">*</span></label>
           <select id="nc-op" name="operator" [(ngModel)]="draft.config.operator">
+            <option value="" disabled>Select Operator</option>
             @for (o of operators; track o) { <option [value]="o">{{ o }}</option> }
           </select>
+          @if (err('operator')) { <small>{{ err('operator') }}</small> }
         </div>
         <div class="field" [class.invalid]="err('conditionValue')">
           <label for="nc-value">Value <span class="req">*</span></label>
@@ -59,22 +67,27 @@
     }
 
     @case ('approval') {
-      <div class="field">
-        <label for="nc-atype">Approval Type</label>
+      <div class="field" [class.invalid]="err('approvalType')">
+        <label for="nc-atype">Approval Type <span class="req">*</span></label>
         <select id="nc-atype" name="approvalType" [(ngModel)]="draft.config.approvalType">
+          <option value="" disabled>Select Approval Type</option>
           @for (o of approvalTypes; track o) { <option [value]="o">{{ o }}</option> }
         </select>
+        @if (err('approvalType')) { <small>{{ err('approvalType') }}</small> }
       </div>
-      <div class="field">
-        <label for="nc-source">Approver Source</label>
+      <div class="field" [class.invalid]="err('approverSource')">
+        <label for="nc-source">Approver Source <span class="req">*</span></label>
         <select id="nc-source" name="approverSource" [(ngModel)]="draft.config.approverSource">
+          <option value="" disabled>Select Approver Source</option>
           @for (o of approverSources; track o) { <option [value]="o">{{ o }}</option> }
         </select>
+        @if (err('approverSource')) { <small>{{ err('approverSource') }}</small> }
       </div>
       @if (draft.config.approverSource === 'Specific User') {
         <div class="field" [class.invalid]="err('approverUser')">
           <label for="nc-user">Approver <span class="req">*</span></label>
           <select id="nc-user" name="approverUser" [(ngModel)]="draft.config.approverUser">
+            <option value="" disabled>Select Approver</option>
             @for (o of people; track o) { <option [value]="o">{{ o }}</option> }
           </select>
           @if (err('approverUser')) { <small>{{ err('approverUser') }}</small> }
@@ -83,7 +96,7 @@
         <div class="field" [class.invalid]="err('approverRole')">
           <label for="nc-role">Approver Role <span class="req">*</span></label>
           <select id="nc-role" name="approverRole" [(ngModel)]="draft.config.approverRole">
-            <option value="">Select role</option>
+            <option value="">Select Approver Role</option>
             @for (o of approverRoles; track o) { <option [value]="o">{{ o }}</option> }
           </select>
           @if (err('approverRole')) { <small>{{ err('approverRole') }}</small> }
@@ -113,17 +126,21 @@
     }
 
     @case ('action') {
-      <div class="field">
-        <label for="nc-action">Action Type</label>
+      <div class="field" [class.invalid]="err('actionType')">
+        <label for="nc-action">Action Type <span class="req">*</span></label>
         <select id="nc-action" name="actionType" [(ngModel)]="draft.config.actionType">
+          <option value="" disabled>Select Action Type</option>
           @for (o of actionTypes; track o) { <option [value]="o">{{ o }}</option> }
         </select>
+        @if (err('actionType')) { <small>{{ err('actionType') }}</small> }
       </div>
-      <div class="field">
-        <label for="nc-target">Target</label>
+      <div class="field" [class.invalid]="err('actionTarget')">
+        <label for="nc-target">Target <span class="req">*</span></label>
         <select id="nc-target" name="actionTarget" [(ngModel)]="draft.config.actionTarget">
+          <option value="" disabled>Select Target</option>
           @for (o of actionTargets; track o) { <option [value]="o">{{ o }}</option> }
         </select>
+        @if (err('actionTarget')) { <small>{{ err('actionTarget') }}</small> }
       </div>
       <div class="field" [class.invalid]="err('actionValue')">
         <label for="nc-avalue">{{ draft.config.actionType === 'Call Webhook' ? 'Webhook URL' : 'Value / Details' }}</label>
@@ -133,34 +150,42 @@
     }
 
     @case ('notification') {
-      <div class="field">
-        <label for="nc-template">Notification Template</label>
+      <div class="field" [class.invalid]="err('template')">
+        <label for="nc-template">Notification Template <span class="req">*</span></label>
         <select id="nc-template" name="template" [(ngModel)]="draft.config.template">
+          <option value="" disabled>Select Notification Template</option>
           @for (o of templates; track o) { <option [value]="o">{{ o }}</option> }
         </select>
+        @if (err('template')) { <small>{{ err('template') }}</small> }
       </div>
       <div class="grid2">
-        <div class="field">
-          <label for="nc-channel">Channel</label>
+        <div class="field" [class.invalid]="err('channel')">
+          <label for="nc-channel">Channel <span class="req">*</span></label>
           <select id="nc-channel" name="channel" [(ngModel)]="draft.config.channel">
+            <option value="" disabled>Select Channel</option>
             @for (o of channels; track o) { <option [value]="o">{{ o }}</option> }
           </select>
+          @if (err('channel')) { <small>{{ err('channel') }}</small> }
         </div>
-        <div class="field">
-          <label for="nc-recipient">Recipient</label>
+        <div class="field" [class.invalid]="err('recipient')">
+          <label for="nc-recipient">Recipient <span class="req">*</span></label>
           <select id="nc-recipient" name="recipient" [(ngModel)]="draft.config.recipient">
+            <option value="" disabled>Select Recipient</option>
             @for (o of recipients; track o) { <option [value]="o">{{ o }}</option> }
           </select>
+          @if (err('recipient')) { <small>{{ err('recipient') }}</small> }
         </div>
       </div>
     }
 
     @case ('end') {
-      <div class="field">
-        <label for="nc-outcome">Outcome</label>
+      <div class="field" [class.invalid]="err('outcome')">
+        <label for="nc-outcome">Outcome <span class="req">*</span></label>
         <select id="nc-outcome" name="outcome" [(ngModel)]="draft.config.outcome">
+          <option value="" disabled>Select Outcome</option>
           @for (o of outcomes; track o) { <option [value]="o">{{ o }}</option> }
         </select>
+        @if (err('outcome')) { <small>{{ err('outcome') }}</small> }
       </div>
       <div class="nc-checks">
         <label><input type="checkbox" name="notifyRequestor" [(ngModel)]="draft.config.notifyRequestor" /> Notify requestor</label>

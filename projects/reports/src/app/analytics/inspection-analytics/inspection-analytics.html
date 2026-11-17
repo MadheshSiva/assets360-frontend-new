@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a [routerLink]="basePath">Reports &amp; Analytics</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <strong>Inspection Analytics</strong>
 </nav>
 
@@ -28,36 +28,42 @@
   <label class="filter filter--period">
     <span>Period</span>
     <select [(ngModel)]="period" (ngModelChange)="apply()">
+      <option value="">Select Period</option>
       @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Organization</span>
     <select [(ngModel)]="organization" (ngModelChange)="apply()">
+      <option value="">Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Location</span>
     <select [(ngModel)]="location" (ngModelChange)="apply()">
+      <option value="">Select Location</option>
       @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Asset Category</span>
     <select [(ngModel)]="category" (ngModelChange)="apply()">
+      <option value="">Select Asset Category</option>
       @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Inspection Type</span>
     <select [(ngModel)]="type" (ngModelChange)="apply()">
+      <option value="">Select Inspection Type</option>
       @for (t of types; track t) { <option [value]="t">{{ t }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Inspector</span>
     <select [(ngModel)]="inspector" (ngModelChange)="apply()">
+      <option value="">Select Inspector</option>
       @for (i of inspectorOptions; track i) { <option [value]="i">{{ i }}</option> }
     </select>
   </label>
@@ -91,10 +97,12 @@
     <app-ra-widget class="span-2" title="Inspection Compliance" info="Inspections completed on time against the 90% target" (exportCsv)="exportCompliance()">
       <div class="ia-compliance">
         <ra-gauge-chart [value]="view.completionRate" [display]="kpis[1].value" [target]="complianceTarget" [color]="'#10b981'" [size]="190" />
-        <div class="ia-compliance__delta">
-          <strong><lucide-icon [img]="icons.ArrowUp" [size]="16" /> {{ kpis[1].delta }}</strong>
-          <span class="muted">vs. previous period</span>
-        </div>
+        @if (kpis[1].delta) {
+          <div class="ia-compliance__delta">
+            <strong><lucide-icon [img]="icons.ArrowUp" [size]="16" /> {{ kpis[1].delta }}</strong>
+            <span class="muted">vs. previous period</span>
+          </div>
+        }
       </div>
       <ra-cartesian-chart [labels]="view.labels" [series]="complianceSeries" kind="line" [height]="130" [min]="80" [max]="100" [format]="percentFormat" [legend]="false" ariaLabel="Inspection compliance trend" />
     </app-ra-widget>
@@ -129,6 +137,8 @@
           <button type="button" class="btn btn--sm btn--primary" (click)="insightAction(ins, ins.secondary.action)">{{ ins.secondary.label }}</button>
         </div>
       </article>
+    } @empty {
+      <div class="empty">No insights for the current filters.</div>
     }
   </aside>
 </div>
@@ -144,7 +154,7 @@
   <app-ra-action-plan-dialog [context]="plan.context" [defaultTitle]="plan.title" [defaultOwner]="plan.owner" (saved)="planSaved($event)" (closed)="plan = null" />
 }
 @if (saveOpen) {
-  <app-ra-save-view-dialog defaultName="Inspection Analytics – {{ location }}" (saved)="saveNamedView($event)" (closed)="saveOpen = false" />
+  <app-ra-save-view-dialog defaultName="Inspection Analytics – {{ locationLabel }}" (saved)="saveNamedView($event)" (closed)="saveOpen = false" />
 }
 @if (toast) {
   <div class="toast" role="status">{{ toast }}</div>

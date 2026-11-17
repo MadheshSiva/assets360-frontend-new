@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a [routerLink]="basePath">Reports &amp; Analytics</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <strong>IoT / Utilization Analytics</strong>
 </nav>
 
@@ -36,31 +36,37 @@
 <section class="filters" aria-label="Filters">
   <label class="filter filter--period"><span>Period</span>
     <select [(ngModel)]="period" (ngModelChange)="onFilterChange()">
+      <option value="">Select Period</option>
       @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter"><span>Organization</span>
     <select [(ngModel)]="organization" (ngModelChange)="onFilterChange()">
+      <option value="">Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter"><span>Location</span>
     <select [(ngModel)]="location" (ngModelChange)="onFilterChange()">
+      <option value="">Select Location</option>
       @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
     </select>
   </label>
   <label class="filter"><span>Asset Category</span>
     <select [(ngModel)]="category" (ngModelChange)="onFilterChange()">
+      <option value="">Select Asset Category</option>
       @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>
   <label class="filter"><span>Device Type</span>
     <select [(ngModel)]="deviceType" (ngModelChange)="onFilterChange()">
+      <option value="">Select Device Type</option>
       @for (d of deviceTypes; track d) { <option [value]="d">{{ d }}</option> }
     </select>
   </label>
   <label class="filter"><span>Connectivity Status</span>
     <select [(ngModel)]="connectivity" (ngModelChange)="onFilterChange()">
+      <option value="">Select Connectivity Status</option>
       @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
     </select>
   </label>
@@ -306,7 +312,7 @@
         <h2>{{ titles[expanded] }}</h2>
         <button type="button" class="icon-btn" (click)="expanded = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18" /></button>
       </div>
-      <p class="muted">{{ period }} · {{ organization }} · {{ location }}</p>
+      <p class="muted">{{ periodLabel }} · {{ organizationLabel }} · {{ locationLabel }}</p>
       @switch (expanded) {
         @case ('trend') { <ng-container *ngTemplateOutlet="trendTpl; context: { $implicit: 380 }"></ng-container> }
         @case ('telemetry') { <ng-container *ngTemplateOutlet="telemetryTpl; context: { $implicit: 380 }"></ng-container> }
@@ -333,7 +339,7 @@
         <h2>{{ breakdown.label }} by location</h2>
         <button type="button" class="icon-btn" (click)="breakdown = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18" /></button>
       </div>
-      <p class="muted">{{ breakdown.label }}: <b>{{ breakdown.value }}</b> · {{ period }}</p>
+      <p class="muted">{{ breakdown.label }}: <b>{{ breakdown.value }}</b> · {{ periodLabel }}</p>
       <div class="table-wrap">
         <table class="table">
           <thead>
@@ -463,7 +469,7 @@
         <div><dt>Telemetry availability</dt><dd>{{ detail.asset.availability === null ? '—' : detail.asset.availability + '%' }}</dd></div>
         <div><dt>Utilization / target</dt><dd>{{ detail.asset.utilization === null ? '—' : detail.utilization + '%' }} / {{ detail.asset.target }}%</dd></div>
       </dl>
-      @if (detail.asset.utilization !== null) {
+      @if (detail.asset.utilization !== null && sparkFor(detail).length) {
         <div class="iot-spark">
           <span class="muted">Utilization, last 12 weeks</span>
           <ra-sparkline [values]="sparkFor(detail)" [color]="colors.purple" [width]="240" [height]="44" [area]="true" />

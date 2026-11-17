@@ -2,11 +2,6 @@
 
 export type PersonStatus = 'Active' | 'On Duty' | 'On Leave' | 'Inactive';
 
-export const PEOPLE_DEPARTMENTS = [
-  'Operations', 'Maintenance', 'IT Support', 'IT Department', 'Facilities', 'Projects', 'Administration', 'HSE',
-  'Safety', 'Civil', 'Quality', 'Finance', 'Procurement', 'Stores', 'Human Resources'
-];
-
 export const DESIGNATIONS = [
   'Technician', 'Senior Technician', 'Engineer', 'Senior Engineer', 'Supervisor', 'Coordinator', 'Officer',
   'Manager', 'Planner', 'Inspector', 'Storekeeper', 'Analyst', 'Administrator'

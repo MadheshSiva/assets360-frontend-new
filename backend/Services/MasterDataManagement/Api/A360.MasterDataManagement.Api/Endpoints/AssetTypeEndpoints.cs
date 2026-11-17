@@ -88,7 +88,7 @@ public static class AssetTypeEndpoints
     private static async Task<IResult> CreateAssetTypeAsync(
         CreateAssetTypeRequest request,
         IAssetTypeRepository repository,
-        IAssetCategoryRepository categories,
+        ISharedAssetCategoryRepository categories,
         IEventLogger eventLogger,
         CancellationToken cancellationToken)
     {
@@ -142,7 +142,7 @@ public static class AssetTypeEndpoints
         string id,
         UpdateAssetTypeRequest request,
         IAssetTypeRepository repository,
-        IAssetCategoryRepository categories,
+        ISharedAssetCategoryRepository categories,
         IAssetModelRepository assetModels,
         IAmcVendorRepository amcVendors,
         IEventLogger eventLogger,

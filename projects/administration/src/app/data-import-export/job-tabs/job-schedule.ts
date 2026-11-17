@@ -46,6 +46,7 @@ import { formatStamp } from '../data-import.util';
             <div class="field">
               <label for="sch-day">Day of Week</label>
               <select id="sch-day" name="day" [(ngModel)]="s.day">
+                <option value="" disabled>Select Day of Week</option>
                 @for (d of weekdays; track d) { <option [value]="d">{{ d }}</option> }
               </select>
             </div>
@@ -54,6 +55,7 @@ import { formatStamp } from '../data-import.util';
             <div class="field">
               <label for="sch-dom">Day of Month</label>
               <select id="sch-dom" name="day" [(ngModel)]="s.day">
+                <option value="" disabled>Select Day of Month</option>
                 @for (d of monthDays; track d) { <option [value]="d">{{ d }}</option> }
               </select>
             </div>

@@ -25,7 +25,6 @@ import {
   Search,
   X,
 } from 'lucide-angular';
-import DATA from './permits.json';
 import { CheckResult, ChecklistItem, Evidence, Permit, PermitEvent, PermitState } from './permit.model';
 
 type Tab = 'register' | 'requirements' | 'risk' | 'approvals' | 'evidence' | 'history';
@@ -47,18 +46,17 @@ interface RequestForm {
   replaces: string;
 }
 
-const CURRENT_USER = 'Ravi Patel';
-/** Job orders that exist on the Job Orders page. */
-const KNOWN_JOBS = ['JO-2026-00438', 'JO-2026-00431', 'JO-2026-00442'];
+/** Signed-in user's display name; filled from the auth/user API once wired. */
+const CURRENT_USER = '';
+/** Job orders that exist on the Job Orders page; filled from the API once wired. */
+const KNOWN_JOBS: string[] = [];
 /** A live permit this close to its end shows as "Expiring Soon". */
 const EXPIRING_SOON_MIN = 120;
 const GOOD_RESULTS: CheckResult[] = ['Verified', 'Valid', 'Complete'];
 
-/** DEMO MODE: kept in memory until the permit service is wired up. */
-const SOURCE = DATA as unknown as { asOf: string; permits: Permit[]; history: PermitEvent[] };
-const PERMITS: Permit[] = structuredClone(SOURCE.permits);
-const HISTORY: PermitEvent[] = structuredClone(SOURCE.history);
-let OPENED_AT = 0;
+/** Permits and their history are kept in memory; empty until the permit service is wired up. */
+const PERMITS: Permit[] = [];
+const HISTORY: PermitEvent[] = [];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const stamp = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -78,7 +76,7 @@ const minutesBetween = (a: string, b: string) => Math.round((parseLocal(b).getTi
   imports: [CommonModule, FormsModule, RouterModule, LucideAngularModule],
   templateUrl: './permit-compliance.html',
   // Buttons, controls, tabs, modal and toast come from the Job Templates stylesheet
-  styleUrls: ['../job-templates/job-templates.css', '../shared/wip-board.css', './permit-compliance.css'],
+  styleUrls: ['../job-templates/job-templates.css', '../shared/wip-board.css', './permit-compliance.css', '../shared/wip-purple-theme.css'],
 })
 export class PermitCompliance implements OnDestroy {
   readonly icons = {
@@ -98,13 +96,13 @@ export class PermitCompliance implements OnDestroy {
   tab: Tab = 'register';
 
   // Filters
-  site = 'Dubai Factory';
+  site = PERMITS[0]?.site ?? '';
   job = '';
   type = '';
   state: PermitState | '' = '';
   search = '';
 
-  selectedId = 'PTW-00126';
+  selectedId = PERMITS[0]?.id ?? '';
 
   // Dialogs
   requestForm: RequestForm | null = null;
@@ -122,7 +120,6 @@ export class PermitCompliance implements OnDestroy {
   private toastTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
-    if (!OPENED_AT) OPENED_AT = Date.now();
     // ?permit=PTW-00126 or ?job=JO-2026-00438 opens a permit (links from other pages)
     inject(ActivatedRoute)
       .queryParamMap.pipe(takeUntilDestroyed(inject(DestroyRef)))
@@ -141,9 +138,8 @@ export class PermitCompliance implements OnDestroy {
     clearTimeout(this.toastTimer);
   }
 
-  /** Demo clock: the data's "as of" time plus the time this page has been open. */
   get now(): string {
-    return stamp(new Date(parseLocal(SOURCE.asOf).getTime() + (Date.now() - OPENED_AT)));
+    return stamp(new Date());
   }
 
   isKnownJob(job: string): boolean {
@@ -471,7 +467,7 @@ export class PermitCompliance implements OnDestroy {
     const start = stamp(new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + 1, 0));
     const end = stamp(new Date(parseLocal(start).getTime() + 8 * 3_600_000));
     this.requestForm = {
-      type: from?.type ?? this.types[0], job: from?.job ?? '', stage: from?.stage ?? '', location: from?.location ?? '', owner: from?.owner ?? CURRENT_USER,
+      type: from?.type ?? this.types[0] ?? '', job: from?.job ?? '', stage: from?.stage ?? '', location: from?.location ?? '', owner: from?.owner ?? CURRENT_USER,
       validFrom: start, validUntil: end, scope: from ? from.scope : '', replaces: from?.id ?? '',
     };
   }

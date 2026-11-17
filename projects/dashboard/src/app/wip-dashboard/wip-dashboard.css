@@ -241,12 +241,7 @@
   width: 130px;
   height: 130px;
   border-radius: 50%;
-  background: conic-gradient(
-    #e391c9 0% 35%,
-    #4f2bd8 35% 55%,
-    #a8d5a2 55% 65%,
-    #f08080 65% 100%
-  );
+  background: #ede9f4;
   display: grid;
   place-items: center;
   position: relative;
@@ -632,4 +627,14 @@
 .wip-bottom-row.partial .wip-jobs-panel {
   flex: 1 1 100%;
   max-width: 100%;
+}
+
+/* Empty state for widgets without data */
+.wip-empty {
+  margin: 0;
+  padding: 16px;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+  list-style: none;
 }

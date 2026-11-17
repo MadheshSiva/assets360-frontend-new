@@ -38,6 +38,7 @@ export const MASTER_DATA_MENU: MasterDataGroup[] = [
     items: [
       { label: 'Category / Subcategory', slug: 'category-subcategory' },
       { label: 'Asset Type', slug: 'asset-type' },
+      { label: 'Asset Sub Type', slug: 'asset-sub-type' },
       { label: 'Asset Model', slug: 'asset-model' },
       { label: 'Manufacturer', slug: 'manufacturer' },
       { label: 'Condition', slug: 'condition' },

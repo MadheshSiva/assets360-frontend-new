@@ -70,7 +70,8 @@ export const TOKEN_LABELS: Record<TokenKind, string> = {
   suffix: 'Suffix'
 };
 export const DATE_FORMATS = ['YYYY', 'YY', 'MM', 'YYYYMM', 'YYMM'];
-export const LOCATION_CODES = ['DXB', 'AUH', 'SHJ', 'RUH', 'LON', 'SIN'];
+/** Site codes for the location token; come from the locations API (empty until wired). */
+export const LOCATION_CODES: string[] = [];
 export const SEPARATORS = [
   { value: '-', label: '-' },
   { value: '/', label: '/' },
@@ -111,6 +112,7 @@ export function maxNumber(seq: NumberSequence): number {
 }
 
 export function isNearLimit(seq: NumberSequence): boolean {
+  if (!seq.numberLength) return false;
   return seq.currentNumber >= maxNumber(seq) * NEAR_LIMIT_RATIO;
 }
 
@@ -197,7 +199,7 @@ export function formatErrors(seq: NumberSequence): string[] {
   const suffix = seq.tokens.find((t) => t.kind === 'suffix');
   if (suffix && suffix.value.trim() && !/^[A-Za-z0-9]{1,6}$/.test(suffix.value.trim())) errors.push('Suffix must be up to 6 letters or digits.');
   if (seq.tokens.length && seq.tokens[0].kind === 'number' && !seq.separator) errors.push('Start with a prefix or add a separator.');
-  if (seq.currentNumber > maxNumber(seq)) errors.push(`Current number exceeds the ${seq.numberLength}-digit limit.`);
+  if (seq.numberLength && seq.currentNumber > maxNumber(seq)) errors.push(`Current number exceeds the ${seq.numberLength}-digit limit.`);
   return errors;
 }
 
@@ -213,8 +215,11 @@ export function settingErrors(seq: NumberSequence, codeTaken: boolean): Record<s
   if (!Number.isInteger(seq.startNumber) || seq.startNumber < 0) e['startNumber'] = 'Enter a whole number of 0 or more.';
   if (!Number.isInteger(seq.currentNumber) || seq.currentNumber < seq.startNumber) e['currentNumber'] = 'Must be at least the start number.';
   if (!Number.isInteger(seq.incrementBy) || seq.incrementBy < 1 || seq.incrementBy > 100) e['incrementBy'] = 'Enter 1-100.';
-  if (!Number.isInteger(seq.numberLength) || seq.numberLength < 2 || seq.numberLength > 8) e['numberLength'] = 'Enter 2-8 digits.';
-  if (seq.resetRule !== 'Never' && !seq.resetDate) e['resetDate'] = 'Pick the next reset date.';
+  if (seq.numberLength == null) e['numberLength'] = 'Number length is required.';
+  else if (!Number.isInteger(seq.numberLength) || seq.numberLength < 2 || seq.numberLength > 8) e['numberLength'] = 'Enter 2-8 digits.';
+  if (!seq.scope) e['scope'] = 'Scope is required.';
+  if (!seq.resetRule) e['resetRule'] = 'Reset frequency is required.';
+  else if (seq.resetRule !== 'Never' && !seq.resetDate) e['resetDate'] = 'Pick the next reset date.';
   return e;
 }
 

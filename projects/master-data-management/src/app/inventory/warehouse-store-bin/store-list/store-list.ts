@@ -22,7 +22,7 @@ interface Filters {
   selector: 'app-store-list',
   imports: [FormsModule, LucideAngularModule, StoreForm],
   templateUrl: './store-list.html',
-  styleUrls: ['../../../shared/styles/mdm-page.css', '../../inventory.css']
+  styleUrls: ['../../../shared/styles/mdm-page.css', '../../inventory.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class StoreList extends ListPage<StoreRecord, Filters, SortKey> implements OnInit {
   // Opens the tab filtered to one warehouse (from its store count)

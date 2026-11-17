@@ -113,3 +113,7 @@ app-rl-map { display: block; width: 100%; height: 100%; }
 @media (prefers-reduced-motion: reduce) {
   .rl-map path.rl-trail, .rl-map path.rl-replay, .rl-map path.rl-zone.is-restricted, .rl-mk.is-sel::after { animation: none; }
 }
+
+/* Uploaded floor plan image (Master Data floor) */
+.rl-floor-img { background: #fff; box-shadow: 0 2px 14px rgba(15, 23, 42, 0.18); border-radius: 4px; image-rendering: auto; }
+

@@ -1,7 +1,7 @@
 <div class="rac" (click)="closeMenu()">
   <nav class="crumbs" aria-label="Breadcrumb">
     <a routerLink="/administration">Administration</a>
-    <span>/</span>
+    <span aria-hidden="true">›</span>
     <strong>Role &amp; Access Control</strong>
   </nav>
 
@@ -14,6 +14,7 @@
     <label class="org-picker">
       Organization
       <select [(ngModel)]="organization" aria-label="Organization">
+        <option value="" disabled>Select Organization</option>
         @for (o of organizations; track o) {
           <option [value]="o">{{ o }}</option>
         }
@@ -87,21 +88,21 @@
     <div class="panel rac-filters">
       <label>Role Type
         <select class="select" [(ngModel)]="filters.type">
-          <option value="">All types</option>
+          <option value="">Select Role Type</option>
           <option value="System">System</option>
           <option value="Custom">Custom</option>
         </select>
       </label>
       <label>Status
         <select class="select" [(ngModel)]="filters.status">
-          <option value="">All statuses</option>
+          <option value="">Select Status</option>
           <option value="Active">Active</option>
           <option value="Inactive">Inactive</option>
         </select>
       </label>
       <label>Data Scope
         <select class="select" [(ngModel)]="filters.scope">
-          <option value="">All scopes</option>
+          <option value="">Select Data Scope</option>
           @for (s of scopes; track s.id) {
             <option [value]="s.id">{{ s.id }}</option>
           }
@@ -131,20 +132,34 @@
           </button>
         }
         @for (r of filtered; track r.id) {
-          <button type="button" class="list-item" [class.active]="!isNew && r.id === selectedId" (click)="select(r)">
-            <span class="list-item__icon"><lucide-icon [img]="roleIcon(r)" [size]="20"></lucide-icon></span>
-            <span class="list-item__body">
-              <span class="list-item__title">{{ r.name }}</span>
-              <span class="rac-meta">
-                <span class="muted"><lucide-icon [img]="icons.Users" [size]="12"></lucide-icon> {{ r.users }} users</span>
-                <span class="pill" [attr.data-tone]="r.type === 'System' ? 'blue' : 'purple'">{{ r.type }}</span>
-                <span class="pill" [attr.data-tone]="r.status === 'Active' ? 'green' : 'grey'"><i></i>{{ r.status }}</span>
+          <div class="rac-row">
+            <button type="button" class="list-item" [class.active]="!isNew && r.id === selectedId" (click)="select(r)">
+              <span class="list-item__icon"><lucide-icon [img]="roleIcon(r)" [size]="20"></lucide-icon></span>
+              <span class="list-item__body">
+                <span class="list-item__title">{{ r.name }}</span>
+                <span class="rac-meta">
+                  <span class="muted"><lucide-icon [img]="icons.Users" [size]="12"></lucide-icon> {{ r.users }} users</span>
+                  <span class="pill" [attr.data-tone]="r.type === 'System' ? 'blue' : 'purple'">{{ r.type }}</span>
+                  <span class="pill" [attr.data-tone]="r.status === 'Active' ? 'green' : 'grey'"><i></i>{{ r.status }}</span>
+                </span>
               </span>
+            </button>
+            <span class="rac-row__actions">
+              <button type="button" class="icon-btn icon-btn--bare" [attr.aria-label]="'Edit ' + r.name" title="Edit role" (click)="editRole(r, $event)">
+                <lucide-icon [img]="icons.Pencil" [size]="15"></lucide-icon>
+              </button>
+              <button
+                type="button"
+                class="icon-btn icon-btn--bare rac-row__delete"
+                [attr.aria-label]="'Delete ' + r.name"
+                [title]="r.type === 'System' ? 'System roles cannot be deleted' : 'Delete role'"
+                [disabled]="r.type === 'System'"
+                (click)="askDelete(r, $event)"
+              >
+                <lucide-icon [img]="icons.Trash2" [size]="15"></lucide-icon>
+              </button>
             </span>
-            @if (!isNew && r.id === selectedId) {
-              <lucide-icon class="rac-chev" [img]="icons.ChevronRight" [size]="16"></lucide-icon>
-            }
-          </button>
+          </div>
         } @empty {
           <p class="list-empty">{{ loading ? 'Loading roles...' : 'No roles match the search or filters.' }}</p>
         }
@@ -246,5 +261,5 @@
 }
 
 @if (toast) {
-  <div class="toast" role="status">{{ toast }}</div>
+  <div class="toast" role="status" [attr.data-tone]="toastTone">{{ toast }}</div>
 }

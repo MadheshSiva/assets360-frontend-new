@@ -1,8 +1,6 @@
 /**
- * Shared asset sample data (DEMO MODE) used by the Asset List and the asset detail tabs
- * (Relationships, Documents, Images, Status & Condition) until the Assets API is wired up.
- * Per-asset detail data lives in asset-details/ (one JSON file per asset).
- * Detail pages are opened with the asset tag in the query string, e.g. /assets/relationships?tag=GEN-00045.
+ * Shared asset types and helpers used by the Asset List and the asset detail tabs.
+ * Asset records come from the Assets API.
  */
 
 import { AirVent, BatteryCharging, Cctv, Cog, Fan, Flame, Forklift, Laptop, SolarPanel, Zap } from 'lucide-angular';
@@ -82,32 +80,8 @@ export const ASSET_TYPE_ICONS = {
   solar: SolarPanel,
 };
 
-/**
- * Every asset in the register. Shared, so pages see the same records.
- * Each one has its detail data (documents, images, status & condition, relationships) in asset-details/<tag>.json.
- */
-export const ASSET_RECORDS: AssetRecord[] = [
-  { id: 1, name: 'Diesel Generator 250 kVA', tag: 'GEN-00045', category: 'Power Generation', type: 'Generator', site: 'Head Office', area: 'Building A - ER-101', custodian: 'Ahmed Basim', department: 'Facilities', status: 'Active', criticality: 'Critical', manufacturer: 'Caterpillar', model: 'C9.3', nextMaintenance: '2027-03-01', icon: 'generator', image: 'asset-generator.svg' },
-  { id: 2, name: 'HVAC Chiller', tag: 'HVAC-00112', category: 'HVAC', type: 'Chiller', site: 'Head Office', area: 'Building B - Roof', custodian: 'Sara Ahmed', department: 'Facilities', status: 'Active', criticality: 'High', manufacturer: 'Carrier', model: '30XA 400', nextMaintenance: '2026-11-15', icon: 'chiller', image: 'asset-images/chiller-overview.svg' },
-  { id: 3, name: 'UPS 100 kVA', tag: 'UPS-00078', category: 'Electrical', type: 'UPS', site: 'Data Center', area: 'Building A - DC Room', custodian: 'Mohan Kumar', department: 'IT', status: 'Active', criticality: 'Critical', manufacturer: 'Schneider Electric', model: 'Galaxy VS 100', nextMaintenance: '2026-12-10', icon: 'ups', image: 'asset-images/ups-overview.svg' },
-  { id: 4, name: 'Forklift - Electric', tag: 'FLT-00021', category: 'Material Handling', type: 'Forklift', site: 'Warehouse', area: 'Main Warehouse', custodian: 'Rashid Ali', department: 'Logistics', status: 'Active', criticality: 'High', manufacturer: 'Toyota', model: '8FBE20', nextMaintenance: '2026-10-22', icon: 'forklift', image: 'asset-images/forklift-overview.svg' },
-  { id: 5, name: 'Fire Pump', tag: 'FP-00056', category: 'Safety & Security', type: 'Fire System', site: 'Head Office', area: 'Building A - Basement', custodian: 'Noura Saeed', department: 'Safety', status: 'Under Maintenance', criticality: 'Critical', manufacturer: 'Grundfos', model: 'NKF 150', nextMaintenance: '2026-10-05', icon: 'fire', image: 'asset-images/firepump-overview.svg' },
-  { id: 6, name: 'Split AC - 5 Ton', tag: 'AC-00311', category: 'HVAC', type: 'Air Conditioner', site: 'Building C', area: '2nd Floor', custodian: 'Faisal Ahmed', department: 'Facilities', status: 'Active', criticality: 'Medium', manufacturer: 'Daikin', model: 'FTKF140', nextMaintenance: '2027-01-18', icon: 'ac', image: 'asset-images/ac-overview.svg' },
-  { id: 7, name: 'Laptop - Dell Latitude', tag: 'IT-00189', category: 'IT Equipment', type: 'Laptop', site: 'Head Office', area: 'IT Department', custodian: 'Sarah James', department: 'IT', status: 'Active', criticality: 'Medium', manufacturer: 'Dell', model: 'Latitude 5440', nextMaintenance: null, icon: 'laptop', image: 'asset-images/laptop-overview.svg' },
-  { id: 8, name: 'CCTV Camera - Dome', tag: 'CCTV-00234', category: 'Security', type: 'CCTV', site: 'Building A', area: 'Ground Floor', custodian: 'Ibrahim Khan', department: 'Security', status: 'Active', criticality: 'Medium', manufacturer: 'Hikvision', model: 'DS-2CD2143', nextMaintenance: '2027-02-12', icon: 'cctv', image: 'asset-images/cctvdome-overview.svg' },
-  { id: 9, name: 'Transformer 1 MVA', tag: 'TRF-00067', category: 'Electrical', type: 'Transformer', site: 'Main Substation', area: 'Outdoor', custodian: 'Hamad Lateef', department: 'Engineering', status: 'In Repair', criticality: 'Critical', manufacturer: 'ABB', model: 'RESIBLOC 1000', nextMaintenance: '2026-10-20', icon: 'transformer', image: 'asset-images/transformer-overview.svg' },
-  { id: 10, name: 'Solar Panel - 550W', tag: 'SOL-00456', category: 'Renewable Energy', type: 'Solar Panel', site: 'Building B', area: 'Roof', custodian: 'Ramesh Kumar', department: 'Engineering', status: 'Active', criticality: 'Low', manufacturer: 'Jinko Solar', model: 'Tiger Neo 550', nextMaintenance: '2027-04-01', icon: 'solar', image: 'asset-images/solar-array.svg' },
-  { id: 11, name: 'Gas Generator 500 kVA', tag: 'GEN-00052', category: 'Power Generation', type: 'Generator', site: 'Main Substation', area: 'Outdoor', custodian: 'Hamad Lateef', department: 'Engineering', status: 'Active', criticality: 'High', manufacturer: 'Cummins', model: 'C500N5', nextMaintenance: '2026-12-05', icon: 'generator', image: 'asset-generator.svg' },
-  { id: 12, name: 'Air Handling Unit', tag: 'HVAC-00118', category: 'HVAC', type: 'AHU', site: 'Head Office', area: 'Building B - Plant Room', custodian: 'Sara Ahmed', department: 'Facilities', status: 'Under Maintenance', criticality: 'High', manufacturer: 'Trane', model: 'Performance CSAA', nextMaintenance: '2026-10-28', icon: 'chiller', image: 'asset-images/ahu-overview.svg' },
-  { id: 13, name: 'Laptop - HP EliteBook', tag: 'IT-00204', category: 'IT Equipment', type: 'Laptop', site: 'Head Office', area: 'Finance Department', custodian: 'Mohan Kumar', department: 'IT', status: 'Checked Out', criticality: 'Low', manufacturer: 'HP', model: 'EliteBook 840 G10', nextMaintenance: null, icon: 'laptop', image: 'asset-images/laptop-overview.svg' },
-  { id: 14, name: 'CCTV Camera - Bullet', tag: 'CCTV-00241', category: 'Security', type: 'CCTV', site: 'Warehouse', area: 'Loading Bay', custodian: 'Ibrahim Khan', department: 'Security', status: 'Active', criticality: 'Medium', manufacturer: 'Axis', model: 'P1455-LE', nextMaintenance: '2027-01-09', icon: 'cctv', image: 'asset-images/cctvbullet-overview.svg' },
-  { id: 15, name: 'Pallet Jack - Electric', tag: 'FLT-00033', category: 'Material Handling', type: 'Pallet Jack', site: 'Warehouse', area: 'Main Warehouse', custodian: 'Rashid Ali', department: 'Logistics', status: 'In Repair', criticality: 'Low', manufacturer: 'Jungheinrich', model: 'EJE 120', nextMaintenance: '2026-10-30', icon: 'forklift', image: 'asset-images/palletjack-overview.svg' },
-  { id: 16, name: 'Fire Alarm Panel', tag: 'FP-00061', category: 'Safety & Security', type: 'Fire System', site: 'Head Office', area: 'Building A - Security Room', custodian: 'Noura Saeed', department: 'Safety', status: 'Active', criticality: 'High', manufacturer: 'Honeywell', model: 'NFS2-3030', nextMaintenance: '2026-12-20', icon: 'fire', image: 'asset-images/alarmpanel-overview.svg' },
-  { id: 17, name: 'UPS 60 kVA', tag: 'UPS-00081', category: 'Electrical', type: 'UPS', site: 'Head Office', area: 'IT Department - Server Room', custodian: 'Sarah James', department: 'IT', status: 'Active', criticality: 'High', manufacturer: 'Eaton', model: '93PM 60', nextMaintenance: '2027-02-02', icon: 'ups', image: 'asset-images/ups-overview.svg' },
-  { id: 18, name: 'Transformer 500 kVA', tag: 'TRF-00072', category: 'Electrical', type: 'Transformer', site: 'Building C', area: 'Electrical Room', custodian: 'Hamad Lateef', department: 'Engineering', status: 'Active', criticality: 'High', manufacturer: 'Siemens', model: 'GEAFOL 500', nextMaintenance: '2027-03-15', icon: 'transformer', image: 'asset-images/transformer-overview.svg' },
-  { id: 19, name: 'Split AC - 2 Ton', tag: 'AC-00318', category: 'HVAC', type: 'Air Conditioner', site: 'Head Office', area: 'Store Room', custodian: 'Faisal Ahmed', department: 'Facilities', status: 'In Storage', criticality: 'Low', manufacturer: 'Daikin', model: 'FTKF71', nextMaintenance: null, icon: 'ac', image: 'asset-images/ac-overview.svg' },
-  { id: 20, name: 'Solar Panel - 550W', tag: 'SOL-00462', category: 'Renewable Energy', type: 'Solar Panel', site: 'Building B', area: 'Roof', custodian: 'Ramesh Kumar', department: 'Engineering', status: 'Disposed', criticality: 'Low', manufacturer: 'Jinko Solar', model: 'Tiger Neo 550', nextMaintenance: null, icon: 'solar', image: 'asset-images/solar-array.svg' },
-];
+/** Asset register; empty until loaded from the Assets API. */
+export const ASSET_RECORDS: AssetRecord[] = [];
 
 export function findAsset(tag: string | null | undefined): AssetRecord | undefined {
   return tag ? ASSET_RECORDS.find((a) => a.tag === tag) : undefined;

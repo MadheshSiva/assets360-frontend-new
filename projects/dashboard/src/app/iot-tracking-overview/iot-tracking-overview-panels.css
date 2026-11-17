@@ -107,7 +107,11 @@
 .io-pager { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
 
 /* ===== Asset quick view ===== */
-.io-qv-head { display: flex; gap: 12px; margin-bottom: 10px; }
+.io-qv-head { display: flex; gap: 12px; margin-bottom: 10px; transition: opacity 0.15s; }
+.io-qv-head.is-loading { opacity: 0.55; }
+.io-qv-nav { display: flex; align-items: center; gap: 4px; }
+.io-qv-nav small { min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
+.io-qv-kv a { color: var(--io-navy); text-decoration: underline; word-break: break-all; }
 .io-qv-head img, .io-qv-ic { flex: 0 0 auto; width: 92px; height: 72px; border-radius: 8px; background: #f3f4f6; object-fit: contain; }
 .io-qv-ic { display: inline-flex; align-items: center; justify-content: center; color: #64748b; }
 .io-qv-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

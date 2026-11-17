@@ -1,7 +1,7 @@
 import { AfterViewInit, Component, ElementRef, EventEmitter, Input, NgZone, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild, ViewEncapsulation, inject } from '@angular/core';
 import type * as Leaflet from 'leaflet';
-import { ASSETS, AssetKind, Zone } from './geofence-data';
-import { LL, gatewaysOf, pointInPoly, siteBox, zoneShape } from './geofence-geo';
+import { Zone } from './geofence-data';
+import { LL, zoneShape } from './geofence-geo';
 
 /** An open alert shown on the map next to the asset that raised it. */
 export interface MapAlert {
@@ -22,18 +22,9 @@ interface ZoneLayer {
   zone: Zone;
 }
 
-interface Mover {
-  marker: Leaflet.Marker;
-  zoneId: string;
-  area: LL[] | null;
-  center: LL;
-  radiusM: number;
-  from: LL;
-  to: LL;
-  t0: number;
-  dur: number;
-  still: boolean;
-}
+/** Neutral view used while the site has no zone geometry. */
+const DEFAULT_CENTER: [number, number] = [20, 0];
+const DEFAULT_ZOOM = 2;
 
 const TILES = {
   map: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', opts: { maxNativeZoom: 19, maxZoom: 20, attribution: '&copy; OpenStreetMap contributors' } },
@@ -41,14 +32,11 @@ const TILES = {
   satLabels: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', opts: { maxNativeZoom: 19, maxZoom: 20, opacity: 0.85 } },
 };
 
-const WIFI = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.86a10 10 0 0 1 14 0"/><path d="M8.5 16.43a5 5 0 0 1 7 0"/></svg>';
-
-const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 /**
- * Leaflet map for Geofence & Alerts: real tiles (street / satellite), zones from GeoJSON, moving asset markers,
- * pulsing alert markers, gateways, and drawing / vertex editing of zones. Runs outside Angular; talks back through
+ * Leaflet map for Geofence & Alerts: real tiles (street / satellite), zones from the API geometry, alert markers,
+ * and drawing / vertex editing of zones. Runs outside Angular; talks back through
  * outputs only.
  */
 @Component({
@@ -67,11 +55,11 @@ export class GeofenceMap implements AfterViewInit, OnChanges, OnDestroy {
   @Input() alerts: MapAlert[] = [];
   @Input() satellite = false;
   @Input() showAssets = true;
+  /** Kept for the layers menu; the Tracking API has no gateway positions, so nothing is drawn yet. */
   @Input() showGateways = true;
   @Input() showLabels = true;
   @Input() mode: MapMode = 'view';
   @Input() editId = '';
-  @Input() kindPaths: Record<AssetKind, string> = {} as Record<AssetKind, string>;
 
   @Output() zoneClick = new EventEmitter<string>();
   @Output() alertClick = new EventEmitter<string>();
@@ -91,18 +79,16 @@ export class GeofenceMap implements AfterViewInit, OnChanges, OnDestroy {
   private zoneGroup?: Leaflet.FeatureGroup;
   private assetGroup?: Leaflet.LayerGroup;
   private alertGroup?: Leaflet.LayerGroup;
-  private gatewayGroup?: Leaflet.LayerGroup;
   private draftGroup?: Leaflet.LayerGroup;
   private layers = new Map<string, ZoneLayer>();
-  private movers: Mover[] = [];
-  private frame = 0;
   private drawPts: LL[] = [];
   private drawGuide?: Leaflet.Polyline;
   private editPoly: LL[] = [];
   private shownSite = '';
+  /** The view has been fitted to zone geometry of the shown site. */
+  private geoFitted = false;
   private resize?: ResizeObserver;
   private destroyed = false;
-  private zooming = false;
 
   async ngAfterViewInit(): Promise<void> {
     if (typeof window === 'undefined') return;
@@ -121,6 +107,7 @@ export class GeofenceMap implements AfterViewInit, OnChanges, OnDestroy {
       const siteChanged = !!c['site'] && this.site !== this.shownSite;
       if (c['rev'] || c['site'] || c['showLabels'] || c['showAssets'] || c['showGateways'] || c['editId'] || c['mode']) this.render();
       if (siteChanged) this.fitSite(true);
+      else if (c['rev'] && !this.geoFitted) this.fitSite(false);
       else if (c['selectedId'] && !c['selectedId'].firstChange) this.focusSelected(false);
       if (c['mode']) this.onMode();
     });
@@ -128,7 +115,6 @@ export class GeofenceMap implements AfterViewInit, OnChanges, OnDestroy {
 
   ngOnDestroy(): void {
     this.destroyed = true;
-    cancelAnimationFrame(this.frame);
     this.resize?.disconnect();
     this.map?.remove();
   }
@@ -173,25 +159,20 @@ export class GeofenceMap implements AfterViewInit, OnChanges, OnDestroy {
 
   private init(L: L): void {
     const el = this.host.nativeElement;
-    const map = L.map(el, { zoomControl: false, attributionControl: true, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 90, inertia: true, maxZoom: 20, minZoom: 13, fadeAnimation: true, zoomAnimation: true, markerZoomAnimation: true });
+    const map = L.map(el, { zoomControl: false, attributionControl: true, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 90, inertia: true, maxZoom: 20, minZoom: 2, fadeAnimation: true, zoomAnimation: true, markerZoomAnimation: true });
     this.map = map;
     map.attributionControl.setPrefix('');
     L.control.scale({ position: 'bottomright', imperial: false, maxWidth: 120 }).addTo(map);
     this.zoneGroup = L.featureGroup().addTo(map);
-    this.gatewayGroup = L.layerGroup().addTo(map);
     this.assetGroup = L.layerGroup().addTo(map);
     this.alertGroup = L.layerGroup().addTo(map);
     this.draftGroup = L.layerGroup().addTo(map);
     this.setBase();
-    this.fitSite(false);
     this.render();
+    this.fitSite(false);
     map.on('click', (e: Leaflet.LeafletMouseEvent) => this.onMapClick(e));
     map.on('mousemove', (e: Leaflet.LeafletMouseEvent) => this.onMapMove(e));
-    map.on('zoomstart', () => (this.zooming = true));
-    map.on('zoomend', () => {
-      this.zooming = false;
-      this.emitZoom();
-    });
+    map.on('zoomend', () => this.emitZoom());
     map.on('dblclick', (e: Leaflet.LeafletMouseEvent) => {
       if (this.mode !== 'draw') return;
       L.DomEvent.stop(e);
@@ -202,11 +183,6 @@ export class GeofenceMap implements AfterViewInit, OnChanges, OnDestroy {
     this.emitZoom();
     this.zone.run(() => this.ready.emit(map));
     this.onMode();
-    const tick = (t: number) => {
-      this.animate(t);
-      this.frame = requestAnimationFrame(tick);
-    };
-    this.frame = requestAnimationFrame(tick);
   }
 
   private emitZoom(): void {
@@ -242,11 +218,19 @@ export class GeofenceMap implements AfterViewInit, OnChanges, OnDestroy {
   private fitSite(animate: boolean): void {
     const map = this.map;
     const L = this.L;
-    if (!map || !L || !this.site) return;
+    if (!map || !L) return;
     this.shownSite = this.site;
-    const b = siteBox(this.site);
-    const bounds = L.latLngBounds([b.s, b.w], [b.n, b.e]);
-    map.setMaxBounds(bounds.pad(1.2));
+    map.setMinZoom(DEFAULT_ZOOM);
+    const shapes = [...this.layers.values()].map((l) => l.shape.getBounds());
+    if (!shapes.length) {
+      // no zone geometry at this site: neutral world view
+      this.geoFitted = false;
+      map.setView(DEFAULT_CENTER, DEFAULT_ZOOM, { animate });
+      return;
+    }
+    this.geoFitted = true;
+    const bounds = L.latLngBounds(shapes[0].getSouthWest(), shapes[0].getNorthEast());
+    for (const b of shapes) bounds.extend(b);
     if (animate) map.flyToBounds(bounds, { padding: [24, 24], duration: 0.9, easeLinearity: 0.2 });
     else map.fitBounds(bounds, { padding: [24, 24], animate: false });
   }
@@ -277,7 +261,6 @@ export class GeofenceMap implements AfterViewInit, OnChanges, OnDestroy {
     for (const z of siteZones) this.drawZone(L, z);
     // selected zone on top
     this.layers.get(this.selectedId)?.shape.bringToFront();
-    this.renderGateways(L);
     this.renderAssets(L, siteZones);
     this.renderEdit(L);
     this.renderDraft();
@@ -319,7 +302,7 @@ export class GeofenceMap implements AfterViewInit, OnChanges, OnDestroy {
       L.DomEvent.stopPropagation(e);
       if (this.mode === 'view') this.zone.run(() => this.zoneClick.emit(z.id));
     });
-    shape.bindTooltip(`<strong>${esc(z.name)}</strong><span>${esc(z.type)} · ${z.assetIds.length} assets · ${z.status}</span>`, { sticky: true, direction: 'top', offset: [0, -10], className: 'gz-tip', opacity: 1 });
+    shape.bindTooltip(`<strong>${esc(z.name)}</strong><span>${esc(z.type)} · ${z.monitoredCount} assets · ${z.status}</span>`, { sticky: true, direction: 'top', offset: [0, -10], className: 'gz-tip', opacity: 1 });
     if (this.showLabels) {
       const top = ring ? ring.reduce((a, p) => (p.lat > a.lat ? p : a), ring[0]) : null;
       const at = top
@@ -332,122 +315,29 @@ export class GeofenceMap implements AfterViewInit, OnChanges, OnDestroy {
     this.layers.set(z.id, { shape, vertices, zone: z });
   }
 
-  private renderGateways(L: L): void {
-    const g = this.gatewayGroup!;
-    g.clearLayers();
-    if (!this.showGateways) return;
-    for (const gw of gatewaysOf(this.site)) {
-      L.marker([gw.at.lat, gw.at.lng], { icon: L.divIcon({ className: 'gz-gw-wrap', html: `<span class="gz-gw">${WIFI}</span>`, iconSize: [24, 24], iconAnchor: [12, 12] }), keyboard: false })
-        .bindTooltip(`<strong>${esc(gw.name)}</strong><span>Gateway · online · ${esc(this.site)}</span>`, { direction: 'top', offset: [0, -12], className: 'gz-tip', opacity: 1 })
-        .addTo(g);
-    }
-  }
-
-  private assetIcon(L: L, kind: AssetKind, alert: boolean): Leaflet.DivIcon {
-    const d = this.kindPaths[kind] ?? '';
-    return L.divIcon({
-      className: 'gz-asset-wrap',
-      html: `<span class="gz-asset${alert ? ' is-alert' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg></span>`,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12],
-    });
-  }
-
+  /** Open alerts are pinned to their zone (asset positions are not part of the zone data). */
   private renderAssets(L: L, siteZones: Zone[]): void {
-    const now = performance.now();
-    const prev = new Map(this.movers.map((m) => [m.marker.options.title ?? '', m]));
     this.assetGroup!.clearLayers();
     this.alertGroup!.clearLayers();
-    this.movers = [];
     for (const z of siteZones) {
       if (z.status !== 'Active') continue;
-      const geo = zoneShape(z);
-      const area = geo.poly ?? null;
-      const center = geo.center ?? (area ? this.centroid(area) : null);
-      if (!center) continue;
       const open = this.alerts.find((a) => a.zoneId === z.id);
-      const codes = open ? [open.assetCode] : [];
-      for (const id of z.assetIds) {
-        if (codes.length >= 3) break;
-        if (!codes.includes(id)) codes.push(id);
-      }
-      codes.forEach((code, i) => {
-        const asset = ASSETS.find((a) => a.code === code);
-        const kind: AssetKind = asset ? asset.kind : 'Forklift';
-        const isAlert = !!open && i === 0;
-        const key = `${z.id}|${code}`;
-        const old = prev.get(key);
-        const start = old ? old.marker.getLatLng() : this.randomIn(area, center, geo.radiusM ?? 0, i);
-        const from = { lat: start.lat, lng: start.lng };
-        if (!this.showAssets && !isAlert) return;
-        const marker = L.marker([from.lat, from.lng], { icon: this.assetIcon(L, kind, isAlert), title: key, keyboard: false, riseOnHover: true })
-          .bindTooltip(`<strong>${esc(code)}</strong><span>${esc(kind)} · ${esc(z.name)}${isAlert ? ' · alert open' : ''}</span>`, { direction: 'top', offset: [0, -12], className: 'gz-tip', opacity: 1 })
-          .addTo(this.assetGroup!);
-        marker.on('click', (e: Leaflet.LeafletMouseEvent) => {
-          L.DomEvent.stopPropagation(e);
-          if (this.mode === 'view') this.zone.run(() => this.zoneClick.emit(z.id));
-        });
-        const m: Mover = { marker, zoneId: z.id, area, center, radiusM: geo.radiusM ?? 0, from, to: from, t0: now, dur: 1, still: isAlert || this.mode !== 'view' };
-        this.retarget(m, now);
-        this.movers.push(m);
-        if (isAlert && open) {
-          const am = L.marker([from.lat, from.lng], { icon: L.divIcon({ className: 'gz-alert-wrap', html: '<span class="gz-alert">!</span>', iconSize: [22, 22], iconAnchor: [-2, 20] }), keyboard: false, zIndexOffset: 900 })
-            .bindTooltip(`<strong>${esc(open.title)}</strong><span>${esc(open.sub)}</span>`, { direction: 'top', offset: [10, -22], className: 'gz-tip', opacity: 1 })
-            .addTo(this.alertGroup!);
-          am.on('click', (e: Leaflet.LeafletMouseEvent) => {
-            L.DomEvent.stopPropagation(e);
-            this.zone.run(() => this.alertClick.emit(open.key));
-          });
-        }
+      if (!open) continue;
+      const geo = zoneShape(z);
+      const at = geo.center ?? (geo.poly?.length ? this.centroid(geo.poly) : null);
+      if (!at) continue;
+      const am = L.marker([at.lat, at.lng], { icon: L.divIcon({ className: 'gz-alert-wrap', html: '<span class="gz-alert">!</span>', iconSize: [22, 22], iconAnchor: [-2, 20] }), keyboard: false, zIndexOffset: 900 })
+        .bindTooltip(`<strong>${esc(open.title)}</strong><span>${esc(open.assetCode)} · ${esc(open.sub)}</span>`, { direction: 'top', offset: [10, -22], className: 'gz-tip', opacity: 1 })
+        .addTo(this.alertGroup!);
+      am.on('click', (e: Leaflet.LeafletMouseEvent) => {
+        L.DomEvent.stopPropagation(e);
+        this.zone.run(() => this.alertClick.emit(open.key));
       });
     }
   }
 
-  // ===================== asset motion =====================
-
   private centroid(p: LL[]): LL {
     return { lat: p.reduce((t, x) => t + x.lat, 0) / p.length, lng: p.reduce((t, x) => t + x.lng, 0) / p.length };
-  }
-
-  private randomIn(area: LL[] | null, center: LL, radiusM: number, salt: number): LL {
-    if (area) {
-      const lats = area.map((p) => p.lat);
-      const lngs = area.map((p) => p.lng);
-      const [s, n, w, e] = [Math.min(...lats), Math.max(...lats), Math.min(...lngs), Math.max(...lngs)];
-      // keep away from the edges so markers sit visibly inside the zone
-      for (let k = 0; k < 40; k++) {
-        const p = { lat: s + (n - s) * (0.15 + Math.random() * 0.7), lng: w + (e - w) * (0.15 + Math.random() * 0.7) };
-        if (pointInPoly(p, area)) return p;
-      }
-      return center;
-    }
-    const a = Math.random() * Math.PI * 2 + salt;
-    const r = radiusM * 0.6 * Math.sqrt(Math.random());
-    return { lat: center.lat + (r * Math.sin(a)) / 111320, lng: center.lng + (r * Math.cos(a)) / (111320 * Math.cos((center.lat * Math.PI) / 180)) };
-  }
-
-  private retarget(m: Mover, now: number): void {
-    const cur = m.marker.getLatLng();
-    m.from = { lat: cur.lat, lng: cur.lng };
-    m.to = m.still ? m.from : this.randomIn(m.area, m.center, m.radiusM, 0);
-    m.t0 = now + Math.random() * 1200;
-    m.dur = 4000 + Math.random() * 4500;
-  }
-
-  private animate(now: number): void {
-    if (document.hidden || this.zooming) return;
-    for (const m of this.movers) {
-      if (m.still) continue;
-      const t = (now - m.t0) / m.dur;
-      if (t < 0) continue;
-      if (t >= 1) {
-        m.marker.setLatLng([m.to.lat, m.to.lng]);
-        this.retarget(m, now);
-        continue;
-      }
-      const k = ease(t);
-      m.marker.setLatLng([m.from.lat + (m.to.lat - m.from.lat) * k, m.from.lng + (m.to.lng - m.from.lng) * k]);
-    }
   }
 
   // ===================== drawing =====================

@@ -1,8 +1,15 @@
-/* Device Replacement — demo data (in-memory, session only). */
+/*
+ * Device Replacement — types, helpers and in-memory session state.
+ * Stock comes from the Tracking API (/api/replacement-devices); the queue of devices needing replacement is the IoT
+ * devices whose health is Critical (/api/iot-devices) plus a device opened from another page (?device=…).
+ * Replacement requests and drafts have no endpoint and are kept for the session.
+ */
 
-export type DeviceKind = 'beacon' | 'vibration' | 'temperature' | 'gps';
-export type Health = 'Critical' | 'Offline' | 'Damaged' | 'End of Life' | 'Retired';
+export type DeviceKind = 'beacon' | 'vibration' | 'temperature' | 'gps' | 'other';
+/** IoT device health as the API reports it (Good, Warning, Critical) or Retired once replaced in this session. */
+export type Health = string;
 export type CheckStatus = 'pass' | 'warn' | 'fail';
+/** One of the API's ReplacementCompatibility values. */
 export type Compat = 'Compatible' | 'Partial' | 'Incompatible';
 export const REASONS = ['Battery failure', 'Hardware fault', 'End of life', 'Damaged', 'Upgrade'];
 
@@ -13,17 +20,21 @@ export interface ExistingDevice {
   kind: DeviceKind;
   type: string;
   model: string;
+  /** Connectivity of the IoT device, e.g. LoRaWAN. */
   protocol: string;
-  battery: number;
+  /** Percent, or null for mains-powered / not reported. */
+  battery: number | null;
   status: Health;
   assetId: string;
   assetName: string;
   site: string;
+  /** Not provided by the API (shown as —). */
   zone: string;
   gateway: string;
   firmware: string;
+  /** Not provided by the API (shown as —). */
   channels: string[];
-  lastSeen: string; // ISO local
+  lastSeen: string; // ISO local, '' when never seen
   reason: string;
   group: string;
   history: HistoryEvent[];
@@ -31,109 +42,70 @@ export interface ExistingDevice {
 
 export interface Candidate {
   id: string;
-  kind: DeviceKind;
   model: string;
   protocol: string;
-  battery: number;
+  battery: number | null;
   location: string;
-  tag: string;
-  channels: string[];
-  signal: 'Good' | 'Fair' | 'None';
-  firmwareProfiles: string[];
+  /** Available / Reserved / Unavailable. */
+  availability: string;
+  /** Compatibility recorded on the stock record. */
+  compatibility: Compat;
 }
 
 export interface CheckResult { key: string; name: string; status: CheckStatus; text: string }
 
-export const QUEUE: ExistingDevice[] = [
-  {
-    id: 'BLE-20951', kind: 'beacon', type: 'BLE Beacon', model: 'Minew E8', protocol: 'BLE 5.0', battery: 8, status: 'Critical',
-    assetId: 'FL-008', assetName: 'Forklift FL-008', site: 'Dubai Warehouse', zone: 'Zone B', gateway: 'GW-DXB-02', firmware: 'v2.1.0',
-    channels: ['Temperature', 'Motion'], lastSeen: '2026-10-22T14:28', reason: 'Battery failure', group: 'DXB Material Handling',
-    history: [
-      { at: '2026-10-22T14:28', kind: 'alert', text: 'Last heartbeat received via GW-DXB-02 (RSSI −91 dBm)' },
-      { at: '2026-10-21T09:05', kind: 'alert', text: 'Critical alert: battery level dropped to 8%' },
-      { at: '2026-10-14T11:40', kind: 'alert', text: 'Low battery warning (18%)' },
-      { at: '2026-08-03T16:12', kind: 'fw', text: 'Firmware updated v2.0.4 → v2.1.0' },
-      { at: '2026-03-18T10:30', kind: 'maint', text: 'Preventive check: mounting bracket re-secured' },
-      { at: '2025-04-09T08:15', kind: 'install', text: 'Installed on Forklift FL-008 and mapped to Temperature, Motion' },
-    ],
-  },
-  {
-    id: 'VS-30018', kind: 'vibration', type: 'Vibration Sensor', model: 'Vibration Sensor V2', protocol: 'LoRaWAN', battery: 46, status: 'Offline',
-    assetId: 'PMP-118', assetName: 'Pump PMP-118', site: 'Abu Dhabi Plant', zone: 'Pump Room 2', gateway: 'GW-AUH-01', firmware: 'v3.0.4',
-    channels: ['Vibration', 'Temperature'], lastSeen: '2026-10-19T08:12', reason: 'Hardware fault', group: 'AUH Rotating Equipment',
-    history: [
-      { at: '2026-10-19T08:12', kind: 'alert', text: 'Device went offline — no uplink for 8 days' },
-      { at: '2026-10-18T22:47', kind: 'alert', text: 'Accelerometer self-test failed (axis Z)' },
-      { at: '2026-06-02T13:20', kind: 'fw', text: 'Firmware updated v3.0.1 → v3.0.4' },
-      { at: '2025-11-27T09:00', kind: 'install', text: 'Installed on Pump PMP-118' },
-    ],
-  },
-  {
-    id: 'TS-80233', kind: 'temperature', type: 'Temperature Sensor', model: 'ThermoTrack T2', protocol: 'LoRaWAN', battery: 61, status: 'Damaged',
-    assetId: 'CR-03', assetName: 'Cold Room CR-03', site: 'Sharjah Cold Store', zone: 'Bay 3', gateway: 'GW-SHJ-04', firmware: 'v1.8.2',
-    channels: ['Temperature', 'Humidity'], lastSeen: '2026-10-25T17:02', reason: 'Damaged', group: 'SHJ Cold Chain',
-    history: [
-      { at: '2026-10-25T17:02', kind: 'alert', text: 'Humidity readings out of range (probe damaged)' },
-      { at: '2026-10-24T10:15', kind: 'maint', text: 'Technician reported cracked enclosure' },
-      { at: '2025-09-10T12:00', kind: 'install', text: 'Installed in Cold Room CR-03' },
-    ],
-  },
-  {
-    id: 'GPS-10477', kind: 'gps', type: 'GPS Tracker', model: 'Teltonika FMC130', protocol: 'LTE Cat-M1', battery: 72, status: 'End of Life',
-    assetId: 'DV-221', assetName: 'Delivery Van DV-221', site: 'Dubai Logistics Hub', zone: 'Fleet Yard', gateway: 'Cellular (du)', firmware: 'v03.27',
-    channels: ['Location', 'Ignition', 'Speed'], lastSeen: '2026-10-27T07:41', reason: 'End of life', group: 'DXB Last-mile Fleet',
-    history: [
-      { at: '2026-10-01T09:00', kind: 'info', text: 'Vendor end-of-life notice: FMC130 support ends Dec 2026' },
-      { at: '2026-05-12T15:34', kind: 'fw', text: 'Firmware updated v03.25 → v03.27' },
-      { at: '2022-02-08T08:30', kind: 'install', text: 'Installed on Delivery Van DV-221' },
-    ],
-  },
-];
+/** Devices awaiting replacement (filled from the API). */
+export const QUEUE: ExistingDevice[] = [];
 
-export const STOCK: Candidate[] = [
-  { id: 'BLE-30112', kind: 'beacon', model: 'Minew E8', protocol: 'BLE 5.0', battery: 100, location: 'Central Store', tag: 'TAG-7F21A9', channels: ['Temperature', 'Motion'], signal: 'Good', firmwareProfiles: ['v2.1.0', 'v2.0.4'] },
-  { id: 'BLE-30126', kind: 'beacon', model: 'Minew E8', protocol: 'BLE 5.0', battery: 100, location: 'Central Store', tag: 'TAG-7F21C4', channels: ['Temperature', 'Motion'], signal: 'Good', firmwareProfiles: ['v2.1.0'] },
-  { id: 'BL-90144', kind: 'beacon', model: 'Minew E9', protocol: 'BLE 5.0', battery: 95, location: 'Central Store', tag: 'TAG-90A144', channels: ['Temperature'], signal: 'Good', firmwareProfiles: ['v2.1.0'] },
-  { id: 'VS-30044', kind: 'vibration', model: 'Vibration Sensor V2', protocol: 'LoRaWAN', battery: 100, location: 'Abu Dhabi Store', tag: 'TAG-3A0044', channels: ['Vibration', 'Temperature'], signal: 'Good', firmwareProfiles: ['v3.0.4'] },
-  { id: 'VS-30051', kind: 'vibration', model: 'Vibration Sensor V3', protocol: 'LoRaWAN', battery: 100, location: 'Central Store', tag: 'TAG-3A0051', channels: ['Vibration', 'Temperature'], signal: 'Fair', firmwareProfiles: ['v4.0.0'] },
-  { id: 'TS-80301', kind: 'temperature', model: 'ThermoTrack T2', protocol: 'LoRaWAN', battery: 100, location: 'Sharjah Store', tag: 'TAG-80301B', channels: ['Temperature', 'Humidity'], signal: 'Good', firmwareProfiles: ['v1.8.2'] },
-  { id: 'TS-80318', kind: 'temperature', model: 'ThermoTrack T1', protocol: 'LoRaWAN', battery: 90, location: 'Central Store', tag: 'TAG-80318B', channels: ['Temperature'], signal: 'Good', firmwareProfiles: ['v1.8.2'] },
-  { id: 'GPS-10590', kind: 'gps', model: 'Teltonika FMC150', protocol: 'LTE Cat-M1', battery: 100, location: 'Central Store', tag: 'TAG-G10590', channels: ['Location', 'Ignition', 'Speed'], signal: 'Good', firmwareProfiles: ['v03.27', 'v03.29'] },
-  { id: 'GPS-10611', kind: 'gps', model: 'Teltonika FM1120', protocol: '2G GSM', battery: 100, location: 'Central Store', tag: 'TAG-G10611', channels: ['Location', 'Ignition', 'Speed'], signal: 'None', firmwareProfiles: ['v01.10'] },
-];
+/** Spare devices (filled from the API). */
+export const STOCK: Candidate[] = [];
+
+/** Placeholder used while no device is selected (all fields blank). */
+export function blankDevice(): ExistingDevice {
+  return { id: '', kind: 'other', type: '', model: '', protocol: '', battery: null, status: '', assetId: '', assetName: '', site: '', zone: '', gateway: '', firmware: '', channels: [], lastSeen: '', reason: '', group: '', history: [] };
+}
+
+/** Device family from the IoT device type, e.g. "BLE Beacon" → beacon. */
+export function kindOf(type: string): DeviceKind {
+  const t = type.toLowerCase();
+  if (t.includes('beacon') || t.includes('ble') || t.includes('tag')) return 'beacon';
+  if (t.includes('vibration')) return 'vibration';
+  if (t.includes('temp')) return 'temperature';
+  if (t.includes('gps') || t.includes('tracker')) return 'gps';
+  return 'other';
+}
 
 /** Session-only state shared across component instances (survives navigation, not a page reload). */
 export interface ReplacementDraft { deviceId: string; reason: string; candidateId: string; step: number; opts: Record<string, boolean>; savedAt: string }
 export const SESSION = {
   draft: null as ReplacementDraft | null,
   requests: {} as Record<string, string>,
-  nextRequest: 4821,
+  nextRequest: 1,
   completed: [] as { oldId: string; newId: string; asset: string; at: string }[],
 };
 
+/** First word of a protocol, lower-case: "LoRaWAN 1.0.3" → "lorawan". */
+function protoKey(p: string): string {
+  return p.trim().split(/[\s/]+/)[0]?.toLowerCase() ?? '';
+}
+
+/** Checks that can be made from the records the API holds. */
 export function checksFor(d: ExistingDevice, c: Candidate): CheckResult[] {
-  const sameKind = d.kind === c.kind;
-  const sameProto = d.protocol === c.protocol;
-  const mapped = d.channels.filter((ch) => c.channels.includes(ch));
-  const missing = d.channels.filter((ch) => !c.channels.includes(ch));
-  const hasFw = c.firmwareProfiles.includes(d.firmware);
+  const comp: CheckStatus = c.compatibility === 'Compatible' ? 'pass' : c.compatibility === 'Partial' ? 'warn' : 'fail';
+  const protoKnown = !!d.protocol && !!c.protocol;
+  const sameProto = protoKnown && protoKey(d.protocol) === protoKey(c.protocol);
+  const avail: CheckStatus = c.availability === 'Available' ? 'pass' : c.availability === 'Reserved' ? 'warn' : 'fail';
+  const lowBattery = c.battery !== null && c.battery < 20;
   return [
-    { key: 'type', name: 'Device type supported', status: sameKind ? 'pass' : 'fail', text: sameKind ? `${d.type} (${c.model}) is supported` : `${c.model} is not a ${d.type}` },
-    { key: 'proto', name: 'Protocol compatible', status: sameProto ? 'pass' : 'fail', text: sameProto ? `${c.protocol} matches existing device` : `${c.protocol} does not match ${d.protocol}` },
+    { key: 'compat', name: 'Compatibility (stock record)', status: comp, text: `${c.id} is recorded as ${c.compatibility}` },
     {
-      key: 'chan', name: 'Sensor channels mapped', status: missing.length ? 'warn' : 'pass',
-      text: missing.length
-        ? `${mapped.join(', ') || 'None'} (${mapped.length}/${d.channels.length}) — ${missing.join(', ')} not available`
-        : `${mapped.join(', ')} (${mapped.length}/${d.channels.length}) can be mapped`,
+      key: 'proto', name: 'Protocol compatible', status: !protoKnown ? 'warn' : sameProto ? 'pass' : 'fail',
+      text: !protoKnown ? `Protocol not recorded for ${!d.protocol ? d.id : c.id}` : sameProto ? `${c.protocol} matches ${d.protocol}` : `${c.protocol} does not match ${d.protocol}`,
     },
+    { key: 'avail', name: 'Available in stock', status: avail, text: `${c.availability} at ${c.location || '—'}` },
     {
-      key: 'gw', name: 'Gateway coverage confirmed', status: c.signal === 'Good' ? 'pass' : c.signal === 'Fair' ? 'warn' : 'fail',
-      text: c.signal === 'None' ? `No coverage — ${c.protocol} not served by ${d.gateway}` : `Covered by ${d.gateway} (Signal strength: ${c.signal})`,
-    },
-    {
-      key: 'fw', name: 'Firmware profile available', status: hasFw ? 'pass' : 'warn',
-      text: hasFw ? `Firmware profile exists (${d.firmware})` : `No ${d.firmware} profile — will use ${c.firmwareProfiles[0]}`,
+      key: 'battery', name: 'Battery level', status: lowBattery ? 'warn' : 'pass',
+      text: c.battery === null ? 'Not battery powered / not reported' : lowBattery ? `Low battery (${c.battery}%) — charge or replace before install` : `${c.battery}%`,
     },
   ];
 }

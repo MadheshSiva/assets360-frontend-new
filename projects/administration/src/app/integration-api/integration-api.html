@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a routerLink="/administration">Administration</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <strong>Integration &amp; API</strong>
 </nav>
 
@@ -13,6 +13,7 @@
   <label class="org-picker">
     <span class="sr-only">Organization</span>
     <select aria-label="Organization" [(ngModel)]="organization">
+      <option value="" disabled>Select Organization</option>
       @for (o of organizations; track o) {
         <option [value]="o">{{ o }}</option>
       }
@@ -27,7 +28,7 @@
       <span class="stat__label">Active Integrations</span>
       <span class="stat__value">
         {{ activeCount }}
-        <span class="stat__trend"><lucide-icon [img]="icons.ArrowUp" [size]="13"></lucide-icon>2</span>
+        <span class="stat__trend"><lucide-icon [img]="icons.ArrowUp" [size]="13"></lucide-icon>0</span>
       </span>
       <span class="stat__hint">of {{ integrations.length }} configured</span>
     </div>
@@ -38,7 +39,7 @@
       <span class="stat__label">API Requests Today</span>
       <span class="stat__value">
         {{ requestsToday }}
-        <span class="stat__trend"><lucide-icon [img]="icons.ArrowUp" [size]="13"></lucide-icon>12%</span>
+        <span class="stat__trend"><lucide-icon [img]="icons.ArrowUp" [size]="13"></lucide-icon>0%</span>
       </span>
       <span class="stat__hint">vs. yesterday</span>
     </div>
@@ -49,7 +50,7 @@
       <span class="stat__label">Webhooks</span>
       <span class="stat__value">
         {{ activeWebhooks }}
-        <span class="stat__trend"><lucide-icon [img]="icons.ArrowUp" [size]="13"></lucide-icon>3</span>
+        <span class="stat__trend"><lucide-icon [img]="icons.ArrowUp" [size]="13"></lucide-icon>0</span>
       </span>
       <span class="stat__hint">active endpoints</span>
     </div>
@@ -60,7 +61,7 @@
       <span class="stat__label">Failed Syncs</span>
       <span class="stat__value">
         {{ failedSyncs }}
-        <span class="stat__trend stat__trend--down"><lucide-icon [img]="icons.ArrowDown" [size]="13"></lucide-icon>5</span>
+        <span class="stat__trend stat__trend--down"><lucide-icon [img]="icons.ArrowDown" [size]="13"></lucide-icon>0</span>
       </span>
       <span class="stat__hint">in the last 24 hours</span>
     </div>
@@ -87,13 +88,13 @@
     <input type="search" placeholder="Search integrations..." aria-label="Search integrations" [(ngModel)]="query" />
   </label>
   <select class="select" aria-label="Type" [(ngModel)]="typeFilter">
-    <option value="">All Types</option>
+    <option value="">Select Type</option>
     @for (t of types; track t) {
       <option [value]="t">{{ t }}</option>
     }
   </select>
   <select class="select" aria-label="Status" [(ngModel)]="statusFilter">
-    <option value="">All Statuses</option>
+    <option value="">Select Status</option>
     @for (s of statuses; track s) {
       <option [value]="s">{{ s }}</option>
     }

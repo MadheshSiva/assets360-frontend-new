@@ -21,7 +21,7 @@ export interface Dataset {
   groups: string[];
   rows: number;
   sizeGb: number;
-  refreshed: string;
+  refreshed: string | null;
   owner: string;
 }
 

@@ -23,31 +23,26 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-angular';
-import DATA from './sla.json';
 import { CompletedSla, EscalationStep, PolicyVersion, SlaEscalation, SlaPolicy, SlaScope, SlaTimer, TimerState, WorkCalendar } from './sla.model';
 
 type Tab = 'policies' | 'timers' | 'breaches' | 'escalations' | 'performance';
 
-const CURRENT_USER = 'Sarah Khan';
-/** Job orders that exist on the Job Orders page. */
-const KNOWN_JOBS = ['JO-2026-00438', 'JO-2026-00431', 'JO-2026-00442'];
+/** Signed-in user's display name; filled from the auth/user API once wired. */
+const CURRENT_USER = '';
+/** Job orders that exist on the Job Orders page; filled from the API once wired. */
+const KNOWN_JOBS: string[] = [];
 const SCOPE_FOR: Record<string, SlaScope> = { 'Job Order': 'Job', 'Process Stage': 'Stage', Task: 'Task', Issue: 'Issue' };
 
-/** DEMO MODE: kept in memory until the SLA service is wired up. */
-const SOURCE = DATA as unknown as {
-  asOf: string;
-  calendars: WorkCalendar[];
-  policies: SlaPolicy[];
-  timers: SlaTimer[];
-  escalations: SlaEscalation[];
-  completed: CompletedSla[];
-  versions: PolicyVersion[];
-};
-const POLICIES: SlaPolicy[] = structuredClone(SOURCE.policies);
-const TIMERS: SlaTimer[] = structuredClone(SOURCE.timers);
-const ESCALATIONS: SlaEscalation[] = structuredClone(SOURCE.escalations);
-const VERSIONS: PolicyVersion[] = structuredClone(SOURCE.versions);
-let OPENED_AT = 0;
+/** Built-in round-the-clock calendar; site work calendars come from the SLA service once wired. */
+const CALENDARS: WorkCalendar[] = [
+  { name: '24×7', label: '24×7', days: [0, 1, 2, 3, 4, 5, 6], start: '00:00', end: '24:00', holidays: [], note: 'Every day, all hours' },
+];
+/** Policies, timers, escalations, completed SLAs and versions are kept in memory; empty until the SLA service is wired up. */
+const POLICIES: SlaPolicy[] = [];
+const TIMERS: SlaTimer[] = [];
+const ESCALATIONS: SlaEscalation[] = [];
+const COMPLETED: CompletedSla[] = [];
+const VERSIONS: PolicyVersion[] = [];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const stamp = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -108,7 +103,7 @@ function addWorking(cal: WorkCalendar, from: string, mins: number): string {
   imports: [CommonModule, FormsModule, RouterModule, LucideAngularModule],
   templateUrl: './sla-management.html',
   // Buttons, controls, tabs, switches, modal and toast come from the Job Templates stylesheet
-  styleUrls: ['../job-templates/job-templates.css', '../shared/wip-board.css', './sla-management.css'],
+  styleUrls: ['../job-templates/job-templates.css', '../shared/wip-board.css', './sla-management.css', '../shared/wip-purple-theme.css'],
 })
 export class SlaManagement implements OnDestroy {
   readonly icons = { ArrowRight, Bell, CircleCheck, CirclePause, CirclePlay, Clock, Download, Gauge, House, Info, Plus, Search, Settings2, Timer, TriangleAlert, X };
@@ -119,7 +114,7 @@ export class SlaManagement implements OnDestroy {
     { key: 'escalations', label: 'Escalation History' },
     { key: 'performance', label: 'Performance' },
   ];
-  readonly calendars = SOURCE.calendars;
+  readonly calendars = CALENDARS;
   readonly appliesToOptions = Object.keys(SCOPE_FOR);
   readonly scopes: SlaScope[] = ['Job', 'Stage', 'Task', 'Issue'];
   readonly priorities = ['High', 'Medium', 'Low'];
@@ -127,7 +122,8 @@ export class SlaManagement implements OnDestroy {
   readonly startEvents = ['Stage ready', 'Job released', 'Task assigned', 'Issue reported', 'Job completed'];
   readonly stopEvents = ['Stage approved', 'Job completed', 'Task completed', 'Issue closed', 'Job dispatched'];
   readonly resumeEvents = ['Dependency resolved', 'Material received', 'Approval received'];
-  readonly matrices = ['Production Escalation', 'Testing Escalation', 'Quality Escalation', 'Stores Escalation', 'Logistics Escalation'];
+  /** Escalation matrices; filled from the SLA service once wired. */
+  readonly matrices: string[] = [];
   readonly channelOptions = ['In-app', 'In-app + Email', 'In-app + Email + SMS'];
   readonly states: TimerState[] = ['Within Target', 'At Risk', 'Breached', 'Paused'];
 
@@ -144,10 +140,10 @@ export class SlaManagement implements OnDestroy {
   timerState: TimerState | '' = '';
   timerPolicy = '';
 
-  selectedId = 'SLA-00012';
-  /** Unsaved edits to the selected (or new) policy. */
-  draft: SlaPolicy = structuredClone(this.policy(this.selectedId)!);
-  isNew = false;
+  selectedId = POLICIES[0]?.id ?? '';
+  /** Unsaved edits to the selected (or new) policy; a blank new policy while none exist. */
+  draft: SlaPolicy = this.blankPolicy();
+  isNew = !POLICIES.length;
   complValue = 2;
   complUnit: 'hours' | 'minutes' = 'hours';
   formError = '';
@@ -162,7 +158,6 @@ export class SlaManagement implements OnDestroy {
   private toastTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
-    if (!OPENED_AT) OPENED_AT = Date.now();
     this.loadDraft();
     // ?policy=Pressure Testing (or SLA-00012) opens a policy (links from other pages)
     inject(ActivatedRoute)
@@ -181,9 +176,8 @@ export class SlaManagement implements OnDestroy {
     clearTimeout(this.toastTimer);
   }
 
-  /** Demo clock: the data's "as of" time plus the time this page has been open. */
   get now(): string {
-    return stamp(new Date(parseLocal(SOURCE.asOf).getTime() + (Date.now() - OPENED_AT)));
+    return stamp(new Date());
   }
 
   isKnownJob(job: string): boolean {
@@ -260,17 +254,22 @@ export class SlaManagement implements OnDestroy {
     this.tab = 'policies';
     this.isNew = true;
     this.formError = '';
-    this.draft = {
-      id: '', name: '', scope: 'Stage', appliesTo: 'Process Stage', priority: 'Medium', responseMin: 15, completionMin: 120, calendar: this.calendars[0].name,
+    this.draft = this.blankPolicy();
+    this.setCompletionFields(120);
+  }
+
+  /** Defaults for a new policy. */
+  private blankPolicy(): SlaPolicy {
+    return {
+      id: '', name: '', scope: 'Stage', appliesTo: 'Process Stage', priority: 'Medium', responseMin: 15, completionMin: 120, calendar: this.calendars[0]?.name ?? '',
       timeZone: 'Asia/Dubai', status: 'Draft', version: 0, startEvent: 'Stage ready', stopEvent: 'Stage approved', pauseStates: 'Awaiting approved external dependency',
-      resumeEvent: 'Dependency resolved', pauseRequiresApproval: true, excludeNonWorking: true, warningPct: 80, escalationMatrix: this.matrices[0],
+      resumeEvent: 'Dependency resolved', pauseRequiresApproval: true, excludeNonWorking: true, warningPct: 80, escalationMatrix: this.matrices[0] ?? '',
       channels: 'In-app + Email', ladder: [
         { trigger: 'pct', value: 80, action: 'Notify assignee' },
         { trigger: 'pct', value: 100, action: 'Notify supervisor' },
         { trigger: 'overdue', value: 30, action: 'Escalate to operations manager' },
       ],
     };
-    this.setCompletionFields(120);
   }
 
   onAppliesTo(): void {
@@ -370,7 +369,7 @@ export class SlaManagement implements OnDestroy {
   // ===== Preview =====
 
   get previewDate(): string {
-    return SOURCE.asOf.slice(0, 10);
+    return this.now.slice(0, 10);
   }
 
   get previewDue(): string {
@@ -509,7 +508,7 @@ export class SlaManagement implements OnDestroy {
     return this.policies
       .filter((p) => p.status !== 'Draft')
       .map((policy) => {
-        const rows = SOURCE.completed.filter((c) => c.policyId === policy.id);
+        const rows = COMPLETED.filter((c) => c.policyId === policy.id);
         const onTime = rows.filter((c) => c.actualMin <= c.targetMin).length;
         const avg = rows.length ? Math.round(rows.reduce((s, c) => s + c.actualMin, 0) / rows.length) : 0;
         return { policy, done: rows.length, onTime, pct: rows.length ? Math.round((onTime / rows.length) * 100) : 0, avg, breachedNow: this.breached.filter((t) => t.policyId === policy.id).length };
@@ -517,7 +516,7 @@ export class SlaManagement implements OnDestroy {
   }
 
   get overallCompliance(): number {
-    const rows = SOURCE.completed;
+    const rows = COMPLETED;
     return rows.length ? Math.round((rows.filter((c) => c.actualMin <= c.targetMin).length / rows.length) * 100) : 0;
   }
 

@@ -201,12 +201,21 @@ export class NumberingSequencePage extends AdminPage {
 
   /** Share of the number range already used, in % */
   get rangeUsed(): number {
+    if (!this.draft.numberLength) return 0;
     return Math.min(100, Math.round((this.draft.currentNumber / maxNumber(this.draft)) * 1000) / 10);
   }
 
   createSequence(): void {
     this.selectedId = null;
-    this.draft = this.blank();
+    // New sequences open with their dropdowns unselected (blank() also backs CSV import and the empty-state draft)
+    this.draft = {
+      ...this.blank(),
+      module: '',
+      recordType: '',
+      numberLength: null as unknown as number,
+      scope: '' as NumberSequence['scope'],
+      resetRule: '' as NumberSequence['resetRule']
+    };
     this.isNew = true;
     this.dirty = true;
     this.showErrors = false;

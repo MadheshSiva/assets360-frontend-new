@@ -113,14 +113,14 @@ export function blankItem(id: string): ChecklistItem {
   return {
     id,
     text: '',
-    responseType: 'Pass/Fail',
+    responseType: '' as ResponseType,
     required: true,
     critical: false,
     score: 10,
     helpText: '',
     expected: '',
     attachmentRequired: false,
-    failureAction: 'None',
+    failureAction: '',
     escalate: false
   };
 }
@@ -130,6 +130,7 @@ export function itemErrors(item: ChecklistItem): Record<string, string> {
   const e: Record<string, string> = {};
   if (!item.text.trim()) e['text'] = 'Item text is required.';
   else if (item.text.trim().length > 200) e['text'] = 'Keep item text under 200 characters.';
+  if (!item.responseType) e['responseType'] = 'Response type is required.';
   if (!Number.isInteger(item.score) || item.score < 0 || item.score > 100) e['score'] = 'Score must be a whole number from 0 to 100.';
   if (item.responseType === 'Numeric' && item.expected.trim() && !/^\s*-?\d+(\.\d+)?\s*(-\s*-?\d+(\.\d+)?)?\s*[a-zA-Z%°]*\s*$/.test(item.expected)) {
     e['expected'] = 'Use a number or a range, e.g. 40-60 or 75%.';

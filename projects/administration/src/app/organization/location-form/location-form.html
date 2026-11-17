@@ -24,6 +24,7 @@
     <div class="field">
       <label for="loc-type">Location Type <span class="req">*</span></label>
       <select id="loc-type" name="type" [(ngModel)]="form.type" (ngModelChange)="onTypeChange()" [disabled]="typeLocked">
+        <option value="" disabled>Select Location Type</option>
         @for (t of types; track t) { <option [value]="t">{{ t }}</option> }
       </select>
       @if (typeLocked) { <small>Has child locations, so the type can't change.</small> }
@@ -43,25 +44,29 @@
     </div>
 
     <div class="field" [class.invalid]="errors['country']">
-      <label for="loc-country">Country</label>
+      <label for="loc-country">Country <span class="req">*</span></label>
       <select id="loc-country" name="country" [(ngModel)]="form.country" (ngModelChange)="onCountryChange()">
-        <option value="">Select...</option>
+        <option value="" disabled>Select Country</option>
         @for (c of countries; track c) { <option [value]="c">{{ c }}</option> }
       </select>
       @if (errors['country']) { <small>{{ errors['country'] }}</small> }
     </div>
-    <div class="field">
-      <label for="loc-city">City</label>
+    <div class="field" [class.invalid]="errors['city']">
+      <label for="loc-city">City <span class="req">*</span></label>
       <select id="loc-city" name="city" [(ngModel)]="form.city">
+        <option value="" disabled>Select City</option>
         @for (c of cities; track c) { <option [value]="c">{{ c }}</option> }
       </select>
+      @if (errors['city']) { <small>{{ errors['city'] }}</small> }
     </div>
 
-    <div class="field">
-      <label for="loc-tz">Time Zone</label>
+    <div class="field" [class.invalid]="errors['timeZone']">
+      <label for="loc-tz">Time Zone <span class="req">*</span></label>
       <select id="loc-tz" name="timeZone" [(ngModel)]="form.timeZone">
+        <option value="" disabled>Select Time Zone</option>
         @for (z of timeZones; track z) { <option [value]="z">{{ z }}</option> }
       </select>
+      @if (errors['timeZone']) { <small>{{ errors['timeZone'] }}</small> }
     </div>
     <div class="field" [class.invalid]="errors['contact']">
       <label for="loc-contact">Contact Person</label>
@@ -75,12 +80,14 @@
       @if (errors['contact']) { <small>{{ errors['contact'] }}</small> }
     </div>
 
-    <div class="field">
+    <div class="field" [class.invalid]="errors['status']">
       <label for="loc-status">Status <span class="req">*</span></label>
       <select id="loc-status" name="status" [(ngModel)]="form.status" class="status-select" [attr.data-status]="form.status">
+        <option value="" disabled>Select Status</option>
         <option value="Active">Active</option>
         <option value="Inactive">Inactive</option>
       </select>
+      @if (errors['status']) { <small>{{ errors['status'] }}</small> }
     </div>
 
     <div class="drawer__foot field--wide">

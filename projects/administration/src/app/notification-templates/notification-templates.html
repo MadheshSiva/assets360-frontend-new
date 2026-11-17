@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a routerLink="/administration">Administration</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <strong>Notification Templates</strong>
 </nav>
 
@@ -13,6 +13,7 @@
   <label class="org-picker">
     Organization
     <select [(ngModel)]="organization" name="organization">
+      <option value="" disabled>Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
@@ -76,21 +77,21 @@
         <div class="field">
           <label for="nt-f-cat">Category</label>
           <select id="nt-f-cat" [(ngModel)]="categoryFilter" name="categoryFilter">
-            <option value="">All categories</option>
+            <option value="">Select Category</option>
             @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
           </select>
         </div>
         <div class="field">
           <label for="nt-f-status">Status</label>
           <select id="nt-f-status" [(ngModel)]="statusFilter" name="statusFilter">
-            <option value="">All statuses</option>
+            <option value="">Select Status</option>
             @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
           </select>
         </div>
         <div class="field">
           <label for="nt-f-channel">Channel</label>
           <select id="nt-f-channel" [(ngModel)]="channelFilter" name="channelFilter">
-            <option value="">All channels</option>
+            <option value="">Select Channel</option>
             @for (c of channels; track c) { <option [value]="c">{{ channelLabels[c] }}</option> }
           </select>
         </div>
@@ -110,6 +111,7 @@
     <div class="panel__head">
       <h2>Templates ({{ visible().length }})</h2>
       <select class="select nt-sort" [(ngModel)]="sortBy" name="sortBy" aria-label="Sort templates">
+        <option value="" disabled>Select Sort Order</option>
         @for (s of sortOptions; track s) { <option [value]="s">{{ s }}</option> }
       </select>
     </div>

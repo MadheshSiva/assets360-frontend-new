@@ -1,4 +1,6 @@
-import { AfterViewInit, Component, ElementRef, HostListener, NgZone, OnDestroy, ViewChild, inject } from '@angular/core';
+import { AfterViewInit, Component, DestroyRef, ElementRef, HostListener, NgZone, OnDestroy, ViewChild, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subscription, catchError, forkJoin, map, of, switchMap } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
@@ -9,6 +11,7 @@ import {
   ArrowDown,
   ArrowUp,
   Archive,
+  Bell,
   Box,
   Building2,
   CalendarDays,
@@ -41,17 +44,57 @@ import {
   Truck,
   Upload,
   Users,
+  Radio,
   Wifi,
   WifiOff,
   Wrench,
 } from 'lucide-angular';
-import { AGE_BANDS, CATEGORIES, HEALTH_COLORS, HealthBand, PORTFOLIO, PortfolioAsset, PortfolioStatus, SITES, STATUSES, STATUS_COLORS, ageYears, healthBand, isoDate } from './asset-overview-data';
+import { AGE_BANDS, CATEGORIES, HEALTH_COLORS, HealthBand, PORTFOLIO, PortfolioAsset, PortfolioStatus, STATUSES, STATUS_COLORS, ageYears, healthBand, isoDate } from './asset-overview-data';
 import { DrillDialog } from '../shared/drill-dialog/drill-dialog';
 import { Drill, DrillColumn, DrillRow, DrillValue, pct } from '../shared/drill-dialog/drill';
+import { AssetQuickView, QuickViewAsset, connectedAssetDrill, qvDate, qvDateTime, statusKey } from '../shared/asset-quick-view/quick-view';
+import { AssetDashboardCategories, AssetDashboardKpis, AssetPerformanceSummary, AssetStatusCounts, AssetTypeOption, InsightAsset, InsightAssetList, InsightEndpoint, ConnectedAssetDetail, Dashboard, LocationUpdateTag, LocationUpdates, SiteOption, TopSite } from '../services/dashboard/dashboard';
+
+/** KPI window: "Last 30 days" for api/asset-performance/summary (vs. previous 30 days) and days=30 for api/asset-dashboard/kpis. */
+const KPI_DAYS = 30;
+
+type KpiKind = 'total' | 'active' | 'maintenance' | 'critical' | 'health';
+type KpiState = 'loading' | 'ok' | 'error';
 
 type AsOf = 'today' | '30' | '90';
 type Insight = '' | 'critical' | 'maintenance' | 'owner' | 'documents';
 type QuickTab = 'overview' | 'location' | 'maintenance' | 'financial' | 'documents';
+
+/** A site on "Asset Distribution by Site": counts from GET api/asset-dashboard/locations, movement from
+ * GET api/asset-dashboard/location-updates?siteId=, position from the master-data site (null when it has none). */
+interface SiteMapRow {
+  siteId: string;
+  name: string;
+  lat: number | null;
+  lng: number | null;
+  totalAssets: number;
+  onlinePercent: number;
+  /** Location updates in the last KPI_DAYS days. */
+  updates: number;
+  tags: LocationUpdateTag[];
+  /** Which side of the pin the card sits on. */
+  card: 'left' | 'right';
+}
+
+/** [lat, lng] when both are real coordinates (0,0 counts as unset). */
+function point(lat: number | null | undefined, lng: number | null | undefined): [number, number] | null {
+  if (lat == null || lng == null) return null;
+  const a = Number(lat);
+  const b = Number(lng);
+  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a) <= 90 && Math.abs(b) <= 180 && !(a === 0 && b === 0) ? [a, b] : null;
+}
+
+/** Average of the given points; null when there are none. */
+function centre(points: ([number, number] | null)[]): [number, number] | null {
+  const ok = points.filter((p): p is [number, number] => !!p);
+  if (!ok.length) return null;
+  return [ok.reduce((s, p) => s + p[0], 0) / ok.length, ok.reduce((s, p) => s + p[1], 0) / ok.length];
+}
 
 /** One asset as it stood on the selected date. */
 interface Snapshot extends PortfolioAsset {
@@ -87,8 +130,8 @@ const AP = { l: 36, r: 6, t: 22, b: 8 };
 })
 export class AssetOverview implements AfterViewInit, OnDestroy {
   readonly icons = {
-    ArrowDown, ArrowUp, Archive, Box, Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CircleDollarSign, CirclePause, CirclePlay, ClipboardList, Cog, Database,
-    ExternalLink, Factory, FileText, FileUp, HardHat, Heart, HeartPulse, House, Lightbulb, MapPin, Monitor, PieChart, Plus, Power, Settings, Trash2, TriangleAlert, Truck, Upload,
+    ArrowDown, ArrowUp, Archive, Bell, Box, Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CircleDollarSign, CirclePause, CirclePlay, ClipboardList, Cog, Database,
+    ExternalLink, Factory, FileText, FileUp, HardHat, Heart, HeartPulse, House, Lightbulb, MapPin, Monitor, PieChart, Plus, Power, Radio, Settings, Trash2, TriangleAlert, Truck, Upload,
     Users, Wifi, WifiOff, Wrench,
   };
   readonly categoryIcons: Record<string, typeof Factory> = { factory: Factory, truck: Truck, building: Building2, monitor: Monitor, wrench: Wrench, 'hard-hat': HardHat };
@@ -96,7 +139,10 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
     Active: CirclePlay, Idle: CirclePause, 'In Transit': Truck, 'Under Maintenance': Wrench, Retired: Archive, Disposed: Trash2,
   };
   readonly categories = CATEGORIES;
-  readonly sites = SITES.map((s) => s.name);
+  /** "Site" dropdown, from GET api/master-data/sites?clientId=. */
+  sites: string[] = [];
+  /** Rows of GET api/master-data/asset-types behind the "Asset Type" dropdown. */
+  private assetTypes: AssetTypeOption[] = [];
   readonly statuses = STATUSES;
   readonly statusColors = STATUS_COLORS;
   readonly healthColors = HEALTH_COLORS;
@@ -129,8 +175,6 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
 
   /** Assets on the selected date that pass the filters; rebuilt by apply(). */
   assets: Snapshot[] = [];
-  /** Same filters, 30 days before the selected date (for the KPI change). */
-  private previous: Snapshot[] = [];
 
   @ViewChild('mapEl') private mapEl?: ElementRef<HTMLDivElement>;
   @ViewChild('agingEl') private agingEl?: ElementRef<HTMLDivElement>;
@@ -141,8 +185,44 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly zone = inject(NgZone);
   private readonly today = new Date();
+  private readonly dashboardApi = inject(Dashboard);
+  private readonly destroyRef = inject(DestroyRef);
+  /** Asset Quick View: registered assets from GET api/asset-registrations, one at a time. */
+  readonly qv = new AssetQuickView(this.dashboardApi, this.destroyRef);
+  readonly statusKey = statusKey;
+  readonly qvDate = qvDate;
+  readonly qvDateTime = qvDateTime;
+
+  readonly kpiDays = KPI_DAYS;
+  // KPI cards, each from an existing API; a source is null until it answers and 'error' when it failed.
+  /** Total / Active / Under Maintenance: GET api/asset-dashboard/statuses?includeAssets=false (Asset service). */
+  statusData: AssetStatusCounts | null | 'error' = null;
+  /** Total Assets change and Avg Asset Health Score: GET api/asset-performance/summary?datePreset=Last 30 days (Report Analytics). */
+  performance: AssetPerformanceSummary | null | 'error' = null;
+  /** GET api/asset-dashboard/kpis: only its connected assets are used here (Quick View connectivity). */
+  kpiData: AssetDashboardKpis | null = null;
+  /** "Asset Portfolio by Category" from GET api/asset-dashboard/categories; null until the first response. */
+  categoryData: AssetDashboardCategories | null = null;
+  categoryLoading = false;
+  /** Quick Insights lists from the API, by insight; missing until loaded. */
+  insightData: Partial<Record<Insight, InsightAssetList>> = {};
+  /** GET api/asset-dashboard/critical-assets failed (Critical Assets card shows "Could not load"). */
+  criticalFailed = false;
+  /** "Asset Distribution by Site", one row per site the dashboard API knows. */
+  siteRows: SiteMapRow[] = [];
+  sitesLoading = false;
+  readonly siteDays = KPI_DAYS;
+  private siteSub?: Subscription;
+  /** Asset type the site rows were fetched for; null before the first fetch. */
+  private siteMapType: string | null = null;
 
   constructor() {
+    this.loadKpiSources();
+    this.loadConnected();
+    this.loadFilterOptions();
+    this.loadCategories();
+    this.loadInsights();
+    this.qv.load();
     this.apply();
     const first = [...this.assets].filter((a) => a.criticality === 'Critical').sort((a, b) => b.value - a.value)[0] ?? this.assets[0];
     this.selectedId = first?.id ?? '';
@@ -175,9 +255,11 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
     this.apply();
   }
 
-  /** Types offered for the chosen category. */
+  /** Types offered in the dropdown: the API types of the chosen category, or all when none belong to it. */
   get types(): string[] {
-    return [...new Set(PORTFOLIO.filter((a) => !this.category || a.category === this.category).map((a) => a.type))].sort();
+    const inCategory = this.assetTypes.filter((t) => t.category?.name === this.category);
+    const list = this.category && inCategory.length ? inCategory : this.assetTypes;
+    return [...new Set(list.map((t) => t.assetTypeName))].sort((a, b) => a.localeCompare(b));
   }
 
   onCategory(): void {
@@ -187,8 +269,12 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
 
   apply(): void {
     this.assets = this.snapshot(this.asOfDate, this.asOf === 'today');
-    this.previous = this.snapshot(new Date(this.asOfDate.getTime() - 30 * DAY), false);
     this.rowPage = 0;
+    // location-updates filters by asset type; site / category / status only highlight on the map
+    if (this.siteMapType !== this.type) {
+      this.siteMapType = this.type;
+      this.loadSiteMap();
+    }
     this.drawSites();
   }
 
@@ -206,40 +292,143 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
 
   // ===== KPIs =====
 
-  private figures(list: Snapshot[]) {
-    const assessed = list.filter((a) => a.hp !== null);
+  /** Fills the Site and Asset Type dropdowns from master data (active, non-deleted rows). */
+  loadFilterOptions(): void {
+    const live = <T extends { status: string; isDeleted: boolean }>(rows: T[] | null) => (rows ?? []).filter((r) => !r.isDeleted && r.status !== 'Inactive');
+    this.dashboardApi
+      .getSites()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => (this.sites = [...new Set(live(res).map((s) => s.siteName).filter(Boolean))].sort((a, b) => a.localeCompare(b))),
+        error: () => (this.sites = []),
+      });
+    this.dashboardApi
+      .getAssetTypes()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => (this.assetTypes = live(res).filter((t) => !!t.assetTypeName)),
+        error: () => (this.assetTypes = []),
+      });
+  }
+
+  /** Fetches the Quick Insights lists that have an API (due-for-maintenance is still local). */
+  loadInsights(): void {
+    const endpoints: [Insight, InsightEndpoint][] = [['critical', 'critical-assets'], ['owner', 'assets-without-custodian'], ['documents', 'assets-without-documents']];
+    for (const [key, endpoint] of endpoints) {
+      // critical-assets also drives the health donut's Critical band
+      const req = key === 'critical' ? this.dashboardApi.getCriticalAssets() : this.dashboardApi.getInsightAssets(endpoint);
+      req
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (res) => (this.insightData = { ...this.insightData, [key]: res }),
+          // critical stays unset on error so the health donut falls back to local data (Quick Insights shows 0 either way)
+          error: () => {
+            if (key === 'critical') this.criticalFailed = true;
+            else this.insightData = { ...this.insightData, [key]: { count: 0, totalAssets: 0, assets: [] } };
+          },
+        });
+    }
+  }
+
+  /** Fetches the asset counts per category once, when the page opens. */
+  loadCategories(): void {
+    this.categoryLoading = true;
+    this.dashboardApi
+      .getCategories()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => {
+          this.categoryData = res;
+          this.categoryLoading = false;
+        },
+        error: () => {
+          this.categoryData = null;
+          this.categoryLoading = false;
+        },
+      });
+  }
+
+  /** Fetches the KPI cards' sources: asset statuses (Asset service) and the asset performance summary (Report Analytics). */
+  loadKpiSources(): void {
+    this.dashboardApi
+      .getStatusCounts(undefined, false)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: (res) => (this.statusData = res), error: () => (this.statusData = 'error') });
+    this.dashboardApi
+      .getAssetPerformanceSummary(`Last ${KPI_DAYS} days`)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: (res) => (this.performance = res), error: () => (this.performance = 'error') });
+  }
+
+  /** Connected assets (GET api/asset-dashboard/kpis) for the Quick View's connectivity; not shown as cards here. */
+  loadConnected(): void {
+    this.dashboardApi
+      .getKpis(KPI_DAYS)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => {
+          this.kpiData = res;
+          this.qv.setConnected(res?.connectedAssetDetails ?? []);
+        },
+        error: () => (this.kpiData = null),
+      });
+  }
+
+  /**
+   * The KPI cards' figures from the existing APIs. A figure is null while its source loads or when it failed;
+   * the matching *State says which ('loading' shows …, 'error' shows – with "Could not load").
+   * Lifecycle Value has no API in any service yet, so it is not here.
+   */
+  get kpis() {
+    const st = this.statusData === 'error' ? null : this.statusData;
+    const perf = this.performance === 'error' ? null : this.performance?.data ?? null;
+    const crit = this.insightData.critical;
+    const state = (src: unknown, failed: boolean): KpiState => (src ? 'ok' : failed ? 'error' : 'loading');
+    const statusState = state(st, this.statusData === 'error');
+    const perfState = state(perf, this.performance === 'error');
+    const count = (status: string) => st?.statuses.find((s) => s.status.toLowerCase() === status.toLowerCase())?.count ?? 0;
+    const round = (v: number | null | undefined) => (v === null || v === undefined ? null : Math.round(v * 10) / 10);
+    const active = st ? count('Active') : null;
+    const maintenance = st ? count('Under Maintenance') : null;
+    const health = perf?.averageHealthScore;
     return {
-      total: list.length,
-      active: list.filter((a) => a.st === 'Active').length,
-      maintenance: list.filter((a) => a.st === 'Under Maintenance').length,
-      critical: list.filter((a) => a.criticality === 'Critical').length,
-      health: assessed.length ? Math.round((assessed.reduce((s, a) => s + (a.hp ?? 0), 0) / assessed.length) * 10) / 10 : 0,
-      value: list.filter((a) => a.st !== 'Disposed').reduce((s, a) => s + a.value, 0),
+      total: st?.totalAssets ?? null, totalState: statusState,
+      // Report Analytics: assets in service vs. the previous 30 days
+      totalChange: round(perf?.totalAssets.change),
+      active, activePct: st && active !== null ? pct(active, st.totalAssets) : 0, activeState: statusState,
+      maintenance, maintenancePct: st && maintenance !== null ? pct(maintenance, st.totalAssets) : 0, maintenanceState: statusState,
+      critical: crit?.count ?? null, criticalPct: crit ? pct(crit.count, crit.totalAssets) : 0, criticalState: state(crit, this.criticalFailed),
+      // null value with the summary loaded = no asset has a condition assessment yet
+      health: round(health?.value), healthState: perfState,
+      healthChange: round(health?.change), healthUnit: health?.changeUnit === 'points' ? ' pts' : '%',
     };
   }
 
-  get kpis() {
-    const now = this.figures(this.assets);
-    const was = this.figures(this.previous);
-    const change = (a: number, b: number) => (b ? Math.round(((a - b) / b) * 1000) / 10 : null);
-    return {
-      ...now,
-      activePct: now.total ? Math.round((now.active / now.total) * 1000) / 10 : 0,
-      totalChange: change(now.total, was.total),
-      maintenanceChange: change(now.maintenance, was.maintenance),
-      criticalChange: change(now.critical, was.critical),
-      healthChange: was.health ? Math.round((now.health - was.health) * 10) / 10 : null,
-      valueChange: change(now.value, was.value),
-    };
+  /** Placeholder for a figure that is not there: … while loading, – when it could not be loaded or has no data. */
+  blank(s: KpiState): string {
+    return s === 'loading' ? '…' : '–';
+  }
+
+  /** Connected assets returned with the KPIs. */
+  get connectedAssets(): ConnectedAssetDetail[] {
+    return this.kpiData?.connectedAssetDetails ?? [];
   }
 
   // ===== Portfolio, health, status =====
 
   get byCategory() {
-    const total = this.assets.length || 1;
-    const rows = CATEGORIES.map((c) => ({ ...c, count: this.assets.filter((a) => a.category === c.name).length }));
+    const rows = this.categoryData?.categories ?? [];
     const max = Math.max(1, ...rows.map((r) => r.count));
-    return rows.map((r) => ({ ...r, pct: Math.round((r.count / total) * 1000) / 10, bar: (r.count / max) * 100 }));
+    return rows.map((r, i) => {
+      // icon and colour from the local catalogue when the name matches, else cycle through it
+      const local = CATEGORIES.find((c) => c.name.toLowerCase() === r.category.toLowerCase()) ?? CATEGORIES[i % CATEGORIES.length];
+      return {
+        name: r.category, color: local.color, icon: local.icon, count: r.count,
+        pct: Math.round(r.percent * 10) / 10, bar: (r.count / max) * 100, subCategories: r.subCategories ?? [],
+        // sub-category lines under the row: bar on the same scale as categories, % is the share of this category
+        subs: (r.subCategories ?? []).map((sc) => ({ name: sc.subCategory, count: sc.count, pct: pct(sc.count, r.count), bar: (sc.count / max) * 100 })),
+      };
+    });
   }
 
   pickCategory(name: string): void {
@@ -247,13 +436,21 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
     this.onCategory();
   }
 
+  /** Assets per health band; Critical comes from GET api/asset-dashboard/critical-assets once loaded, the rest from the local portfolio. */
+  private healthCount(b: HealthBand): number {
+    const api = this.insightData.critical;
+    if (b === 'Critical' && api) return api.count;
+    return this.assets.filter((a) => healthBand(a.hp) === b).length;
+  }
+
   get health() {
-    const total = this.assets.length;
+    const bands: HealthBand[] = ['Healthy', 'Warning', 'Critical', 'Unknown'];
+    const counts = bands.map((b) => this.healthCount(b));
+    const total = counts.reduce((s, n) => s + n, 0);
     const C = 2 * Math.PI * 46;
     let acc = 0;
-    const bands: HealthBand[] = ['Healthy', 'Warning', 'Critical', 'Unknown'];
-    const rows = bands.map((b) => {
-      const count = this.assets.filter((a) => healthBand(a.hp) === b).length;
+    const rows = bands.map((b, i) => {
+      const count = counts[i];
       const len = total ? (count / total) * C : 0;
       const mid = (acc + len / 2) / C;
       const row = {
@@ -289,10 +486,10 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
 
   get insights(): { key: Insight; count: number; label: string; icon: typeof Factory; tone: string }[] {
     return [
-      { key: 'critical', count: this.assets.filter((a) => a.criticality === 'Critical').length, label: 'critical assets', icon: TriangleAlert, tone: 'red' },
+      { key: 'critical', count: this.insightData.critical?.count ?? 0, label: 'critical assets', icon: TriangleAlert, tone: 'red' },
       { key: 'maintenance', count: this.assets.filter((a) => this.dueSoon(a)).length, label: 'due for maintenance', icon: Wrench, tone: 'amber' },
-      { key: 'owner', count: this.assets.filter((a) => !a.owner).length, label: 'assets without owner', icon: Users, tone: 'blue' },
-      { key: 'documents', count: this.assets.filter((a) => !a.documents).length, label: 'assets with missing documents', icon: FileText, tone: 'violet' },
+      { key: 'owner', count: this.insightData.owner?.count ?? 0, label: 'assets without custodian', icon: Users, tone: 'blue' },
+      { key: 'documents', count: this.insightData.documents?.count ?? 0, label: 'assets with missing documents', icon: FileText, tone: 'violet' },
     ];
   }
 
@@ -323,12 +520,66 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** Default and "Critical Assets" views list GET api/asset-dashboard/critical-assets once it has loaded; other insights stay local. */
+  get apiTable(): boolean {
+    return (this.insight === '' || this.insight === 'critical') && !!this.insightData.critical;
+  }
+
+  /** Critical assets from the API, narrowed by the Site / Category / Type filters (matched by name, case-insensitive). */
+  get apiRows(): InsightAsset[] {
+    const same = (v: string | null, f: string) => !f || (v ?? '').toLowerCase() === f.toLowerCase();
+    return (this.insightData.critical?.assets ?? []).filter((a) => same(a.siteName, this.site) && same(a.category, this.category) && same(a.assetType, this.type));
+  }
+
+  /** Row count of whichever list the table shows. */
+  get tableCount(): number {
+    return this.apiTable ? this.apiRows.length : this.tableRows.length;
+  }
+
+  private page<T>(list: T[]): T[] {
+    return this.showAllRows ? list.slice(this.rowPage * this.rowPageSize, (this.rowPage + 1) * this.rowPageSize) : list.slice(0, 5);
+  }
+
   get pageRows(): Snapshot[] {
-    return this.showAllRows ? this.tableRows.slice(this.rowPage * this.rowPageSize, (this.rowPage + 1) * this.rowPageSize) : this.tableRows.slice(0, 5);
+    return this.page(this.tableRows);
+  }
+
+  get pageApiRows(): InsightAsset[] {
+    return this.page(this.apiRows);
   }
 
   get rowPages(): number {
-    return Math.max(1, Math.ceil(this.tableRows.length / this.rowPageSize));
+    return Math.max(1, Math.ceil(this.tableCount / this.rowPageSize));
+  }
+
+  /** Pill class for an API criticality (Critical / High / Medium / Low). */
+  critClass(c: string | null): string {
+    return { critical: 'sev--critical', high: 'sev--warning', medium: 'sev--info' }[(c ?? '').toLowerCase()] ?? 'sev--low';
+  }
+
+  /** Details popup for a row of the critical-assets API. */
+  openCriticalAsset(a: InsightAsset): void {
+    this.drill = this.insightAssetDrill(a);
+  }
+
+  /** Details of one dashboard-API asset row (also opened from the KPI card lists); shows it in Quick View too. */
+  private insightAssetDrill(a: InsightAsset): Drill {
+    this.showQuick(a.assetRegistrationId);
+    return {
+      title: `${a.assetTag} · ${a.assetName}`,
+      subtitle: [[a.category, a.subCategory].filter(Boolean).join(' / '), a.assetType, a.siteName].filter(Boolean).join(' · ') || 'Asset',
+      stats: [
+        { label: 'Criticality', value: a.criticality ?? '-', color: (a.criticality ?? '').toLowerCase() === 'critical' ? '#dc2626' : undefined },
+        { label: 'Status', value: a.assetStatus ?? '-' },
+        { label: 'Documents', value: a.documentCount },
+      ],
+      columns: [{ key: 'field', label: 'Field' }, { key: 'value', label: 'Value' }],
+      rows: [
+        ['Asset Tag', a.assetTag], ['Asset Name', a.assetName], ['Category', a.category], ['Sub-category', a.subCategory], ['Asset Type', a.assetType],
+        ['Site', a.siteName], ['Location', a.locationPath],
+        ['Custodian', a.custodianName ? `${a.custodianName}${a.custodianDepartment ? ' (' + a.custodianDepartment + ')' : ''}` : 'Not assigned'],
+      ].map(([field, value]) => ({ cells: { field: field as string, value: (value as string | null) || '-' } })),
+    };
   }
 
   // ===== Aging =====
@@ -368,20 +619,68 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
 
   // ===== Sites & map =====
 
-  get siteStats() {
-    return SITES.map((s) => {
-      const list = this.assets.filter((a) => a.site === s.name);
-      const healthy = list.filter((a) => healthBand(a.hp) === 'Healthy').length;
-      return { site: s, total: list.length, healthyPct: list.length ? Math.round((healthy / list.length) * 1000) / 10 : 0 };
-    });
+  /** Sites that can be pinned on the map. */
+  get pinnedSites(): SiteMapRow[] {
+    return this.siteRows.filter((r) => r.lat !== null && r.lng !== null);
+  }
+
+  /**
+   * Sites (GET api/asset-dashboard/locations) with their location updates for the last KPI_DAYS days
+   * (GET api/asset-dashboard/location-updates?siteId=, one call per site) and map position (master-data sites).
+   */
+  loadSiteMap(): void {
+    this.siteSub?.unsubscribe();
+    this.sitesLoading = true;
+    const assetType = this.type || undefined;
+    this.siteSub = forkJoin({
+      master: this.dashboardApi.getSites().pipe(catchError(() => of([] as SiteOption[]))),
+      locations: this.dashboardApi.getLocations().pipe(catchError(() => of(null))),
+    })
+      .pipe(
+        switchMap(({ master, locations }) => {
+          const sites = locations?.topSites ?? [];
+          if (!sites.length) return of([] as SiteMapRow[]);
+          return forkJoin(
+            sites.map((site) =>
+              this.dashboardApi.getLocationUpdates(KPI_DAYS, { siteId: site.siteId, assetType }).pipe(
+                catchError(() => of(null)),
+                map((u) => this.siteRow(site, u, master ?? [])),
+              ),
+            ),
+          );
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((rows) => {
+        // cards sit right of their pin, except the easternmost site's, which opens to the left
+        const east = rows.filter((r) => r.lng !== null).sort((a, b) => b.lng! - a.lng!)[0];
+        if (east && rows.filter((r) => r.lng !== null).length > 1) east.card = 'left';
+        this.siteRows = rows.sort((a, b) => b.totalAssets - a.totalAssets || a.name.localeCompare(b.name));
+        this.sitesLoading = false;
+        this.fitSites();
+        this.drawSites();
+      });
+  }
+
+  private siteRow(site: TopSite, u: LocationUpdates | null, master: SiteOption[]): SiteMapRow {
+    const name = site.siteName || site.siteId;
+    const m = master.find((x) => x.id === site.siteId) ?? master.find((x) => x.siteName?.trim().toLowerCase() === name.trim().toLowerCase());
+    const tags = u?.tags ?? [];
+    // the master-data site's position; without one, the centre of where the site's tags last moved to
+    const pos = point(m?.latitude, m?.longitude) ?? centre(tags.map((t) => point(t.lastToLatitude, t.lastToLongitude)));
+    return {
+      siteId: site.siteId, name, lat: pos?.[0] ?? null, lng: pos?.[1] ?? null,
+      totalAssets: site.totalAssets ?? 0, onlinePercent: Math.round((site.onlinePercent ?? 0) * 10) / 10,
+      updates: u?.totalCount ?? 0, tags, card: 'right',
+    };
   }
 
   private initMap(): void {
     const el = this.mapEl?.nativeElement;
     if (!el) return;
     this.map = L.map(el, { zoomControl: false, attributionControl: true, scrollWheelZoom: false });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 18, subdomains: 'abcd', attribution: '&copy; OpenStreetMap &copy; CARTO',
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(this.map);
     this.siteLayer = L.layerGroup().addTo(this.map);
     this.fitSites();
@@ -395,28 +694,35 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
     this.mapResize.observe(el);
   }
 
-  /** Fits all sites, with padding scaled to the map so small cards still get a usable zoom. */
+  /** Fits all pinned sites, with padding scaled to the map so small cards still get a usable zoom. */
   private fitSites(): void {
     const size = this.map?.getSize();
     if (!this.map || !size?.x || !size.y) return;
+    const pins = this.pinnedSites;
+    // No sites with coordinates: show a world view instead of fitting empty (invalid) bounds
+    if (!pins.length) {
+      this.map.setView([20, 0], 2);
+      return;
+    }
     const pad: [number, number] = [Math.min(120, size.x * 0.2), Math.min(70, size.y * 0.2)];
-    this.map.fitBounds(L.latLngBounds(SITES.map((s) => [s.lat, s.lng] as [number, number])), { padding: pad });
+    this.map.fitBounds(L.latLngBounds(pins.map((s) => [s.lat!, s.lng!] as [number, number])), { padding: pad, maxZoom: 12 });
   }
 
-  /** Each site: a pin plus a card with its asset count and healthy share. */
+  /** Each site: a pin plus a card with its asset count and online share (location updates are in the site popup). */
   private drawSites(): void {
     if (!this.map || !this.siteLayer) return;
     this.siteLayer.clearLayers();
-    for (const s of this.siteStats) {
-      const on = this.site === s.site.name;
+    const esc = (v: string) => v.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    for (const s of this.pinnedSites) {
+      const on = this.site === s.name;
       const dim = !!this.site && !on;
       const C = 2 * Math.PI * 9;
-      const ring = `<svg viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="12" r="9" fill="none" stroke="#e5e7eb" stroke-width="4"/><circle cx="12" cy="12" r="9" fill="none" stroke="#16a34a" stroke-width="4" stroke-dasharray="${(C * s.healthyPct) / 100} ${C}" transform="rotate(-90 12 12)"/></svg>`;
-      const html = `<div class="ao-site-card ao-site-card--${s.site.card}${on ? ' is-on' : ''}${dim ? ' is-dim' : ''}">
-          <strong>${s.site.name}</strong><span>${s.total.toLocaleString()} assets</span>
-          <span class="ao-site-health">${ring}<b>${s.healthyPct}%</b> Healthy</span></div><i class="ao-site-pin"></i>`;
-      L.marker([s.site.lat, s.site.lng], { icon: L.divIcon({ className: 'ao-site', html, iconSize: [0, 0] }), keyboard: true, title: s.site.name })
-        .on('click', () => this.openSite(s.site.name))
+      const ring = `<svg viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="12" r="9" fill="none" stroke="#e5e7eb" stroke-width="4"/><circle cx="12" cy="12" r="9" fill="none" stroke="#16a34a" stroke-width="4" stroke-dasharray="${(C * s.onlinePercent) / 100} ${C}" transform="rotate(-90 12 12)"/></svg>`;
+      const html = `<div class="ao-site-card ao-site-card--${s.card}${on ? ' is-on' : ''}${dim ? ' is-dim' : ''}">
+          <strong>${esc(s.name)}</strong><span>${s.totalAssets.toLocaleString()} assets</span>
+          <span class="ao-site-health">${ring}<b>${s.onlinePercent}%</b> Online</span></div><i class="ao-site-pin"></i>`;
+      L.marker([s.lat!, s.lng!], { icon: L.divIcon({ className: 'ao-site', html, iconSize: [0, 0] }), keyboard: true, title: s.name })
+        .on('click', () => this.zone.run(() => this.openSite(s)))
         .addTo(this.siteLayer);
     }
   }
@@ -432,9 +738,16 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
     return this.assets.find((a) => a.id === this.selectedId) ?? null;
   }
 
+  /** Highlights the row and shows the asset in the Quick View when it is registered under the same tag. */
   select(a: Snapshot): void {
     this.selectedId = a.id;
+    if (this.qv.showTag(a.id)) this.quickTab = 'overview';
+  }
+
+  /** Shows a registered asset in the Quick View. */
+  showQuick(assetRegistrationId: string): void {
     this.quickTab = 'overview';
+    this.qv.show(assetRegistrationId);
   }
 
   imageOf(a: PortfolioAsset): string | null {
@@ -492,67 +805,97 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
         { label: 'Last Service', value: this.fmtDate(a.lastService) }, { label: 'Next Service', value: this.fmtDate(a.nextService) },
         { label: 'Connectivity', value: a.connected ? 'Online' : 'Not connected' }, { label: 'Last Update', value: this.fmtDateTime(a.lastUpdate) },
       ],
-      actions: [{ label: 'Show in Quick View', run: () => this.select(a) }],
+      actions: this.qv.hasTag(a.id) ? [{ label: 'Show in Quick View', run: () => this.select(a) }] : [],
     };
   }
 
-  openKpi(kind: 'total' | 'active' | 'maintenance' | 'critical' | 'health' | 'value'): void {
-    const list = this.assets;
+  /** Drill-down of a KPI card; asset lists come from GET api/asset-dashboard/statuses and /critical-assets. */
+  openKpi(kind: KpiKind): void {
     const k = this.kpis;
-    const service = (a: Snapshot) => ({ last: a.lastService, next: a.nextService });
-    const serviceCols: DrillColumn[] = [{ key: 'last', label: 'Last Service' }, { key: 'next', label: 'Next Service' }];
+    const change = (v: number | null, unit = '%') => (v === null ? [] : [{ label: `vs. previous ${KPI_DAYS} days`, value: `${v > 0 ? '+' : ''}${v}${unit}` }]);
+    const columns: DrillColumn[] = [
+      { key: 'tag', label: 'Asset Tag' }, { key: 'name', label: 'Asset Name' }, { key: 'category', label: 'Category' }, { key: 'type', label: 'Type' },
+      { key: 'site', label: 'Site' }, { key: 'criticality', label: 'Criticality' }, { key: 'status', label: 'Status' },
+    ];
+    const rows = (list: InsightAsset[]): DrillRow[] => list.map((a) => ({
+      cells: {
+        tag: a.assetTag, name: a.assetName, category: a.category ?? '-', type: a.assetType ?? '-', site: a.siteName ?? '-',
+        criticality: a.criticality ?? '-', status: a.assetStatus ?? '-',
+      },
+      open: () => this.insightAssetDrill(a),
+    }));
+    // asset list of one status, fetched when the card is opened
+    const byStatus = (title: string, status: string, stats: Drill['stats']) => {
+      this.drill = { title, subtitle: 'Registered assets by status', stats, tableTitle: `${status} assets`, columns, rows: [], empty: 'Loading assets…' };
+      this.dashboardApi
+        .getStatusCounts(status)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (res) => {
+            if (this.drill?.title !== title) return;
+            const assets = res.statuses.find((s) => s.status.toLowerCase() === status.toLowerCase())?.assets ?? [];
+            this.drill = { ...this.drill, rows: rows(assets), empty: `No ${status.toLowerCase()} assets.` };
+          },
+          error: () => this.drill?.title === title && (this.drill = { ...this.drill, empty: 'Could not load the assets.' }),
+        });
+    };
+
     if (kind === 'total') {
-      this.drill = { title: 'Total Assets', subtitle: this.scope, stats: [{ label: 'Assets', value: k.total }, ...this.statusStats(list)], columns: this.assetColumns(), rows: this.assetRows(list) };
+      this.drill = {
+        title: 'Total Assets', subtitle: 'Registered assets by status',
+        stats: [{ label: 'Registered', value: k.total ?? '-' }, ...change(k.totalChange)],
+        tableTitle: 'Assets by status',
+        columns: [{ key: 'status', label: 'Status' }, { key: 'count', label: 'Assets', num: true }, { key: 'pct', label: 'Of total', num: true }],
+        rows: [], empty: 'Loading statuses…',
+      };
+      this.dashboardApi
+        .getStatusCounts(undefined, false)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (res) => {
+            if (this.drill?.title !== 'Total Assets') return;
+            this.drill = { ...this.drill, rows: res.statuses.map((s) => ({ cells: { status: s.status, count: s.count, pct: `${s.percent}%` } })), empty: 'No assets.' };
+          },
+          error: () => this.drill?.title === 'Total Assets' && (this.drill = { ...this.drill, empty: 'Could not load the statuses.' }),
+        });
     } else if (kind === 'active') {
-      const active = list.filter((a) => a.st === 'Active');
-      this.drill = {
-        title: 'Active Assets', subtitle: this.scope,
-        stats: [{ label: 'Active', value: k.active, color: STATUS_COLORS.Active }, { label: 'Of total assets', value: `${k.activePct}%` }, { label: 'Value', value: this.valueOf(active) }],
-        columns: this.assetColumns(), rows: this.assetRows(active),
-      };
+      byStatus('Active Assets', 'Active', [{ label: 'Active', value: k.active ?? '-', color: '#16a34a' }, { label: 'Of total assets', value: `${k.activePct}%` }]);
     } else if (kind === 'maintenance') {
-      const m = list.filter((a) => a.st === 'Under Maintenance');
-      this.drill = {
-        title: 'Assets Under Maintenance', subtitle: this.scope,
-        stats: [{ label: 'Under maintenance', value: k.maintenance, color: STATUS_COLORS['Under Maintenance'] }, { label: 'Of total assets', value: `${pct(k.maintenance, k.total)}%` }],
-        columns: this.assetColumns(...serviceCols), rows: this.assetRows(m, service),
-      };
+      byStatus('Assets Under Maintenance', 'Under Maintenance', [{ label: 'Under maintenance', value: k.maintenance ?? '-', color: '#d97706' }, { label: 'Of total assets', value: `${k.maintenancePct}%` }]);
     } else if (kind === 'critical') {
-      const c = list.filter((a) => a.criticality === 'Critical').sort((a, b) => b.value - a.value);
       this.drill = {
-        title: 'Critical Assets', subtitle: this.scope,
-        stats: [{ label: 'Critical', value: k.critical, color: '#dc2626' }, { label: 'Of total assets', value: `${pct(k.critical, k.total)}%` }, { label: 'Value', value: this.valueOf(c) }],
-        columns: this.assetColumns(...serviceCols), rows: this.assetRows(c, service),
-      };
-    } else if (kind === 'health') {
-      const bands: HealthBand[] = ['Healthy', 'Warning', 'Critical', 'Unknown'];
-      this.drill = {
-        title: 'Avg Asset Health Score', subtitle: this.scope,
-        stats: [{ label: 'Average', value: `${k.health}%` }, ...bands.map((b) => ({ label: b, value: list.filter((a) => healthBand(a.hp) === b).length, color: HEALTH_COLORS[b] }))],
-        columns: this.assetColumns(), rows: this.assetRows([...list].sort((a, b) => (a.hp ?? 101) - (b.hp ?? 101))),
+        title: 'Critical Assets', subtitle: 'Assets with criticality Critical',
+        stats: [{ label: 'Critical', value: k.critical ?? '-', color: '#dc2626' }, { label: 'Of total assets', value: `${k.criticalPct}%` }],
+        tableTitle: 'Critical assets', columns, rows: rows(this.insightData.critical?.assets ?? []), empty: 'No critical assets.',
       };
     } else {
-      const owned = list.filter((a) => a.st !== 'Disposed').sort((a, b) => b.value - a.value);
       this.drill = {
-        title: 'Lifecycle Value', subtitle: `Book value of assets not disposed · ${this.scope}`,
-        stats: [{ label: 'Total value', value: this.money(k.value) }, { label: 'Assets', value: owned.length }, { label: 'Average value', value: this.money(owned.length ? Math.round(k.value / owned.length) : 0) }],
-        columns: this.assetColumns({ key: 'acquired', label: 'Acquired' }), rows: this.assetRows(owned, (a) => ({ acquired: a.acquired })),
+        title: 'Avg Asset Health Score', subtitle: `Latest condition assessment of each asset · last ${KPI_DAYS} days`,
+        stats: [{ label: 'Average score', value: k.health === null ? '-' : `${k.health}%` }, ...change(k.healthChange, k.healthUnit)],
       };
     }
   }
 
   openCategory(name: string): void {
-    const list = this.assets.filter((a) => a.category === name);
+    const c = this.byCategory.find((r) => r.name === name);
+    if (!c) return;
     const on = this.category === name;
     this.drill = {
-      title: name, subtitle: `Asset category · ${this.scope}`,
-      stats: [{ label: 'Assets', value: list.length }, { label: 'Of portfolio', value: `${pct(list.length, this.assets.length)}%` }, { label: 'Value', value: this.valueOf(list) }],
-      columns: this.assetColumns({ key: 'type', label: 'Type' }), rows: this.assetRows(list, (a) => ({ type: a.type })),
+      title: name, subtitle: 'Asset category',
+      stats: [{ label: 'Assets', value: c.count }, { label: 'Of portfolio', value: `${c.pct}%` }, { label: 'Sub-categories', value: c.subCategories.length }],
+      tableTitle: 'Sub-categories',
+      columns: [{ key: 'sub', label: 'Sub-category' }, { key: 'count', label: 'Assets', num: true }, { key: 'pct', label: 'Of category', num: true }],
+      rows: c.subCategories.map((s) => ({ cells: { sub: s.subCategory, count: s.count, pct: `${pct(s.count, c.count)}%` } })),
+      empty: 'No sub-categories.',
       actions: [{ label: on ? 'Clear category filter' : `Filter dashboard to ${name}`, run: () => this.pickCategory(name) }],
     };
   }
 
   openHealthBand(band: HealthBand): void {
+    if (band === 'Critical' && this.insightData.critical) {
+      this.openInsightDrill('critical');
+      return;
+    }
     const list = this.assets.filter((a) => healthBand(a.hp) === band).sort((a, b) => (a.hp ?? 0) - (b.hp ?? 0));
     this.drill = {
       title: `${band} Assets`, subtitle: `Asset health distribution · ${this.scope}`,
@@ -574,6 +917,28 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
 
   openInsightDrill(key: Insight): void {
     const i = this.insights.find((x) => x.key === key);
+    const api = this.insightData[key];
+    if (key !== 'maintenance') {
+      const list: InsightAsset[] = api?.assets ?? [];
+      this.drill = {
+        title: this.capitalize(i?.label ?? ''), subtitle: 'All registered assets',
+        stats: [{ label: 'Assets', value: api?.count ?? 0 }, { label: 'Of portfolio', value: `${pct(api?.count ?? 0, api?.totalAssets ?? 0)}%` }],
+        columns: [
+          { key: 'tag', label: 'Asset Tag' }, { key: 'name', label: 'Asset Name' }, { key: 'category', label: 'Category' }, { key: 'type', label: 'Type' },
+          { key: 'site', label: 'Site' }, { key: 'criticality', label: 'Criticality', pill: { Critical: '#dc2626', High: '#f59e0b', Medium: '#2563eb', Low: '#16a34a' } },
+          { key: 'custodian', label: 'Custodian' }, { key: 'docs', label: 'Documents', num: true },
+        ],
+        rows: list.map((a) => ({
+          cells: {
+            tag: a.assetTag, name: a.assetName, category: [a.category, a.subCategory].filter(Boolean).join(' / ') || '-', type: a.assetType ?? '-',
+            site: a.siteName ?? '-', criticality: a.criticality ?? '-',
+            custodian: a.custodianName ? `${a.custodianName}${a.custodianDepartment ? ' (' + a.custodianDepartment + ')' : ''}` : 'Not assigned', docs: a.documentCount,
+          },
+        })),
+        empty: 'No assets.',
+      };
+      return;
+    }
     const list = this.insightList(key);
     const service = key === 'maintenance';
     this.drill = {
@@ -585,15 +950,28 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
     };
   }
 
-  openSite(name: string): void {
-    const list = this.assets.filter((a) => a.site === name);
-    const s = this.siteStats.find((x) => x.site.name === name);
-    const on = this.site === name;
+  openSite(s: SiteMapRow): void {
+    const on = this.site === s.name;
+    const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '-');
     this.drill = {
-      title: name, subtitle: `Site · ${this.scope}`,
-      stats: [{ label: 'Assets', value: list.length }, { label: 'Healthy', value: `${s?.healthyPct ?? 0}%`, color: HEALTH_COLORS.Healthy }, { label: 'Value', value: this.valueOf(list) }],
-      columns: this.assetColumns(), rows: this.assetRows(list),
-      actions: [{ label: on ? 'Clear site filter' : `Filter dashboard to ${name}`, run: () => this.pickSite(name) }],
+      title: s.name, subtitle: `Site · last ${KPI_DAYS} days${this.type ? ` · ${this.type}` : ''}`,
+      stats: [
+        { label: 'Assets', value: s.totalAssets }, { label: 'Online', value: `${s.onlinePercent}%`, color: HEALTH_COLORS.Healthy },
+        { label: 'Location Updates', value: s.updates }, { label: 'Tags Moved', value: s.tags.length },
+      ],
+      tableTitle: 'Location updates per tag',
+      columns: [
+        { key: 'tag', label: 'Tag ID' }, { key: 'count', label: 'Updates', num: true }, { key: 'at', label: 'Last Moved' },
+        { key: 'from', label: 'From Gateway' }, { key: 'to', label: 'To Gateway' }, { key: 'pos', label: 'Last Position' },
+      ],
+      rows: [...s.tags].sort((a, b) => b.count - a.count).map((t) => ({
+        cells: {
+          tag: t.tagId, count: t.count, at: fmt(t.lastChangedAt), from: t.lastFromGatewayId ?? '-', to: t.lastToGatewayId ?? '-',
+          pos: point(t.lastToLatitude, t.lastToLongitude)?.map((v) => v.toFixed(5)).join(', ') ?? '-',
+        },
+      })),
+      empty: `No location updates in the last ${KPI_DAYS} days.`,
+      actions: [{ label: on ? 'Clear site filter' : `Filter dashboard to ${s.name}`, run: () => this.pickSite(s.name) }],
     };
   }
 
@@ -627,21 +1005,34 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
     this.router.navigate([path]);
   }
 
+  /** Opens the asset's detail page in the Assets app. */
+  openDetails(a: QuickViewAsset): void {
+    this.router.navigate(['/assets/overview'], { queryParams: { id: a.registrationId, tag: a.tag } });
+  }
+
   exportReport(): void {
     const k = this.kpis;
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet([
       { Metric: 'As of', Value: isoDate(this.asOfDate) },
       { Metric: 'Filters', Value: `Site: ${this.site || 'All'}; Category: ${this.category || 'All'}; Type: ${this.type || 'All'}; Status: ${this.status || 'All'}` },
-      { Metric: 'Total Assets', Value: k.total }, { Metric: 'Active Assets', Value: k.active }, { Metric: 'Under Maintenance', Value: k.maintenance },
-      { Metric: 'Critical Assets', Value: k.critical }, { Metric: 'Avg Health Score %', Value: k.health }, { Metric: 'Lifecycle Value (USD)', Value: k.value },
+      { Metric: `KPI window`, Value: `Last ${KPI_DAYS} days` },
+      { Metric: 'Total Assets', Value: k.total ?? '' }, { Metric: 'Active Assets', Value: k.active ?? '' },
+      { Metric: 'Assets Under Maintenance', Value: k.maintenance ?? '' }, { Metric: 'Critical Assets', Value: k.critical ?? '' },
+      { Metric: 'Avg Asset Health Score %', Value: k.health ?? '' },
     ]), 'Summary');
     XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(this.byCategory.map((c) => ({ Category: c.name, Assets: c.count, '%': c.pct }))), 'By Category');
     XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(this.byStatus.map((s) => ({ Status: s.status, Assets: s.count, '%': s.pct }))), 'By Status');
-    XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(this.siteStats.map((s) => ({ Site: s.site.name, Assets: s.total, 'Healthy %': s.healthyPct }))), 'By Site');
-    XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(this.tableRows.map((a) => ({
-      'Asset ID': a.id, 'Asset Name': a.name, Category: a.category, Site: a.site, Health: a.hp ?? '', Criticality: a.criticality, 'Value (USD)': a.value, Status: a.st,
-    }))), this.tableTitle.slice(0, 31));
+    XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(this.siteRows.map((s) => ({ Site: s.name, Assets: s.totalAssets, 'Online %': s.onlinePercent, [`Location Updates (${KPI_DAYS}d)`]: s.updates }))), 'By Site');
+    const tableSheet = this.apiTable
+      ? this.apiRows.map((a) => ({
+          'Asset Tag': a.assetTag, 'Asset Name': a.assetName, Category: a.category ?? '', 'Sub-category': a.subCategory ?? '', 'Asset Type': a.assetType ?? '',
+          Site: a.siteName ?? '', Criticality: a.criticality ?? '', Status: a.assetStatus ?? '',
+        }))
+      : this.tableRows.map((a) => ({
+          'Asset ID': a.id, 'Asset Name': a.name, Category: a.category, Site: a.site, Health: a.hp ?? '', Criticality: a.criticality, 'Value (USD)': a.value, Status: a.st,
+        }));
+    XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(tableSheet), this.tableTitle.slice(0, 31));
     XLSX.writeFile(book, `Asset_Overview_${isoDate(this.asOfDate)}.xlsx`);
   }
 
@@ -663,7 +1054,7 @@ export class AssetOverview implements AfterViewInit, OnDestroy {
     return 'sev--' + healthBand(a.hp).toLowerCase();
   }
 
-  stClass(s: PortfolioStatus): string {
+  stClass(s: PortfolioStatus | string): string {
     return 'st--' + s.toLowerCase().replace(/ /g, '-');
   }
 

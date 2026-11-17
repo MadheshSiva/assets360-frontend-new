@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import {
   ArrowLeftRight, Box, ChartColumn, Check, ClipboardCheck, FileText, House, Coins, LayoutDashboard, Lock, LucideAngularModule, LucideIconData,
-  Minus, Settings, ShieldCheck, Wifi, Wrench, Database
+  Minus, Settings, ShieldCheck, Wifi, Wrench, Database, Factory, Layers
 } from 'lucide-angular';
 import { CellState, PERM_ACTIONS, PermAction, ROLE_MODULES, RoleRecord } from '../role-access.data';
 
@@ -19,7 +19,9 @@ const MODULE_ICONS: Record<string, LucideIconData> = {
   'Contracts & Warranty': FileText,
   Financial: Coins,
   'Reports & Analytics': ChartColumn,
-  Administration: Settings
+  Administration: Settings,
+  'WIP / Operations': Factory,
+  'Master Data Management': Layers
 };
 
 /**

@@ -41,7 +41,9 @@ import { MapsStore } from '../maps.store';
             }
           </h2>
           @if (plan; as p) {
-            <p>Type: {{ p.type }} | Format: {{ p.format }} | Size: {{ p.sizeMb }} MB | Updated: {{ date(p.updated) }}, {{ time(p.updated) }} by {{ p.updatedBy }}</p>
+            <p>Type: {{ p.type }} | Format: {{ p.format }} | Size: {{ p.sizeMb }} MB | Updated: {{ date(p.updated) }}{{ time(p.updated) ? ', ' + time(p.updated) : '' }}{{ p.updatedBy ? ' by ' + p.updatedBy : '' }}</p>
+          } @else if (store.plansLoading || store.treeLoading) {
+            <p>Loading floor plans…</p>
           } @else {
             <p>No floor plan uploaded for this location yet.</p>
           }
@@ -62,7 +64,7 @@ import { MapsStore } from '../maps.store';
                 <button type="button" role="menuitem" (click)="action('download')"><lucide-icon [img]="icons.Download" [size]="14"></lucide-icon> Download map</button>
                 <button type="button" role="menuitem" (click)="action('replace')"><lucide-icon [img]="icons.Upload" [size]="14"></lucide-icon> Replace floor plan</button>
                 <button type="button" role="menuitem" (click)="action('versions')"><lucide-icon [img]="icons.History" [size]="14"></lucide-icon> Version history</button>
-                <button type="button" role="menuitem" class="danger" (click)="action('clear')"><lucide-icon [img]="icons.Trash2" [size]="14"></lucide-icon> Clear all plots</button>
+                <button type="button" role="menuitem" class="danger" [disabled]="!store.editing || store.working" (click)="action('clear')"><lucide-icon [img]="icons.Trash2" [size]="14"></lucide-icon> Clear all plots</button>
               </div>
             }
           </div>
@@ -91,6 +93,7 @@ import { MapsStore } from '../maps.store';
           <lucide-icon [img]="icons.Plus" [size]="16"></lucide-icon>
         </button>
         <select class="zoom-select" aria-label="Zoom" [(ngModel)]="zoom">
+          <option [ngValue]="null" disabled>Select Zoom</option>
           @for (z of zoomLevels; track z) { <option [ngValue]="z">{{ z }}%</option> }
         </select>
       </div>
@@ -149,17 +152,20 @@ export class MapViewer {
   action(kind: 'download' | 'replace' | 'versions' | 'clear'): void {
     this.actionsOpen = false;
     const plan = this.plan;
-    if (kind === 'download') this.store.notify(plan ? `Downloading ${plan.fileName}` : 'No floor plan to download');
-    if (kind === 'replace') this.store.notify('Use Floor Plans > Add Floor Plan to upload a replacement');
-    if (kind === 'versions') this.versions.emit();
+    if (kind === 'download') {
+      if (plan) this.store.download(plan.fileUrl, plan.fileName);
+      else this.store.notify('No floor plan to download', 'error');
+    }
+    // A replacement is a new version of the plan
+    if (kind === 'replace' || kind === 'versions') this.versions.emit();
     if (kind === 'clear') {
-      this.store.checkpoint();
-      this.store.items.forEach((i) => {
-        i.x = null;
-        i.y = null;
-        i.zoneId = undefined;
-      });
-      this.store.notify('All plots cleared - use Undo to bring them back');
+      const ids = this.store.plotted.map((i) => i.id);
+      if (!ids.length) {
+        this.store.notify('Nothing is plotted on this floor plan');
+        return;
+      }
+      if (!confirm(`Remove all ${ids.length} plotted items from this floor plan?`)) return;
+      this.store.unplotMany(ids, 'All plots cleared - use Undo to bring them back');
     }
   }
 

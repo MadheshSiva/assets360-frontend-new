@@ -8,21 +8,21 @@
       <label class="filter">
         <span>Store</span>
         <select name="store" [(ngModel)]="draft.store">
-          <option value="">All</option>
+          <option value="">Select Store</option>
           @for (s of stores.all(); track s.code) { <option [value]="s.code">{{ s.name }}</option> }
         </select>
       </label>
       <label class="filter">
         <span>Bin Type</span>
         <select name="binType" [(ngModel)]="draft.binType">
-          <option value="">All</option>
+          <option value="">Select Bin Type</option>
           @for (t of binTypes; track t) { <option [value]="t">{{ t }}</option> }
         </select>
       </label>
       <label class="filter">
         <span>Status</span>
         <select name="status" [(ngModel)]="draft.status">
-          <option value="">All</option>
+          <option value="">Select Status</option>
           <option value="Active">Active</option>
           <option value="Inactive">Inactive</option>
         </select>

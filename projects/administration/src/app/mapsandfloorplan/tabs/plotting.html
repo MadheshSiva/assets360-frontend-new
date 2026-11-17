@@ -3,6 +3,7 @@
     <section class="panel">
       <span class="field-label">Location</span>
       <select class="select select--full" aria-label="Location" [ngModel]="store.selectedFloorId" (ngModelChange)="store.selectFloor($event)">
+        <option value="" disabled>Select Location</option>
         @for (f of store.floors; track f.id) { <option [value]="f.id">{{ f.label }}</option> }
       </select>
 
@@ -22,7 +23,7 @@
       </div>
 
       <div class="dd" style="display: flex; justify-content: flex-end; margin-bottom: 6px">
-        <button type="button" class="btn btn--primary btn--sm" [disabled]="!store.editing" (click)="togglePlotMenu($event, listTab)">
+        <button type="button" class="btn btn--primary btn--sm" [disabled]="!store.editing || store.working || store.creatingPlan || !store.canDraw" (click)="togglePlotMenu($event, listTab)">
           <lucide-icon [img]="icons.Plus" [size]="14"></lucide-icon> Plot {{ listTab === 'device' ? 'Device' : 'Asset' }}
         </button>
         @if (plotMenu === listTab) {
@@ -60,7 +61,7 @@
           </div>
         </div>
       } @empty {
-        <p class="list-empty">No {{ listTab }}s match.</p>
+        <p class="list-empty">{{ emptyText }}</p>
       }
     </section>
 
@@ -82,7 +83,7 @@
               </button>
             </div>
           } @empty {
-            <p class="list-empty">Everything is plotted.</p>
+            <p class="list-empty">{{ store.itemsLoading ? 'Loading…' : store.items.length ? 'Everything is plotted.' : 'No assets or devices registered yet.' }}</p>
           }
         </div>
       }
@@ -95,7 +96,7 @@
         <lucide-icon [img]="icons.MousePointer2" [size]="15"></lucide-icon> Select
       </button>
       <div class="dd">
-        <button type="button" class="btn" [disabled]="!store.editing" (click)="togglePlotMenu($event, 'device')">
+        <button type="button" class="btn" [disabled]="!store.editing || store.working || store.creatingPlan || !store.canDraw" (click)="togglePlotMenu($event, 'device')">
           <lucide-icon [img]="icons.Cpu" [size]="15"></lucide-icon> Plot Device <lucide-icon [img]="icons.ChevronDown" [size]="14"></lucide-icon>
         </button>
         @if (plotMenu === 'device') {
@@ -109,7 +110,7 @@
         }
       </div>
       <div class="dd">
-        <button type="button" class="btn" [disabled]="!store.editing" (click)="togglePlotMenu($event, 'asset')">
+        <button type="button" class="btn" [disabled]="!store.editing || store.working || store.creatingPlan || !store.canDraw" (click)="togglePlotMenu($event, 'asset')">
           <lucide-icon [img]="icons.Package" [size]="15"></lucide-icon> Plot Asset <lucide-icon [img]="icons.ChevronDown" [size]="14"></lucide-icon>
         </button>
         @if (plotMenu === 'asset') {
@@ -122,7 +123,7 @@
           </div>
         }
       </div>
-      <button type="button" class="btn" [disabled]="!store.editing" (click)="autoPlot()">
+      <button type="button" class="btn" [disabled]="!store.editing || store.working || store.creatingPlan || !store.canDraw" (click)="autoPlot()">
         <lucide-icon [img]="icons.Sparkles" [size]="15"></lucide-icon> Auto Plot (Bulk)
       </button>
     </ng-container>
@@ -130,18 +131,29 @@
     @if (placingId) {
       <p class="note placing-hint">Click on the map to place {{ selected?.name }} ({{ selected?.code }}). <button type="button" class="btn--link btn" (click)="placingId = null">Cancel</button></p>
     }
-    <app-map-canvas
-      [zoom]="v.zoom"
-      [showZones]="show.zones"
-      [showDevices]="show.devices && showFilter !== 'assets'"
-      [showAssets]="show.assets && showFilter !== 'devices'"
-      [showLabels]="show.labels"
-      [showItemLabels]="settings.labelMode !== 'None'"
-      [selectedItemId]="store.selectedItemId"
-      [placing]="!!placingId"
-      (itemSelect)="select($event)"
-      (place)="place($event)"
-    ></app-map-canvas>
+    <!-- the map, with the live asset popup over its top-right corner -->
+    <div class="map-stage">
+      <app-map-canvas
+        [zoom]="v.zoom"
+        [showZones]="show.zones"
+        [showDevices]="show.devices && showFilter !== 'assets'"
+        [showAssets]="show.assets && showFilter !== 'devices'"
+        [showLabels]="show.labels"
+        [showItemLabels]="settings.labelMode !== 'None'"
+        [selectedItemId]="store.selectedItemId"
+        [placing]="!!placingId"
+        [anchorItemId]="livePopup?.id ?? null"
+        [anchorZoneId]="zonePopup?.zone?.id ?? null"
+        (zoneTotalSelect)="openZoneTotals($event)"
+        [gatewayCounts]="gatewayCounts"
+        (anchorMove)="popupAnchor = $event"
+        (itemSelect)="select($event)"
+        (place)="place($event)"
+      ></app-map-canvas>
+      @if (livePopup; as p) {
+        <app-asset-live-popup [item]="p" [anchor]="popupAnchor" [zone]="zonePopupInfo" [gateway]="p.kind === 'device' ? gatewayOf(p) : null" [gatewayState]="gatewayState" (close)="closePopup()"></app-asset-live-popup>
+      }
+    </div>
 
     <div class="map-foot" foot>
       <label><input type="checkbox" [(ngModel)]="show.devices" /> Devices ({{ count('device') }})</label>
@@ -151,7 +163,7 @@
       <span class="map-foot__spacer"></span>
       Show
       <select class="zoom-select" aria-label="Show" [(ngModel)]="showFilter">
-        <option value="all">All Items</option>
+        <option value="all">Select Show</option>
         <option value="devices">Devices only</option>
         <option value="assets">Assets only</option>
       </select>
@@ -177,13 +189,13 @@
           @if (i.assetType) { <dt>Asset Type</dt><dd>{{ i.assetType }}</dd> }
           <dt>Model</dt><dd>{{ i.model ?? '—' }}</dd>
           <dt>Serial Number</dt><dd>{{ i.serial ?? '—' }}</dd>
-          <dt>Location</dt><dd>{{ store.locationLabel() }}</dd>
+          <dt>Location</dt><dd>{{ store.locationLabel() || '—' }}</dd>
           <dt>Zone</dt><dd>{{ selectedZoneLabel }}</dd>
           @if (i.x !== null) {
             <dt>Map Position</dt><dd>X: {{ metres(i).x }} m &nbsp; Y: {{ metres(i).y }} m</dd>
             <dt>Orientation</dt>
             <dd class="inline">
-              <input class="mini-input" type="number" step="15" aria-label="Orientation in degrees" [ngModel]="i.orientation" (ngModelChange)="rotate(i, $event)" [disabled]="!store.editing" /> °
+              <input class="mini-input" type="number" step="15" aria-label="Orientation in degrees" [ngModel]="i.orientation" (ngModelChange)="rotate(i, $event)" [ngModelOptions]="{ updateOn: 'blur' }" [disabled]="!store.editing || store.working" /> °
             </dd>
           }
           <dt>Icon &amp; Color</dt>
@@ -195,17 +207,17 @@
             </div>
           </dd>
           <dt>Status</dt><dd><span class="pill" [attr.data-tone]="i.status === 'Active' ? 'green' : 'grey'"><i></i>{{ i.status }}</span></dd>
-          <dt>Last Updated</dt><dd>{{ date(i.lastUpdated) }}, {{ time(i.lastUpdated) }}</dd>
+          <dt>Last Updated</dt><dd>{{ date(i.lastUpdated) }} {{ time(i.lastUpdated) }}</dd>
         </dl>
         <div class="action-grid">
-          <button type="button" class="btn btn--outline" [disabled]="!store.editing" (click)="startPlacing(i)">
+          <button type="button" class="btn btn--outline" [disabled]="!store.editing || store.working || store.creatingPlan || !store.canDraw" (click)="startPlacing(i)">
             <lucide-icon [img]="icons.Move" [size]="14"></lucide-icon> {{ i.x === null ? 'Plot on Map' : 'Reposition' }}
           </button>
           <button type="button" class="btn btn--outline" [disabled]="!store.editing" (click)="replaceIcon()">
             <lucide-icon [img]="icons.Image" [size]="14"></lucide-icon> Replace Icon
           </button>
           @if (i.x !== null) {
-            <button type="button" class="btn btn--danger btn--full" [disabled]="!store.editing" (click)="remove(i)">
+            <button type="button" class="btn btn--danger btn--full" [disabled]="!store.editing || store.working" (click)="remove(i)">
               <lucide-icon [img]="icons.Trash2" [size]="14"></lucide-icon> Remove Plot
             </button>
           }
@@ -232,6 +244,7 @@
         <div class="field">
           <label for="pl-label">Marker label</label>
           <select id="pl-label" [(ngModel)]="settings.labelMode">
+            <option value="" disabled>Select Marker Label</option>
             <option value="ID">Asset / Device ID</option>
             <option value="None">None</option>
           </select>

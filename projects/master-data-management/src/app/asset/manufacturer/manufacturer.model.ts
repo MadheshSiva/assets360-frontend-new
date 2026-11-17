@@ -33,7 +33,7 @@ export interface ManufacturerRecord {
   preferred: boolean;
   warrantyRegistration: boolean;
   autoCreateWarranty: boolean;
-  // DEMO MODE: count owned by the Documents module
+  // count owned by the Documents module
   documents: number;
   createdOn: string;
   createdBy: string;

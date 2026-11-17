@@ -1,4 +1,4 @@
-import { ChartTypeRecord, SyncStatusRecord, SystemSettings, UpdateSourceRecord } from './system-config.model';
+import { ChartTypeRecord, ConfigStatus, SyncStatusRecord, SystemSettings, UpdateSourceRecord } from './system-config.model';
 
 /* Option lists, blank records and default settings for System Configuration. */
 
@@ -7,15 +7,15 @@ export const CHART_CATEGORIES = ['Comparison', 'Trend', 'Distribution', 'KPI', '
 export const SOURCE_TYPES = ['Manual', 'Device', 'External', 'File', 'API', 'System'];
 
 export function blankSyncStatus(): SyncStatusRecord {
-  return { code: '', name: '', description: '', color: SYNC_COLORS[0], isSuccess: false, status: 'Active', createdOn: '', updatedOn: '' };
+  return { code: '', name: '', description: '', color: SYNC_COLORS[0], isSuccess: false, status: '' as ConfigStatus, createdOn: '', updatedOn: '' };
 }
 
 export function blankChartType(): ChartTypeRecord {
-  return { code: '', name: '', category: '', description: '', preview: 'column', image: null, status: 'Active', createdOn: '', updatedOn: '' };
+  return { code: '', name: '', category: '', description: '', preview: 'column', image: null, status: '' as ConfigStatus, createdOn: '', updatedOn: '' };
 }
 
 export function blankUpdateSource(): UpdateSourceRecord {
-  return { code: '', name: '', type: '', description: '', status: 'Active', createdOn: '', updatedOn: '' };
+  return { code: '', name: '', type: '', description: '', status: '' as ConfigStatus, createdOn: '', updatedOn: '' };
 }
 
 /* System Settings choices */
@@ -80,6 +80,6 @@ export function defaultSettings(): SystemSettings {
     numbering: { prefix: 'AST', pattern: '{PREFIX}-{YY}-{0000}', startNumber: 1, digits: 4, resetYearly: true, includeSite: false },
     integration: { erp: 'None', apiEnabled: true, rateLimitPerMinute: 120, webhookUrl: '', syncIntervalMinutes: 60, sources: [], failedSyncStatus: '' },
     backup: { frequency: 'Daily', time: '02:00', retentionDays: 30, auditRetentionMonths: 24, deletedRetentionDays: 90 },
-    other: { betaFeatures: false, helpdeskEmail: 'support@purpleiq.com', supportPhone: '+971 4 000 0000', termsUrl: '' }
+    other: { betaFeatures: false, helpdeskEmail: 'support@purpleiq.com', supportPhone: '', termsUrl: '' }
   };
 }

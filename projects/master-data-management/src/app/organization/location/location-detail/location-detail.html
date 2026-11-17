@@ -104,8 +104,10 @@
         <table class="grid-table">
           <thead><tr><th>Asset Tag</th><th>Name</th><th>Category</th><th>Condition</th><th>Status</th></tr></thead>
           <tbody>
-            @for (a of assets(location); track a.tag) {
+            @for (a of assets; track a.tag) {
               <tr><td class="mono">{{ a.tag }}</td><td>{{ a.name }}</td><td>{{ a.category }}</td><td>{{ a.condition }}</td><td><span class="tag" [attr.data-kind]="a.status">{{ a.status }}</span></td></tr>
+            } @empty {
+              <tr><td colspan="5" class="empty">No records found.</td></tr>
             }
           </tbody>
         </table>
@@ -117,8 +119,10 @@
         <table class="grid-table">
           <thead><tr><th>Name</th><th>Role</th><th>Shift</th><th>Phone</th></tr></thead>
           <tbody>
-            @for (p of people(location); track p.name) {
+            @for (p of people; track p.name) {
               <tr><td>{{ p.name }}</td><td>{{ p.role }}</td><td>{{ p.shift }}</td><td>{{ p.phone }}</td></tr>
+            } @empty {
+              <tr><td colspan="4" class="empty">No records found.</td></tr>
             }
           </tbody>
         </table>
@@ -149,8 +153,10 @@
         <table class="grid-table">
           <thead><tr><th>Document</th><th>Type</th><th>Size</th><th>Uploaded On</th><th>Uploaded By</th></tr></thead>
           <tbody>
-            @for (d of documents(location); track d.name) {
+            @for (d of documents; track d.name) {
               <tr><td>{{ d.name }}</td><td>{{ d.kind }}</td><td>{{ d.size }}</td><td>{{ d.uploadedOn }}</td><td>{{ d.uploadedBy }}</td></tr>
+            } @empty {
+              <tr><td colspan="5" class="empty">No records found.</td></tr>
             }
           </tbody>
         </table>
@@ -201,10 +207,13 @@
     @case ('activity') {
       <div class="card">
         <ol class="timeline">
-          @for (a of activity(location); track $index) {
+          @for (a of activity; track $index) {
             <li><span class="timeline__when">{{ formatDateTime(a.when) }}</span><span class="timeline__text"><strong>{{ a.who }}</strong> {{ a.text }}</span></li>
           }
         </ol>
+        @if (!activity.length) {
+          <p class="muted">No records found.</p>
+        }
       </div>
     }
   }

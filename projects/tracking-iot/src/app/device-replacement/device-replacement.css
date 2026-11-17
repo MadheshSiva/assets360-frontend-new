@@ -153,3 +153,7 @@ select.control {
 @media (max-width: 640px) {
   .toast { right: 12px; left: 12px; max-width: none; }
 }
+.hs--good { background: #e5f6ec; color: #15803d; }
+.hs--warning { background: var(--dr-warn-soft); color: var(--dr-warn); }
+.avail--reserved i { background: #f59e0b; }
+.load-error { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 13px; color: var(--dr-bad); }

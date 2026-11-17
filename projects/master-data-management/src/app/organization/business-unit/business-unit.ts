@@ -23,7 +23,7 @@ const EMPTY_FILTERS: BusinessUnitFilters = { search: '', status: '', organizatio
   selector: 'app-mdm-organization-business-unit',
   imports: [FormsModule, RouterLink, LucideAngularModule, BuForm, BuDetail],
   templateUrl: './business-unit.html',
-  styleUrl: '../../shared/styles/mdm-page.css'
+  styleUrls: ['../../shared/styles/mdm-page.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class BusinessUnitPage {
   readonly service = inject(BusinessUnitService);

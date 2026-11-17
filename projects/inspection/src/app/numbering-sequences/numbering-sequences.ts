@@ -109,16 +109,16 @@ export class NumberingSequencesPage implements OnInit {
       tenantId: null,
       sequenceCode: '',
       sequenceName: 'New Sequence',
-      numberType: 'Inspection',
+      numberType: '',
       prefix: 'NEW',
       separator: '-',
       yearFormat: 'YYYY',
-      sequenceDigits: 4,
+      sequenceDigits: null as unknown as number,
       startingNumber: 1,
       runningNumber: 1,
-      resetFrequency: 'Annually',
-      scope: 'Tenant-wide',
-      timezone: 'Asia/Dubai',
+      resetFrequency: '',
+      scope: '',
+      timezone: '',
       format: 'NEW-{YYYY}-{SEQ}',
       generateOnFinalCreation: true,
       doNotReuse: true,
@@ -199,7 +199,15 @@ export class NumberingSequencesPage implements OnInit {
       ? this.store.items().find((s) => s.isActive && s.numberType === d.numberType && s.id !== d.id)
       : undefined;
     const per = d.scope === 'Site-wide' ? 'site' : 'tenant';
+    const missing = [
+      !d.numberType && 'record type',
+      !d.sequenceDigits && 'sequence digits',
+      !d.resetFrequency && 'reset rule',
+      !d.scope && 'scope',
+      !d.timezone && 'timezone'
+    ].filter(Boolean);
     return [
+      ...(missing.length ? [{ ok: false, text: `Select ${missing.join(', ')}` }] : []),
       { ok: formatOk, text: formatOk ? 'Format valid' : 'Format must contain {SEQ}' },
       {
         ok: !conflict,

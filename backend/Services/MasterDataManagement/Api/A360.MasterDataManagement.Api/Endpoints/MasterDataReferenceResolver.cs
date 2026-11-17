@@ -37,7 +37,7 @@ public static class MasterDataReferenceResolver
 
     public static async Task<IResult?> ResolveAssetCategoryAsync(
         MasterDataReference? reference,
-        IAssetCategoryRepository categories,
+        ISharedAssetCategoryRepository categories,
         CancellationToken cancellationToken)
     {
         if (reference is null || string.IsNullOrWhiteSpace(reference.Id))
@@ -55,7 +55,7 @@ public static class MasterDataReferenceResolver
                 new { message = $"Asset category '{reference.Id}' was not found." });
         }
 
-        reference.Name = category.CategoryName;
+        reference.Name = category.Name;
         return null;
     }
 

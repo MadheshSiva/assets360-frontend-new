@@ -30,7 +30,7 @@
         <div class="field" [class.invalid]="errors.department">
           <label for="team-dept"><span class="req">*</span> Department</label>
           <select id="team-dept" name="department" [(ngModel)]="form.department">
-            <option value="" disabled>Select department</option>
+            <option value="" disabled>Select Department</option>
             @for (d of departments; track d) { <option [value]="d">{{ d }}</option> }
           </select>
           @if (errors.department) { <small>{{ errors.department }}</small> }
@@ -38,7 +38,7 @@
         <div class="field">
           <label for="team-leader">Team Leader</label>
           <select id="team-leader" name="leaderId" [(ngModel)]="form.leaderId" (ngModelChange)="onLeaderChange()">
-            <option value="">Select team leader</option>
+            <option value="">Select Team Leader</option>
             <optgroup label="Technicians">
               @for (p of technicianOptions; track p.id) { <option [value]="p.id">{{ p.name }} ({{ p.id }})</option> }
             </optgroup>
@@ -52,16 +52,18 @@
           <label for="team-desc">Description</label>
           <textarea id="team-desc" name="description" rows="3" [(ngModel)]="form.description"></textarea>
         </div>
-        <div class="field">
+        <div class="field" [class.invalid]="errors.status">
           <label for="team-status">Status</label>
           <div class="status-select">
             <i [attr.data-status]="form.status"></i>
             <select id="team-status" name="status" [(ngModel)]="form.status">
+              <option value="" disabled>Select Status</option>
               <option value="Active">Active</option>
               <option value="On Leave">On Leave</option>
               <option value="Inactive">Inactive</option>
             </select>
           </div>
+          @if (errors.status) { <small>{{ errors.status }}</small> }
         </div>
       }
 
@@ -89,6 +91,7 @@
         <div class="field">
           <label for="team-shift">Shift</label>
           <select id="team-shift" name="shiftCode" [(ngModel)]="form.shiftCode">
+            <option value="" disabled>Select Shift</option>
             <option value="">No fixed shift</option>
             @for (s of shifts.all(); track s.code) { <option [value]="s.code">{{ s.name }}@if (s.status === 'Inactive') { (inactive) }</option> }
           </select>
@@ -127,7 +130,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

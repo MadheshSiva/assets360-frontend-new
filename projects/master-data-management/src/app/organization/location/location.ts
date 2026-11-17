@@ -33,7 +33,7 @@ const EMPTY_FILTERS: LocationFilters = { search: '', siteId: '', buildingCode: '
   selector: 'app-mdm-organization-location',
   imports: [FormsModule, RouterLink, DecimalPipe, LucideAngularModule, LocationForm, LocationDetail],
   templateUrl: './location.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', './location.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', './location.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class LocationPage {
   readonly service = inject(LocationService);

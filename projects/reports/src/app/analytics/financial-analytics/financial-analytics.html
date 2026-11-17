@@ -14,36 +14,42 @@
   <label class="filter filter--period">
     <span>Period</span>
     <select [(ngModel)]="period" (ngModelChange)="apply()">
+      <option value="">Select Period</option>
       @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Organization</span>
     <select [(ngModel)]="organization" (ngModelChange)="apply()">
+      <option value="">Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Location</span>
     <select [(ngModel)]="location" (ngModelChange)="apply()">
+      <option value="">Select Location</option>
       @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Asset Category</span>
     <select [(ngModel)]="category" (ngModelChange)="apply()">
+      <option value="">Select Asset Category</option>
       @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Cost Center</span>
     <select [(ngModel)]="costCenter" (ngModelChange)="apply()">
+      <option value="">Select Cost Center</option>
       @for (c of costCenterOptions; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Currency</span>
     <select [(ngModel)]="currency" (ngModelChange)="apply()">
+      <option value="" disabled>Select Currency</option>
       @for (c of currencies; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>

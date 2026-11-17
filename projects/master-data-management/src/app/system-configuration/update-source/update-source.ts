@@ -23,7 +23,7 @@ interface Filters {
   selector: 'app-mdm-system-configuration-update-source',
   imports: [FormsModule, RouterLink, LucideAngularModule, UpdateSourceForm],
   templateUrl: './update-source.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../system-config.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../system-config.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class UpdateSourcePage extends ListPage<UpdateSourceRecord, Filters, SortKey> {
   readonly service = inject(UpdateSourceService);

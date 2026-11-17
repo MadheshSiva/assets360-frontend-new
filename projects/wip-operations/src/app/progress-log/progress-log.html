@@ -4,7 +4,7 @@
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <a routerLink="/wip-operations">WIP / Operations</a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <span class="crumb-current">Progress Log</span>
       </nav>
       <h1>Progress Log</h1>
@@ -18,7 +18,7 @@
 
   <!-- ===== Job ===== -->
   <div class="card job-strip">
-    <img class="job-img" [src]="job.image" alt="" />
+    <img *ngIf="job.image" class="job-img" [src]="job.image" alt="" />
     <div class="grow job-name">
       <a class="job-link plain" routerLink="/wip-operations/job-orders" [queryParams]="{ code: job.code }">{{ job.code }}</a> • {{ job.name }}
       <span class="pill pill--green"><span class="dot-sm"></span>{{ job.status }}</span>
@@ -49,10 +49,10 @@
       <section class="box" aria-labelledby="pl-tl">
         <div class="tl-head">
           <h3 id="pl-tl" class="grow">Execution Timeline</h3>
-          <label class="field"><span class="field-label">Date</span><select class="control" [(ngModel)]="date"><option value="">All dates</option><option *ngFor="let d of dates" [value]="d">{{ fmtDate(d) }}</option></select></label>
-          <label class="field"><span class="field-label">Stage</span><select class="control" [(ngModel)]="stageFilter"><option value="">All</option><option *ngFor="let s of stages" [value]="s.name">{{ s.name }}</option></select></label>
-          <label class="field"><span class="field-label">Update Type</span><select class="control" [(ngModel)]="typeFilter"><option value="">All</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
-          <label class="field"><span class="field-label">Logged By</span><select class="control" [(ngModel)]="byFilter"><option value="">All</option><option *ngFor="let p of people" [value]="p">{{ p }}</option></select></label>
+          <label class="field"><span class="field-label">Date</span><select class="control" [(ngModel)]="date"><option value="">Select Date</option><option *ngFor="let d of dates" [value]="d">{{ fmtDate(d) }}</option></select></label>
+          <label class="field"><span class="field-label">Stage</span><select class="control" [(ngModel)]="stageFilter"><option value="">Select Stage</option><option *ngFor="let s of stages" [value]="s.name">{{ s.name }}</option></select></label>
+          <label class="field"><span class="field-label">Update Type</span><select class="control" [(ngModel)]="typeFilter"><option value="">Select Update Type</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
+          <label class="field"><span class="field-label">Logged By</span><select class="control" [(ngModel)]="byFilter"><option value="">Select Logged By</option><option *ngFor="let p of people" [value]="p">{{ p }}</option></select></label>
         </div>
 
         <ol class="timeline">
@@ -93,6 +93,7 @@
           <thead><tr><th>Stage</th><th>Tasks (Completed / Total)</th><th>Status</th></tr></thead>
           <tbody>
             <tr *ngFor="let s of stages"><td>{{ s.name }}</td><td>{{ stageDone(s) }} / {{ s.tasks.length }}</td><td><span class="pill" [ngClass]="stageClass(stageStatus(s))">{{ stageStatus(s) }}</span></td></tr>
+            <tr *ngIf="!stages.length"><td colspan="3" class="empty">No stages.</td></tr>
           </tbody>
         </table>
       </section>
@@ -104,12 +105,12 @@
         <h3 id="pl-add">Add Progress Update</h3>
         <form class="add-form" (ngSubmit)="submitUpdate()">
           <label class="field span-2 inline-field"><span class="field-label">Job</span><input class="control" [value]="job.code" readonly aria-readonly="true" /></label>
-          <label class="field"><span class="field-label">Stage</span><select class="control" name="stage" [(ngModel)]="form.stage" (ngModelChange)="onStage()"><option *ngFor="let s of stages" [value]="s.name">{{ s.name }}</option></select></label>
-          <label class="field"><span class="field-label">Task</span><select class="control" name="task" [(ngModel)]="form.task" (ngModelChange)="form.complete = false"><option *ngFor="let t of tasksOf(form.stage)" [value]="t.id">{{ t.name }}{{ t.done ? ' (done)' : '' }}</option></select></label>
-          <label class="field"><span class="field-label">Update Type</span><select class="control" name="type" [(ngModel)]="form.type"><option *ngFor="let t of updateTypes" [value]="t">{{ t }}</option></select></label>
+          <label class="field"><span class="field-label">Stage</span><select class="control" name="stage" [(ngModel)]="form.stage" (ngModelChange)="onStage()"><option value="" disabled>Select Stage</option><option *ngFor="let s of stages" [value]="s.name">{{ s.name }}</option></select></label>
+          <label class="field"><span class="field-label">Task</span><select class="control" name="task" [(ngModel)]="form.task" (ngModelChange)="form.complete = false"><option value="" disabled>Select Task</option><option *ngFor="let t of tasksOf(form.stage)" [value]="t.id">{{ t.name }}{{ t.done ? ' (done)' : '' }}</option></select></label>
+          <label class="field"><span class="field-label">Update Type</span><select class="control" name="type" [(ngModel)]="form.type"><option value="" disabled>Select Update Type</option><option *ngFor="let t of updateTypes" [value]="t">{{ t }}</option></select></label>
           <label class="field"><span class="field-label">Event Time</span><input class="control" type="datetime-local" name="at" [(ngModel)]="form.at" /></label>
-          <label class="field"><span class="field-label">Operator</span><select class="control" name="op" [(ngModel)]="form.operator"><option *ngFor="let o of operators" [value]="o">{{ o }}</option></select></label>
-          <label class="field"><span class="field-label">Time Spent</span><select class="control" name="min" [(ngModel)]="form.minutes"><option *ngFor="let d of durations" [ngValue]="d">{{ d ? d + ' minutes' : 'None' }}</option></select></label>
+          <label class="field"><span class="field-label">Operator</span><select class="control" name="op" [(ngModel)]="form.operator"><option value="" disabled>Select Operator</option><option *ngFor="let o of operators" [value]="o">{{ o }}</option></select></label>
+          <label class="field"><span class="field-label">Time Spent</span><select class="control" name="min" [(ngModel)]="form.minutes"><option [ngValue]="null" disabled>Select Time Spent</option><option *ngFor="let d of durations" [ngValue]="d">{{ d ? d + ' minutes' : 'None' }}</option></select></label>
           <label class="field span-2"><span class="field-label">Notes</span><textarea class="control" rows="3" name="notes" [(ngModel)]="form.notes" placeholder="What was done?"></textarea></label>
           <div class="field span-2">
             <span class="field-label">Evidence</span>
@@ -161,6 +162,7 @@
             <td><span class="pill" [ngClass]="e.review === 'Reviewed' ? 'pill--green' : 'pill--amber'">{{ e.review }}</span><span class="sub">{{ e.reviewedBy }}</span></td>
             <td><button *ngIf="e.correctedBy === null && e.type !== 'System event'" type="button" class="btn btn-outline btn-xs" (click)="openCorrect(e)"><lucide-icon [img]="icons.Pencil" [size]="13"></lucide-icon>Correct</button></td>
           </tr>
+          <tr *ngIf="!timeline.length"><td colspan="7" class="empty">No entries match the filters.</td></tr>
         </tbody>
       </table>
     </div>
@@ -168,6 +170,7 @@
   </section>
 
   <!-- =================== Stage summary =================== -->
+  <p *ngIf="tab === 'stages' && !stages.length" class="box empty">No stages.</p>
   <div *ngIf="tab === 'stages'" class="stage-grid">
     <section *ngFor="let s of stages" class="box">
       <div class="box-head"><h3 class="grow">{{ s.name }}</h3><span class="pill" [ngClass]="stageClass(stageStatus(s))">{{ stageStatus(s) }}</span></div>
@@ -196,6 +199,7 @@
             <td><span class="pill" [ngClass]="o.disposition === 'Accepted' ? 'pill--green' : o.disposition === 'Awaiting QC' ? 'pill--amber' : 'pill--red'">{{ o.disposition }}</span></td>
             <td>{{ o.inspection }}</td><td>{{ o.location }}</td><td>{{ handover(o.serial) }}</td>
           </tr>
+          <tr *ngIf="!outputs.length"><td colspan="7" class="empty">No output recorded yet.</td></tr>
         </tbody>
       </table>
     </div>
@@ -232,6 +236,7 @@
           <button *ngIf="b.status === 'Open'" type="button" class="btn btn-outline btn-xs" (click)="resolveBlocker(b)">Mark resolved</button>
           <span *ngIf="b.status === 'Resolved'" class="pill pill--green">Resolved</span>
         </li>
+        <li *ngIf="!blockers.length" class="empty">No blockers.</li>
       </ul>
     </section>
 

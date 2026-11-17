@@ -5,7 +5,7 @@ import { DATA_SOURCES } from '../custom-reports.data';
 import { applySource, calcAsField, groupsOf, isNumeric, removeField } from '../custom-reports.engine';
 import { CustomReport, FieldDef } from '../custom-reports.model';
 
-type FieldView = 'all' | 'selected' | 'numeric';
+type FieldView = '' | 'selected' | 'numeric';
 
 interface TreeGroup {
   key: string;
@@ -26,6 +26,7 @@ interface TreeGroup {
       <label class="cr-inline-field">
         <span>Data source</span>
         <select class="select" [ngModel]="report.sourceKey" (ngModelChange)="changeSource($event)" aria-label="Data source">
+          <option value="" disabled>Select Data Source</option>
           @for (s of sources; track s.key) {
             <option [value]="s.key">{{ s.label }}</option>
           }
@@ -39,7 +40,7 @@ interface TreeGroup {
         <input type="search" placeholder="Search fields..." [(ngModel)]="query" aria-label="Search fields" />
       </label>
       <select class="select" [(ngModel)]="view" aria-label="Show fields">
-        <option value="all">All fields</option>
+        <option value="">Select Show Fields</option>
         <option value="selected">Selected only</option>
         <option value="numeric">Numeric only</option>
       </select>
@@ -86,11 +87,12 @@ export class FieldsStep {
   readonly sources = DATA_SOURCES;
 
   query = '';
-  view: FieldView = 'all';
+  view: FieldView = '';
   private collapsed = new Set<string>();
 
   get tree(): TreeGroup[] {
     const q = this.query.trim().toLowerCase();
+    if (!this.report.sourceKey) return [];
     const groups: TreeGroup[] = groupsOf(this.report.sourceKey).map((g) => ({ key: g.key, label: g.label, fields: g.fields }));
     if (this.report.calcFields.length) {
       groups.push({ key: 'calculated', label: 'Calculated Fields', fields: this.report.calcFields.map(calcAsField) });

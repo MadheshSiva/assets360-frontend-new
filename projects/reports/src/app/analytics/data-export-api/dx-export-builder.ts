@@ -17,7 +17,7 @@ const EMAIL = /^[^\s@,;]+@[^\s@,;]+\.[a-z]{2,}$/i;
 
 function blankDraft(datasetId: string): ExportDraft {
   return {
-    id: null, name: '', datasetId, format: 'CSV', fields: [], filters: [], delivery: 'S3', target: 's3://piq-asset360-exports/',
+    id: null, name: '', datasetId, format: 'CSV', fields: [], filters: [], delivery: 'S3', target: '',
     frequency: 'Daily', time: '02:00', encrypted: true
   };
 }
@@ -59,6 +59,7 @@ function blankDraft(datasetId: string): ExportDraft {
             <label class="dx-row-field">
               <span>Dataset</span>
               <select class="select" [ngModel]="draft.datasetId" (ngModelChange)="setDataset($event)" name="ds">
+                <option value="" disabled>Select Dataset</option>
                 @for (d of service.datasets; track d.id) {
                   <option [value]="d.id">{{ d.name }}</option>
                 }
@@ -67,6 +68,7 @@ function blankDraft(datasetId: string): ExportDraft {
             <label class="dx-row-field">
               <span>File format</span>
               <select class="select" [(ngModel)]="draft.format" name="fmt">
+                <option value="" disabled>Select Format</option>
                 @for (f of formats; track f) {
                   <option [value]="f">{{ f }}</option>
                 }
@@ -99,12 +101,14 @@ function blankDraft(datasetId: string): ExportDraft {
             @for (r of draft.filters; track $index; let i = $index) {
               <div class="dx-filter-row">
                 <select class="select" [(ngModel)]="r.field" [name]="'ff' + i" (ngModelChange)="fieldChanged(r)" aria-label="Field">
+                  <option value="" disabled>Select Field</option>
                   <option value="">Field…</option>
                   @for (fl of allFields; track fl.name) {
                     <option [value]="fl.name">{{ fl.name }}</option>
                   }
                 </select>
                 <select class="select" [(ngModel)]="r.operator" [name]="'fo' + i" aria-label="Operator">
+                  <option value="" disabled>Select Operator</option>
                   @for (o of operatorsFor(r); track o) {
                     <option [value]="o">{{ o }}</option>
                   }
@@ -134,7 +138,7 @@ function blankDraft(datasetId: string): ExportDraft {
               <label class="dx-row-field">
                 <span>Connection</span>
                 <select class="select" [(ngModel)]="draft.target" name="tgt">
-                  <option value="">Select…</option>
+                  <option value="">Select Connection</option>
                   @for (c of service.connections; track c.id) {
                     <option [value]="c.name">{{ c.name }} ({{ c.status }})</option>
                   }
@@ -149,6 +153,7 @@ function blankDraft(datasetId: string): ExportDraft {
             <label class="dx-row-field">
               <span>Frequency</span>
               <select class="select" [(ngModel)]="draft.frequency" name="freq">
+                <option value="" disabled>Select Frequency</option>
                 @for (fq of frequencies; track fq) {
                   <option [value]="fq">{{ fq }}</option>
                 }
@@ -160,6 +165,7 @@ function blankDraft(datasetId: string): ExportDraft {
                 <span class="dx-inline">
                   @if (draft.frequency === 'Weekly') {
                     <select class="select" [(ngModel)]="weekday" name="wd" aria-label="Day">
+                      <option value="" disabled>Select Day</option>
                       @for (d of weekdays; track d) {
                         <option [value]="d">{{ d }}</option>
                       }
@@ -289,7 +295,7 @@ export class ExportBuilder {
 
   get datasetSummary(): string {
     const ds = this.service.dataset(this.draft.datasetId);
-    return ds ? `${ds.rows.toLocaleString('en-US')} rows · ${this.allFields.length} fields · refreshed ${ds.refreshed.replace('T', ' ')}` : '';
+    return ds ? `${ds.rows.toLocaleString('en-US')} rows · ${this.allFields.length} fields · refreshed ${ds.refreshed ? ds.refreshed.replace('T', ' ') : '—'}` : '';
   }
 
   setDataset(id: string): void {
@@ -339,7 +345,7 @@ export class ExportBuilder {
 
   valueHint(r: ExportFilter): string {
     const t = this.fieldType(r.field);
-    if (t === 'date') return r.operator === 'in last' ? '30 days' : '2026-10-01';
+    if (t === 'date') return r.operator === 'in last' ? '30 days' : new Date().toISOString().slice(0, 10);
     if (t === 'text' || t === 'id') return 'Value';
     return '0';
   }
@@ -371,7 +377,7 @@ export class ExportBuilder {
 
   setDelivery(d: DeliveryType): void {
     this.draft.delivery = d;
-    this.draft.target = d === 'S3' ? 's3://piq-asset360-exports/' : d === 'Email' ? '' : d === 'Secure FTP' ? 'sftp.purpleiq.com/exports' : '';
+    this.draft.target = '';
   }
 
   get deliveryError(): string {

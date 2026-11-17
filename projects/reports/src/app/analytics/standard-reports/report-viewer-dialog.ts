@@ -29,6 +29,7 @@ import { formatPeriod, formatStamp } from './standard-reports.util';
           <div class="mini-stat"><div><span>Generated on</span><strong class="sr-viewer__small">{{ generated }}</strong></div></div>
           <div class="mini-stat"><div><span>Time zone</span><strong class="sr-viewer__small">{{ timeZone }}</strong></div></div>
         </div>
+        @if (rows.length) {
         <ra-cartesian-chart
           [labels]="labels"
           [series]="series"
@@ -39,6 +40,7 @@ import { formatPeriod, formatStamp } from './standard-reports.util';
           [legend]="false"
           [ariaLabel]="report.preview.measure + ' by ' + dimensionLabel"
         />
+        }
         <div class="table-wrap sr-viewer__table">
           <table class="table">
             <thead>
@@ -55,11 +57,14 @@ import { formatPeriod, formatStamp } from './standard-reports.util';
                   <td class="num">{{ r.display }}</td>
                   <td class="num">{{ r.share }}</td>
                 </tr>
+              } @empty {
+                <tr>
+                  <td colspan="3" class="empty">No data available for this report.</td>
+                </tr>
               }
             </tbody>
           </table>
         </div>
-        <p class="muted sr-viewer__note">DEMO MODE: sample figures generated from the Asset360 analytics model.</p>
         <div class="dialog__actions">
           <button type="button" class="btn" (click)="close.emit()">Close</button>
           <button type="button" class="btn btn--primary" (click)="exportCsv.emit(report)">
@@ -87,7 +92,7 @@ export class ReportViewerDialog implements OnChanges {
 
   get dimensionLabel(): string {
     const d = this.report.preview.dimension;
-    return d === 'category' ? 'Asset category' : d === 'site' ? 'Site' : 'Month (2026)';
+    return d === 'category' ? 'Asset category' : d === 'site' ? 'Site' : 'Month';
   }
 
   get shareLabel(): string {

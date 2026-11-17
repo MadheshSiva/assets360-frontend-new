@@ -23,7 +23,6 @@ import {
   Upload,
   X,
 } from 'lucide-angular';
-import DATA from './material-consumption.json';
 import { JobMaterials, MaterialException, MaterialLine, MaterialTx, TxType } from './material.model';
 
 type Tab = 'summary' | 'transactions' | 'issues' | 'trace' | 'cost';
@@ -49,26 +48,20 @@ interface MoveForm {
 }
 
 const PREFIX: Record<TxType, string> = { Issue: 'MI', Consumption: 'MC', Return: 'RT', Scrap: 'SC' };
-const OPERATORS = ['Ravi Patel', 'S. Ali', 'Ahmed Khan', 'Store Team', 'John Mathew'];
-/** Job orders that exist on the Job Orders page. */
-const KNOWN_JOBS = ['JO-2026-00438', 'JO-2026-00431', 'JO-2026-00442'];
+/** Operators; filled from master data once the API is wired. */
+const OPERATORS: string[] = [];
+/** Job orders that exist on the Job Orders page; filled from the API once wired. */
+const KNOWN_JOBS: string[] = [];
 
-/** DEMO MODE: kept in memory until the inventory / WIP API is wired up. */
-const SOURCE = DATA as { asOf: string; jobs: JobMaterials[] };
-const JOBS: JobMaterials[] = structuredClone(SOURCE.jobs);
+/** Job material ledgers are kept in memory; empty until the inventory / WIP API is wired up. */
+const JOBS: JobMaterials[] = [];
+/** Placeholder while no job exists (keeps the bindings safe). */
+const NO_JOB: JobMaterials = { job: '', name: '', status: '', stage: '', site: '', store: '', materials: [], transactions: [], traceability: [], exceptions: [] };
 /** Evidence photos picked in this session, by transaction ref. */
 const PHOTOS = new Map<string, File>();
-let OPENED_AT = 0;
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const stamp = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-
-function parseLocal(s: string): Date {
-  const [date, time = '00:00'] = s.split('T');
-  const [y, m, d] = date.split('-').map(Number);
-  const [hh, mm] = time.split(':').map(Number);
-  return new Date(y, m - 1, d, hh, mm);
-}
 
 @Component({
   selector: 'app-material-consumption',
@@ -76,7 +69,7 @@ function parseLocal(s: string): Date {
   imports: [CommonModule, FormsModule, RouterModule, LucideAngularModule],
   templateUrl: './material-consumption.html',
   // Buttons, controls, cards, tabs, menu, modal and toast come from the Job Templates stylesheet
-  styleUrls: ['../job-templates/job-templates.css', './material-consumption.css', './material-consumption-panels.css'],
+  styleUrls: ['../job-templates/job-templates.css', './material-consumption.css', './material-consumption-panels.css', '../shared/wip-purple-theme.css'],
 })
 export class MaterialConsumption implements OnDestroy {
   readonly icons = { ArrowRight, Box, ChevronDown, CircleCheck, Coins, Info, Network, PackagePlus, Paperclip, Plus, Search, Trash2, TriangleAlert, Undo2, Upload, X };
@@ -91,7 +84,7 @@ export class MaterialConsumption implements OnDestroy {
   readonly txTypes: TxType[] = ['Issue', 'Consumption', 'Return', 'Scrap'];
   readonly jobList = JOBS.map((j) => ({ job: j.job, name: j.name, status: j.status }));
 
-  j: JobMaterials = JOBS[0];
+  j: JobMaterials = JOBS[0] ?? NO_JOB;
   tab: Tab = 'summary';
   switcherOpen = false;
 
@@ -115,12 +108,11 @@ export class MaterialConsumption implements OnDestroy {
   private readonly router = inject(Router);
 
   constructor() {
-    if (!OPENED_AT) OPENED_AT = Date.now();
     inject(ActivatedRoute)
       .queryParamMap.pipe(takeUntilDestroyed(inject(DestroyRef)))
       .subscribe((p) => {
         const code = p.get('job');
-        this.j = JOBS.find((x) => x.job === code) ?? JOBS[0];
+        this.j = JOBS.find((x) => x.job === code) ?? JOBS[0] ?? NO_JOB;
         this.tab = 'summary';
         this.search = this.category = this.txType = '';
         this.stageFilter = this.j.stage;
@@ -134,9 +126,9 @@ export class MaterialConsumption implements OnDestroy {
     clearTimeout(this.toastTimer);
   }
 
-  /** Demo clock: the data's asOf time plus however long the page has been open. */
+  /** Current local time as yyyy-MM-ddTHH:mm. */
   private nowStamp(): string {
-    return stamp(new Date(parseLocal(SOURCE.asOf).getTime() + (Date.now() - OPENED_AT)));
+    return stamp(new Date());
   }
 
   openJob(job: string): void {
@@ -235,7 +227,7 @@ export class MaterialConsumption implements OnDestroy {
     const issue = m ? [...this.j.transactions].find((t) => t.type === 'Issue' && t.code === m.code) : undefined;
     this.form = {
       code: m?.code ?? '', stage: this.j.stage, lot: m?.batches[0]?.lot ?? '', ref: issue?.ref ?? '',
-      qty: 1, operator: OPERATORS[0], at: this.nowStamp(), notes: '', photo: null,
+      qty: 1, operator: OPERATORS[0] ?? '', at: this.nowStamp(), notes: '', photo: null,
     };
     this.formError = '';
   }
@@ -370,7 +362,7 @@ export class MaterialConsumption implements OnDestroy {
     if (type === 'Issue') m.issued += qty;
     const at = this.nowStamp();
     this.j.transactions = [
-      { id: this.nextId(), at, type, code: m.code, qty, ref, by: type === 'Scrap' ? OPERATORS[0] : 'Store Team', stage: this.j.stage, lot: this.move.lot, notes: this.move.reason.trim() },
+      { id: this.nextId(), at, type, code: m.code, qty, ref, by: type === 'Scrap' ? OPERATORS[0] ?? '' : 'Store Team', stage: this.j.stage, lot: this.move.lot, notes: this.move.reason.trim() },
       ...this.j.transactions,
     ];
     if (type === 'Scrap') {

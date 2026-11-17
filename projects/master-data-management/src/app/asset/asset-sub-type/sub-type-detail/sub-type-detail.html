@@ -1,0 +1,229 @@
+<section class="detail">
+  <header class="detail__head">
+    <div class="detail__photo model-photo type-photo">
+      @if (subType.image) {
+        <img [src]="subType.image" [alt]="subType.name" />
+      } @else {
+        <lucide-icon [img]="icon" [size]="38" [strokeWidth]="1.6"></lucide-icon>
+      }
+    </div>
+
+    <div class="detail__title">
+      <div class="detail__name">
+        <h2>{{ subType.name }}</h2>
+        <span class="pill" [attr.data-status]="subType.status"><i></i>{{ subType.status }}</span>
+      </div>
+      <div class="detail__meta">
+        Code: {{ subType.code }}<span class="sep">|</span>Asset Type: {{ subType.assetType }}<span class="sep">|</span>Category: {{ subType.category || '-' }}
+      </div>
+      @if (subType.description) { <div class="detail__meta">{{ subType.description }}</div> }
+    </div>
+
+    <div class="detail__actions">
+      <button type="button" class="btn" (click)="edit.emit({ subType })">
+        <lucide-icon [img]="icons.Pencil" [size]="15"></lucide-icon> Edit
+      </button>
+      <button type="button" class="btn" (click)="duplicate.emit(subType)">
+        <lucide-icon [img]="icons.Copy" [size]="15"></lucide-icon> Duplicate
+      </button>
+      <div class="more">
+        <button type="button" class="btn" [attr.aria-expanded]="moreOpen" (click)="$event.stopPropagation(); moreOpen = !moreOpen">
+          More Actions <lucide-icon [img]="icons.ChevronDown" [size]="15"></lucide-icon>
+        </button>
+        @if (moreOpen) {
+          <div class="menu" role="menu" (click)="$event.stopPropagation()">
+            <button type="button" role="menuitem" (click)="moreOpen = false; toggleStatus.emit(subType)">
+              Mark as {{ subType.status === 'Active' ? 'Inactive' : 'Active' }}
+            </button>
+            <button type="button" role="menuitem" class="danger" (click)="moreOpen = false; remove.emit(subType)">Delete</button>
+          </div>
+        }
+      </div>
+    </div>
+  </header>
+
+  <nav class="detail__tabs" role="tablist">
+    @for (t of tabs; track t.id) {
+      <button type="button" role="tab" [class.active]="tab === t.id" [attr.aria-selected]="tab === t.id" (click)="tab = t.id">{{ t.label }}</button>
+    }
+  </nav>
+
+  @switch (tab) {
+    @case ('overview') {
+      <div class="overview">
+        <div class="card">
+          <div class="card__head">
+            <h3 class="card__title">Basic Information</h3>
+            <button type="button" class="card__edit" (click)="editAt('basic')"><lucide-icon [img]="icons.Pencil" [size]="12"></lucide-icon> Edit</button>
+          </div>
+          <dl class="facts">
+            <dt>Name</dt><dd>{{ subType.name }}</dd>
+            <dt>Code</dt><dd>{{ subType.code }}</dd>
+            <dt>Asset Type</dt><dd>{{ subType.assetType }}</dd>
+            <dt>Category</dt><dd>{{ subType.category || '-' }}</dd>
+            <dt>Subcategory</dt><dd>{{ subType.subcategory || '-' }}</dd>
+            <dt>Description</dt><dd>{{ subType.description || '-' }}</dd>
+            <dt>Icon</dt>
+            <dd>
+              <span class="type-icon">
+                @if (subType.image) { <img [src]="subType.image" [alt]="subType.name" /> } @else { <lucide-icon [img]="icon" [size]="22"></lucide-icon> }
+              </span>
+            </dd>
+            <dt>Status</dt><dd><span class="pill" [attr.data-status]="subType.status"><i></i>{{ subType.status }}</span></dd>
+            <dt>Created On</dt><dd>{{ formatDateTime(subType.createdOn) }}</dd>
+            <dt>Created By</dt><dd>{{ subType.createdBy || '-' }}</dd>
+            <dt>Last Updated</dt><dd>{{ formatDateTime(subType.updatedOn) }}</dd>
+          </dl>
+        </div>
+
+        <div class="stack">
+          <div class="card">
+            <div class="card__head">
+              <h3 class="card__title">Tagging</h3>
+              <button type="button" class="card__edit" (click)="editAt('basic')"><lucide-icon [img]="icons.Pencil" [size]="12"></lucide-icon> Edit</button>
+            </div>
+            <dl class="facts">
+              <dt>Tagging Format</dt><dd>{{ subType.taggingFormat }}</dd>
+              <dt>Sample Asset Tag</dt><dd>{{ sample }}</dd>
+              <dt>Tracking Method</dt><dd>{{ subType.trackingMethod }}</dd>
+            </dl>
+          </div>
+
+          <div class="card">
+            <div class="card__head">
+              <h3 class="card__title">Lifecycle & Maintenance</h3>
+              <button type="button" class="card__edit" (click)="editAt('lifecycle')"><lucide-icon [img]="icons.Pencil" [size]="12"></lucide-icon> Edit</button>
+            </div>
+            <dl class="facts facts--specs">
+              <dt>Lifecycle (Years)</dt><dd>{{ subType.lifecycleYears }}</dd>
+              <dt>Maintenance Type</dt><dd>{{ subType.maintenanceType }}</dd>
+              <dt>Maintenance Frequency</dt><dd>Every {{ subType.maintenanceFrequencyDays }} days</dd>
+              <dt>Warranty Period (Months)</dt><dd>{{ subType.warrantyMonths }}</dd>
+            </dl>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="card">
+            <div class="card__head">
+              <h3 class="card__title">Specifications</h3>
+              <button type="button" class="card__edit" (click)="editAt('specifications')"><lucide-icon [img]="icons.Pencil" [size]="12"></lucide-icon> Edit</button>
+            </div>
+            <dl class="facts facts--wide">
+              @for (s of subType.specifications; track s.name) {
+                <dt>{{ s.name }}</dt><dd>{{ s.unit || '-' }}{{ s.required ? ' · Required' : '' }}</dd>
+              } @empty {
+                <dt>Specifications</dt><dd>-</dd>
+              }
+            </dl>
+          </div>
+
+          <div class="card">
+            <h3 class="card__title">Quick Links</h3>
+            <div class="tiles">
+              <button type="button" class="tile" (click)="tab = 'specifications'">
+                <span class="tile__icon"><lucide-icon [img]="icons.Cpu" [size]="18"></lucide-icon></span>
+                <span><small>Specifications</small><strong>{{ subType.specifications.length }}</strong></span>
+              </button>
+              <div class="tile">
+                <span class="tile__icon"><lucide-icon [img]="icons.Boxes" [size]="18"></lucide-icon></span>
+                <span><small>Assets</small><strong>{{ subType.assetCount | number }}</strong></span>
+              </div>
+              <button type="button" class="tile" (click)="tab = 'fields'">
+                <span class="tile__icon"><lucide-icon [img]="icons.ListChecks" [size]="18"></lucide-icon></span>
+                <span><small>Custom Fields</small><strong>{{ subType.customFields.length }}</strong></span>
+              </button>
+              <button type="button" class="tile" (click)="tab = 'lifecycle'">
+                <span class="tile__icon"><lucide-icon [img]="icons.Wrench" [size]="18"></lucide-icon></span>
+                <span><small>Maintenance (Days)</small><strong>{{ subType.maintenanceFrequencyDays }}</strong></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+
+    @case ('specifications') {
+      <div class="card">
+        <div class="card__head">
+          <h3 class="card__title">Specifications</h3>
+          <button type="button" class="card__edit" (click)="editAt('specifications')"><lucide-icon [img]="icons.Pencil" [size]="12"></lucide-icon> Edit</button>
+        </div>
+        <table class="grid-table">
+          <thead><tr><th>Specification</th><th>Unit</th><th>Required</th></tr></thead>
+          <tbody>
+            @for (s of subType.specifications; track s.name) {
+              <tr><td>{{ s.name }}</td><td>{{ s.unit || '-' }}</td><td>{{ s.required ? 'Yes' : 'No' }}</td></tr>
+            } @empty {
+              <tr><td colspan="3" class="empty">No specifications yet.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    @case ('fields') {
+      <div class="card">
+        <div class="card__head">
+          <h3 class="card__title">Custom Fields</h3>
+          <button type="button" class="card__edit" (click)="editAt('fields')"><lucide-icon [img]="icons.Pencil" [size]="12"></lucide-icon> Edit</button>
+        </div>
+        <table class="grid-table">
+          <thead><tr><th>Field</th><th>Type</th><th>Required</th></tr></thead>
+          <tbody>
+            @for (c of subType.customFields; track c.name) {
+              <tr><td>{{ c.name }}</td><td>{{ c.type }}</td><td>{{ c.required ? 'Yes' : 'No' }}</td></tr>
+            } @empty {
+              <tr><td colspan="3" class="empty">No custom fields yet.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    @case ('lifecycle') {
+      <div class="card">
+        <div class="card__head">
+          <h3 class="card__title">Lifecycle & Maintenance</h3>
+          <button type="button" class="card__edit" (click)="editAt('lifecycle')"><lucide-icon [img]="icons.Pencil" [size]="12"></lucide-icon> Edit</button>
+        </div>
+        <dl class="facts facts--settings">
+          <dt>Lifecycle</dt><dd>{{ subType.lifecycleYears }} years</dd>
+          <dt>Maintenance Type</dt><dd>{{ subType.maintenanceType }}</dd>
+          <dt>Maintenance Frequency</dt><dd>Every {{ subType.maintenanceFrequencyDays }} days</dd>
+          <dt>Warranty Period</dt><dd>{{ subType.warrantyMonths }} months</dd>
+          <dt>Inspection</dt><dd>{{ subType.inspectionRequired ? 'Required' : 'Not required' }}</dd>
+        </dl>
+      </div>
+    }
+
+    @case ('defaults') {
+      <div class="card">
+        <div class="card__head">
+          <h3 class="card__title">Default Values for New Assets</h3>
+          <button type="button" class="card__edit" (click)="editAt('defaults')"><lucide-icon [img]="icons.Pencil" [size]="12"></lucide-icon> Edit</button>
+        </div>
+        <dl class="facts facts--settings">
+          <dt>Tagging Format</dt><dd>{{ subType.taggingFormat }}</dd>
+          <dt>Default Condition</dt><dd>{{ subType.defaultCondition }}</dd>
+          <dt>Tracking Method</dt><dd>{{ subType.trackingMethod }}</dd>
+          <dt>Serial Number</dt><dd>{{ subType.serialRequired ? 'Required' : 'Optional' }}</dd>
+          <dt>IoT Tracking</dt><dd>{{ subType.iotTracking ? 'Enabled' : 'Disabled' }}</dd>
+        </dl>
+      </div>
+    }
+
+    @case ('activity') {
+      <div class="card">
+        <ol class="timeline">
+          @for (a of activity; track $index) {
+            <li><span class="timeline__when">{{ formatDateTime(a.when) }}</span><span><strong>{{ a.who }}</strong> {{ a.text }}</span></li>
+          }
+        </ol>
+        @if (!activity.length) {
+          <p class="muted">No records found.</p>
+        }
+      </div>
+    }
+  }
+</section>

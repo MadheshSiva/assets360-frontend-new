@@ -6,8 +6,22 @@ import { INSPECTION_FREQUENCIES, MONITORING, PRIORITIES, SCALE, STRATEGIES, blan
 import { CriticalityRecord } from '../criticality.model';
 import { CriticalityService } from '../criticality.service';
 
+/** A new level starts with every dropdown empty so the user picks each value. */
+function newCriticality(): CriticalityRecord {
+  return {
+    ...blankCriticality(),
+    riskLevel: '' as CriticalityRecord['riskLevel'],
+    maintenancePriority: '' as CriticalityRecord['maintenancePriority'],
+    likelihood: '' as CriticalityRecord['likelihood'],
+    impact: '' as CriticalityRecord['impact'],
+    inspectionFrequency: '' as CriticalityRecord['inspectionFrequency'],
+    conditionMonitoring: '' as CriticalityRecord['conditionMonitoring'],
+    sparePartsPriority: '' as CriticalityRecord['sparePartsPriority']
+  };
+}
+
 export type CritFormTab = 'basic' | 'risk' | 'maintenance' | 'settings';
-type FieldKey = 'name' | 'code' | 'color' | 'image' | 'isDefault' | 'responseTimeHours';
+type FieldKey = 'name' | 'code' | 'riskLevel' | 'maintenancePriority' | 'color' | 'image' | 'isDefault' | 'responseTimeHours';
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
@@ -16,7 +30,7 @@ const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
   selector: 'app-crit-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './crit-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../level-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../level-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class CritForm implements OnChanges {
   // 'edit' changes `level`; 'add' creates a new one, pre-filled from `level` if given (Duplicate)
@@ -51,13 +65,13 @@ export class CritForm implements OnChanges {
   ];
 
   tab: CritFormTab = 'basic';
-  form: CriticalityRecord = blankCriticality();
+  form: CriticalityRecord = newCriticality();
   errors: Partial<Record<FieldKey, string>> = {};
   private original: CriticalityRecord | null = null;
 
   ngOnChanges(): void {
     this.original = this.mode === 'edit' ? this.level : null;
-    this.form = this.level ? structuredClone(this.level) : blankCriticality();
+    this.form = this.level ? structuredClone(this.level) : newCriticality();
     this.errors = {};
     this.tab = this.startTab;
   }
@@ -105,13 +119,31 @@ export class CritForm implements OnChanges {
     this.form.image = null;
   }
 
+  /** True on the final tab, where the primary button saves instead of advancing. */
+  get isLastTab(): boolean {
+    return this.tab === this.tabs[this.tabs.length - 1].id;
+  }
+
+  /** Move to the next tab. */
+  next(): void {
+    const i = this.tabs.findIndex((t) => t.id === this.tab);
+    if (i < this.tabs.length - 1) this.tab = this.tabs[i + 1].id;
+  }
+
   submit(): void {
+    // Enter key / primary button on earlier tabs just advances
+    if (!this.isLastTab) {
+      this.next();
+      return;
+    }
     const f = this.form;
     const errors: Partial<Record<FieldKey, string>> = {};
     if (!f.name.trim()) errors.name = 'Enter a criticality name.';
     else if (this.service.isNameTaken(f.name, this.original?.code ?? null)) errors.name = `${f.name.trim()} already exists.`;
     if (!f.code.trim()) errors.code = 'Enter a code.';
     else if (this.service.isCodeTaken(f.code, this.original?.code ?? null)) errors.code = `${f.code.trim()} is already used.`;
+    if (!f.riskLevel) errors.riskLevel = 'Select a risk level.';
+    if (!f.maintenancePriority) errors.maintenancePriority = 'Select a maintenance priority.';
     if (!HEX_COLOR.test(f.color.trim())) errors.color = 'Enter a colour like #EF4444.';
     if (this.original?.isDefault && !f.isDefault) errors.isDefault = 'Make another level the default instead.';
     else if (f.isDefault && f.status !== 'Active') errors.isDefault = 'The default level must be active.';
@@ -133,7 +165,7 @@ export class CritForm implements OnChanges {
         color: f.color.trim().toUpperCase(),
         description: f.description.trim(),
         createdOn: this.original?.createdOn ?? stamp,
-        createdBy: this.original?.createdBy ?? 'Rex Kumar',
+        createdBy: this.original?.createdBy ?? '',
         updatedOn: stamp
       },
       originalCode: this.original?.code ?? null

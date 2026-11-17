@@ -24,7 +24,7 @@ interface Filters {
   selector: 'app-mdm-system-configuration-chart-type',
   imports: [FormsModule, RouterLink, LucideAngularModule, ChartTypeForm, ChartPreviewIcon],
   templateUrl: './chart-type.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../system-config.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../system-config.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class ChartTypePage extends ListPage<ChartTypeRecord, Filters, SortKey> {
   readonly service = inject(ChartTypeService);

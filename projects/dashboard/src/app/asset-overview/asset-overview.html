@@ -17,56 +17,65 @@
         </span>
       </span>
       <label class="io-filter"><span>Site</span>
-        <select class="control" [(ngModel)]="site" (ngModelChange)="apply()"><option value="">All Sites</option><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></label>
+        <select class="control" [(ngModel)]="site" (ngModelChange)="apply()"><option value="">Select Site</option><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></label>
       <label class="io-filter"><span>Asset Category</span>
-        <select class="control" [(ngModel)]="category" (ngModelChange)="onCategory()"><option value="">All Categories</option><option *ngFor="let c of categories" [value]="c.name">{{ c.name }}</option></select></label>
+        <select class="control" [(ngModel)]="category" (ngModelChange)="onCategory()"><option value="">Select Category</option><option *ngFor="let c of categories" [value]="c.name">{{ c.name }}</option></select></label>
       <label class="io-filter"><span>Asset Type</span>
-        <select class="control" [(ngModel)]="type" (ngModelChange)="apply()"><option value="">All Types</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
+        <select class="control" [(ngModel)]="type" (ngModelChange)="apply()"><option value="">Select Type</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
       <label class="io-filter"><span>Asset Status</span>
-        <select class="control" [(ngModel)]="status" (ngModelChange)="apply()"><option value="">All Statuses</option><option *ngFor="let s of statuses" [value]="s">{{ s }}</option></select></label>
+        <select class="control" [(ngModel)]="status" (ngModelChange)="apply()"><option value="">Select Status</option><option *ngFor="let s of statuses" [value]="s">{{ s }}</option></select></label>
       <button type="button" class="btn btn-primary" (click)="exportReport()"><lucide-icon [img]="icons.Upload" [size]="17"></lucide-icon>Export Report</button>
     </div>
   </header>
 
   <!-- One 6-column grid for the KPI cards and every widget, so all edges line up with the KPI cards -->
   <div class="io-grid io-grid--6">
-  <!-- ===== KPIs ===== -->
+  <!-- ===== KPIs: existing APIs only. Total / Active / Under Maintenance: Asset GET api/asset-dashboard/statuses;
+       Critical: Asset GET api/asset-dashboard/critical-assets; Total change + Avg Health Score: Report Analytics GET api/asset-performance/summary ===== -->
   <ng-container *ngIf="kpis as k">
     <div class="card io-kpi io-click" role="button" tabindex="0" (click)="openKpi('total')" (keydown.enter)="openKpi('total')">
       <span class="io-kpi-ic ic--blue"><lucide-icon [img]="icons.Box" [size]="30"></lucide-icon></span>
-      <span class="io-kpi-body"><span class="io-kpi-label">Total Assets</span><strong>{{ k.total | number }}</strong></span>
-      <ng-container *ngTemplateOutlet="trend; context: { v: k.totalChange, goodUp: true }"></ng-container>
+      <span class="io-kpi-body"><span class="io-kpi-label">Total Assets</span><strong>{{ k.total === null ? blank(k.totalState) : (k.total | number) }}</strong></span>
+      <ng-container *ngTemplateOutlet="trend; context: { v: k.totalChange, goodUp: true, state: k.totalState }"></ng-container>
     </div>
     <div class="card io-kpi io-click" role="button" tabindex="0" (click)="openKpi('active')" (keydown.enter)="openKpi('active')">
       <span class="io-kpi-ic ic--green"><lucide-icon [img]="icons.Power" [size]="30"></lucide-icon></span>
-      <span class="io-kpi-body"><span class="io-kpi-label">Active Assets</span><strong>{{ k.active | number }}</strong></span>
-      <span class="io-kpi-side io-kpi-side--rule"><b class="up big">{{ k.activePct }}%</b><small>of total assets</small></span>
+      <span class="io-kpi-body"><span class="io-kpi-label">Active Assets</span><strong>{{ k.active === null ? blank(k.activeState) : (k.active | number) }}</strong></span>
+      <ng-container *ngTemplateOutlet="trend; context: { v: null, pct: k.activePct, state: k.activeState }"></ng-container>
     </div>
     <div class="card io-kpi io-click" role="button" tabindex="0" (click)="openKpi('maintenance')" (keydown.enter)="openKpi('maintenance')">
       <span class="io-kpi-ic ic--amber"><lucide-icon [img]="icons.Wrench" [size]="30"></lucide-icon></span>
-      <span class="io-kpi-body"><span class="io-kpi-label">Assets Under Maintenance</span><strong>{{ k.maintenance | number }}</strong></span>
-      <ng-container *ngTemplateOutlet="trend; context: { v: k.maintenanceChange, goodUp: false }"></ng-container>
+      <span class="io-kpi-body"><span class="io-kpi-label">Assets Under Maintenance</span><strong>{{ k.maintenance === null ? blank(k.maintenanceState) : (k.maintenance | number) }}</strong></span>
+      <ng-container *ngTemplateOutlet="trend; context: { v: null, pct: k.maintenancePct, state: k.maintenanceState }"></ng-container>
     </div>
     <div class="card io-kpi io-click" role="button" tabindex="0" (click)="openKpi('critical')" (keydown.enter)="openKpi('critical')">
       <span class="io-kpi-ic ic--red"><lucide-icon [img]="icons.TriangleAlert" [size]="30"></lucide-icon></span>
-      <span class="io-kpi-body"><span class="io-kpi-label">Critical Assets</span><strong>{{ k.critical | number }}</strong></span>
-      <ng-container *ngTemplateOutlet="trend; context: { v: k.criticalChange, goodUp: false }"></ng-container>
+      <span class="io-kpi-body"><span class="io-kpi-label">Critical Assets</span><strong>{{ k.critical === null ? blank(k.criticalState) : (k.critical | number) }}</strong></span>
+      <ng-container *ngTemplateOutlet="trend; context: { v: null, pct: k.criticalPct, state: k.criticalState }"></ng-container>
     </div>
     <div class="card io-kpi io-click" role="button" tabindex="0" (click)="openKpi('health')" (keydown.enter)="openKpi('health')">
       <span class="io-kpi-ic ic--sky"><lucide-icon [img]="icons.HeartPulse" [size]="30"></lucide-icon></span>
-      <span class="io-kpi-body"><span class="io-kpi-label">Avg Asset Health Score</span><strong>{{ k.health }}%</strong></span>
-      <ng-container *ngTemplateOutlet="trend; context: { v: k.healthChange, goodUp: true }"></ng-container>
+      <span class="io-kpi-body"><span class="io-kpi-label">Avg Asset Health Score</span><strong>{{ k.health === null ? blank(k.healthState) : k.health + '%' }}</strong></span>
+      <ng-container *ngTemplateOutlet="trend; context: { v: k.healthChange, goodUp: true, unit: k.healthUnit, state: k.healthState, none: k.health === null ? 'No assessments yet' : '' }"></ng-container>
     </div>
-    <div class="card io-kpi io-click" role="button" tabindex="0" (click)="openKpi('value')" (keydown.enter)="openKpi('value')">
+    <!-- no API returns an asset lifecycle / book value yet -->
+    <div class="card io-kpi" title="No API provides the lifecycle value yet">
       <span class="io-kpi-ic ic--violet"><lucide-icon [img]="icons.Database" [size]="30"></lucide-icon></span>
-      <span class="io-kpi-body"><span class="io-kpi-label">Lifecycle Value</span><strong>{{ money(k.value) }}</strong></span>
-      <ng-container *ngTemplateOutlet="trend; context: { v: k.valueChange, goodUp: true }"></ng-container>
+      <span class="io-kpi-body"><span class="io-kpi-label">Lifecycle Value</span><strong>–</strong></span>
+      <span class="io-kpi-side"><small>No API yet</small></span>
     </div>
   </ng-container>
-  <!-- change vs. 30 days earlier; colour says whether the move is good -->
-  <ng-template #trend let-v="v" let-goodUp="goodUp">
-    <span *ngIf="v !== null && v !== 0" class="io-kpi-side"><b [class.up]="(v > 0) === goodUp" [class.down]="(v > 0) !== goodUp">
-      <lucide-icon [img]="v > 0 ? icons.ArrowUp : icons.ArrowDown" [size]="14"></lucide-icon>{{ v > 0 ? '+' : '' }}{{ v }}%</b><small>vs. previous 30 days</small></span>
+  <!-- change vs. the previous KPI window (colour says whether the move is good); without a change, the share of total assets when given -->
+  <ng-template #trend let-v="v" let-goodUp="goodUp" let-pct="pct" let-unit="unit" let-state="state" let-none="none">
+    <span *ngIf="state === 'error'" class="io-kpi-side"><small>Could not load</small></span>
+    <span *ngIf="state === 'ok' && none" class="io-kpi-side"><small>{{ none }}</small></span>
+    <ng-container *ngIf="state === 'ok' && !none">
+      <span *ngIf="v !== null && v !== 0; else noChange" class="io-kpi-side"><b [class.up]="(v > 0) === goodUp" [class.down]="(v > 0) !== goodUp">
+        <lucide-icon [img]="v > 0 ? icons.ArrowUp : icons.ArrowDown" [size]="14"></lucide-icon>{{ v > 0 ? '+' : '' }}{{ v }}{{ unit ?? '%' }}</b><small>vs. previous {{ kpiDays }} days</small></span>
+      <ng-template #noChange>
+        <span *ngIf="pct !== undefined" class="io-kpi-side io-kpi-side--rule"><b class="big">{{ pct }}%</b><small>of total assets</small></span>
+      </ng-template>
+    </ng-container>
   </ng-template>
 
   <!-- ===== Row 1 ===== -->
@@ -75,33 +84,29 @@
       <table class="ao-cat">
         <thead><tr><th>Category</th><th></th><th class="num">Asset Count</th><th class="num">Percentage</th></tr></thead>
         <tbody>
-          <tr *ngFor="let c of byCategory" [class.is-on]="category === c.name" (click)="openCategory(c.name)" title="Show category details">
+          <ng-container *ngFor="let c of byCategory">
+          <tr [class.is-on]="category === c.name" (click)="openCategory(c.name)" title="Show category details">
             <td><span class="ao-cat-name"><span class="ao-cat-ic" [style.color]="c.color" [style.background]="c.color + '1f'"><lucide-icon [img]="categoryIcons[c.icon]" [size]="15"></lucide-icon></span>{{ c.name }}</span></td>
             <td class="ao-cat-bar"><span><i [style.width.%]="c.bar" [style.background]="c.color"></i></span></td>
             <td class="num">{{ c.count | number }}</td>
             <td class="num">{{ c.pct }}%</td>
           </tr>
+          <tr *ngFor="let sc of c.subs" class="ao-cat-sub" (click)="openCategory(c.name)" [title]="sc.name + ': ' + sc.count + ' assets (' + sc.pct + '% of ' + c.name + ')'">
+            <td><span class="ao-cat-sub-name">{{ sc.name }}</span></td>
+            <td class="ao-cat-bar"><span><i [style.width.%]="sc.bar" [style.background]="c.color"></i></span></td>
+            <td class="num">{{ sc.count | number }}</td>
+            <td class="num">{{ sc.pct }}%</td>
+          </tr>
+          </ng-container>
+          <tr *ngIf="!byCategory.length"><td colspan="4" class="muted">{{ categoryLoading ? 'Loading categories…' : 'No assets by category.' }}</td></tr>
         </tbody>
       </table>
     </section>
 
     <section class="card io-pad ao-fill io-span-1" aria-labelledby="ao-hd">
       <h2 id="ao-hd" class="io-title"><lucide-icon [img]="icons.Heart" [size]="18"></lucide-icon>Asset Health Distribution</h2>
-      <div class="ao-health" *ngIf="health as h">
-        <svg viewBox="0 0 140 140" role="img" [attr.aria-label]="h.total + ' assets by health'" (mouseleave)="hoverHealth = null">
-          <ng-container *ngFor="let r of h.rows">
-            <circle *ngIf="r.count" cx="70" cy="70" r="46" fill="none" [attr.stroke]="r.color" [attr.stroke-width]="hoverHealth === r.band ? 26 : 22"
-              [attr.stroke-dasharray]="r.dash" [attr.stroke-dashoffset]="r.offset" transform="rotate(-90 70 70)" (mouseenter)="hoverHealth = r.band" (click)="openHealthBand(r.band)" class="io-click"></circle>
-            <text *ngIf="r.count" class="ao-seg-label" [attr.x]="r.lx" [attr.y]="r.ly" text-anchor="middle" [attr.fill]="r.band === 'Healthy' ? '#15803d' : r.color">{{ r.pct }}%</text>
-          </ng-container>
-          <text x="70" y="70" class="ao-health-num">{{ hoverHealth ? (h.rows[['Healthy', 'Warning', 'Critical', 'Unknown'].indexOf(hoverHealth)].count | number) : (h.total | number) }}</text>
-          <text x="70" y="84" class="io-donut-cap">{{ hoverHealth ?? 'Total Assets' }}</text>
-        </svg>
-        <ul class="ao-health-legend">
-          <li *ngFor="let r of h.rows" class="io-click" (mouseenter)="hoverHealth = r.band" (mouseleave)="hoverHealth = null" (click)="openHealthBand(r.band)"><i [style.background]="r.color"></i>
-            <span><strong>{{ r.band }}</strong><span class="ao-hl-row"><b>{{ r.count | number }}</b><small [style.color]="r.band === 'Unknown' ? '#6b7280' : r.color">{{ r.pct }}%</small></span></span></li>
-        </ul>
-      </div>
+      <!-- No API for health bands yet: no mock data -->
+      <p class="io-empty">No data</p>
     </section>
 
     <section class="card io-pad ao-fill io-span-2" aria-labelledby="ao-st">
@@ -141,38 +146,43 @@
     <section class="card io-pad ao-map-card io-span-2" aria-labelledby="ao-map">
       <div class="io-sub-head"><h2 id="ao-map" class="io-title"><lucide-icon [img]="icons.MapPin" [size]="18"></lucide-icon>Asset Distribution by Site</h2>
         <button type="button" class="io-link" (click)="showAllSites = !showAllSites">{{ showAllSites ? 'Show Map' : 'View All Sites' }}</button></div>
-      <div class="ao-map-wrap" [hidden]="showAllSites"><div #mapEl class="ao-map" role="application" aria-label="Asset distribution map"></div></div>
+      <div class="ao-map-wrap" [hidden]="showAllSites"><div #mapEl class="ao-map" role="application" aria-label="Asset distribution map"></div>
+        <p *ngIf="sitesLoading || !pinnedSites.length" class="ao-map-note">{{ sitesLoading ? 'Loading sites…' : siteRows.length ? siteRows.length + ' site(s) have no map coordinates. Use View All Sites.' : 'No data' }}</p></div>
       <table *ngIf="showAllSites" class="io-table">
-        <thead><tr><th>Site</th><th class="num">Assets</th><th class="num">Healthy</th></tr></thead>
-        <tbody><tr *ngFor="let s of siteStats" (click)="openSite(s.site.name)" [class.is-selected]="site === s.site.name" class="ao-click">
-          <td>{{ s.site.name }}</td><td class="num">{{ s.total | number }}</td><td class="num">{{ s.healthyPct }}%</td></tr></tbody>
+        <thead><tr><th>Site</th><th class="num">Assets</th><th class="num">Online</th><th class="num">Location Updates ({{ siteDays }}d)</th></tr></thead>
+        <tbody><tr *ngFor="let s of siteRows" (click)="openSite(s)" [class.is-selected]="site === s.name" class="ao-click">
+          <td>{{ s.name }}</td><td class="num">{{ s.totalAssets | number }}</td><td class="num">{{ s.onlinePercent }}%</td><td class="num">{{ s.updates | number }}</td></tr>
+          <tr *ngIf="!siteRows.length"><td colspan="4" class="io-empty">{{ sitesLoading ? 'Loading…' : 'No data' }}</td></tr></tbody>
       </table>
     </section>
 
     <section class="card io-pad io-span-1" aria-labelledby="ao-age">
       <h2 id="ao-age" class="io-title"><lucide-icon [img]="icons.FileText" [size]="18"></lucide-icon>Asset Lifecycle Aging</h2>
-      <div #agingEl class="ao-aging" *ngIf="aging as g" (mouseleave)="hoverAge = null">
-        <svg [attr.viewBox]="'0 0 ' + aw + ' ' + ah" role="img" aria-label="Assets by age">
-          <g class="grid"><line *ngFor="let t of g.ticks" [attr.x1]="ap.l" [attr.x2]="aw - ap.r" [attr.y1]="t.y" [attr.y2]="t.y"></line></g>
-          <g class="axis"><text *ngFor="let t of g.ticks" [attr.x]="ap.l - 5" [attr.y]="t.y + 3" text-anchor="end">{{ t.label }}</text></g>
-          <g *ngFor="let b of g.bars; let i = index" class="io-click" (click)="openAge(i)" (mouseenter)="hoverAge = i" [class.is-dim]="hoverAge !== null && hoverAge !== i">
-            <rect [attr.x]="b.x" [attr.y]="b.y" [attr.width]="g.barW" [attr.height]="b.h" [attr.fill]="b.color" rx="2"></rect>
-            <text class="ao-bar-val" [attr.x]="b.x + g.barW / 2" [attr.y]="b.y - 5" text-anchor="middle">{{ b.count | number }}</text>
-          </g>
-        </svg>
-        <ul class="ao-age-keys">
-          <li *ngFor="let b of g.bars; let i = index" class="io-click" (click)="openAge(i)"><strong>{{ b.band }}</strong><small>{{ b.label }}</small><b [style.color]="b.color">{{ b.pct }}%</b></li>
-        </ul>
-      </div>
+      <!-- No API for lifecycle aging yet: no mock data -->
+      <p class="io-empty">No data</p>
     </section>
 
     <section class="card io-pad ao-table-card io-span-2 io-full-md" aria-labelledby="ao-tb">
-      <div class="io-sub-head"><h2 id="ao-tb" class="io-title"><lucide-icon class="ao-red" [img]="icons.TriangleAlert" [size]="18"></lucide-icon>{{ tableTitle }} <small class="muted">({{ tableRows.length | number }})</small></h2>
+      <div class="io-sub-head"><h2 id="ao-tb" class="io-title"><lucide-icon class="ao-red" [img]="icons.TriangleAlert" [size]="18"></lucide-icon>{{ tableTitle }} <small class="muted">({{ tableCount | number }})</small></h2>
         <span class="ao-tb-links">
           <button *ngIf="insight" type="button" class="io-link" (click)="openInsight('')">Clear</button>
           <button type="button" class="io-link" (click)="showAllRows = !showAllRows; rowPage = 0">{{ showAllRows ? 'Show Top 5' : 'View All' }}</button></span></div>
       <div class="io-table-wrap">
         <table class="io-table ao-table">
+          <!-- Critical assets from the API: no health score or value in the response, so Criticality replaces them -->
+          <ng-container *ngIf="apiTable; else localTable">
+          <thead><tr><th>Asset Tag</th><th>Asset Name</th><th>Category</th><th>Site</th><th>Criticality</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let a of pageApiRows" class="ao-click" (click)="openCriticalAsset(a)">
+              <td><button type="button" class="io-id" (click)="$event.stopPropagation(); openCriticalAsset(a)">{{ a.assetTag }}</button></td>
+              <td>{{ a.assetName }}</td><td>{{ a.category ?? '-' }}</td><td>{{ a.siteName ?? '-' }}</td>
+              <td><span class="io-sev" [ngClass]="critClass(a.criticality)"><lucide-icon *ngIf="critClass(a.criticality) === 'sev--critical'" [img]="icons.TriangleAlert" [size]="11"></lucide-icon>{{ a.criticality ?? '-' }}</span></td>
+              <td><span class="ao-st" [ngClass]="stClass(a.assetStatus ?? '')"><i></i>{{ a.assetStatus ?? '-' }}</span></td>
+            </tr>
+            <tr *ngIf="!pageApiRows.length"><td colspan="6" class="io-empty">No critical assets.</td></tr>
+          </tbody>
+          </ng-container>
+          <ng-template #localTable>
           <thead><tr><th>Asset ID</th><th>Asset Name</th><th>Category</th><th>Site</th><th>Health</th><th class="num">Value</th><th>Status</th></tr></thead>
           <tbody>
             <tr *ngFor="let a of pageRows" class="ao-click" [class.is-selected]="selectedId === a.id" (click)="openAsset(a)">
@@ -184,6 +194,7 @@
             </tr>
             <tr *ngIf="!pageRows.length"><td colspan="7" class="io-empty">No assets match.</td></tr>
           </tbody>
+          </ng-template>
         </table>
       </div>
       <div *ngIf="showAllRows && rowPages > 1" class="io-pager">
@@ -193,48 +204,64 @@
       </div>
     </section>
 
+    <!-- Asset Quick View: registered assets from GET api/asset-registrations(/{id}) -->
     <section class="card io-pad io-quick io-span-1 io-full-md" aria-labelledby="ao-qv">
       <div class="io-sub-head"><h2 id="ao-qv" class="io-title"><lucide-icon [img]="icons.Box" [size]="18"></lucide-icon>Asset Quick View</h2>
-        <button type="button" class="icon-btn" (click)="go('/assets/list')" aria-label="Open asset list" title="Open asset list"><lucide-icon [img]="icons.ExternalLink" [size]="16"></lucide-icon></button></div>
-      <ng-container *ngIf="selected as d; else noSel">
-        <div class="io-qv-head">
-          <img *ngIf="imageOf(d) as src; else qvIcon" [src]="src" [alt]="d.name" />
+        <div class="io-qv-nav">
+          <ng-container *ngIf="qv.items.length > 1">
+            <button type="button" class="icon-btn" (click)="quickTab = 'overview'; qv.step(-1)" aria-label="Previous asset" title="Previous asset"><lucide-icon [img]="icons.ChevronLeft" [size]="16"></lucide-icon></button>
+            <small class="muted">{{ qv.index + 1 }} / {{ qv.items.length }}</small>
+            <button type="button" class="icon-btn" (click)="quickTab = 'overview'; qv.step(1)" aria-label="Next asset" title="Next asset"><lucide-icon [img]="icons.ChevronRight" [size]="16"></lucide-icon></button>
+          </ng-container>
+          <button type="button" class="icon-btn" (click)="qv.asset ? openDetails(qv.asset) : go('/assets/list')" aria-label="Open asset details" title="Open asset details"><lucide-icon [img]="icons.ExternalLink" [size]="16"></lucide-icon></button>
+        </div></div>
+      <ng-container *ngIf="qv.asset as d; else noSel">
+        <div class="io-qv-head" [class.is-loading]="qv.loading">
+          <img *ngIf="d.image; else qvIcon" [src]="d.image" [alt]="d.name" />
           <ng-template #qvIcon><span class="io-qv-ic"><lucide-icon [img]="icons.Cog" [size]="34"></lucide-icon></span></ng-template>
           <div class="grow">
-            <div class="io-qv-title"><strong>{{ d.id }}</strong><span class="ao-st ao-st--pill" [ngClass]="stClass(d.st)"><i></i>{{ d.st }}</span></div>
-            <small>{{ d.name }}</small>
+            <div class="io-qv-title"><strong>{{ d.tag }}</strong><span *ngIf="d.status" class="ao-st ao-st--pill" [ngClass]="'st--' + statusKey(d.status)"><i></i>{{ d.status }}</span></div>
+            <small>{{ d.name }}{{ d.model ? ' - ' + d.model : '' }}</small>
             <div class="io-qv-meta">
-              <span><lucide-icon [img]="icons.MapPin" [size]="13"></lucide-icon><small>Site</small>{{ d.site }}</span>
-              <span><lucide-icon class="heart" [img]="icons.Heart" [size]="13"></lucide-icon><small>Health Score</small><b [style.color]="healthColors[healthBand(d.hp)]">{{ d.hp === null ? '-' : d.hp + '%' }}</b></span>
+              <span><lucide-icon [img]="icons.MapPin" [size]="13"></lucide-icon><small>Site</small>{{ d.site || '-' }}</span>
+              <span><lucide-icon class="heart" [img]="icons.TriangleAlert" [size]="13"></lucide-icon><small>Criticality</small><b [style.color]="d.criticality.toLowerCase() === 'critical' ? '#dc2626' : d.criticality.toLowerCase() === 'high' ? '#d97706' : null">{{ d.criticality || '-' }}</b></span>
             </div>
           </div>
         </div>
+        <p *ngIf="qv.error" class="io-bad">{{ qv.error }}</p>
         <nav class="io-qv-tabs" role="tablist" aria-label="Asset details">
           <button *ngFor="let t of ['overview', 'location', 'maintenance', 'financial', 'documents']" type="button" role="tab" [class.is-active]="quickTab === t" [attr.aria-selected]="quickTab === t" (click)="quickTab = $any(t)">{{ t | titlecase }}</button>
         </nav>
         <dl *ngIf="quickTab === 'overview'" class="io-qv-kv">
-          <dt>Asset Type</dt><dd>{{ d.type }}</dd><dt>Site</dt><dd>{{ d.site }}</dd>
-          <dt>Manufacturer</dt><dd>{{ d.manufacturer }}</dd><dt>Commissioned</dt><dd>{{ fmtDate(d.acquired) }}</dd>
-          <dt>Model</dt><dd>{{ d.model }}</dd><dt>Connectivity</dt><dd><span class="io-conn" [style.color]="d.connected ? '#16a34a' : '#6b7280'"><lucide-icon [img]="d.connected ? icons.Wifi : icons.WifiOff" [size]="13"></lucide-icon>{{ d.connected ? 'Online' : 'Not connected' }}</span></dd>
-          <dt>Serial Number</dt><dd>{{ d.serial }}</dd><dt>Last Update</dt><dd>{{ fmtDateTime(d.lastUpdate) }}</dd>
+          <dt>Asset Type</dt><dd>{{ d.type || '-' }}</dd><dt>Site</dt><dd>{{ d.site || '-' }}</dd>
+          <dt>Manufacturer</dt><dd>{{ d.manufacturer || '-' }}</dd><dt>Commissioned</dt><dd>{{ qvDate(d.commissioned) }}</dd>
+          <dt>Model</dt><dd>{{ d.model || '-' }}</dd>
+          <dt>Connectivity</dt><dd><span class="io-conn" [style.color]="d.iot?.network?.toLowerCase() === 'online' ? '#16a34a' : '#6b7280'"><lucide-icon [img]="d.iot ? icons.Wifi : icons.WifiOff" [size]="13"></lucide-icon>{{ d.iot ? (d.iot.network | titlecase) : 'Not connected' }}</span></dd>
+          <dt>Serial Number</dt><dd>{{ d.serial || '-' }}</dd><dt>Last Update</dt><dd>{{ qvDateTime(d.iot?.lastSeen || d.lastUpdate) }}</dd>
         </dl>
         <dl *ngIf="quickTab === 'location'" class="io-qv-kv">
-          <dt>Site</dt><dd>{{ d.site }}</dd><dt>Department</dt><dd>{{ d.department }}</dd>
-          <dt>Owner</dt><dd [class.io-bad]="!d.owner">{{ d.owner || 'Not assigned' }}</dd><dt>Category</dt><dd>{{ d.category }}</dd>
+          <dt>Site</dt><dd>{{ d.site || '-' }}</dd><dt>Building</dt><dd>{{ d.building || '-' }}</dd>
+          <dt>Floor</dt><dd>{{ d.floor || '-' }}</dd><dt>Zone</dt><dd>{{ d.zone || '-' }}</dd>
+          <dt>Room</dt><dd>{{ d.room || '-' }}</dd><dt>Department</dt><dd>{{ d.department || '-' }}</dd>
+          <dt>Custodian</dt><dd [class.io-bad]="!d.custodian">{{ d.custodian || 'Not assigned' }}</dd><dt>Category</dt><dd>{{ d.category || '-' }}</dd>
         </dl>
         <dl *ngIf="quickTab === 'maintenance'" class="io-qv-kv">
-          <dt>Last Service</dt><dd>{{ fmtDate(d.lastService) }}</dd><dt>Next Service</dt><dd>{{ fmtDate(d.nextService) }}</dd>
-          <dt>Criticality</dt><dd>{{ d.criticality }}</dd><dt>Health</dt><dd>{{ healthBand(d.hp) }}</dd>
+          <dt>Last Service</dt><dd>{{ qvDate(d.lastService) }}</dd><dt>Next Service</dt><dd>{{ qvDate(d.nextService) }}</dd>
+          <dt>Frequency</dt><dd>{{ d.maintenanceFrequency || '-' }}</dd><dt>Criticality</dt><dd>{{ d.criticality || '-' }}</dd>
+          <dt>Condition</dt><dd>{{ d.condition || '-' }}</dd>
         </dl>
         <dl *ngIf="quickTab === 'financial'" class="io-qv-kv">
-          <dt>Book Value</dt><dd>{{ money(d.value) }}</dd><dt>Acquired</dt><dd>{{ fmtDate(d.acquired) }}</dd>
-          <dt>Age</dt><dd>{{ ageOf(d) }} years</dd><dt>Status</dt><dd>{{ d.st }}</dd>
+          <dt>Cost</dt><dd>{{ d.cost === null ? '-' : (d.cost | number: '1.0-2') + (d.currency ? ' ' + d.currency : '') }}</dd><dt>Purchased</dt><dd>{{ qvDate(d.purchaseDate) }}</dd>
+          <dt>Vendor</dt><dd>{{ d.vendor || '-' }}</dd><dt>Warranty Ends</dt><dd>{{ qvDate(d.warrantyEnd) }}</dd>
+          <dt>Status</dt><dd>{{ d.status || '-' }}</dd>
         </dl>
         <dl *ngIf="quickTab === 'documents'" class="io-qv-kv">
-          <dt>Documents</dt><dd [class.io-bad]="!d.documents">{{ d.documents || 'None on file' }}</dd><dt>Owner</dt><dd>{{ d.owner || '-' }}</dd>
+          <ng-container *ngFor="let f of d.documents"><dt>Document</dt><dd><a [href]="f.url" target="_blank" rel="noopener">{{ f.name }}</a></dd></ng-container>
+          <ng-container *ngIf="!d.documents.length"><dt>Documents</dt><dd class="io-bad">None on file</dd></ng-container>
+          <dt>Custodian</dt><dd>{{ d.custodian || '-' }}</dd>
         </dl>
       </ng-container>
-      <ng-template #noSel><p class="muted">Select an asset in the table to see its details.</p></ng-template>
+      <ng-template #noSel><p class="muted">{{ qv.loading ? 'Loading asset…' : qv.error || 'No registered assets yet.' }}</p></ng-template>
     </section>
   </div>
 </section>

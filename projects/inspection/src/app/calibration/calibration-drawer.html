@@ -25,7 +25,7 @@
         <label class="field"><span class="field-label">Interval (months)</span><input class="control" type="number" min="1" [(ngModel)]="form.intervalMonths" /></label>
         <label class="field"><span class="field-label">Provider</span><input class="control" [(ngModel)]="form.provider" /></label>
         <label class="field"><span class="field-label">Provider type</span>
-          <select class="control" [(ngModel)]="form.providerType"><option value="In-house">In-house</option><option value="Service Provider">Service Provider</option></select></label>
+          <select class="control" [(ngModel)]="form.providerType"><option value="" disabled>Select Provider Type</option><option value="In-house">In-house</option><option value="Service Provider">Service Provider</option></select></label>
         <label class="field"><span class="field-label">Assigned to</span>
           <input class="control" list="cal-people" [(ngModel)]="form.assignedTo" /></label>
         <label class="field"><span class="field-label">Certificate</span><input class="control" [(ngModel)]="form.certificate" placeholder="CERT-0148 or URL" /></label>
@@ -40,7 +40,7 @@
       <div class="form-grid">
         <label class="field span-2"><span class="field-label">Instrument <span class="req">*</span></span>
           <select class="control" [ngModel]="result.instrumentId" (ngModelChange)="pickInstrument($event)">
-            <option value="">Select instrument</option>
+            <option value="">Select Instrument</option>
             @for (i of api.instruments.items(); track i.id) { <option [value]="i.id">{{ i.instrumentCode }} — {{ i.instrumentName }}</option> }
           </select></label>
         @if (selectedInstrument(); as inst) {
@@ -65,7 +65,7 @@
                 <td><input class="control" type="number" step="any" [(ngModel)]="p.reference" (ngModelChange)="autoResult(p)" /></td>
                 <td><input class="control" type="number" step="any" [(ngModel)]="p.asFound" (ngModelChange)="autoResult(p)" /></td>
                 <td><input class="control" type="number" step="any" [(ngModel)]="p.asLeft" (ngModelChange)="autoResult(p)" /></td>
-                <td><select class="control" [(ngModel)]="p.result"><option value="">—</option><option value="Pass">Pass</option><option value="Fail">Fail</option></select></td>
+                <td><select class="control" [(ngModel)]="p.result"><option value="">Select Result</option><option value="Pass">Pass</option><option value="Fail">Fail</option></select></td>
                 <td><button type="button" class="icon-btn" aria-label="Remove point" (click)="removePoint(k)"><lucide-icon [img]="icons.Trash2" [size]="15"></lucide-icon></button></td>
               </tr>
             }

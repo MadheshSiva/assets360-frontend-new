@@ -73,7 +73,7 @@ export class VendorDocuments {
   readonly today = new Date().toISOString().slice(0, 10);
 
   add(): void {
-    this.vendor.documents = [...this.vendor.documents, { name: '', type: 'Trade Licence', expiry: '' }];
+    this.vendor.documents = [...this.vendor.documents, { name: '', type: '', expiry: '' }];
   }
 
   remove(index: number): void {
@@ -97,10 +97,12 @@ export function validateVendorBase(f: VendorBase, taken: { code: boolean; name: 
   else if (taken.name) errors['name'] = `${f.name.trim()} already exists.`;
   if (!f.code.trim()) errors['code'] = 'Enter a code.';
   else if (taken.code) errors['code'] = `${f.code.trim()} is already used.`;
+  if (!f.status) errors['status'] = 'Select a status.';
   if (f.website.trim() && !WEB_URL.test(f.website.trim())) errors['website'] = 'Enter a full URL, e.g. https://www.example.com';
   if (f.email.trim() && !EMAIL.test(f.email.trim())) errors['email'] = 'Enter a valid email address.';
   if (f.alternateEmail.trim() && !EMAIL.test(f.alternateEmail.trim())) errors['alternateEmail'] = 'Enter a valid email address.';
   if (f.documents.some((d) => !d.name.trim())) errors['documents'] = 'Name every document or remove the empty ones.';
+  else if (f.documents.some((d) => !d.type)) errors['documents'] = 'Select a type for every document.';
   return errors;
 }
 
@@ -125,6 +127,7 @@ export const BASE_TAB_OF: Record<string, 'basic' | 'address' | 'documents'> = {
   website: 'basic',
   email: 'basic',
   logo: 'basic',
+  status: 'basic',
   alternateEmail: 'address',
   documents: 'documents'
 };

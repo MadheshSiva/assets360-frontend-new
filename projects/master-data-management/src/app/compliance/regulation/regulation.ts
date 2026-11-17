@@ -24,7 +24,7 @@ interface Filters {
   selector: 'app-mdm-compliance-regulation',
   imports: [FormsModule, RouterLink, LucideAngularModule, RegulationForm],
   templateUrl: './regulation.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../compliance.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../compliance.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class RegulationPage extends ListPage<RegulationRecord, Filters, SortKey> implements OnInit {
   readonly service = inject(RegulationService);

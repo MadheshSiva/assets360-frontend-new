@@ -3,7 +3,7 @@ import { FacilityFeature, LngLat } from './location-data';
 /**
  * CAD-style artwork for the Level 1 floor plan: yard, building shell with columns, dock doors, pallet racking,
  * production cells, conveyors, presses, tanks, trailers, charging bays and floor markings. Generated from
- * facility-level1.geo.json in local metres and laid under the live layers as a single SVG overlay, so every
+ * the floor-plan GeoJSON in local metres and laid under the live layers as a single SVG overlay, so every
  * detail stays aligned with the zones, gateways and asset positions. Purely decorative (no pointer events).
  */
 export interface PlanArt { svg: SVGSVGElement; south: number; west: number; north: number; east: number }

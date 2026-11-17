@@ -29,7 +29,7 @@ export const VARIABLE_GROUPS: VariableGroup[] = [
   { name: 'Organization', icon: 'org', variables: ['organization_name', 'site_name', 'support_email', 'portal_url'] }
 ];
 
-/** Values the Live Preview and Test Send substitute for each variable. */
+/** Placeholder values the Live Preview and Test Send substitute for each variable (illustrative, not tenant data). */
 export const SAMPLE_VALUES: Record<string, string> = {
   work_order_number: 'WO-10245',
   work_order_type: 'Corrective Maintenance',
@@ -39,17 +39,17 @@ export const SAMPLE_VALUES: Record<string, string> = {
   asset_name: 'Air Handling Unit AHU-01',
   asset_code: 'AST-HVAC-0001',
   asset_category: 'HVAC',
-  location_name: 'Main Building - Level 2',
+  location_name: '[Location Name]',
   serial_number: 'SN-AHU-77821',
-  assignee_name: 'John Doe',
-  requestor_name: 'Omar Hassan',
-  supervisor_name: 'Sarah Ahmed',
-  user_email: 'john.doe@purpleiq.com',
-  team_name: 'HVAC Team A',
-  organization_name: 'Purple IQ Group',
-  site_name: 'Dubai HQ',
-  support_email: 'support@asset360.com',
-  portal_url: 'https://app.asset360.com'
+  assignee_name: '[Assignee Name]',
+  requestor_name: '[Requestor Name]',
+  supervisor_name: '[Supervisor Name]',
+  user_email: '[User Email]',
+  team_name: '[Team Name]',
+  organization_name: '[Organization Name]',
+  site_name: '[Site Name]',
+  support_email: '[Support Email]',
+  portal_url: '[Portal URL]'
 };
 
 /** Starter content offered by "Template Library". */

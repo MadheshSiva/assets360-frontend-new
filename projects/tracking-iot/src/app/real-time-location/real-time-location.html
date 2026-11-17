@@ -1,16 +1,18 @@
 <section class="rl-page">
   <header class="rl-head">
     <div class="grow">
-      <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep">/</span><strong>Real-Time Location</strong></nav>
+      <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep" aria-hidden="true">›</span><strong>Real-Time Location</strong></nav>
       <h1>Real-Time Location</h1>
       <p>See where tracked assets are now, where they have moved and whether they crossed a zone boundary.</p>
     </div>
     <div class="head-side">
       <div class="head-status">
         <span class="live"><i></i>LIVE</span>
+        <label class="ic-select"><lucide-icon [img]="icons.Globe" [size]="15"></lucide-icon>
+          <select class="control control-sm" [(ngModel)]="country" (ngModelChange)="onCountry()" aria-label="Country"><option value="">Select Country</option><option *ngFor="let c of countries" [value]="c">{{ c }}</option></select></label>
         <label class="ic-select"><lucide-icon [img]="icons.Building2" [size]="15"></lucide-icon>
-          <select class="control control-sm" [(ngModel)]="site" (ngModelChange)="onSite($event)" aria-label="Site"><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></label>
-        <span class="updated"><lucide-icon [img]="icons.Clock" [size]="15"></lucide-icon>Updated {{ updatedSec }} sec ago</span>
+          <select class="control control-sm" [(ngModel)]="site" (ngModelChange)="onSite($event)" aria-label="Site"><option value="">Select Site</option><option *ngFor="let s of sites" [value]="s.id">{{ s.name }}</option></select></label>
+        <span class="updated"><lucide-icon [img]="icons.Clock" [size]="15"></lucide-icon>{{ updatedSec === null ? (loadingEvents ? 'Loading…' : 'Not updated') : 'Updated ' + updatedSec + ' sec ago' }}</span>
       </div>
       <div class="head-actions">
         <button type="button" class="btn btn-primary" (click)="openLocate()"><lucide-icon [img]="icons.Crosshair" [size]="16"></lucide-icon>Locate Asset</button>
@@ -37,8 +39,10 @@
       <section class="card map-card" aria-label="Facility map">
         <div class="map-head">
           <h2 class="grow">Facility Map</h2>
-          <select class="control control-sm level-sel" [(ngModel)]="level" (ngModelChange)="onLevel($event)" aria-label="Level">
-            <option *ngFor="let l of levels" [value]="l.id">{{ l.name }}</option></select>
+          <select class="control control-sm level-sel" [(ngModel)]="level" (ngModelChange)="onLevel($event)" aria-label="Floor" [disabled]="!levels.length">
+            <option value="" disabled>Select Floor</option>
+            <option *ngIf="!levels.length" value="">No floors</option>
+            <option *ngFor="let l of levels" [value]="l.id">{{ floorLabel(l) }}</option></select>
           <span class="menu-wrap">
             <button type="button" class="tool" [class.is-on]="layersOpen" (click)="$event.stopPropagation(); layersOpen = !layersOpen" title="Layers" aria-label="Layers"><lucide-icon [img]="icons.Layers" [size]="17"></lucide-icon></button>
             <div *ngIf="layersOpen" class="pop layers-pop" (click)="$event.stopPropagation()">
@@ -56,8 +60,7 @@
           <button type="button" class="tool" (click)="zoomOut()" title="Zoom out" aria-label="Zoom out"><lucide-icon [img]="icons.Minus" [size]="17"></lucide-icon></button>
         </div>
         <div class="map-box">
-          <app-rl-map [selectedId]="selectedId" [layers]="layers" [imagery]="imagery" (select)="select($event)" (live)="onLive($event)" (replayDone)="onReplayDone()" (ready)="drawMap = $event"></app-rl-map>
-          <app-map-draw-tools [map]="drawMap" storageKey="real-time-location"></app-map-draw-tools>
+          <app-rl-map [selectedId]="selectedId" [geofences]="geoZones" [layers]="layers" [imagery]="imagery" (select)="select($event)" (live)="onLive($event)" (replayDone)="onReplayDone()"></app-rl-map>
           <span *ngIf="replaying" class="replay-chip"><lucide-icon [img]="icons.Route" [size]="14"></lucide-icon>Replaying last 30 min</span>
         </div>
         <div class="legend">
@@ -87,6 +90,7 @@
                 <td class="nowrap">{{ e.zone }}</td>
                 <td>{{ e.details }}</td>
               </tr>
+              <tr *ngIf="!shownEvents.length"><td colspan="6" class="empty">{{ loadingEvents ? 'Loading location events…' : eventsError || 'No location events found.' }} <button *ngIf="eventsError && !loadingEvents" type="button" class="link-btn" (click)="loadEvents()">Retry</button></td></tr>
             </tbody>
           </table>
         </div>
@@ -99,9 +103,9 @@
         <h2>Assets ({{ rows.length }}<ng-container *ngIf="hasFilters"> of {{ kpi.total }}</ng-container>)</h2>
         <label class="search"><lucide-icon [img]="icons.Search" [size]="15"></lucide-icon><input type="search" [(ngModel)]="search" placeholder="Search assets by ID, name or tag..." aria-label="Search assets" /></label>
         <div class="list-filters">
-          <label class="lsel"><span>Asset Type</span><select class="control control-sm" [(ngModel)]="typeFilter"><option value="">All Types</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
-          <label class="lsel"><span>Status</span><select class="control control-sm" [(ngModel)]="statusFilter"><option value="">All Statuses</option><option value="moving">Moving</option><option value="stationary">Stationary</option><option value="stale">Stale</option><option value="offline">Offline</option><option value="breach">Geofence breach</option><option value="alerts">Any alert</option></select></label>
-          <label class="lsel"><span>Zone</span><select class="control control-sm" [(ngModel)]="zoneFilter"><option value="">All Zones</option><option *ngFor="let z of zones" [value]="z.name">{{ z.name }}</option></select></label>
+          <label class="lsel"><span>Asset Type</span><select class="control control-sm" [(ngModel)]="typeFilter"><option value="">Select Type</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
+          <label class="lsel"><span>Status</span><select class="control control-sm" [(ngModel)]="statusFilter"><option value="">Select Status</option><option value="moving">Moving</option><option value="stationary">Stationary</option><option value="stale">Stale</option><option value="offline">Offline</option><option value="breach">Geofence breach</option><option value="alerts">Any alert</option></select></label>
+          <label class="lsel"><span>Zone</span><select class="control control-sm" [(ngModel)]="zoneFilter"><option value="">Select Zone</option><option *ngFor="let z of zones" [value]="z.name">{{ z.name }}</option></select></label>
         </div>
         <div class="list-wrap">
           <table class="dt list-table">
@@ -153,6 +157,7 @@
         <h3 class="sub-h"><span>Recent Trail (Last 30 mins)</span><span class="grow"></span><button type="button" class="link-btn" (click)="trackHistory(a)">View Full History</button></h3>
         <ol class="trail">
           <li *ngFor="let p of trailPoints; let last = last" [class.is-moved]="p.moved" [class.is-now]="last" [title]="p.place"><i></i><span>{{ clock(p.at) }}</span></li>
+          <li *ngIf="!trailPoints.length" class="muted small">No positions recorded in the last 30 minutes.</li>
         </ol>
 
         <div class="sel-actions">
@@ -171,10 +176,18 @@
   <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="rl-loc" (click)="$event.stopPropagation()">
     <div class="modal-head"><h2 id="rl-loc">Locate Asset</h2><button type="button" class="icon-btn" (click)="locateOpen = false" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
     <div class="modal-body">
-      <label class="search"><lucide-icon [img]="icons.Search" [size]="15"></lucide-icon><input type="search" [(ngModel)]="locateQuery" placeholder="Asset ID, name or device" aria-label="Find asset" autofocus /></label>
+      <label class="search"><lucide-icon [img]="icons.Search" [size]="15"></lucide-icon><input type="search" [(ngModel)]="locateQuery" placeholder="Asset tag, ID, name, category or location" aria-label="Find asset" autofocus /></label>
+      <p *ngIf="!loadingRegistered && !registeredError && registered.length" class="muted small loc-count">
+        Showing {{ locateResults.length }} of {{ locateTotal }} registered asset{{ locateTotal === 1 ? '' : 's' }}</p>
       <ul class="loc-list">
-        <li *ngFor="let a of locateResults"><button type="button" (click)="select(a.id)"><i class="dot" [style.background]="dotColor(a)"></i><span class="grow"><strong>{{ a.id }}</strong> {{ a.name }}<small>{{ place(a) }} · {{ ago(seenSec(a)) }}</small></span><lucide-icon [img]="icons.Crosshair" [size]="15"></lucide-icon></button></li>
-        <li *ngIf="!locateResults.length" class="muted small">No asset matches “{{ locateQuery }}”.</li>
+        <li *ngFor="let a of locateResults"><button type="button" (click)="locateRegistered(a)">
+          <i class="dot" [style.background]="'#2563eb'"></i>
+          <span class="grow"><strong>{{ a.tag || a.regId }}</strong> {{ a.name }}
+            <small>{{ a.category || a.type || 'Asset' }}<ng-container *ngIf="a.location"> · {{ a.location }}</ng-container><ng-container *ngIf="a.status"> · {{ a.status }}</ng-container></small></span>
+          <lucide-icon [img]="icons.Crosshair" [size]="15"></lucide-icon></button></li>
+        <li *ngIf="loadingRegistered" class="muted small">Loading registered assets…</li>
+        <li *ngIf="registeredError" class="muted small">{{ registeredError }}</li>
+        <li *ngIf="!loadingRegistered && !registeredError && !locateResults.length" class="muted small">{{ locateQuery ? 'No asset matches “' + locateQuery + '”.' : 'No assets are registered yet.' }}</li>
       </ul>
     </div>
   </div>
@@ -186,14 +199,14 @@
     <div class="modal-head"><h2 id="rl-al">Create Location Alert · {{ f.assetId }}</h2><button type="button" class="icon-btn" (click)="alertForm = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
     <form class="modal-body" (ngSubmit)="saveAlert()">
       <label class="field"><span class="field-label">Trigger when the asset</span>
-        <select class="control" [(ngModel)]="f.rule" name="rule"><option value="enter">{{ ruleLabel.enter }}</option><option value="exit">{{ ruleLabel.exit }}</option><option value="dwell">{{ ruleLabel.dwell }}</option><option value="boundary">{{ ruleLabel.boundary }}</option></select></label>
+        <select class="control" [(ngModel)]="f.rule" name="rule"><option value="" disabled>Select Trigger</option><option value="enter">{{ ruleLabel.enter }}</option><option value="exit">{{ ruleLabel.exit }}</option><option value="dwell">{{ ruleLabel.dwell }}</option><option value="boundary" disabled>{{ ruleLabel.boundary }} (not supported yet)</option></select></label>
       <div class="two">
-        <label class="field"><span class="field-label">Zone</span><select class="control" [(ngModel)]="f.zone" name="zone"><option *ngFor="let z of zones" [value]="z.name">{{ z.name }}</option></select></label>
+        <label class="field"><span class="field-label">Geofence</span><select class="control" [(ngModel)]="f.zone" name="zone"><option value="" disabled>Select Geofence</option><option *ngFor="let z of alertZones" [value]="z.id">{{ z.name }}</option></select></label>
         <label class="field" *ngIf="f.rule === 'dwell'"><span class="field-label">Minutes</span><input class="control" type="number" min="1" [(ngModel)]="f.minutes" name="min" /></label>
       </div>
-      <label class="field"><span class="field-label">Notify</span><select class="control" [(ngModel)]="f.notify" name="notify"><option>Operations team</option><option>Warehouse supervisor</option><option>Security desk</option><option>Me only</option></select></label>
+      <label class="field"><span class="field-label">Notify</span><select class="control" [(ngModel)]="f.notify" name="notify"><option value="" disabled>Select Notify</option><option>Operations team</option><option>Warehouse supervisor</option><option>Security desk</option><option>Me only</option></select></label>
       <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
-      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="alertForm = null">Cancel</button><button type="submit" class="btn btn-primary">Create Alert</button></div>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="alertForm = null">Cancel</button><button type="submit" class="btn btn-primary" [disabled]="saving || !alertZones.length">Create Alert</button></div>
     </form>
   </div>
 </div>

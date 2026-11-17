@@ -4,9 +4,9 @@
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <a routerLink="/dashboard" aria-label="Home"><lucide-icon [img]="icons.House" [size]="16"></lucide-icon></a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <a routerLink="/wip-operations">WIP / Operations</a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <span class="crumb-current">Asset Linking</span>
       </nav>
       <h1>Asset Linking</h1>
@@ -49,8 +49,8 @@
             <div class="box-head linked-head">
               <h3 id="al-linked" class="grow">Linked Assets</h3>
               <label class="search"><lucide-icon [img]="icons.Search" [size]="15"></lucide-icon><input type="search" [(ngModel)]="search" placeholder="Search linked assets..." aria-label="Search linked assets" /></label>
-              <label class="inline-filter"><span>Stage</span><select class="control" [(ngModel)]="stageFilter"><option value="">All</option><option *ngFor="let s of stageNames" [value]="s">{{ s }}</option></select></label>
-              <label class="inline-filter"><span>Link Role</span><select class="control" [(ngModel)]="roleFilter"><option value="">All</option><option *ngFor="let r of roles" [value]="r">{{ r }}</option></select></label>
+              <label class="inline-filter"><span>Stage</span><select class="control" [(ngModel)]="stageFilter"><option value="">Select Stage</option><option *ngFor="let s of stageNames" [value]="s">{{ s }}</option></select></label>
+              <label class="inline-filter"><span>Link Role</span><select class="control" [(ngModel)]="roleFilter"><option value="">Select Role</option><option *ngFor="let r of roles" [value]="r">{{ r }}</option></select></label>
             </div>
             <div class="table-wrap">
               <table class="wt linked-table">
@@ -110,9 +110,9 @@
                 <datalist id="al-assets"><option *ngFor="let a of siteAssets" [value]="a.tag + ' · ' + a.name">{{ a.category }} · {{ a.location }}</option></datalist>
                 <span class="hint">{{ formAsset ? formAsset.category + ' · ' + formAsset.location + ' · ' + formAsset.status : 'Select an existing asset record.' }}</span>
               </label>
-              <label class="field"><span class="field-label">Link Role <em>*</em></span><select class="control" [(ngModel)]="form.role" (ngModelChange)="formChecks = null" name="role"><option value="" disabled>Select role</option><option *ngFor="let r of roles" [value]="r">{{ r }}</option></select></label>
-              <label class="field"><span class="field-label">Stage <em>*</em></span><select class="control" [(ngModel)]="form.stage" (ngModelChange)="onFormStage()" name="stage"><option *ngFor="let s of stageNames" [value]="s">{{ s }}</option></select></label>
-              <label class="field"><span class="field-label">Task (optional)</span><select class="control" [(ngModel)]="form.task" name="task"><option value="">Whole stage</option><option *ngFor="let t of tasksOf(form.stage)" [value]="t">{{ t }}</option></select></label>
+              <label class="field"><span class="field-label">Link Role <em>*</em></span><select class="control" [(ngModel)]="form.role" (ngModelChange)="formChecks = null" name="role"><option value="" disabled>Select Role</option><option *ngFor="let r of roles" [value]="r">{{ r }}</option></select></label>
+              <label class="field"><span class="field-label">Stage <em>*</em></span><select class="control" [(ngModel)]="form.stage" (ngModelChange)="onFormStage()" name="stage"><option value="" disabled>Select Stage</option><option *ngFor="let s of stageNames" [value]="s">{{ s }}</option></select></label>
+              <label class="field"><span class="field-label">Task (optional)</span><select class="control" [(ngModel)]="form.task" name="task"><option value="" disabled>Select Task</option><option value="">Whole stage</option><option *ngFor="let t of tasksOf(form.stage)" [value]="t">{{ t }}</option></select></label>
               <span class="link-spacer"></span>
               <label class="field"><span class="field-label">Booking Start <em>*</em></span><input class="control" type="datetime-local" [(ngModel)]="form.start" (ngModelChange)="formChecks = null" name="start" /></label>
               <label class="field"><span class="field-label">Booking End <em>*</em></span><input class="control" type="datetime-local" [(ngModel)]="form.end" (ngModelChange)="formChecks = null" name="end" /></label>
@@ -173,9 +173,9 @@
                 <dt>Allocation</dt><dd>{{ draft.allocation }}</dd>
               </dl>
               <div *ngIf="editingConfig" class="cfg-grid">
-                <label class="field"><span class="field-label">Role</span><select class="control" [(ngModel)]="draft.role"><option *ngFor="let r of roles" [value]="r">{{ r }}</option></select></label>
-                <label class="field"><span class="field-label">Stage</span><select class="control" [(ngModel)]="draft.stage" (ngModelChange)="onDraftStage()"><option *ngFor="let s of stageNames" [value]="s">{{ s }}</option></select></label>
-                <label class="field span-2"><span class="field-label">Task</span><select class="control" [(ngModel)]="draft.task"><option value="">Whole stage</option><option *ngFor="let t of tasksOf(draft.stage)" [value]="t">{{ t }}</option></select></label>
+                <label class="field"><span class="field-label">Role</span><select class="control" [(ngModel)]="draft.role"><option value="" disabled>Select Role</option><option *ngFor="let r of roles" [value]="r">{{ r }}</option></select></label>
+                <label class="field"><span class="field-label">Stage</span><select class="control" [(ngModel)]="draft.stage" (ngModelChange)="onDraftStage()"><option value="" disabled>Select Stage</option><option *ngFor="let s of stageNames" [value]="s">{{ s }}</option></select></label>
+                <label class="field span-2"><span class="field-label">Task</span><select class="control" [(ngModel)]="draft.task"><option value="" disabled>Select Task</option><option value="">Whole stage</option><option *ngFor="let t of tasksOf(draft.stage)" [value]="t">{{ t }}</option></select></label>
                 <label class="field"><span class="field-label">Booking Start</span><input class="control" type="datetime-local" [(ngModel)]="draft.start" /></label>
                 <label class="field"><span class="field-label">Booking End</span><input class="control" type="datetime-local" [(ngModel)]="draft.end" /></label>
                 <label class="field span-2"><span class="field-label">Allocation</span>
@@ -215,7 +215,7 @@
         <div class="box-head">
           <h3 id="al-av" class="grow">Asset Register <span class="muted">{{ job.site }} · {{ available.length }} assets</span></h3>
           <label class="search av-search"><lucide-icon [img]="icons.Search" [size]="16"></lucide-icon><input type="search" [(ngModel)]="availSearch" placeholder="Search ID, name, capability..." aria-label="Search register" /></label>
-          <select class="control w-auto" [(ngModel)]="availCategory" aria-label="Category"><option value="">All categories</option><option *ngFor="let c of categories" [value]="c">{{ c }}</option></select>
+          <select class="control w-auto" [(ngModel)]="availCategory" aria-label="Category"><option value="">Select Category</option><option *ngFor="let c of categories" [value]="c">{{ c }}</option></select>
         </div>
         <div class="table-wrap">
           <table class="wt">

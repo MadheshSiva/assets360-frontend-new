@@ -64,14 +64,16 @@
     <label for="vendor-phone">Phone</label>
     <input id="vendor-phone" name="phone" type="tel" placeholder="Enter phone number" [(ngModel)]="vendor.phone" />
   </div>
-  <div class="field">
-    <label for="vendor-status">Status</label>
+  <div class="field" [class.invalid]="errors['status']">
+    <label for="vendor-status"><span class="req">*</span> Status</label>
     <div class="status-select">
       <i [attr.data-status]="vendor.status"></i>
       <select id="vendor-status" name="status" [(ngModel)]="vendor.status">
+        <option value="" disabled>Select Status</option>
         <option value="Active">Active</option>
         <option value="Inactive">Inactive</option>
       </select>
     </div>
+    @if (errors['status']) { <small>{{ errors['status'] }}</small> }
   </div>
 </div>

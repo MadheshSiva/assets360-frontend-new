@@ -25,19 +25,27 @@ import {
   Waypoints,
   X,
 } from 'lucide-angular';
-import ORDER_DATA from './job-orders.json';
 import { Issue, JobOrder, OrderStage, OrderTask, Severity, TaskStatus } from './job-order.model';
 
 type Tab = 'overview' | 'stages' | 'resources' | 'materials' | 'quality' | 'issues' | 'output' | 'activity';
 type Dialog = 'issue' | 'progress' | 'output' | 'consumption' | 'checklist' | 'completeStage' | null;
 
-const CURRENT_USER = 'Ahmed Khan';
+/** Signed-in user's display name; filled from the auth/user API once wired. */
+const CURRENT_USER = '';
 
-/** DEMO MODE: orders come from job-orders.json and are kept in memory until the WIP API is wired up. */
-const ORDERS: JobOrder[] = ORDER_DATA as JobOrder[];
+/** Orders are kept in memory; empty until the WIP API is wired up. */
+const ORDERS: JobOrder[] = [];
 const WORKING = new Map<string, JobOrder>();
-/** When each order was first opened; the demo clock runs from the order's asOf time from then on. */
-const OPENED_AT = new Map<string, number>();
+
+/** Empty order used while there are no job orders to show. */
+function blankOrder(): JobOrder {
+  return {
+    code: '', templateCode: '', templateVersion: '', name: '', image: '', status: 'Planned', priority: 'Medium', batch: '', site: '', location: '',
+    supervisor: '', team: '', plannedStart: '', due: '', actualStart: '', asOf: '', linkedAsset: { tag: '', name: '' },
+    output: { planned: 0, unit: '', completed: 0, accepted: 0, rework: 0, rejected: 0 },
+    stages: [], gates: [], permits: [], qualityChecks: [], resources: [], materials: [], issues: [], activity: [], serials: [],
+  };
+}
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');
@@ -60,7 +68,7 @@ function parseLocal(s: string): Date {
   imports: [CommonModule, FormsModule, RouterModule, LucideAngularModule],
   templateUrl: './job-orders.html',
   // Buttons, form controls, cards, tabs, modal and toast come from the Job Templates stylesheet
-  styleUrls: ['../job-templates/job-templates.css', './job-orders.css'],
+  styleUrls: ['../job-templates/job-templates.css', './job-orders.css', '../shared/wip-purple-theme.css'],
 })
 export class JobOrders implements OnDestroy {
   readonly icons = {
@@ -81,9 +89,10 @@ export class JobOrders implements OnDestroy {
   readonly orderList = ORDERS.map((o) => ({ code: o.code, name: o.name, status: o.status }));
   readonly severities: Severity[] = ['Low', 'Medium', 'High', 'Critical'];
   readonly taskStatuses: TaskStatus[] = ['Pending', 'In Progress', 'Completed'];
-  readonly owners = ['Maintenance Team', 'Quality Team', 'Stores', 'Production Supervisor', 'HSE Team'];
+  /** Issue owners (teams); filled from master data once the API is wired. */
+  readonly owners: string[] = [];
 
-  o: JobOrder = this.working(ORDERS[0].code);
+  o: JobOrder = ORDERS.length ? this.working(ORDERS[0].code) : blankOrder();
   tab: Tab = 'overview';
   switcherOpen = false;
   dialog: Dialog = null;
@@ -93,7 +102,7 @@ export class JobOrders implements OnDestroy {
   private timer = setInterval(() => (this.now = this.clock()), 30_000);
 
   // Dialog forms
-  issueForm = { title: '', severity: 'Medium' as Severity, stage: '', owner: 'Maintenance Team', description: '' };
+  issueForm = { title: '', severity: 'Medium' as Severity, stage: '', owner: '', description: '' };
   progressForm = { task: 0, status: 'Completed' as TaskStatus, photos: 0, note: '' };
   outputForm = { accepted: 0, rework: 0, rejected: 0 };
   consumptionForm = { material: 0, quantity: 1 };
@@ -109,7 +118,7 @@ export class JobOrders implements OnDestroy {
       .queryParamMap.pipe(takeUntilDestroyed(inject(DestroyRef)))
       .subscribe((params) => {
         const code = params.get('code');
-        this.o = this.working(code && ORDERS.some((x) => x.code === code) ? code : ORDERS[0].code);
+        this.o = code && ORDERS.some((x) => x.code === code) ? this.working(code) : ORDERS.length ? this.working(ORDERS[0].code) : blankOrder();
         this.now = this.clock();
         this.tab = 'overview';
         this.dialog = null;
@@ -127,16 +136,13 @@ export class JobOrders implements OnDestroy {
     if (!o) {
       o = structuredClone(ORDERS.find((x) => x.code === code)!);
       WORKING.set(code, o);
-      OPENED_AT.set(code, Date.now());
     }
     return o;
   }
 
-  /** The demo time: the order's asOf time plus however long the page has been open. */
+  /** Current time (drives the SLA countdown). */
   private clock(): Date {
-    const code = this.o?.code ?? ORDERS[0].code;
-    const order = WORKING.get(code) ?? ORDERS[0];
-    return new Date(parseLocal(order.asOf).getTime() + (Date.now() - (OPENED_AT.get(code) ?? Date.now())));
+    return new Date();
   }
 
   private stamp(): string {
@@ -179,7 +185,7 @@ export class JobOrders implements OnDestroy {
 
   /** Minutes until the due time (negative when overdue); null once the job is complete. */
   get slaMinutes(): number | null {
-    if (this.o.status === 'Completed') return null;
+    if (this.o.status === 'Completed' || !this.o.due) return null;
     return Math.round((parseLocal(this.o.due).getTime() - this.now.getTime()) / 60_000);
   }
 
@@ -261,7 +267,7 @@ export class JobOrders implements OnDestroy {
   openDialog(d: Exclude<Dialog, null>): void {
     this.formError = '';
     const stage = this.currentStage;
-    if (d === 'issue') this.issueForm = { title: '', severity: 'Medium', stage: stage?.name ?? this.o.stages[0]?.name ?? '', owner: 'Maintenance Team', description: '' };
+    if (d === 'issue') this.issueForm = { title: '', severity: 'Medium', stage: stage?.name ?? this.o.stages[0]?.name ?? '', owner: '', description: '' };
     if (d === 'progress' || d === 'checklist' || d === 'completeStage') {
       if (!this.requireRunning() || !stage) return;
       const firstOpen = stage.tasks.findIndex((t) => t.status !== 'Completed');

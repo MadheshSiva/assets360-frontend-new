@@ -1,8 +1,7 @@
 /**
  * Output units for a job, shared by the Product / Output and Progress Log pages.
- * DEMO MODE: loaded from outputs.json and kept in memory until the production API is wired up.
+ * Kept in memory; empty until the production API is wired up.
  */
-import DATA from './outputs.json';
 
 export type Disposition = 'Accepted' | 'Awaiting QC' | 'Rework' | 'Rejected';
 export type HandoverState = 'Received' | 'Pending' | 'Not eligible';
@@ -47,24 +46,13 @@ export interface OutputJob {
   routing: string;
 }
 
-const SOURCE = DATA as unknown as {
-  asOf: string;
-  job: OutputJob;
-  components: { part: string; ref: string }[];
-  outputs: OutputUnit[];
-  handovers: Handover[];
-  stores: string[];
-  locations: string[];
-  operators: string[];
-  stages: string[];
-};
-
-export const OUTPUT_AS_OF = SOURCE.asOf;
-export const OUTPUT_JOB: OutputJob = SOURCE.job;
-export const OUTPUT_COMPONENTS = SOURCE.components;
-export const OUTPUTS: OutputUnit[] = structuredClone(SOURCE.outputs);
-export const HANDOVERS: Handover[] = structuredClone(SOURCE.handovers);
-export const OUTPUT_LISTS = { stores: SOURCE.stores, locations: SOURCE.locations, operators: SOURCE.operators, stages: SOURCE.stages };
+/** The job whose output is shown; blank until the production API is wired up. */
+export const OUTPUT_JOB: OutputJob = { code: '', name: '', status: '', item: '', batch: '', uom: '', site: '', planned: 0, routing: '' };
+export const OUTPUT_COMPONENTS: { part: string; ref: string }[] = [];
+export const OUTPUTS: OutputUnit[] = [];
+export const HANDOVERS: Handover[] = [];
+/** Stores, locations, operators and stages for the dialogs; filled from master data once the API is wired. */
+export const OUTPUT_LISTS: { stores: string[]; locations: string[]; operators: string[]; stages: string[] } = { stores: [], locations: [], operators: [], stages: [] };
 
 /** Only accepted units can be received into stock. */
 export function handoverState(u: OutputUnit): HandoverState {
@@ -72,8 +60,6 @@ export function handoverState(u: OutputUnit): HandoverState {
   return u.handoverRef ? 'Received' : 'Pending';
 }
 
-/** Shared demo clock, so both pages agree on "now": the data's time plus the time since the first page opened. */
-let OPENED_AT = 0;
 const pad = (n: number) => String(n).padStart(2, '0');
 export const stamp = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
@@ -84,7 +70,7 @@ export function parseLocal(s: string): Date {
   return new Date(y, m - 1, d, hh, mm);
 }
 
-export function demoNow(): string {
-  if (!OPENED_AT) OPENED_AT = Date.now();
-  return stamp(new Date(parseLocal(OUTPUT_AS_OF).getTime() + (Date.now() - OPENED_AT)));
+/** Current local time as yyyy-MM-ddTHH:mm (shared by the Product / Output and Progress Log pages). */
+export function nowStamp(): string {
+  return stamp(new Date());
 }

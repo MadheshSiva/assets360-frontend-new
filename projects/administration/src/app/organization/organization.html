@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a routerLink="/administration">Administration</a>
-  <span aria-hidden="true">/</span>
+  <span aria-hidden="true">›</span>
   <strong>Organization</strong>
 </nav>
 
@@ -13,6 +13,7 @@
   <label class="org-picker">
     <span>Organization</span>
     <select [(ngModel)]="organization" aria-label="Organization">
+      <option value="" disabled>Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
@@ -83,11 +84,11 @@
         @if (filterOpen) {
           <div class="toolbar filter-row">
             <select class="select" aria-label="Type" [(ngModel)]="typeFilter" (ngModelChange)="onFilterChange()">
-              <option value="">All Types</option>
+              <option value="">Select Type</option>
               @for (t of types; track t) { <option [value]="t">{{ t }}</option> }
             </select>
             <select class="select" aria-label="Status" [(ngModel)]="statusFilter" (ngModelChange)="onFilterChange()">
-              <option value="">All Statuses</option>
+              <option value="">Select Status</option>
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
             </select>

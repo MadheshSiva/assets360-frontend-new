@@ -34,6 +34,7 @@
     <div class="field">
       <label for="rd-type">Role Type</label>
       <select id="rd-type" name="type" [disabled]="system" [(ngModel)]="role.type" (ngModelChange)="changed.emit()">
+        <option value="" disabled>Select Role Type</option>
         @for (t of types; track t) {
           <option [value]="t" [disabled]="t === 'System' && !system">{{ t }} Role</option>
         }
@@ -66,13 +67,15 @@
     }
   </div>
 
-  <div class="field">
-    <label for="rd-scope">Data Scope</label>
+  <div class="field" [class.invalid]="show('dataScope')">
+    <label for="rd-scope">Data Scope <span class="req">*</span></label>
     <select id="rd-scope" name="scope" [ngModel]="role.dataScope" (ngModelChange)="onScope($event)">
+      <option value="" disabled>Select Data Scope</option>
       @for (s of scopes; track s.id) {
         <option [value]="s.id">{{ s.id }}</option>
       }
     </select>
+    @if (show('dataScope'); as msg) { <small>{{ msg }}</small> }
   </div>
 
   <div class="field" [class.invalid]="submitted && errors.locations">
@@ -117,14 +120,16 @@
     </label>
   </div>
 
-  <div class="row-field">
-    <label for="rd-timeout">Session Timeout</label>
+  <div class="row-field" [class.invalid]="show('sessionTimeout')">
+    <label for="rd-timeout">Session Timeout <span class="req">*</span></label>
     <select id="rd-timeout" name="timeout" [(ngModel)]="role.sessionTimeout" (ngModelChange)="changed.emit()">
+      <option value="" disabled>Select Session Timeout</option>
       @for (t of timeouts; track t) {
         <option [value]="t">{{ t }}</option>
       }
     </select>
   </div>
+  @if (show('sessionTimeout'); as msg) { <small class="rd-row-error">{{ msg }}</small> }
 
   <div class="drawer__foot">
     <button type="button" class="btn btn--outline" (click)="cancel.emit()">Cancel</button>

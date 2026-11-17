@@ -113,12 +113,8 @@ export class NotificationTemplatesPage implements OnInit {
   readonly sample = computed<Record<string, string>>(() => {
     const rows = this.api.inspections.items();
     const i = rows.find((r) => r.status === 'In Progress') ?? rows[0];
-    if (!i) {
-      return {
-        inspection_id: 'INS-2026-0001', inspection_title: 'Sample Inspection', inspector_name: 'Inspector',
-        asset_name: 'Asset', location: 'Site', due_date: fmtDate(new Date().toISOString()), inspection_url: '#', asset_code: ''
-      };
-    }
+    // No inspection yet: leave the {{variables}} unfilled in the preview.
+    if (!i) return {} as Record<string, string>;
     return {
       inspection_id: i.inspectionCode,
       inspection_title: i.title,
@@ -192,14 +188,14 @@ export class NotificationTemplatesPage implements OnInit {
       tenantId: null,
       templateCode: '',
       templateName: 'New Template',
-      event: EVENTS[0]!,
+      event: '',
       channels: ['Email', 'In-app'],
       subject: 'Inspection {{inspection_id}}',
       messageBody: 'Hello {{inspector_name}},\n\n',
       recipients: ['Assigned inspector'],
       ccRecipients: [],
       buttonLabel: 'Open Inspection',
-      timing: this.timings[1]!,
+      timing: '',
       respectUserLocale: true,
       preventDuplicates: true,
       isActive: false
@@ -339,6 +335,10 @@ export class NotificationTemplatesPage implements OnInit {
     if (!d || this.saving) return;
     if (!d.templateName.trim() || !d.subject.trim()) {
       this.flash('Template name and subject are required.');
+      return;
+    }
+    if (!d.event || !d.timing) {
+      this.flash('Select an event and a notification timing.');
       return;
     }
     if (activate && !d.channels.length) {

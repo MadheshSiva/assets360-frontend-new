@@ -77,7 +77,7 @@ const IPV4 = /^((25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(25[0-5]|2[0-4]\d|1?\d?\d)(\/([0
   selector: 'app-mdm-system-configuration-system-settings',
   imports: [FormsModule, RouterLink, LucideAngularModule],
   templateUrl: './system-settings.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../../shared/styles/mdm-drawer.css', '../../people/people-form.css', '../../asset/level-form.css', './system-settings.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../../shared/styles/mdm-drawer.css', '../../people/people-form.css', '../../asset/level-form.css', './system-settings.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class SystemSettingsPage {
   private readonly service = inject(SystemSettingsService);

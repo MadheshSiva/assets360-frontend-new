@@ -19,7 +19,7 @@ type SortKey = 'name' | 'code';
   selector: 'app-mdm-maintenance-maintenance-type',
   imports: [FormsModule, RouterLink, LucideAngularModule, MaintenanceTypeForm],
   templateUrl: './maintenance-type.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../../people/people.css', '../maintenance.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../../people/people.css', '../maintenance.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class MaintenanceTypePage extends ListPage<MaintenanceTypeRecord, MaintenanceTypeFilters, SortKey> implements OnInit {
   readonly service = inject(MaintenanceTypeService);

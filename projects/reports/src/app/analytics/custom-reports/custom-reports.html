@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a [routerLink]="basePath">Reports &amp; Analytics</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <strong>Custom Reports</strong>
 </nav>
 
@@ -45,27 +45,28 @@
   <label class="filter">
     <span>Owner</span>
     <select [(ngModel)]="owner" (ngModelChange)="refilter()">
-      <option value="">All owners</option>
+      <option value="">Select Owner</option>
       @for (o of owners; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Module</span>
     <select [(ngModel)]="module" (ngModelChange)="refilter()">
-      <option value="">All modules</option>
+      <option value="">Select Module</option>
       @for (m of modules; track m) { <option [value]="m">{{ m }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Status</span>
     <select [(ngModel)]="status" (ngModelChange)="refilter()">
-      <option value="">All statuses</option>
+      <option value="">Select Status</option>
       @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Last Updated</span>
     <select [(ngModel)]="updated" (ngModelChange)="refilter()">
+      <option value="">Select Last Updated</option>
       @for (u of updatedRanges; track u.key) { <option [value]="u.key">{{ u.label }}</option> }
     </select>
   </label>

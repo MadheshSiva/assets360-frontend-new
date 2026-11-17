@@ -44,14 +44,14 @@
             <div class="field">
               <label for="tech-skill">Primary Skill</label>
               <select id="tech-skill" name="primarySkill" [(ngModel)]="form.primarySkill" (ngModelChange)="onPrimaryChange()">
-                <option value="">Select primary skill</option>
+                <option value="">Select Primary Skill</option>
                 @for (s of primaryOptions; track s) { <option [value]="s">{{ s }}</option> }
               </select>
             </div>
             <div class="field" [class.invalid]="errors.team">
               <label for="tech-team">Assigned Team</label>
               <select id="tech-team" name="team" [(ngModel)]="teamCode">
-                <option value="">Select team</option>
+                <option value="">Select Assigned Team</option>
                 @for (t of teamOptions; track t.code) { <option [value]="t.code">{{ t.name }}</option> }
               </select>
               @if (errors.team) { <small>{{ errors.team }}</small> }
@@ -65,13 +65,15 @@
               <label for="tech-phone">Phone</label>
               <input id="tech-phone" name="phone" type="tel" placeholder="Enter phone number" [(ngModel)]="form.phone" />
             </div>
-            <div class="field">
+            <div class="field" [class.invalid]="errors.status">
               <div class="status-select">
                 <i [attr.data-status]="form.status"></i>
                 <select name="status" aria-label="Status" [(ngModel)]="form.status">
+                  <option value="" disabled>Select Status</option>
                   @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
                 </select>
               </div>
+              @if (errors.status) { <small>{{ errors.status }}</small> }
             </div>
           </div>
         </div>
@@ -79,11 +81,13 @@
       }
 
       @case ('skills') {
-        <div class="field">
+        <div class="field" [class.invalid]="errors.skillLevel">
           <label for="tech-level">Skill Level ({{ form.primarySkill || 'primary skill' }})</label>
           <select id="tech-level" name="skillLevel" [(ngModel)]="form.skillLevel">
+            <option value="" disabled>Select Skill Level</option>
             @for (l of levels; track l) { <option [value]="l">{{ l }}</option> }
           </select>
+          @if (errors.skillLevel) { <small>{{ errors.skillLevel }}</small> }
         </div>
         <span class="section-title">Secondary Skills ({{ form.secondarySkills.length }})</span>
         <div class="ticks">
@@ -123,6 +127,7 @@
           <div class="field field--wide">
             <label for="tech-emp">Linked Employee</label>
             <select id="tech-emp" name="employeeId" [(ngModel)]="form.employeeId" (ngModelChange)="onEmployeeChange()">
+              <option value="" disabled>Select Linked Employee</option>
               <option value="">Not linked</option>
               @for (e of employeeOptions; track e.id) { <option [value]="e.id">{{ e.name }} ({{ e.id }})</option> }
             </select>
@@ -131,6 +136,7 @@
             <div class="field">
               <label for="tech-type">Employment Type</label>
               <select id="tech-type" name="employmentType" [(ngModel)]="form.employmentType">
+                <option value="" disabled>Select Employment Type</option>
                 @for (t of employmentTypes; track t) { <option [value]="t">{{ t }}</option> }
               </select>
             </div>
@@ -191,7 +197,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

@@ -4,9 +4,9 @@
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <a routerLink="/dashboard" aria-label="Home"><lucide-icon [img]="icons.House" [size]="16"></lucide-icon></a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <a routerLink="/wip-operations">WIP / Operations</a>
-        <span class="sep" aria-hidden="true">/</span>
+        <span class="sep" aria-hidden="true">›</span>
         <span class="crumb-current">Permit &amp; Compliance</span>
       </nav>
       <h1>Permit / Compliance</h1>
@@ -38,10 +38,10 @@
   <div *ngIf="tab === 'register'" class="pc-grid">
     <div class="col">
       <div class="filters">
-        <label class="field"><span class="field-label">Site</span><select class="control" [(ngModel)]="site" (ngModelChange)="onSite()"><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></label>
-        <label class="field"><span class="field-label">Job</span><select class="control" [(ngModel)]="job"><option value="">All</option><option *ngFor="let j of jobs" [value]="j">{{ j }}</option></select></label>
-        <label class="field"><span class="field-label">Permit Type</span><select class="control" [(ngModel)]="type"><option value="">All</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
-        <label class="field"><span class="field-label">Status</span><select class="control" [(ngModel)]="state"><option value="">All</option><option *ngFor="let s of states" [value]="s">{{ s }}</option></select></label>
+        <label class="field"><span class="field-label">Site</span><select class="control" [(ngModel)]="site" (ngModelChange)="onSite()"><option value="" disabled>Select Site</option><option *ngFor="let s of sites" [value]="s">{{ s }}</option></select></label>
+        <label class="field"><span class="field-label">Job</span><select class="control" [(ngModel)]="job"><option value="">Select Job</option><option *ngFor="let j of jobs" [value]="j">{{ j }}</option></select></label>
+        <label class="field"><span class="field-label">Permit Type</span><select class="control" [(ngModel)]="type"><option value="">Select Permit Type</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
+        <label class="field"><span class="field-label">Status</span><select class="control" [(ngModel)]="state"><option value="">Select Status</option><option *ngFor="let s of states" [value]="s">{{ s }}</option></select></label>
       </div>
 
       <section class="box" aria-labelledby="pc-reg">
@@ -68,7 +68,7 @@
       </section>
 
       <!-- Job Authorization Gate -->
-      <section class="box" aria-labelledby="pc-gate">
+      <section *ngIf="permits.length" class="box" aria-labelledby="pc-gate">
         <h3 id="pc-gate" class="gate-title">Job Authorization Gate</h3>
         <p class="gate-sub">{{ selected.job }} • {{ selected.stage }}<ng-container *ngIf="selected.asset"> • {{ selected.asset }}</ng-container></p>
         <div class="gate-banner" [class.is-bad]="!authorized(selected)">
@@ -81,7 +81,7 @@
       </section>
 
       <!-- Compliance checklist -->
-      <section class="box" aria-labelledby="pc-check">
+      <section *ngIf="permits.length" class="box" aria-labelledby="pc-check">
         <h3 id="pc-check">Compliance Checklist</h3>
         <div class="table-wrap">
           <table class="wt">
@@ -110,7 +110,7 @@
     </div>
 
     <!-- ===== Right column ===== -->
-    <div class="col">
+    <div *ngIf="permits.length" class="col">
       <section class="box" aria-labelledby="pc-det">
         <h3 id="pc-det">Permit Details</h3>
         <div class="det-title"><span class="det-id">{{ selected.id }}</span><span class="pill" [ngClass]="stateClass(stateOf(selected))"><span class="dot-sm"></span>{{ stateOf(selected) }}</span></div>
@@ -190,6 +190,7 @@
   <!-- =================== Compliance requirements =================== -->
   <section *ngIf="tab === 'requirements'" class="box" aria-labelledby="pc-req">
     <h3 id="pc-req">Compliance Requirements <span class="muted">{{ site }} · open permits meeting each requirement</span></h3>
+    <p *ngIf="!requirementsByType.length" class="empty">No permits for this site.</p>
     <div class="req-grid">
       <div *ngFor="let t of requirementsByType" class="req-card">
         <div class="req-head"><strong>{{ t.type }}</strong><span class="muted">{{ t.permits }} open</span></div>
@@ -323,7 +324,7 @@
     <form class="modal-body" (ngSubmit)="saveRequest()">
       <p *ngIf="f.replaces" class="hint">Replaces {{ f.replaces }}. The new permit needs safety review and operations release.</p>
       <div class="grid-3">
-        <label class="field"><span class="field-label">Permit Type</span><select class="control" [(ngModel)]="f.type" name="type"><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
+        <label class="field"><span class="field-label">Permit Type</span><select class="control" [(ngModel)]="f.type" name="type"><option value="" disabled>Select Permit Type</option><option *ngFor="let t of types" [value]="t">{{ t }}</option></select></label>
         <label class="field"><span class="field-label">Job Order <em>*</em></span><input class="control" [(ngModel)]="f.job" name="job" placeholder="JO-2026-00438" /></label>
         <label class="field"><span class="field-label">Stage <em>*</em></span><input class="control" [(ngModel)]="f.stage" name="stage" /></label>
         <label class="field"><span class="field-label">Location <em>*</em></span><input class="control" [(ngModel)]="f.location" name="location" /></label>

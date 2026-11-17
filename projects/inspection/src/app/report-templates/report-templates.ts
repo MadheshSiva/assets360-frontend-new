@@ -45,10 +45,10 @@ function blankTemplate(): Partial<ReportTemplate> {
     reportTemplateCode: '',
     reportTitle: '',
     inspectionTypeName: '',
-    format: 'PDF',
-    pageSize: 'A4',
-    orientation: 'Portrait',
-    language: 'English',
+    format: '',
+    pageSize: '',
+    orientation: '',
+    language: '',
     accentColor: '#6D28D9',
     versionLabel: '1.0',
     reportNumberFormat: 'INSR-{YYYY}-{SEQ}',
@@ -345,6 +345,10 @@ export class ReportTemplatesPage implements OnInit {
     const title = f.reportTitle?.trim();
     if (!title) {
       this.formError = 'Template name is required.';
+      return;
+    }
+    if (!f.format || !f.pageSize || !f.orientation || !f.language) {
+      this.formError = 'Select a format, page size, orientation and language.';
       return;
     }
     this.busy = true;

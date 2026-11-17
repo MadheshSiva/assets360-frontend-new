@@ -23,7 +23,7 @@ interface Filters {
   selector: 'app-mdm-security-module-access-master',
   imports: [FormsModule, RouterLink, LucideAngularModule, ModuleForm],
   templateUrl: './module-access-master.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../security.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../security.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class ModuleAccessMasterPage extends ListPage<ModuleRecord, Filters, SortKey> {
   readonly service = inject(ModuleService);

@@ -29,7 +29,7 @@ export interface ActionPlan {
           <div class="field" [class.invalid]="tried && !plan.owner">
             <label for="ap-owner">Owner <span class="req">*</span></label>
             <select id="ap-owner" name="owner" [(ngModel)]="plan.owner">
-              <option value="">Select owner</option>
+              <option value="">Select Owner</option>
               @for (p of people; track p) { <option [value]="p">{{ p }}</option> }
             </select>
             @if (tried && !plan.owner) { <small>Choose who owns the plan.</small> }
@@ -39,11 +39,13 @@ export interface ActionPlan {
             <input id="ap-due" name="due" type="date" min="2026-10-28" [(ngModel)]="plan.due" />
             @if (tried && dueError) { <small>{{ dueError }}</small> }
           </div>
-          <div class="field">
-            <label for="ap-priority">Priority</label>
+          <div class="field" [class.invalid]="tried && !plan.priority">
+            <label for="ap-priority">Priority <span class="req">*</span></label>
             <select id="ap-priority" name="priority" [(ngModel)]="plan.priority">
+              <option value="" disabled>Select Priority</option>
               @for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }
             </select>
+            @if (tried && !plan.priority) { <small>Choose a priority.</small> }
           </div>
         </div>
         <div class="field">
@@ -73,7 +75,7 @@ export class IotActionPlanDialog implements OnInit {
 
   readonly people = RA_PEOPLE;
   readonly priorities = ['Critical', 'High', 'Medium', 'Low'];
-  plan: ActionPlan = { title: '', owner: '', due: '', priority: 'High', notes: '' };
+  plan: ActionPlan = { title: '', owner: '', due: '', priority: '', notes: '' };
   tried = false;
 
   ngOnInit(): void {
@@ -82,12 +84,14 @@ export class IotActionPlanDialog implements OnInit {
 
   get dueError(): string {
     if (!this.plan.due) return 'Pick a due date.';
-    return this.plan.due < '2026-10-28' ? 'The due date cannot be in the past.' : '';
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return this.plan.due < today ? 'The due date cannot be in the past.' : '';
   }
 
   submit(): void {
     this.tried = true;
-    if (!this.plan.title.trim() || !this.plan.owner || this.dueError) return;
+    if (!this.plan.title.trim() || !this.plan.owner || !this.plan.priority || this.dueError) return;
     this.saved.emit({ ...this.plan, title: this.plan.title.trim() });
   }
 }

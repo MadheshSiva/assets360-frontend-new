@@ -14,7 +14,7 @@ type Tab = 'basic' | 'settings';
   selector: 'app-maintenance-type-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './maintenance-type-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../maintenance-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../maintenance-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class MaintenanceTypeForm extends MasterForm<MaintenanceTypeRecord, Tab> {
   protected readonly store = inject(MaintenanceTypeService);
@@ -38,6 +38,7 @@ export class MaintenanceTypeForm extends MasterForm<MaintenanceTypeRecord, Tab> 
   protected validate(f: MaintenanceTypeRecord) {
     const errors: Record<string, string> = {};
     if (!f.description.trim()) errors['description'] = 'Enter a description.';
+    if (!f.status) errors['status'] = 'Select a status.';
     return { errors, tab: 'basic' as Tab };
   }
 

@@ -45,7 +45,7 @@
             <div class="field" [class.invalid]="errors.assetType">
               <label for="cat-type"><span class="req">*</span> Asset Type</label>
               <select id="cat-type" name="assetType" [(ngModel)]="form.assetType" (ngModelChange)="onAssetTypeChange()">
-                <option value="" disabled>Select asset type</option>
+                <option value="" disabled>Select Asset Type</option>
                 @for (t of assetTypes; track t) { <option [value]="t">{{ t }}</option> }
               </select>
               @if (errors.assetType) { <small>{{ errors.assetType }}</small> }
@@ -95,7 +95,7 @@
         <div class="field" [class.invalid]="errors.assetType">
           <label for="cat-type-d"><span class="req">*</span> Asset Type</label>
           <select id="cat-type-d" name="assetTypeD" [(ngModel)]="form.assetType" (ngModelChange)="onAssetTypeChange()">
-            <option value="" disabled>Select asset type</option>
+            <option value="" disabled>Select Asset Type</option>
             @for (t of assetTypes; track t) { <option [value]="t">{{ t }}</option> }
           </select>
         </div>
@@ -104,6 +104,7 @@
           <div class="field">
             <label for="cat-method">Depreciation Method</label>
             <select id="cat-method" name="depreciationMethod" [(ngModel)]="form.depreciationMethod">
+              <option value="" disabled>Select Depreciation Method</option>
               <option value="Straight Line">Straight Line</option>
               <option value="Declining Balance">Declining Balance</option>
             </select>
@@ -116,7 +117,7 @@
           <div class="field">
             <label for="cat-cc">Cost Center</label>
             <select id="cat-cc" name="costCenter" [(ngModel)]="form.costCenter">
-              <option value="">Select cost center</option>
+              <option value="">Select Cost Center</option>
               @for (c of costCenters; track c) { <option [value]="c">{{ c }}</option> }
             </select>
           </div>
@@ -128,12 +129,14 @@
           <div class="field">
             <label for="cat-tracking">Tracking Method</label>
             <select id="cat-tracking" name="trackingMethod" [(ngModel)]="form.trackingMethod">
+              <option value="" disabled>Select Tracking Method</option>
               @for (t of trackingMethods; track t) { <option [value]="t">{{ t }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="cat-condition">Default Condition</label>
             <select id="cat-condition" name="defaultCondition" [(ngModel)]="form.defaultCondition">
+              <option value="" disabled>Select Default Condition</option>
               <option value="New">New</option>
               <option value="Good">Good</option>
               <option value="Fair">Fair</option>
@@ -149,6 +152,7 @@
             <div class="spec-row field-row">
               <input [name]="'fieldName' + $index" placeholder="Field name" [attr.aria-label]="'Custom field ' + ($index + 1) + ' name'" [(ngModel)]="c.name" />
               <select [name]="'fieldType' + $index" [attr.aria-label]="'Custom field ' + ($index + 1) + ' type'" [(ngModel)]="c.type">
+                <option value="" disabled>Select Type</option>
                 @for (t of fieldTypes; track t) { <option [value]="t">{{ t }}</option> }
               </select>
               <label class="field-row__req"><input type="checkbox" [name]="'fieldReq' + $index" [(ngModel)]="c.required" /> Required</label>
@@ -192,7 +196,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

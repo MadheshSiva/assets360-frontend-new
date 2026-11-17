@@ -18,7 +18,7 @@ type SortKey = 'name' | 'code' | 'maintenanceType' | 'durationHours';
   selector: 'app-mdm-maintenance-work-type',
   imports: [FormsModule, RouterLink, LucideAngularModule, WorkTypeForm],
   templateUrl: './work-type.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../../people/people.css', '../maintenance.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../../people/people.css', '../maintenance.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class WorkTypePage extends ListPage<WorkTypeRecord, WorkTypeFilters, SortKey> implements OnInit {
   readonly service = inject(WorkTypeService);

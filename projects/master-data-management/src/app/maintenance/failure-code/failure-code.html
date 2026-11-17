@@ -28,14 +28,14 @@
         <label class="filter">
           <span>Category</span>
           <select name="category" [(ngModel)]="draft.category">
-            <option value="">All</option>
+            <option value="">Select Category</option>
             @for (o of categories; track o) { <option [value]="o">{{ o }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Severity</span>
           <select name="severity" [(ngModel)]="draft.severity">
-            <option value="">All</option>
+            <option value="">Select Severity</option>
             @for (o of severities; track o) { <option [value]="o">{{ o }}</option> }
           </select>
         </label>

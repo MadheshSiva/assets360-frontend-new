@@ -23,7 +23,7 @@ interface DepreciationRow {
   selector: 'app-model-detail',
   imports: [DecimalPipe, RouterLink, LucideAngularModule],
   templateUrl: './model-detail.html',
-  styleUrls: ['../../../shared/styles/mdm-detail.css', '../../../shared/styles/mdm-detail-extras.css', './model-detail.css']
+  styleUrls: ['../../../shared/styles/mdm-detail.css', '../../../shared/styles/mdm-detail-extras.css', './model-detail.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class ModelDetail implements OnChanges {
   @Input({ required: true }) model!: AssetModelRecord;

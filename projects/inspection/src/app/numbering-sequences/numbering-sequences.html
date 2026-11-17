@@ -2,7 +2,7 @@
   <div class="page-head">
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a routerLink="/inspection/overview">Inspection</a><span>/</span><span>Configuration</span><span>/</span>
+        <a routerLink="/inspection/overview">Inspection</a><span class="crumb-sep" aria-hidden="true">›</span><span>Configuration</span><span class="crumb-sep" aria-hidden="true">›</span>
         <span class="current">Numbering Sequences</span>
       </nav>
       <h1>Numbering Sequences</h1>
@@ -87,6 +87,7 @@
               <input class="control" [(ngModel)]="d.sequenceName" (ngModelChange)="touch()" /></label>
             <label class="field"><span class="field-label">Record type</span>
               <select class="control" [(ngModel)]="d.numberType" (ngModelChange)="touch()">
+                <option value="" disabled>Select Record Type</option>
                 @for (t of recordTypes; track t) { <option [value]="t">{{ t }}</option> }
               </select></label>
             <label class="field"><span class="field-label">Prefix</span>
@@ -101,20 +102,24 @@
               </select></label>
             <label class="field"><span class="field-label">Sequence digits</span>
               <select class="control" [(ngModel)]="d.sequenceDigits" (ngModelChange)="touch()">
+                <option [ngValue]="null" disabled>Select Sequence Digits</option>
                 @for (n of digitOptions; track n) { <option [ngValue]="n">{{ n }}</option> }
               </select></label>
             <label class="field"><span class="field-label">Starting number</span>
               <input class="control" type="number" min="0" [(ngModel)]="d.startingNumber" (ngModelChange)="setStarting()" /></label>
             <label class="field"><span class="field-label">Reset rule</span>
               <select class="control" [(ngModel)]="d.resetFrequency" (ngModelChange)="touch()">
+                <option value="" disabled>Select Reset Rule</option>
                 @for (r of resetRules; track r) { <option [value]="r">{{ r }}</option> }
               </select></label>
             <label class="field"><span class="field-label">Scope</span>
               <select class="control" [(ngModel)]="d.scope" (ngModelChange)="touch()">
+                <option value="" disabled>Select Scope</option>
                 @for (s of scopes; track s) { <option [value]="s">{{ s }}</option> }
               </select></label>
             <label class="field"><span class="field-label">Timezone</span>
               <select class="control" [(ngModel)]="d.timezone" (ngModelChange)="touch()">
+                <option value="" disabled>Select Timezone</option>
                 @for (t of timezones; track t) { <option [value]="t">{{ t }}</option> }
               </select></label>
             <label class="field span-2"><span class="field-label">Sequence format</span>

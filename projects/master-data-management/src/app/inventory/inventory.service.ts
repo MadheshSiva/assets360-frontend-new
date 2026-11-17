@@ -292,7 +292,7 @@ export class ItemCategoryService extends InventoryStore<ItemCategoryRecord, Item
       parentCategory: this.ref(r.parentCode),
       description: r.description,
       defaultUom: this.uoms.ref(r.defaultUom),
-      valuationMethod: r.valuationMethod,
+      valuationMethod: r.valuationMethod || null,
       inspectionOnReceipt: r.inspectionOnReceipt,
       allowNegativeStock: r.allowNegativeStock,
       status: r.status
@@ -500,7 +500,7 @@ export class StoreService extends InventoryStore<StoreRecord, StoreDto> {
       code: r.code,
       warehouse: this.warehouses.ref(r.warehouseCode),
       description: r.description,
-      storeType: r.storeType,
+      storeType: r.storeType || null,
       keeper: this.employees.ref(r.keeperId),
       temperatureControlled: r.temperatureControlled,
       restrictedAccess: r.restrictedAccess,
@@ -566,7 +566,7 @@ export class BinService extends InventoryStore<BinRecord, BinDto> {
       description: r.description,
       rack: r.rack,
       shelf: r.shelf,
-      binType: r.binType,
+      binType: r.binType || null,
       capacity: r.capacity,
       status: r.status
     };
@@ -715,8 +715,8 @@ export class ItemService extends InventoryStore<ItemRecord, ItemDto> {
       store: this.stores.ref(r.storeCode),
       bin: this.bins.ref(r.binCode),
       unitCost: r.unitCost,
-      currency: r.currency,
-      valuationMethod: r.valuationMethod,
+      currency: r.currency || null,
+      valuationMethod: r.valuationMethod || null,
       manufacturer: r.manufacturer,
       specification: r.specification,
       shelfLifeDays: r.shelfLifeDays,

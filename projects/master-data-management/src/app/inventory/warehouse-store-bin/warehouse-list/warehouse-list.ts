@@ -20,7 +20,7 @@ interface Filters {
   selector: 'app-warehouse-list',
   imports: [FormsModule, LucideAngularModule, WarehouseForm],
   templateUrl: './warehouse-list.html',
-  styleUrls: ['../../../shared/styles/mdm-page.css', '../../inventory.css']
+  styleUrls: ['../../../shared/styles/mdm-page.css', '../../inventory.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class WarehouseList extends ListPage<WarehouseRecord, Filters, SortKey> {
   @Output() showStores = new EventEmitter<string>();

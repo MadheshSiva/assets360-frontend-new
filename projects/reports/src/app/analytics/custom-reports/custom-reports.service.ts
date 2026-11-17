@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { CURRENT_USER } from '../shared/analytics-common';
 import { CUSTOM_REPORT_SEED, DATA_SOURCES, MODULE_SOURCES, blankDefinition } from './custom-reports.data';
 import { sourceOf } from './custom-reports.engine';
-import { CustomReport, ReportStatus } from './custom-reports.model';
+import { Aggregate, CustomReport, ReportStatus, ReportVisibility } from './custom-reports.model';
 
 // DEMO MODE: custom reports live in memory until the reporting API exists
 
@@ -66,7 +66,10 @@ export class CustomReportsService {
 
   blank(): CustomReport {
     return {
-      ...blankDefinition(),
+      // New reports start with every dropdown empty: the user picks the source, aggregate, row limit, visibility and schedule
+      ...blankDefinition(''),
+      aggregate: '' as Aggregate,
+      rowLimit: null,
       id: '',
       name: '',
       description: '',
@@ -75,8 +78,8 @@ export class CustomReportsService {
       status: 'Draft',
       favourite: false,
       updatedAt: dubaiNow(),
-      visibility: 'My team',
-      schedule: 'Not scheduled'
+      visibility: '' as ReportVisibility,
+      schedule: ''
     };
   }
 
@@ -150,6 +153,11 @@ export class CustomReportsService {
     report.description = input.description;
     report.sourceKey = sourceKey;
     report.module = sourceOf(sourceKey).module;
+    // Copies are stored straight away, so they keep the standard settings (blank() leaves these for the user to pick)
+    report.aggregate = 'Sum';
+    report.rowLimit = 25;
+    report.visibility = 'My team';
+    report.schedule = 'Not scheduled';
     // Start with the first few fields of the source so the copy previews straight away
     report.fields = [...(STARTER_FIELDS[sourceKey] ?? [])];
     this.items = [report, ...this.items];

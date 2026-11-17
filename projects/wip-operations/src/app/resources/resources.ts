@@ -28,8 +28,7 @@ import {
   Wrench,
   X,
 } from 'lucide-angular';
-import { ASSET_RECORDS } from 'shared-ui';
-import RESOURCE_DATA from './resources.json';
+import { AssetRecord } from 'shared-ui';
 import { Availability, Booking, BookingRequest, Resource, ResourceType } from './resource.model';
 
 type Tab = 'directory' | 'calendar' | 'assignments' | 'skills' | 'capacity';
@@ -59,17 +58,14 @@ interface UnavailableForm {
 const TYPES: ResourceType[] = ['Person', 'Team', 'Equipment', 'Workstation', 'Tool'];
 const CODE_PREFIX: Record<ResourceType, string> = { Person: 'PER', Team: 'TEAM', Equipment: 'EQP', Workstation: 'WS', Tool: 'TL' };
 const DEFAULT_CAPACITY: Record<ResourceType, string> = { Person: '8 h/day', Team: '3 members', Equipment: '1 job at a time', Workstation: '1 job at a time', Tool: '1 job at a time' };
-/** Job orders that exist on the Job Orders page (others are shown as plain codes). */
-const KNOWN_JOBS = ['JO-2026-00438', 'JO-2026-00431', 'JO-2026-00442'];
+/** Job orders that exist on the Job Orders page (others are shown as plain codes); filled from the API once wired. */
+const KNOWN_JOBS: string[] = [];
 const DAY_START = 8;
 const DAY_END = 17;
 
-/** DEMO MODE: resources come from resources.json and are kept in memory until the WIP API is wired up. */
-const DATA = RESOURCE_DATA as { asOf: string; resources: Resource[]; requests: BookingRequest[] };
-const RESOURCES: Resource[] = structuredClone(DATA.resources);
-const REQUESTS: BookingRequest[] = structuredClone(DATA.requests);
-/** When the page was first opened; the demo clock runs on from the data's asOf time. */
-let OPENED_AT = 0;
+/** Resources and booking requests are kept in memory; empty until the WIP API is wired up. */
+const RESOURCES: Resource[] = [];
+const REQUESTS: BookingRequest[] = [];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const localStamp = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -95,7 +91,7 @@ const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
   imports: [CommonModule, FormsModule, RouterModule, LucideAngularModule],
   templateUrl: './resources.html',
   // Buttons, controls, cards, tabs, menu, modal and toast come from the Job Templates stylesheet
-  styleUrls: ['../job-templates/job-templates.css', './resources.css', './resources-panels.css'],
+  styleUrls: ['../job-templates/job-templates.css', './resources.css', './resources-panels.css', '../shared/wip-purple-theme.css'],
 })
 export class Resources implements OnDestroy {
   readonly icons = {
@@ -113,7 +109,8 @@ export class Resources implements OnDestroy {
   ];
   readonly hours = Array.from({ length: DAY_END - DAY_START + 1 }, (_, i) => DAY_START + i);
   readonly calendars = ['Factory Day Shift', 'Factory Night Shift', 'Office Hours', '24/7'];
-  readonly assetOptions = ASSET_RECORDS;
+  /** Assets that can be linked to a resource; filled from the asset register API once wired. */
+  readonly assetOptions: AssetRecord[] = [];
 
   resources = RESOURCES;
   requests = REQUESTS;
@@ -127,11 +124,11 @@ export class Resources implements OnDestroy {
   sortDir: SortDir = 'none';
   readonly pageSize = 7;
   page = 1;
-  selectedCode = 'EQP-003';
+  selectedCode = RESOURCES[0]?.code ?? '';
   menuCode: string | null = null;
 
   // ===== Schedule / calendar =====
-  /** The demo "now" (ticks every 30 s). */
+  /** Current time (ticks every 30 s). */
   now: Date;
   scheduleDate: string;
   private timer?: ReturnType<typeof setInterval>;
@@ -152,7 +149,6 @@ export class Resources implements OnDestroy {
   private toastTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
-    if (!OPENED_AT) OPENED_AT = Date.now();
     this.now = this.clock();
     this.scheduleDate = this.today;
     this.timer = setInterval(() => (this.now = this.clock()), 30_000);
@@ -164,7 +160,7 @@ export class Resources implements OnDestroy {
   }
 
   private clock(): Date {
-    return new Date(parseLocal(DATA.asOf).getTime() + (Date.now() - OPENED_AT));
+    return new Date();
   }
 
   get nowStamp(): string {
@@ -439,7 +435,7 @@ export class Resources implements OnDestroy {
 
   openAdd(): void {
     this.formError = '';
-    this.form = { code: null, name: '', type: 'Person', skills: '', capacity: DEFAULT_CAPACITY.Person, site: 'Dubai Factory', location: '', calendar: this.calendars[0], owner: 'Production Manager', linkedAsset: '' };
+    this.form = { code: null, name: '', type: 'Person', skills: '', capacity: DEFAULT_CAPACITY.Person, site: '', location: '', calendar: this.calendars[0], owner: '', linkedAsset: '' };
   }
 
   openEdit(r: Resource): void {
@@ -465,7 +461,7 @@ export class Resources implements OnDestroy {
       this.formError = 'Enter the resource name, capacity and site.';
       return;
     }
-    const asset = ASSET_RECORDS.find((a) => a.tag === f.linkedAsset);
+    const asset = this.assetOptions.find((a) => a.tag === f.linkedAsset);
     const values = {
       name: f.name.trim(), type: f.type, skills: f.skills.split(',').map((s) => s.trim()).filter(Boolean), capacity: f.capacity.trim(),
       site: f.site.trim(), location: f.location.trim(), calendar: f.calendar, owner: f.owner.trim(),
@@ -631,8 +627,8 @@ export class Resources implements OnDestroy {
           }
           this.resources.push({
             code: this.newCode(type), name, type, skills: (get(row, 'skills') || get(row, 'skillscapability')).split(/[,;]/).map((s) => s.trim()).filter(Boolean),
-            capacity: get(row, 'capacity') || DEFAULT_CAPACITY[type], site: get(row, 'site') || 'Dubai Factory', location: get(row, 'location'),
-            calendar: get(row, 'calendar') || this.calendars[0], owner: get(row, 'owner') || 'Production Manager', linkedAsset: null,
+            capacity: get(row, 'capacity') || DEFAULT_CAPACITY[type], site: get(row, 'site'), location: get(row, 'location'),
+            calendar: get(row, 'calendar') || this.calendars[0], owner: get(row, 'owner'), linkedAsset: null,
             readiness: [], certifications: [], utilization: 0, bookings: [], notes: '',
           });
           added++;
@@ -652,8 +648,6 @@ export class Resources implements OnDestroy {
   downloadImportTemplate(): void {
     const sheet = XLSX.utils.aoa_to_sheet([
       ['Name', 'Type', 'Skills', 'Capacity', 'Site', 'Location', 'Calendar', 'Owner'],
-      ['Khalid Mansour', 'Person', 'Assembly, Seal fitting', '8 h/day', 'Dubai Factory', 'Assembly Bay 02', 'Factory Day Shift', 'Production Manager'],
-      ['Leak Test Rig LT-03', 'Equipment', 'Leak test', '1 job at a time', 'Abu Dhabi Plant', 'Valve Workshop', 'Factory Day Shift', 'Maintenance Team'],
     ]);
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, sheet, 'Resources');

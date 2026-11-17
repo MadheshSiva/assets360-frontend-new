@@ -1,5 +1,5 @@
 <div class="dm-page">
-  <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep">/</span><strong>Device Type &amp; Model</strong></nav>
+  <nav class="crumbs" aria-label="Breadcrumb"><span>IoT &amp; Tracking</span><span class="sep" aria-hidden="true">›</span><strong>Device Type &amp; Model</strong></nav>
   <header class="dm-head">
     <div class="grow">
       <h1>Device Type &amp; Model</h1>
@@ -49,10 +49,12 @@
         <section class="card table-card" aria-label="Device models">
           <div class="filters">
             <label class="search"><lucide-icon [img]="icons.Search" [size]="16"></lucide-icon><input type="search" [(ngModel)]="search" (ngModelChange)="onFilter()" placeholder="Search models, manufacturer..." aria-label="Search models" /></label>
-            <label class="lsel"><span>Manufacturer</span><select [(ngModel)]="mfrFilter" (ngModelChange)="onFilter()"><option value="">All</option><option *ngFor="let x of manufacturers" [value]="x">{{ x }}</option></select></label>
-            <label class="lsel"><span>Connectivity</span><select [(ngModel)]="connFilter" (ngModelChange)="onFilter()"><option value="">All</option><option *ngFor="let c of connOptions" [value]="c">{{ c }}</option></select></label>
-            <label class="lsel"><span>Status</span><select [(ngModel)]="statusFilter" (ngModelChange)="onFilter()"><option value="">All</option><option *ngFor="let s of statuses" [value]="s">{{ statusLabel(s) }}</option></select></label>
+            <label class="lsel"><span>Manufacturer</span><select [(ngModel)]="mfrFilter" (ngModelChange)="onFilter()"><option value="">Select Manufacturer</option><option *ngFor="let x of manufacturers" [value]="x">{{ x }}</option></select></label>
+            <label class="lsel"><span>Connectivity</span><select [(ngModel)]="connFilter" (ngModelChange)="onFilter()"><option value="">Select Connection</option><option *ngFor="let c of connOptions" [value]="c">{{ c }}</option></select></label>
+            <label class="lsel"><span>Status</span><select [(ngModel)]="statusFilter" (ngModelChange)="onFilter()"><option value="">Select Status</option><option *ngFor="let s of statuses" [value]="s">{{ statusLabel(s) }}</option></select></label>
           </div>
+          <p *ngIf="loading" class="muted" role="status">Loading device models…</p>
+          <p *ngIf="loadError" class="form-error" role="alert">{{ loadError }} <button type="button" class="link-btn" (click)="load()">Retry</button></p>
           <div *ngIf="measFilter || attrFilter" class="cap-filters">
             <span class="muted">Capability:</span>
             <button *ngIf="measFilter" type="button" class="fchip" (click)="toggleMeas(measFilter)">{{ measFilter }}<lucide-icon [img]="icons.X" [size]="13"></lucide-icon></button>
@@ -74,16 +76,16 @@
                     </span>
                   </td>
                   <td class="c-type">{{ typeName(m.typeId) }}</td>
-                  <td class="c-conn">{{ m.connectivity.join(' / ') }}</td>
+                  <td class="c-conn">{{ m.connectivity.join(' / ') || '—' }}</td>
                   <td class="c-meas">{{ measText(m) }}</td>
                   <td class="c-power">{{ powerShort(m) }}</td>
-                  <td class="c-proto">{{ m.protocol }}</td>
+                  <td class="c-proto">{{ m.protocol || '—' }}</td>
                   <td><span class="pill pill--badge" [ngClass]="'pill--' + m.status.toLowerCase()">{{ statusLabel(m.status) }}</span></td>
                   <td class="col-act" (click)="$event.stopPropagation()">
                     <button type="button" class="icon-btn" (click)="openMenu(m, $event)" aria-haspopup="menu" [attr.aria-expanded]="menuId === m.id" [attr.aria-label]="'Actions for ' + m.name"><lucide-icon [img]="icons.Ellipsis" [size]="18"></lucide-icon></button>
                   </td>
                 </tr>
-                <tr *ngIf="!pageRows.length"><td colspan="8" class="empty">
+                <tr *ngIf="!pageRows.length && !loading"><td colspan="8" class="empty">
                   <ng-container *ngIf="hasFilters; else noModels">No models match these filters. <button type="button" class="link-btn" (click)="clearFilters()">Clear filters</button></ng-container>
                   <ng-template #noModels>No models for {{ scopeName }} yet. <button type="button" class="link-btn" (click)="openAdd()">Add Device Model</button></ng-template>
                 </td></tr>
@@ -157,7 +159,7 @@
         <dt>Manufacturer</dt><dd>{{ m.manufacturer }}</dd>
         <dt>Model Number</dt><dd>{{ m.name }}</dd>
         <dt>Device Type</dt><dd>{{ typeName(m.typeId) }}</dd>
-        <dt>Radio / Protocol</dt><dd>{{ m.connectivity.join(', ') }}</dd>
+        <dt>Radio / Protocol</dt><dd>{{ m.connectivity.join(', ') || '—' }}{{ m.protocol ? ' · ' + m.protocol : '' }}</dd>
         <dt>Frequency Bands</dt><dd>{{ m.bands.length ? m.bands.join(', ') : '—' }}</dd>
         <dt>IP Rating</dt><dd>{{ m.ipRating || '—' }}</dd>
         <dt>Power</dt><dd>{{ m.power || '—' }}</dd>
@@ -198,17 +200,17 @@
     <div class="modal-head"><h2 id="dm-mdl">{{ d.title }}</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
     <form class="modal-body" (ngSubmit)="saveModel()">
       <div class="three">
-        <label class="field"><span class="field-label">Model name <em>*</em></span><input class="control" [(ngModel)]="d.f.name" name="name" placeholder="e.g. EM300-TH" /></label>
+        <label class="field"><span class="field-label">Model name <em>*</em></span><input class="control" [(ngModel)]="d.f.name" name="name" placeholder="e.g. EM300-TH" [readonly]="!!d.editId" [title]="d.editId ? 'The model number cannot be changed' : ''" /></label>
         <label class="field"><span class="field-label">Manufacturer <em>*</em></span><input class="control" [(ngModel)]="d.f.manufacturer" name="mfr" list="dm-mfrs" placeholder="e.g. Milesight" autocomplete="off" /></label>
-        <label class="field"><span class="field-label">Device type <em>*</em></span><select class="control" [(ngModel)]="d.f.typeId" name="type" (ngModelChange)="onFormType()"><option *ngFor="let t of types" [value]="t.id">{{ t.name }}</option></select></label>
+        <label class="field"><span class="field-label">Device type <em>*</em></span><select class="control" [(ngModel)]="d.f.typeId" name="type" (ngModelChange)="onFormType()"><option value="" disabled>Select Device Type</option><option *ngFor="let t of types" [value]="t.id">{{ t.name }}</option></select></label>
       </div>
       <fieldset class="field">
         <legend class="field-label">Connectivity <em>*</em></legend>
-        <div class="chips"><button *ngFor="let c of connOptions" type="button" class="cchip" [class.is-on]="d.f.connectivity.includes(c)" (click)="toggleIn(d.f.connectivity, c)"><lucide-icon [img]="connIcon(c)" [size]="14"></lucide-icon>{{ c }}</button></div>
+        <div class="chips"><button *ngFor="let c of connOptions" type="button" class="cchip" [class.is-on]="d.f.connectivity.includes(c)" (click)="pickConn(d.f.connectivity, c)"><lucide-icon [img]="connIcon(c)" [size]="14"></lucide-icon>{{ c }}</button></div>
       </fieldset>
       <div class="three">
-        <label class="field"><span class="field-label">Protocol</span><input class="control" [(ngModel)]="d.f.protocol" name="proto" placeholder="e.g. LoRaWAN 1.0.3" /></label>
-        <label class="field"><span class="field-label">Power</span><select class="control" [(ngModel)]="d.f.power" name="power"><option *ngFor="let p of powerOptions" [value]="p">{{ p }}</option></select></label>
+        <label class="field"><span class="field-label">Protocol</span><input class="control" [(ngModel)]="d.f.protocol" name="proto" list="dm-protos" placeholder="e.g. LoRaWAN 1.0.3" autocomplete="off" /><datalist id="dm-protos"><option *ngFor="let p of protocolHints(d.f.connectivity[0])" [value]="p"></option></datalist></label>
+        <label class="field"><span class="field-label">Power</span><select class="control" [(ngModel)]="d.f.power" name="power"><option value="" disabled>Select Power</option><option *ngFor="let p of powerOptions" [value]="p">{{ p }}</option></select></label>
         <label class="field"><span class="field-label">Frequency bands</span><input class="control" [(ngModel)]="d.f.bands" name="bands" placeholder="EU868, US915" /></label>
       </div>
       <fieldset class="field">
@@ -216,12 +218,13 @@
         <div class="chips"><button *ngFor="let x of measOptions" type="button" class="cchip" [class.is-on]="d.f.measurements.includes(x.name)" (click)="toggleIn(d.f.measurements, x.name)">{{ x.name }} <small>{{ x.unit }}</small></button></div>
       </fieldset>
       <div class="three">
-        <label class="field"><span class="field-label">IP rating</span><input class="control" [(ngModel)]="d.f.ipRating" name="ip" placeholder="IP67" /></label>
+        <label class="field"><span class="field-label">IP rating</span><input class="control" [(ngModel)]="d.f.ipRating" name="ip" list="dm-ips" placeholder="IP67" autocomplete="off" /><datalist id="dm-ips"><option *ngFor="let x of ipRatings" [value]="x"></option></datalist></label>
         <label class="field"><span class="field-label">Battery life (est.)</span><input class="control" [(ngModel)]="d.f.batteryLife" name="bat" placeholder="Up to 10 years (10 min interval)" /></label>
         <label class="field"><span class="field-label">Operating temperature</span><input class="control" [(ngModel)]="d.f.opTemp" name="temp" placeholder="-30 °C to 70 °C" /></label>
         <label class="field"><span class="field-label">Firmware from</span><input class="control" [(ngModel)]="d.f.fwMin" name="fwmin" placeholder="1.1.0" /></label>
         <label class="field"><span class="field-label">Firmware to</span><input class="control" [(ngModel)]="d.f.fwMax" name="fwmax" placeholder="1.4.0" /></label>
         <label class="field"><span class="field-label">Status</span><select class="control" [(ngModel)]="d.f.status" name="status">
+          <option value="" disabled>Select Status</option>
           <option value="Draft">Draft (Pending Review)</option><option value="Active">Active</option><option *ngIf="d.editId" value="Retired">Retired</option></select></label>
       </div>
       <fieldset class="field">
@@ -229,7 +232,7 @@
         <div class="chips"><button *ngFor="let a of attrOptions" type="button" class="cchip" [class.is-on]="d.f.attributes.includes(a)" (click)="toggleIn(d.f.attributes, a)">{{ a }}</button></div>
       </fieldset>
       <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
-      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-primary">{{ d.editId ? 'Save changes' : 'Add model' }}</button></div>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-primary" [disabled]="saving">{{ d.editId ? 'Save changes' : 'Add model' }}</button></div>
     </form>
   </div>
 </div>
@@ -245,7 +248,7 @@
         <legend class="field-label">Icon</legend>
         <div class="icon-pick"><button *ngFor="let i of typeIcons" type="button" [class.is-on]="d.icon === i" (click)="d.icon = i" [attr.aria-label]="i" [attr.aria-pressed]="d.icon === i"><lucide-icon [img]="typeIcon(i)" [size]="18"></lucide-icon></button></div>
       </fieldset>
-      <label class="field"><span class="field-label">Thumbnail style</span><select class="control" [(ngModel)]="d.form" name="form"><option *ngFor="let f of forms" [value]="f.id">{{ f.label }}</option></select></label>
+      <label class="field"><span class="field-label">Thumbnail style</span><select class="control" [(ngModel)]="d.form" name="form"><option value="" disabled>Select Thumbnail Style</option><option *ngFor="let f of forms" [value]="f.id">{{ f.label }}</option></select></label>
       <label class="field"><span class="field-label">Description</span><textarea class="control control-area" [(ngModel)]="d.description" name="desc" rows="3" placeholder="What devices belong to this type?"></textarea></label>
       <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
       <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="submit" class="btn btn-primary">Add type</button></div>
@@ -273,7 +276,7 @@
             <td><span *ngIf="r.model" class="ok">Ready</span><span *ngIf="!r.model" class="bad">{{ r.error }}</span></td></tr></tbody>
         </table>
       </div>
-      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-primary" [disabled]="!importValid" (click)="saveImport()">Import {{ importValid }} model{{ importValid === 1 ? '' : 's' }}</button></div>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-primary" [disabled]="!importValid || saving" (click)="saveImport()">Import {{ importValid }} model{{ importValid === 1 ? '' : 's' }}</button></div>
     </div>
   </div>
 </div>
@@ -284,7 +287,8 @@
     <div class="modal-head"><h2 id="dm-ret">Retire {{ byId(d.id)?.name }}</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
     <div class="modal-body">
       <p>Retired models can't be chosen for new devices. The {{ byId(d.id)?.deployed }} deployed device(s) keep their records and keep reporting.</p>
-      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-danger-solid" (click)="confirmRetire()">Retire model</button></div>
+      <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-danger-solid" [disabled]="saving" (click)="confirmRetire()">Retire model</button></div>
     </div>
   </div>
 </div>
@@ -293,7 +297,8 @@
     <div class="modal-head"><h2 id="dm-del">Delete {{ byId(d.id)?.name }}</h2><button type="button" class="icon-btn" (click)="dialog = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18"></lucide-icon></button></div>
     <div class="modal-body">
       <p>No devices use this model. Deleting removes its specification and configuration template.</p>
-      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-danger-solid" (click)="confirmDelete()">Delete model</button></div>
+      <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
+      <div class="modal-foot"><button type="button" class="btn btn-outline" (click)="dialog = null">Cancel</button><button type="button" class="btn btn-danger-solid" [disabled]="saving" (click)="confirmDelete()">Delete model</button></div>
     </div>
   </div>
 </div>

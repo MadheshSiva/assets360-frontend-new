@@ -35,14 +35,14 @@ export const DATA_OBJECTS: DataObjectDef[] = [
     name: 'Work Order', abbr: 'WO', icon: 'file', tone: 'pink',
     fields: [
       f('Work Order No', true, 'WO-10245'), f('Title', true, 'Chiller PM - Q4'), f('Asset Code', true, 'AST-2026-DXB-000118'),
-      f('Priority', true, 'High'), f('Assigned To', false, 'James Tan'), f('Due Date', false, '30/10/2026'), f('Status', false, 'Open')
+      f('Priority', true, 'High'), f('Assigned To', false, 'Technician name'), f('Due Date', false, '30/10/2026'), f('Status', false, 'Open')
     ]
   },
   {
     name: 'People', abbr: 'PPL', icon: 'users', tone: 'blue',
     fields: [
-      f('Employee ID', true, 'EMP-00412'), f('Full Name', true, 'Aisha Khan'), f('Email', true, 'aisha.khan@purpleiq.com'),
-      f('Department', true, 'Operations'), f('Job Title', false, 'Supervisor'), f('Location', false, 'Dubai HQ'), f('Manager', false, 'Omar Hassan')
+      f('Employee ID', true, 'EMP-00412'), f('Full Name', true, 'First Last'), f('Email', true, 'name@company.com'),
+      f('Department', true, 'Operations'), f('Job Title', false, 'Supervisor'), f('Location', false, 'Site name'), f('Manager', false, 'Manager name')
     ]
   },
   {
@@ -55,8 +55,8 @@ export const DATA_OBJECTS: DataObjectDef[] = [
   {
     name: 'Vendor', abbr: 'VEN', icon: 'truck', tone: 'purple',
     fields: [
-      f('Vendor Code', true, 'VEN-0042'), f('Vendor Name', true, 'Gulf Facility Services LLC'), f('Trade License', true, 'DED-778812'),
-      f('Contact Email', false, 'ops@gfs.ae'), f('Phone', false, '+971 4 555 0192'), f('Country', false, 'UAE'), f('Payment Terms', false, 'Net 45')
+      f('Vendor Code', true, 'VEN-0042'), f('Vendor Name', true, 'Vendor legal name'), f('Trade License', true, 'DED-778812'),
+      f('Contact Email', false, 'contact@vendor.com'), f('Phone', false, '+000 0 000 0000'), f('Country', false, 'UAE'), f('Payment Terms', false, 'Net 45')
     ]
   },
   {
@@ -69,7 +69,7 @@ export const DATA_OBJECTS: DataObjectDef[] = [
   {
     name: 'Location', abbr: 'LOC', icon: 'building', tone: 'blue',
     fields: [
-      f('Location Code', true, 'DXB-HQ-F3'), f('Location Name', true, 'Dubai HQ - Floor 3'), f('Site', true, 'Dubai HQ'),
+      f('Location Code', true, 'DXB-HQ-F3'), f('Location Name', true, 'Head Office - Floor 3'), f('Site', true, 'Head Office'),
       f('Building', false, 'Tower A'), f('Floor', false, '3'), f('Latitude', false, '25.2048'), f('Longitude', false, '55.2708')
     ]
   },

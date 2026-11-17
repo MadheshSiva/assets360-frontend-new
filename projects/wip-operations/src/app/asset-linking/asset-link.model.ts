@@ -1,4 +1,4 @@
-/** Assets from the shared register linked to WIP jobs. DEMO MODE: loaded from asset-links.json and kept in memory. */
+/** Assets from the shared register linked to WIP jobs. */
 export type Allocation = 'Exclusive' | 'Shared';
 
 export interface Inspection {

@@ -239,3 +239,16 @@
   .opt-pair { grid-template-columns: minmax(0, 1fr); }
 }
 .is-scaled .card > .other-toggle { align-self: flex-start; }
+
+/* ================= Two-step verification ================= */
+.totp-setup { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 20px; margin-bottom: 16px; padding: 14px; border: 1px solid var(--lg-border); border-radius: 10px; background: #fafafb; }
+.totp-qr { grid-row: span 2; width: 150px; height: 150px; border-radius: 6px; background: #fff; image-rendering: pixelated; }
+.totp-steps { margin: 0; padding-left: 20px; font-size: 14.5px; line-height: 1.5; color: var(--lg-text); }
+.totp-key { margin: 0; font-size: 13px; color: var(--lg-muted); }
+.totp-key code { display: inline-block; margin-top: 4px; padding: 2px 6px; border-radius: 4px; background: #f1efff; font-size: 13px; letter-spacing: 0.06em; color: var(--lg-primary); word-break: break-all; }
+.code-input { font-size: 22px !important; letter-spacing: 0.35em; }
+
+@container (max-width: 440px) {
+  .totp-setup { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: left; }
+  .totp-qr { grid-row: auto; }
+}

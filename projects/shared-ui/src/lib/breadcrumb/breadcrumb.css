@@ -23,7 +23,7 @@
   background: none;
   border: none;
   padding: 0;
-  color: #4f2bd8;
+  color: #6d28d9;
   font-size: inherit;
   cursor: pointer;
   font-weight: 500;
@@ -31,11 +31,11 @@
 
 .breadcrumb-btn:hover {
   text-decoration: underline;
-  color: #5a3db8;
+  color: #4c1d95;
 }
 
 .breadcrumb-label {
-  color: #374151;
+  color: #6d28d9;
 }
 
 .breadcrumb-current {
@@ -45,13 +45,13 @@
 
 .breadcrumb-separator {
   margin: 0 8px;
-  color: #9ca3af;
+  color: #a78bfa;
 }
 
 .breadcrumb-caret {
   display: inline-flex;
   margin-left: 4px;
-  color: #4f2bd8;
+  color: inherit;
 }
 
 .breadcrumb-caret svg {

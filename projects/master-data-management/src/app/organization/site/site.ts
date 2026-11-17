@@ -40,7 +40,7 @@ const COUNTRY_SHORT: Record<string, string> = {
   selector: 'app-mdm-organization-site',
   imports: [FormsModule, RouterLink, LucideAngularModule, SiteForm, SiteDetail],
   templateUrl: './site.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', './site.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', './site.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class SitePage {
   readonly service = inject(SiteService);

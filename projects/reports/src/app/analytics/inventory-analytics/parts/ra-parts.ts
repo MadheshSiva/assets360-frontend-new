@@ -1,37 +1,29 @@
 import { LucideIconData } from 'lucide-angular';
-import { RA_MONTH_LABELS, RA_PERIODS } from '../../shared/analytics-common';
+import { RA_PERIODS } from '../../shared/analytics-common';
 
 // Building blocks shared by Inventory, Financial and WIP / Production Analytics:
-// scope + period helpers, deterministic sample generators and the card / dialog models.
+// scope + period helpers, number helpers and the card / dialog models.
 
-/** Which organization each site reports into. Purple IQ Group (and "All organizations") sees every site. */
-export const SITE_ORG: Record<string, string> = {
-  'Dubai HQ': 'Purple IQ UAE',
-  'Abu Dhabi Office': 'Purple IQ UAE',
-  'Sharjah Facility': 'Purple IQ UAE',
-  'Jebel Ali Warehouse': 'Purple IQ UAE',
-  'Al Ain Depot': 'Purple IQ UAE',
-  'Riyadh Office': 'Purple IQ KSA',
-  'London Office': 'Purple IQ Group',
-  'Singapore Office': 'Purple IQ Group'
-};
+/** Which organization each site reports into; comes from the Administration API (not wired yet). */
+export const SITE_ORG: Record<string, string> = {};
 
-/** True when a site is inside the organization + location filters. */
+/** True when a site is inside the organization + location filters. Sites with no known organization are kept. */
 export function siteInScope(site: string, organization: string, location: string): boolean {
-  const orgOk = organization === 'All organizations' || organization === 'Purple IQ Group' || SITE_ORG[site] === organization;
-  const locOk = location === 'All locations' || location === site;
+  const org = SITE_ORG[site];
+  const orgOk = !organization || organization === 'All organizations' || !org || org === organization;
+  const locOk = !location || location === 'All locations' || location === site;
   return orgOk && locOk;
 }
 
 // ===== Period window =====
 
-/** Trend data is kept for 12 months (Nov 2025 – Oct 2026); index 11 is October 2026. */
-export const TREND_LABELS = ['Nov\n2025', 'Dec\n2025', ...RA_MONTH_LABELS];
+/** Trend labels come with the reporting API data; none are generated here. */
+export const TREND_LABELS: string[] = [];
 const WEEK_SPLIT = [0.23, 0.25, 0.26, 0.26];
 
 export interface PeriodWindow {
   labels: string[];
-  /** Month indexes into the 12-month arrays */
+  /** Month indexes into the monthly arrays */
   months: number[];
   /** Single-month periods are shown by week */
   weekly: boolean;
@@ -41,29 +33,30 @@ export interface PeriodWindow {
 }
 
 export function periodWindow(period: string): PeriodWindow {
-  const range = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+  const caption = period || RA_PERIODS[0];
   switch (RA_PERIODS.indexOf(period)) {
     case 1:
     case 3:
-      return { labels: ['Week 1\nOct', 'Week 2\nOct', 'Week 3\nOct', 'Week 4\nOct'], months: [11], weekly: true, monthCount: 1, caption: 'Oct 2026' };
+      return { labels: [], months: [], weekly: true, monthCount: 1, caption };
     case 2:
-      return { labels: TREND_LABELS.slice(8, 11), months: range(8, 10), weekly: false, monthCount: 3, caption: 'Jul – Sep 2026' };
+      return { labels: [], months: [], weekly: false, monthCount: 3, caption };
     case 4:
-      return { labels: TREND_LABELS, months: range(0, 11), weekly: false, monthCount: 12, caption: 'Nov 2025 – Oct 2026' };
+      return { labels: [], months: [], weekly: false, monthCount: 12, caption };
     default:
-      return { labels: TREND_LABELS.slice(2), months: range(2, 11), weekly: false, monthCount: 10, caption: 'Jan – Oct 2026' };
+      return { labels: [], months: [], weekly: false, monthCount: 10, caption };
   }
 }
 
 /** Amounts that add up over time (spend, output): monthly values, or the month split into weeks. */
 export function flowSeries(base: number[], w: PeriodWindow, factor = 1): number[] {
-  if (w.weekly) return WEEK_SPLIT.map((s) => base[w.months[0]] * s * factor);
+  if (w.weekly) return w.months.length && base.length ? WEEK_SPLIT.map((s) => (base[w.months[0]] ?? 0) * s * factor) : [];
   return w.months.map((m) => base[m] * factor);
 }
 
 /** Balances read at a point in time (stock value, WIP): month-end values, or interpolated weekly. */
 export function levelSeries(base: number[], w: PeriodWindow, factor = 1): number[] {
   if (w.weekly) {
+    if (!w.months.length || !base.length) return [];
     const m = w.months[0];
     const from = base[m - 1];
     return WEEK_SPLIT.map((_, k) => (from + ((base[m] - from) * (k + 1)) / 4) * factor);
@@ -91,15 +84,6 @@ export function splitTotal(total: number, weights: number[]): number[] {
   const order = raw.map((r, i) => ({ i, f: r - Math.floor(r) })).sort((a, b) => b.f - a.f);
   for (let k = 0; rest > 0 && order.length; k = (k + 1) % order.length, rest--) parts[order[k].i]++;
   return parts;
-}
-
-/** Deterministic pseudo-random sequence (LCG) so generated sample rows are identical on every load. */
-export function seeded(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
 }
 
 export function fmtInt(v: number): string {

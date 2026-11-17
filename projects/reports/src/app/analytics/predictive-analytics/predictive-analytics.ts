@@ -44,7 +44,7 @@ export class PredictiveAnalyticsPage extends ScopedAnalyticsPage {
   readonly hoursFormat = (v: number) => compactNumber(v);
   protected readonly fileStem = 'predictive-analytics';
 
-  riskLevel = ALL_RISK_LEVELS;
+  riskLevel = '';
   view!: PredictiveView;
   insights: RaInsight[] = [];
   actionSort: ActionSortKey = 'riskScore';
@@ -54,8 +54,6 @@ export class PredictiveAnalyticsPage extends ScopedAnalyticsPage {
 
   constructor() {
     super();
-    // The model re-scores assets every few hours
-    this.updatedMinutes = 120;
     this.recompute();
   }
 
@@ -65,7 +63,7 @@ export class PredictiveAnalyticsPage extends ScopedAnalyticsPage {
   }
 
   recompute(): void {
-    const v = buildPredictive(this.scope, this.period, this.riskLevel, this.compare);
+    const v = buildPredictive(this.scope, this.period, this.riskLevel || ALL_RISK_LEVELS, this.compare);
     this.view = v;
     this.kpis = [
       { id: 'monitored', label: 'Assets Monitored', value: v.monitored.length.toLocaleString('en-US'), delta: PA_DELTAS.monitored, icon: Database, tone: 'blue' },
@@ -108,11 +106,11 @@ export class PredictiveAnalyticsPage extends ScopedAnalyticsPage {
 
   protected override restoreFilters(f: Record<string, string>): void {
     super.restoreFilters(f);
-    this.riskLevel = f['riskLevel'] ?? ALL_RISK_LEVELS;
+    this.riskLevel = f['riskLevel'] ?? '';
   }
 
   override resetFilters(): void {
-    this.riskLevel = ALL_RISK_LEVELS;
+    this.riskLevel = '';
     super.resetFilters();
   }
 

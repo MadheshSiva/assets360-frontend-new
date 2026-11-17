@@ -1,5 +1,6 @@
-import { Component, HostListener, OnDestroy } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Subscription, catchError, concatMap, from, map, of, switchMap, toArray } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import * as XLSX from 'xlsx';
@@ -52,7 +53,8 @@ import {
   X,
   Zap,
 } from 'lucide-angular';
-import { DEFAULT_TYPE, LinkedAsset, lastActivity, PREFIX, SITES, STATUSES, TAGS, TECHS, TYPES, TagEvent, TagId, TagStatus, TagType, Tech, Validation, codeFor, formatError, knownAssets, nextNumber, readerFor, tagIdOf } from './tag-data';
+import { DEFAULT_TYPE, LinkedAsset, lastActivity, PREFIX, SITES, STATUSES, TAGS, TECHS, TYPES, TagEvent, TagId, TagRead, TagStatus, TagType, Tech, Validation, ensureSite, formatError, knownAssets, nextNumber, tagIdFromNumber } from './tag-data';
+import { TagIdApiService, TagSummary, apiType, pageType } from './tag-id-api.service';
 
 /** Tag IDs = the identifier registry; Assignments = lifecycle of each tag on assets; Audit = every change. */
 type View = 'ids' | 'assignments' | 'audit';
@@ -65,7 +67,8 @@ type Dialog =
   | { kind: 'replace'; tagId: string; newId: string; oldTo: 'Inactive' | 'Available'; reason: string }
   | { kind: 'unassign'; tagId: string; reason: string }
   | { kind: 'status'; tagId: string; to: 'Inactive' | 'Available'; reason: string }
-  | { kind: 'import'; rows: ImportRow[]; fileName: string; error: string };
+  | { kind: 'import'; rows: ImportRow[]; fileName: string; error: string }
+  | { kind: 'delete'; tagId: string };
 
 interface ImportRow {
   line: number;
@@ -79,26 +82,17 @@ interface ImportRow {
   error: string;
 }
 
-interface Read { at: number; reader: string; rssi: number | null; battery: number | null }
 interface AuditRow { at: number; tag: TagId; text: string; by: string; kind: EventKind }
 
-const CURRENT_USER = 'John Doe';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const TECH_ALIASES: Record<string, Tech> = { barcode: 'Barcode', qr: 'QR Code', 'qr code': 'QR Code', rfid: 'Passive RFID', 'passive rfid': 'Passive RFID', ble: 'BLE', beacon: 'BLE' };
-const TECH_LONG: Record<Tech, string> = { Barcode: 'Barcode (1D)', 'QR Code': 'QR Code (2D)', 'Passive RFID': 'Passive RFID (UHF)', BLE: 'BLE (Bluetooth Low Energy)' };
-/** Month-over-month change shown on the KPI cards (demo figures). */
-const KPI_TREND = { Total: 12, Assigned: 8, Available: -6, Inactive: -14 };
-/** How often each technology is read, for the telemetry list. */
-const READ_EVERY_MIN: Record<Tech, number> = { BLE: 10, 'Passive RFID': 120, 'QR Code': 4320, Barcode: 4320 };
+const TECH_ALIASES: Record<string, Tech> = {
+  barcode: 'Barcode', qr: 'QR Code', 'qr code': 'QR Code', rfid: 'Passive RFID', 'passive rfid': 'Passive RFID', 'active rfid': 'Active RFID', ble: 'BLE', beacon: 'BLE', nfc: 'NFC',
+};
+const TECH_LONG: Record<Tech, string> = {
+  Barcode: 'Barcode (1D)', 'QR Code': 'QR Code (2D)', 'Passive RFID': 'Passive RFID (UHF)', 'Active RFID': 'Active RFID', BLE: 'BLE (Bluetooth Low Energy)', NFC: 'NFC (Near Field Communication)',
+};
 const EVENT_KINDS: EventKind[] = ['Registered', 'Assigned', 'Reassigned', 'Replaced', 'Unassigned', 'Deactivated', 'Reactivated', 'Validated', 'Edited', 'Read'];
 const DAY = 86_400_000;
-
-/** Stable 0..1 value per tag and salt, so derived readings don't change between renders. */
-function unit(id: string, salt: number): number {
-  let h = 2166136261 ^ salt;
-  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
-  return ((h >>> 0) % 10000) / 10000;
-}
 
 function eventKind(text: string): EventKind {
   if (text.startsWith('Last read')) return 'Read';
@@ -106,23 +100,35 @@ function eventKind(text: string): EventKind {
   return EVENT_KINDS.find((k) => text.startsWith(k)) ?? 'Edited';
 }
 
+type ToastTone = 'success' | 'error' | 'warning' | 'info';
+interface Toast {
+  /** New for every toast, so the card (and its countdown bar) restarts. */
+  id: number;
+  tone: ToastTone;
+  title: string;
+  message: string;
+}
+/** How long a toast stays up (errors included); hovering pauses it. */
+const TOAST_MS = 4000;
+
 @Component({
   selector: 'app-tag-management',
   standalone: true,
   imports: [CommonModule, FormsModule, RouterModule, LucideAngularModule],
   templateUrl: './tag-management.html',
-  styleUrls: ['./tag-management.css', './tag-management-panel.css', './tag-management-layout.css', './tag-management-views.css'],
+  styleUrls: ['./tag-management.css', './tag-management-panel.css', './tag-management-layout.css', './tag-management-views.css', '../shared/iot-purple-theme.css'],
 })
-export class TagManagement implements OnDestroy {
+export class TagManagement implements OnInit, OnDestroy {
+  private readonly api = inject(TagIdApiService);
   readonly icons = { ArrowDown, ArrowLeftRight, ArrowRight, ArrowUp, Ban, Box, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, CircleSlash, Download, Ellipsis, ExternalLink, FileText, History, House, Info, Link2, MapPin, Pencil, Plus, Replace, Search, ShieldCheck, Tag, Unlink, Upload, X };
-  readonly techs = TECHS;
+  techs: Tech[] = TECHS;
   readonly types = TYPES;
+  /** Per technology, from GET /api/tag-ids/options: the tag types it comes in and the name of its encoded value. */
+  private techOptions = new Map<Tech, { types: TagType[]; apiTypes: string[]; valueLabel: string }>();
   readonly statuses = STATUSES;
   readonly sites = SITES;
   readonly eventKinds = EVENT_KINDS;
-  readonly users = [CURRENT_USER, 'Ahmed Khan', 'Priya Nair', 'Ravi Patel', 'Stores Team', 'System'];
   readonly pageSizes = [5, 10, 25, 50];
-  readonly trend = KPI_TREND;
   readonly views: { key: View; label: string; hint: string }[] = [
     { key: 'ids', label: 'Tag IDs', hint: 'Store and manage individual identifiers: barcode numbers, QR values, RFID EPCs and BLE tag IDs. Create, import, validate and deactivate them here.' },
     { key: 'assignments', label: 'Assignments', hint: 'Manage the full lifecycle of each tag: assign, reassign, replace and unassign it, with assignment dates, location and history.' },
@@ -134,8 +140,11 @@ export class TagManagement implements OnDestroy {
   techFilter: Tech | '' = '';
   statusFilter: TagStatus | '' = '';
   siteFilter = '';
-  typeFilter: TagType | '' = '';
-  validFilter: Validation | '' = '';
+  /** Tag type as the API names it ("Barcode Label", "Hard Tag", ...). */
+  typeFilter = '';
+  /** Validation filter: 'Valid', or 'Invalid' = any failing result (server, format, duplicate or missing value). */
+  validFilter: 'Valid' | 'Invalid' | '' = '';
+  readonly validFilters = ['Valid', 'Invalid'] as const;
   eventFilter: EventKind | '' = '';
   userFilter = '';
   periodFilter: '' | '1' | '7' | '30' | '90' = '';
@@ -146,13 +155,26 @@ export class TagManagement implements OnDestroy {
   /** Tag ids ticked in the table. */
   checked = new Set<string>();
 
-  /** Wide screens open with a tag selected; narrower ones keep the drawer closed until a row is clicked. */
-  selectedId: string | null = typeof window !== 'undefined' && window.innerWidth >= 1200 ? 'BLE-002951' : null;
+  /** No tag is selected until a row is clicked. */
+  selectedId: string | null = null;
   panelTab: 'details' | 'telemetry' | 'history' = 'details';
   menuOpen = '';
   dialog: Dialog | null = null;
   formError = '';
-  toast = '';
+  /** Top-right toast; replaced by the next one, closed after TOAST_MS (paused while hovered). */
+  toast: Toast | null = null;
+  readonly toastMs = TOAST_MS;
+  /** True while the pointer is on the toast: its countdown stops. */
+  toastPaused = false;
+  private toastEndsAt = 0;
+  private toastLeft = 0;
+  private toastSeq = 0;
+  /** True while the tag list is being fetched. */
+  loading = false;
+  /** Why the tag list could not be loaded. */
+  loadError = '';
+  /** True while a change is being saved. */
+  saving = false;
   private toastTimer?: ReturnType<typeof setTimeout>;
   /** Bumped on every change so the cached rows recompute. */
   private version = 0;
@@ -165,7 +187,71 @@ export class TagManagement implements OnDestroy {
     if (this.views.some((x) => x.key === v)) this.view = v as View;
   }
 
+  private changedSub?: Subscription;
+
+  ngOnInit(): void {
+    this.load();
+    // Create / update / delete change the counts: ask the server again
+    this.changedSub = this.api.changed$.subscribe(() => this.loadSummary());
+    this.api.technologies().subscribe({
+      next: (opts) => {
+        const list = opts.map((o) => o.technology as Tech).filter((t) => t in DEFAULT_TYPE);
+        for (const o of opts) {
+          if (!(o.technology in DEFAULT_TYPE)) continue;
+          const tech = o.technology as Tech;
+          if (o.idPrefix) PREFIX[tech] = o.idPrefix;
+          const types = [...new Set(o.tagTypes.map(pageType))];
+          this.techOptions.set(tech, { types, apiTypes: o.tagTypes, valueLabel: o.valueLabel });
+        }
+        if (list.length) this.techs = list;
+        // An open Register dialog follows the new options
+        const d = this.dialog;
+        if (d?.kind === 'register' && d.type && !this.typesFor(d.tech).includes(d.type)) d.type = '' as TagType;
+      },
+      error: () => {},
+    });
+    this.api.assets().subscribe((assets) => {
+      this.registeredAssets = assets;
+      this.version++;
+    });
+    this.api.sites().subscribe((sites) => {
+      for (const s of sites) ensureSite(s.name, s.id);
+      this.version++;
+    });
+  }
+
+  /** GET /api/tag-ids/summary → the KPI counts (null: counted from the loaded list). */
+  summary: TagSummary | null = null;
+
+  loadSummary(): void {
+    this.api.summary().subscribe((s) => {
+      this.summary = s;
+      this.version++;
+    });
+  }
+
+  /** GET /api/tag-ids → the tag list. */
+  load(): void {
+    this.loadSummary();
+    this.loading = true;
+    this.loadError = '';
+    this.api.getAll().subscribe({
+      next: (tags) => {
+        TAGS.splice(0, TAGS.length, ...tags);
+        for (const t of tags) ensureSite(t.site, t.siteId, t.location);
+        this.loading = false;
+        this.version++;
+      },
+      error: (e: Error) => {
+        this.loading = false;
+        this.loadError = e.message;
+        this.version++;
+      },
+    });
+  }
+
   ngOnDestroy(): void {
+    this.changedSub?.unsubscribe();
     clearTimeout(this.toastTimer);
   }
 
@@ -191,20 +277,23 @@ export class TagManagement implements OnDestroy {
 
   // ===== KPIs =====
 
+  /** KPI counts from GET /api/tag-ids/summary; counted from the loaded list until it answers (or when it fails). */
   get counts(): Record<TagStatus | 'Total', number> {
+    if (this.summary) return this.summary.counts;
     const c = { Total: TAGS.length, Assigned: 0, Available: 0, Inactive: 0 };
     for (const t of TAGS) c[t.status]++;
     return c;
+  }
+
+  /** Change vs last month in % for a KPI card (null: not shown). */
+  kpiChange(key: TagStatus | 'Total'): number | null {
+    return this.summary?.change[key] ?? null;
   }
 
   setStatus(s: TagStatus | ''): void {
     this.statusFilter = this.statusFilter === s ? '' : s;
     if (this.view === 'audit') this.setView('assignments');
     this.onFilter();
-  }
-
-  abs(n: number): number {
-    return Math.abs(n);
   }
 
   // ===== Validation =====
@@ -217,12 +306,17 @@ export class TagManagement implements OnDestroy {
       for (const x of TAGS) map.set(x.code, (map.get(x.code) ?? 0) + 1);
       this.codeUse = { version: this.version, map };
     }
-    if (formatError(t.tech, t.code)) return 'Invalid format';
-    return (this.codeUse.map.get(t.code) ?? 0) > 1 ? 'Duplicate' : 'Valid';
+    // The page's checks of the value first (more specific), then the server's verdict
+    const local: Validation | null = !t.code ? null : formatError(t.tech, t.code) ? 'Invalid format' : (this.codeUse.map.get(t.code) ?? 0) > 1 ? 'Duplicate' : 'Valid';
+    if (local && local !== 'Valid') return local;
+    if (/^invalid$/i.test(t.apiValidation ?? '')) return 'Invalid';
+    return local ?? 'Not recorded';
   }
 
   validationDetail(t: TagId): string {
     const v = this.validation(t);
+    if (v === 'Invalid') return t.apiValidationMessage || 'Failed server validation';
+    if (v === 'Not recorded') return t.apiValidationMessage || `No ${this.codeLabel(t).toLowerCase()} is stored for this tag`;
     if (v === 'Invalid format') return formatError(t.tech, t.code);
     if (v === 'Duplicate') return `Same ${this.codeLabel(t).toLowerCase()} as ${TAGS.filter((x) => x !== t && x.code === t.code).map((x) => x.id).join(', ')}`;
     return `${this.codeLabel(t)} format and uniqueness OK`;
@@ -231,7 +325,7 @@ export class TagManagement implements OnDestroy {
   private issues = { version: -1, count: 0 };
 
   get issueCount(): number {
-    if (this.issues.version !== this.version) this.issues = { version: this.version, count: TAGS.filter((t) => this.validation(t) !== 'Valid').length };
+    if (this.issues.version !== this.version) this.issues = { version: this.version, count: TAGS.filter((t) => ['Invalid', 'Invalid format', 'Duplicate'].includes(this.validation(t))).length };
     return this.issues.count;
   }
 
@@ -241,11 +335,12 @@ export class TagManagement implements OnDestroy {
     let bad = 0;
     for (const t of list) {
       const v = this.validation(t);
+      if (v === 'Not recorded') continue;
       if (v !== 'Valid') bad++;
       this.log(t, v === 'Valid' ? 'Validated: format and uniqueness OK' : `Validation failed: ${this.validationDetail(t)}`);
     }
     const one = list.length === 1 ? list[0].id : `${list.length} tags`;
-    this.showToast(bad ? `${one} checked: ${bad} with issues.` : `${one} validated. No issues found.`);
+    this.showToast(bad ? 'Issues found' : 'Validated', bad ? `${bad} of ${one} need attention` : one, bad ? 'warning' : 'success');
   }
 
   validateChecked(): void {
@@ -255,8 +350,7 @@ export class TagManagement implements OnDestroy {
   showIssues(): void {
     this.setView('ids');
     this.clearFilters();
-    this.validFilter = 'Invalid format';
-    if (!this.rows.length) this.validFilter = 'Duplicate';
+    this.validFilter = 'Invalid';
   }
 
   // ===== Tag tables =====
@@ -267,9 +361,9 @@ export class TagManagement implements OnDestroy {
     const q = this.search.trim().toLowerCase();
     const rows = TAGS.filter((t) =>
       (!this.techFilter || t.tech === this.techFilter) && (!this.statusFilter || t.status === this.statusFilter) &&
-      (!this.typeFilter || t.type === this.typeFilter) &&
+      (!this.typeFilter || this.typeLabel(t) === this.typeFilter) &&
       (this.view !== 'assignments' || !this.siteFilter || t.site === this.siteFilter) &&
-      (this.view !== 'ids' || !this.validFilter || this.validation(t) === this.validFilter) &&
+      (this.view !== 'ids' || !this.validFilter || (this.validation(t) === 'Valid') === (this.validFilter === 'Valid')) &&
       (!q || `${t.id} ${t.code} ${t.asset ? t.asset.kind + ' ' + t.asset.tag : ''} ${t.site} ${t.location}`.toLowerCase().includes(q)));
     const dir = this.sortDesc ? -1 : 1;
     const val = (t: TagId): number => {
@@ -300,6 +394,11 @@ export class TagManagement implements OnDestroy {
   }
 
   // ===== Audit trail =====
+
+  /** People who appear in the audit trail, for the "Performed By" filter. */
+  get users(): string[] {
+    return [...new Set(this.audit.map((r) => r.by))].sort((a, b) => a.localeCompare(b));
+  }
 
   private auditCache: { version: number; list: AuditRow[] } = { version: -1, list: [] };
 
@@ -373,6 +472,16 @@ export class TagManagement implements OnDestroy {
 
   onFilter(): void {
     this.page = 0;
+    // A type the chosen technology doesn't come in is dropped
+    if (this.typeFilter && !this.typeOptions.includes(this.typeFilter)) this.typeFilter = '';
+  }
+
+  /** Tag Type filter: the API's type names, for the chosen technology (or all technologies). */
+  get typeOptions(): string[] {
+    const techs = this.techFilter ? [this.techFilter as Tech] : this.techs;
+    const names = techs.flatMap((tech) => this.typesFor(tech).map((type) => this.typeName(tech, type)));
+    for (const t of TAGS) if (!this.techFilter || t.tech === this.techFilter) names.push(this.typeLabel(t));
+    return [...new Set(names)];
   }
 
   clearFilters(): void {
@@ -386,8 +495,8 @@ export class TagManagement implements OnDestroy {
 
   /** "QR Label", "Barcode Label", "Hard Tag", "Beacon". */
   typeLabel(t: TagId): string {
-    if (t.type !== 'Label') return t.type;
-    return t.tech === 'QR Code' ? 'QR Label' : t.tech === 'Barcode' ? 'Barcode Label' : 'RFID Label';
+    if (t.apiTagType && pageType(t.apiTagType) === t.type) return t.apiTagType;
+    return this.typeName(t.tech, t.type);
   }
 
   techLong(t: TagId): string {
@@ -486,29 +595,45 @@ export class TagManagement implements OnDestroy {
     return t.tech === 'BLE';
   }
 
+  /** Tag types offered for a technology (from GET /api/tag-ids/options; all types until it answers). */
+  typesFor(tech: Tech): TagType[] {
+    const types = this.techOptions.get(tech)?.types;
+    return types?.length ? types : this.types;
+  }
+
+  /** The technology's usual type, when it is offered; else its first offered type. */
+  defaultType(tech: Tech): TagType {
+    const types = this.typesFor(tech);
+    return types.includes(DEFAULT_TYPE[tech]) ? DEFAULT_TYPE[tech] : types[0];
+  }
+
+  /** Dropdown text of a type for a technology: the API's name ("Barcode Label", "QR Label", "Hard Tag"). */
+  typeName(tech: Tech, type: TagType): string {
+    return this.techOptions.get(tech)?.apiTypes.find((a) => pageType(a) === type) ?? apiType(tech, type);
+  }
+
+  /** Example of the encoded value for a technology (input placeholder). */
+  valuePlaceholder(tech: Tech): string {
+    switch (tech) {
+      case 'Barcode': return '12 or 13 digits, e.g. 4006381333931';
+      case 'QR Code': return 'Text or URL';
+      case 'BLE': return 'e.g. AC:23:3F:12:AB:01';
+      case 'NFC': return 'e.g. 04A224B2C35E80';
+      default: return '24 hex characters, e.g. E28011606000020D6A7B1C2F';
+    }
+  }
+
   codeLabel(t: { tech: Tech }): string {
+    const fromApi = this.techOptions.get(t.tech)?.valueLabel;
+    if (fromApi) return fromApi;
     return t.tech === 'BLE' ? 'MAC Address' : t.tech === 'Passive RFID' ? 'EPC' : 'Encoded Value';
   }
 
-  firmware(t: TagId): string {
-    return `v1.${3 + Math.floor(unit(t.id, 7) * 2)}.${Math.floor(unit(t.id, 8) * 6)}`;
-  }
-
-  battery(t: TagId): number {
-    return t.id === 'BLE-002951' ? 78 : 22 + Math.round(unit(t.id, 3) * 76);
-  }
-
-  rssi(t: TagId): number {
-    return t.id === 'BLE-002951' ? -62 : -(55 + Math.round(unit(t.id, 5) * 35));
-  }
-
-  batteryIcon(t: TagId) {
-    const b = this.battery(t);
+  batteryIcon(b: number) {
     return b >= 60 ? BatteryFull : b >= 25 ? BatteryMedium : BatteryLow;
   }
 
-  batteryLevel(t: TagId): 'ok' | 'warn' | 'bad' {
-    const b = this.battery(t);
+  batteryLevel(b: number): 'ok' | 'warn' | 'bad' {
     return b >= 40 ? 'ok' : b >= 20 ? 'warn' : 'bad';
   }
 
@@ -547,37 +672,20 @@ export class TagManagement implements OnDestroy {
     return e.text === `Assigned to ${label}` ? { lead: 'Assigned to ', asset: label } : null;
   }
 
-  private readsCache: { id: string; version: number; list: Read[] } = { id: '', version: -1, list: [] };
-
-  /** Recent reads leading up to the last seen time (derived for the demo). */
-  reads(t: TagId): Read[] {
-    if (this.readsCache.id === t.id && this.readsCache.version === this.version) return this.readsCache.list;
-    const list: Read[] = [];
-    if (t.lastSeen !== null) {
-      const every = READ_EVERY_MIN[t.tech] * 60_000;
-      for (let i = 0; i < 6; i++) {
-        const jitter = 0.7 + unit(t.id, 20 + i) * 0.6;
-        list.push({
-          at: t.lastSeen - Math.round(i * every * jitter),
-          reader: t.reader,
-          rssi: t.tech === 'BLE' ? this.rssi(t) - Math.round((unit(t.id, 40 + i) - 0.5) * 8) : null,
-          battery: t.tech === 'BLE' ? Math.min(100, this.battery(t) + Math.floor(i / 3)) : null,
-        });
-      }
-    }
-    this.readsCache = { id: t.id, version: this.version, list };
-    return list;
+  /** Recent reads reported for the tag, newest first. */
+  reads(t: TagId): TagRead[] {
+    return t.reads ?? [];
   }
 
   viewAsset(t: TagId): void {
     this.menuOpen = '';
     if (!t.asset) return;
-    if (t.asset.real) {
+    if (t.asset.real || this.registeredAssets.some((a) => a.tag.toUpperCase() === t.asset!.tag.toUpperCase())) {
       this.router.navigate(['/assets/status-condition'], { queryParams: { tag: t.asset.tag } });
       return;
     }
     this.showAssetTags(t.asset.tag);
-    this.showToast(`${t.asset.tag} isn't in the demo asset register. Showing its tags instead.`);
+    this.showToast('Asset not registered', `Showing tags of ${t.asset.tag}`, 'info');
   }
 
   viewOnMap(t: TagId): void {
@@ -592,10 +700,41 @@ export class TagManagement implements OnDestroy {
 
   // ===== Changes =====
 
+  /** Adds a page event to the tag's history (kept for this session; the API stores no change history). */
   private log(t: TagId, text: string): void {
-    t.history.unshift({ at: Date.now(), text, by: CURRENT_USER });
+    t.history.unshift({ at: Date.now(), text, by: this.api.currentUser() });
     t.touched = Date.now();
     this.version++;
+  }
+
+  /** A working copy of a tag to send to the API (the list keeps the original until the save succeeds). */
+  private draftOf(t: TagId): TagId {
+    return { ...t, asset: t.asset ? { ...t.asset } : null, history: [...t.history] };
+  }
+
+  /** Puts the saved tag into the list, keeping the page-only fields of the local copy. */
+  private commit(saved: TagId, local: TagId): TagId {
+    const t: TagId = { ...saved, code: local.code, assignedOn: local.assignedOn, history: local.history, touched: local.touched, reads: local.reads, reader: local.reader };
+    const i = TAGS.findIndex((x) => x.id === t.id);
+    if (i >= 0) TAGS[i] = t;
+    else TAGS.unshift(t);
+    ensureSite(t.site, t.siteId, t.location);
+    this.version++;
+    return t;
+  }
+
+  /** Master-data id of a site picked on the page; keeps the tag's own id while the site is unchanged. */
+  private siteIdOf(site: string, t?: TagId): string | null {
+    if (!site) return null;
+    if (t && t.site === site && t.siteId) return t.siteId;
+    return SITES.find((s) => s.name === site)?.code || null;
+  }
+
+  /** Shows a failed save in the open dialog, or as a toast. */
+  private failed(e: Error): void {
+    this.saving = false;
+    if (this.dialog) this.formError = e.message;
+    else this.showToast('Action failed', e.message, 'error');
   }
 
   private open(d: Dialog): void {
@@ -608,11 +747,22 @@ export class TagManagement implements OnDestroy {
     this.open({ kind: 'assign', tagId: t.id, asset: t.asset?.tag ?? '', site: t.site, location: t.location, note: '' });
   }
 
+  /** Assets from the asset register (GET api/asset-registrations). */
+  private registeredAssets: LinkedAsset[] = [];
   private assetCache: { version: number; list: LinkedAsset[] } = { version: -1, list: [] };
 
+  /** Picker options: registered assets, then any asset a tag is linked to that the register doesn't list. */
   get assetOptions(): LinkedAsset[] {
-    if (this.assetCache.version !== this.version) this.assetCache = { version: this.version, list: knownAssets() };
+    if (this.assetCache.version !== this.version) {
+      const seen = new Set(this.registeredAssets.map((a) => a.tag.toUpperCase()));
+      const extra = knownAssets().filter((a) => !seen.has(a.tag.toUpperCase()));
+      this.assetCache = { version: this.version, list: [...this.registeredAssets, ...extra] };
+    }
     return this.assetCache.list;
+  }
+
+  assetOptionLabel(a: LinkedAsset): string {
+    return `${a.kind} - ${a.tag}`;
   }
 
   locationsOf(site: string): string[] {
@@ -622,28 +772,33 @@ export class TagManagement implements OnDestroy {
   private resolveAsset(code: string): LinkedAsset | null {
     const c = code.trim().toUpperCase();
     if (!c) return null;
-    return knownAssets().find((a) => a.tag.toUpperCase() === c) ?? { tag: c, kind: 'Asset', real: false };
+    return this.assetOptions.find((a) => a.tag.toUpperCase() === c) ?? { tag: c, kind: 'Asset', real: false };
   }
 
   saveAssign(): void {
     const d = this.dialog;
-    if (d?.kind !== 'assign') return;
+    if (d?.kind !== 'assign' || this.saving) return;
     const t = TAGS.find((x) => x.id === d.tagId);
     const asset = this.resolveAsset(d.asset);
     if (!t) return;
     if (!asset) return void (this.formError = 'Choose the asset to link.');
-    if (t.status === 'Assigned' && t.asset?.tag === asset.tag) return void (this.formError = `${t.id} is already linked to ${asset.tag}.`);
+    if (t.status === 'Assigned' && t.asset?.tag === asset.tag && t.site === d.site && t.location === d.location) return void (this.formError = `${t.id} is already linked to ${asset.tag}.`);
     const previous = t.asset;
-    if (previous) this.log(t, `Unassigned from ${this.assetLabel(previous)}${d.note.trim() ? ': ' + d.note.trim() : ''}`);
-    t.asset = asset;
-    t.status = 'Assigned';
-    t.assignedOn = Date.now();
-    t.site = d.site;
-    t.location = d.location;
-    this.log(t, `Assigned to ${this.assetLabel(asset)}`);
-    this.dialog = null;
-    this.selectedId = t.id;
-    this.showToast(`${t.id} ${previous ? 'reassigned' : 'assigned'} to ${asset.tag}.`);
+    const draft = this.draftOf(t);
+    Object.assign(draft, { asset, status: 'Assigned', assignedOn: Date.now(), site: d.site, location: d.location, siteId: this.siteIdOf(d.site, t) });
+    this.saving = true;
+    this.api.update(draft).subscribe({
+      next: (saved) => {
+        const n = this.commit(saved, draft);
+        if (previous && previous.tag !== asset.tag) this.log(n, `Unassigned from ${this.assetLabel(previous)}${d.note.trim() ? ': ' + d.note.trim() : ''}`);
+        this.log(n, `Assigned to ${this.assetLabel(n.asset ?? asset)}`);
+        this.saving = false;
+        this.dialog = null;
+        this.selectedId = n.id;
+        this.showToast(previous ? 'Tag reassigned' : 'Tag assigned', `${n.id} → ${asset.tag}`);
+      },
+      error: (e: Error) => this.failed(e),
+    });
   }
 
   // ----- Replace: a new tag takes over the asset, the old one is retired or freed -----
@@ -659,9 +814,10 @@ export class TagManagement implements OnDestroy {
       .sort((a, b) => Number(b.tech === old.tech) - Number(a.tech === old.tech) || a.id.localeCompare(b.id));
   }
 
+  /** Two saves: the old tag is freed / retired first, then the new tag takes the asset. */
   saveReplace(): void {
     const d = this.dialog;
-    if (d?.kind !== 'replace') return;
+    if (d?.kind !== 'replace' || this.saving) return;
     const old = TAGS.find((x) => x.id === d.tagId);
     const next = TAGS.find((x) => x.id === d.newId.trim().toUpperCase());
     if (!old?.asset) return;
@@ -670,19 +826,31 @@ export class TagManagement implements OnDestroy {
     if (d.oldTo === 'Inactive' && !d.reason.trim()) return void (this.formError = 'Enter why the old tag is being retired.');
     const asset = old.asset;
     const why = d.reason.trim() ? `: ${d.reason.trim()}` : '';
-    old.asset = null;
-    old.assignedOn = null;
-    old.status = d.oldTo;
-    this.log(old, `Replaced by ${next.id} on ${this.assetLabel(asset)}${d.oldTo === 'Inactive' ? ' and deactivated' : ''}${why}`);
-    next.asset = asset;
-    next.status = 'Assigned';
-    next.assignedOn = Date.now();
-    next.site = old.site;
-    next.location = old.location;
-    this.log(next, `Assigned to ${this.assetLabel(asset)} (replaces ${old.id})`);
-    this.dialog = null;
-    this.selectedId = next.id;
-    this.showToast(`${next.id} now identifies ${asset.tag}. ${old.id} is ${d.oldTo.toLowerCase()}.`);
+    const oldDraft = this.draftOf(old);
+    Object.assign(oldDraft, { asset: null, assignedOn: null, status: d.oldTo });
+    const nextDraft = this.draftOf(next);
+    Object.assign(nextDraft, { asset, status: 'Assigned', assignedOn: Date.now(), site: old.site, location: old.location, siteId: old.siteId ?? null });
+    this.saving = true;
+    let oldSaved: TagId | null = null;
+    this.api.update(oldDraft).pipe(
+      switchMap((saved) => {
+        oldSaved = this.commit(saved, oldDraft);
+        this.log(oldSaved, `Replaced by ${next.id} on ${this.assetLabel(asset)}${d.oldTo === 'Inactive' ? ' and deactivated' : ''}${why}`);
+        return this.api.update(nextDraft);
+      }),
+    ).subscribe({
+      next: (saved) => {
+        const n = this.commit(saved, nextDraft);
+        this.log(n, `Assigned to ${this.assetLabel(asset)} (replaces ${old.id})`);
+        this.saving = false;
+        this.dialog = null;
+        this.selectedId = n.id;
+        this.showToast('Tag replaced', `${old.id} → ${n.id} on ${asset.tag}`);
+      },
+      error: (e: Error) => {
+        this.failed(oldSaved ? new Error(`${old.id} was updated, but ${next.id} could not be assigned: ${e.message}`) : e);
+      },
+    });
   }
 
   openUnassign(t: TagId): void {
@@ -691,16 +859,23 @@ export class TagManagement implements OnDestroy {
 
   saveUnassign(): void {
     const d = this.dialog;
-    if (d?.kind !== 'unassign') return;
+    if (d?.kind !== 'unassign' || this.saving) return;
     const t = TAGS.find((x) => x.id === d.tagId);
     if (!t?.asset) return;
     const from = t.asset;
-    t.asset = null;
-    t.status = 'Available';
-    t.assignedOn = null;
-    this.log(t, `Unassigned from ${this.assetLabel(from)}${d.reason.trim() ? ': ' + d.reason.trim() : ''}`);
-    this.dialog = null;
-    this.showToast(`${t.id} is now available. ${from.tag}'s history keeps the link.`);
+    const draft = this.draftOf(t);
+    Object.assign(draft, { asset: null, status: 'Available', assignedOn: null });
+    this.saving = true;
+    this.api.update(draft).subscribe({
+      next: (saved) => {
+        const n = this.commit(saved, draft);
+        this.log(n, `Unassigned from ${this.assetLabel(from)}${d.reason.trim() ? ': ' + d.reason.trim() : ''}`);
+        this.saving = false;
+        this.dialog = null;
+        this.showToast('Tag unassigned', `${n.id} is available`);
+      },
+      error: (e: Error) => this.failed(e),
+    });
   }
 
   openStatus(t: TagId, to: 'Inactive' | 'Available'): void {
@@ -709,22 +884,28 @@ export class TagManagement implements OnDestroy {
 
   saveStatus(): void {
     const d = this.dialog;
-    if (d?.kind !== 'status') return;
+    if (d?.kind !== 'status' || this.saving) return;
     const t = TAGS.find((x) => x.id === d.tagId);
     if (!t) return;
     if (d.to === 'Inactive' && !d.reason.trim()) return void (this.formError = 'Enter why the tag is being deactivated.');
     const from = t.asset;
-    if (d.to === 'Inactive') {
-      t.asset = null;
-      t.assignedOn = null;
-    }
-    t.status = d.to;
-    this.log(t, d.to === 'Inactive' ? `Deactivated${from ? ' and unlinked from ' + this.assetLabel(from) : ''}: ${d.reason.trim()}` : `Reactivated${d.reason.trim() ? ': ' + d.reason.trim() : ''}`);
-    this.dialog = null;
-    this.showToast(`${t.id} ${d.to === 'Inactive' ? 'deactivated' : 'reactivated'}.`);
+    const draft = this.draftOf(t);
+    // a deactivated or reactivated tag is not linked to an asset
+    Object.assign(draft, { asset: null, assignedOn: null, status: d.to });
+    this.saving = true;
+    this.api.update(draft).subscribe({
+      next: (saved) => {
+        const n = this.commit(saved, draft);
+        this.log(n, d.to === 'Inactive' ? `Deactivated${from ? ' and unlinked from ' + this.assetLabel(from) : ''}: ${d.reason.trim()}` : `Reactivated${d.reason.trim() ? ': ' + d.reason.trim() : ''}`);
+        this.saving = false;
+        this.dialog = null;
+        this.showToast(d.to === 'Inactive' ? 'Tag deactivated' : 'Tag reactivated', n.id);
+      },
+      error: (e: Error) => this.failed(e),
+    });
   }
 
-  // ----- Edit identifier (fix a wrong encoded value or type) -----
+  // ----- Edit identifier (the tag type; the API stores no encoded value) -----
 
   openEdit(t: TagId): void {
     this.open({ kind: 'edit', tagId: t.id, type: t.type, code: t.code });
@@ -733,84 +914,119 @@ export class TagManagement implements OnDestroy {
   get editError(): string {
     const d = this.dlg('edit');
     const t = d && this.tagById(d.tagId);
-    return t ? formatError(t.tech, d.code) : '';
+    return t && d.code.trim() ? formatError(t.tech, d.code) : '';
   }
 
   saveEdit(): void {
     const d = this.dialog;
-    if (d?.kind !== 'edit') return;
+    if (d?.kind !== 'edit' || this.saving) return;
     const t = TAGS.find((x) => x.id === d.tagId);
     if (!t) return;
     const code = d.code.trim();
+    if (d.type === t.type && code === t.code) return void (this.dialog = null);
     if (!code) return void (this.formError = `Enter the ${this.codeLabel(t).toLowerCase()}.`);
-    if (TAGS.some((x) => x !== t && x.code === code)) return void (this.formError = `Another tag already uses this ${this.codeLabel(t).toLowerCase()}.`);
-    if (code === t.code && d.type === t.type) return void (this.dialog = null);
-    const changes = [code !== t.code ? `${this.codeLabel(t)} ${t.code} → ${code}` : '', d.type !== t.type ? `type ${t.type} → ${d.type}` : ''].filter(Boolean).join(', ');
-    t.code = code;
-    t.type = d.type;
-    this.log(t, `Edited: ${changes}`);
-    this.dialog = null;
-    this.showToast(`${t.id} updated${formatError(t.tech, code) ? ', but the value still fails validation' : ''}.`);
+    const bad = formatError(t.tech, code);
+    if (bad) return void (this.formError = bad);
+    const draft = this.draftOf(t);
+    draft.type = d.type;
+    draft.code = code;
+    const changes = [d.type !== t.type ? `type ${t.type} → ${d.type}` : '', code !== t.code ? `${this.codeLabel(t)} ${t.code || '—'} → ${code}` : ''].filter(Boolean).join(', ');
+    this.saving = true;
+    this.api.update(draft).subscribe({
+      next: (saved) => {
+        const n = this.commit(saved, draft);
+        this.log(n, `Edited: ${changes}`);
+        this.saving = false;
+        this.dialog = null;
+        this.showToast('Tag updated', n.id);
+      },
+      error: (e: Error) => this.failed(e),
+    });
+  }
+
+  // ----- Delete -----
+
+  openDelete(t: TagId): void {
+    this.open({ kind: 'delete', tagId: t.id });
+  }
+
+  saveDelete(): void {
+    const d = this.dialog;
+    if (d?.kind !== 'delete' || this.saving) return;
+    this.saving = true;
+    this.api.delete(d.tagId).subscribe({
+      next: () => {
+        const i = TAGS.findIndex((x) => x.id === d.tagId);
+        if (i >= 0) TAGS.splice(i, 1);
+        this.checked.delete(d.tagId);
+        if (this.selectedId === d.tagId) this.selectedId = null;
+        this.saving = false;
+        this.dialog = null;
+        this.version++;
+        this.page = Math.min(this.page, this.pageCount - 1);
+        this.showToast('Tag deleted', d.tagId);
+      },
+      error: (e: Error) => this.failed(e),
+    });
   }
 
   // ===== Register =====
 
   openRegister(): void {
-    const tech: Tech = 'BLE';
-    this.open({ kind: 'register', tech, type: DEFAULT_TYPE[tech], number: String(nextNumber(tech)).padStart(6, '0'), code: '', site: SITES[0].name, location: SITES[0].locations[0], asset: '' });
-    this.fillCode();
+    this.open({ kind: 'register', tech: '' as Tech, type: '' as TagType, number: '', code: '', site: '', location: '', asset: '' });
   }
 
   onRegisterTech(): void {
     const d = this.dialog;
     if (d?.kind !== 'register') return;
-    d.type = DEFAULT_TYPE[d.tech];
-    d.number = String(nextNumber(d.tech)).padStart(6, '0');
-    this.fillCode();
-  }
-
-  /** Suggest a code value (EPC / barcode / MAC) for the number; the user can overwrite it. */
-  fillCode(): void {
-    const d = this.dialog;
-    if (d?.kind === 'register') d.code = codeFor(d.tech, Number(d.number) || 0);
+    d.type = '' as TagType;
+    if (d.tech) d.number = String(nextNumber(d.tech)).padStart(6, '0');
   }
 
   get registerPreview(): string {
     const d = this.dialog;
-    return d?.kind === 'register' ? tagIdOf(d.tech, Number(d.number) || 0) : '';
+    return d?.kind === 'register' ? (tagIdFromNumber(d.tech, d.number) ?? '–') : '';
   }
 
   saveRegister(): void {
     const d = this.dialog;
-    if (d?.kind !== 'register') return;
-    const n = Number(d.number);
-    if (!Number.isInteger(n) || n <= 0) return void (this.formError = 'Enter a tag number.');
-    const id = tagIdOf(d.tech, n);
-    if (TAGS.some((t) => t.id === id)) return void (this.formError = `${id} already exists.`);
-    const bad = formatError(d.tech, d.code);
-    if (bad) return void (this.formError = bad + '.');
-    if (TAGS.some((t) => t.code === d.code.trim())) return void (this.formError = 'Another tag already uses this encoded value.');
-    const t = this.createTag(d.tech, id, d.type, d.code.trim(), d.site, d.location, d.asset);
-    this.selectedId = t.id;
-    this.dialog = null;
-    this.clearFilters();
-    this.sortKey = 'activity';
-    this.sortDesc = true;
-    this.showToast(`${t.id} registered${t.asset ? ' and assigned to ' + t.asset.tag : ''}.`);
+    if (d?.kind !== 'register' || this.saving) return;
+    if (!d.tech) return void (this.formError = 'Choose the technology.');
+    if (!d.type) return void (this.formError = 'Choose the tag type.');
+    if (!String(d.number ?? '').trim()) return void (this.formError = 'Enter a tag number.');
+    const id = tagIdFromNumber(d.tech, d.number);
+    if (!id) return void (this.formError = "Tag number can only contain letters, digits, '-' and '_' (up to 50 characters).");
+    if (TAGS.some((t) => t.id.toLowerCase() === id.toLowerCase())) return void (this.formError = `${id} already exists.`);
+    const code = d.code.trim();
+    if (!code) return void (this.formError = `Enter the ${this.codeLabel(d).toLowerCase()}.`);
+    const bad = formatError(d.tech, code);
+    if (bad) return void (this.formError = bad);
+    const draft = this.newTag(d.tech, id, d.type, d.site, d.location, d.asset, code);
+    this.saving = true;
+    this.api.create(draft).subscribe({
+      next: (saved) => {
+        const t = this.commit(saved, { ...draft, history: saved.history });
+        if (t.asset) this.log(t, `Assigned to ${this.assetLabel(t.asset)}`);
+        this.saving = false;
+        this.selectedId = t.id;
+        this.dialog = null;
+        this.clearFilters();
+        this.sortKey = 'activity';
+        this.sortDesc = true;
+        this.showToast('Tag registered', t.asset ? `${t.id} → ${t.asset.tag}` : t.id);
+      },
+      error: (e: Error) => this.failed(e),
+    });
   }
 
-  private createTag(tech: Tech, id: string, type: TagType, code: string, site: string, location: string, asset: string): TagId {
+  /** A new tag to POST; the API fills in who registered it and when. */
+  private newTag(tech: Tech, id: string, type: TagType, site: string, location: string, asset: string, code: string): TagId {
     const now = Date.now();
     const linked = this.resolveAsset(asset);
-    const siteCode = SITES.find((s) => s.name === site)?.code ?? 'CST';
-    const t: TagId = {
+    return {
       id, tech, type, code, asset: linked, site, location, status: linked ? 'Assigned' : 'Available', assignedOn: linked ? now : null,
-      lastSeen: null, reader: readerFor(tech, siteCode), registeredOn: now,
-      history: [...(linked ? [{ at: now, text: `Assigned to ${this.assetLabel(linked)}`, by: CURRENT_USER }] : []), { at: now, text: `Registered as ${tech} ${type.toLowerCase()}`, by: CURRENT_USER }],
+      lastSeen: null, reader: '', registeredOn: now, history: [], siteId: this.siteIdOf(site),
     };
-    TAGS.unshift(t);
-    this.version++;
-    return t;
   }
 
   // ===== Import =====
@@ -820,12 +1036,9 @@ export class TagManagement implements OnDestroy {
   }
 
   downloadTemplate(): void {
-    const sample = [
-      { Technology: 'BLE', 'Tag Number': nextNumber('BLE'), Type: 'Beacon', 'Encoded Value': '', Site: 'Dubai Plant', Location: 'Warehouse', 'Asset Code': 'FL-008' },
-      { Technology: 'QR Code', 'Tag Number': nextNumber('QR Code'), Type: 'Label', 'Encoded Value': '', Site: 'Central Store', Location: '', 'Asset Code': '' },
-    ];
+    const header = ['Technology', 'Tag Number', 'Value', 'Type', 'Site', 'Location', 'Asset Code'];
     const book = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(sample), 'Tags');
+    XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet([], { header }), 'Tags');
     XLSX.writeFile(book, 'Tag_Import_Template.xlsx');
   }
 
@@ -855,7 +1068,6 @@ export class TagManagement implements OnDestroy {
 
   private validateImport(raw: Record<string, unknown>[]): ImportRow[] {
     const ids = new Set(TAGS.map((t) => t.id));
-    const codes = new Set(TAGS.map((t) => t.code));
     const get = (r: Record<string, unknown>, ...keys: string[]) => {
       const k = Object.keys(r).find((x) => keys.includes(x.trim().toLowerCase()));
       return k ? String(r[k]).trim() : '';
@@ -863,24 +1075,23 @@ export class TagManagement implements OnDestroy {
     return raw.map((r, i) => {
       const techText = get(r, 'technology', 'tech');
       const tech = TECH_ALIASES[techText.toLowerCase()] ?? null;
-      const num = Number(get(r, 'tag number', 'number', 'tag no'));
-      const id = tech && num > 0 ? tagIdOf(tech, num) : '';
+      const numText = get(r, 'tag number', 'number', 'tag no');
+      const id = (tech && tagIdFromNumber(tech, numText)) || '';
       const typeText = get(r, 'type');
       const type = (TYPES.find((x) => x.toLowerCase() === typeText.toLowerCase()) ?? (tech ? DEFAULT_TYPE[tech] : 'Label')) as TagType;
-      const code = get(r, 'encoded value', 'epc', 'code') || (tech && num > 0 ? codeFor(tech, num) : '');
-      const site = SITES.find((s) => s.name.toLowerCase() === get(r, 'site').toLowerCase())?.name ?? '';
+      const siteText = get(r, 'site');
+      const site = SITES.find((s) => s.name.toLowerCase() === siteText.toLowerCase())?.name ?? siteText;
       const location = get(r, 'location');
+      // EPC / MAC / barcode / QR payload / UID: required by the API
+      const code = get(r, 'value', 'encoded value', 'epc', 'mac', 'mac address', 'uid', 'barcode', 'code');
       let error = '';
       if (!tech) error = techText ? `Unknown technology "${techText}"` : 'Technology missing';
-      else if (!(num > 0)) error = 'Tag number missing';
+      else if (!numText) error = 'Tag number missing';
+      else if (!id) error = `Tag number "${numText}" can only contain letters, digits, '-' and '_'`;
       else if (ids.has(id)) error = `${id} already exists`;
+      else if (!code) error = `${this.codeLabel({ tech })} missing`;
       else if (formatError(tech, code)) error = formatError(tech, code);
-      else if (codes.has(code)) error = 'Encoded value already used';
-      else if (!site) error = 'Unknown site';
-      if (!error) {
-        ids.add(id);
-        codes.add(code);
-      }
+      if (!error) ids.add(id);
       return { line: i + 2, tech, id, type, code, site, location, asset: get(r, 'asset code', 'asset'), error };
     });
   }
@@ -890,15 +1101,41 @@ export class TagManagement implements OnDestroy {
     return d?.kind === 'import' ? d.rows.filter((r) => !r.error).length : 0;
   }
 
+  /** POSTs the valid rows one by one; rows the API rejects are reported with its reason. */
   saveImport(): void {
     const d = this.dialog;
-    if (d?.kind !== 'import') return;
+    if (d?.kind !== 'import' || this.saving) return;
     const ok = d.rows.filter((r) => !r.error && r.tech);
-    for (const r of ok) this.createTag(r.tech!, r.id, r.type, r.code, r.site, r.location, r.asset);
-    const skipped = d.rows.length - ok.length;
-    this.dialog = null;
-    this.clearFilters();
-    this.showToast(`${ok.length} tag${ok.length === 1 ? '' : 's'} imported${skipped ? `, ${skipped} skipped` : ''}.`);
+    this.saving = true;
+    from(ok).pipe(
+      concatMap((r) => {
+        const draft = this.newTag(r.tech!, r.id, r.type, r.site, r.location, r.asset, r.code);
+        return this.api.create(draft).pipe(
+          map((saved) => {
+            this.commit(saved, { ...draft, history: saved.history });
+            return '';
+          }),
+          catchError((e: Error) => {
+            r.error = e.message;
+            return of(r.error);
+          }),
+        );
+      }),
+      toArray(),
+    ).subscribe((results) => {
+      this.saving = false;
+      const done = results.filter((x) => !x).length;
+      const failed = results.length - done;
+      const skipped = d.rows.length - ok.length;
+      this.clearFilters();
+      if (failed) {
+        d.error = `${done} imported; ${failed} rejected by the server (see Result).`;
+        d.rows = d.rows.filter((r) => r.error);
+        return;
+      }
+      this.dialog = null;
+      this.showToast('Import complete', `${done} imported${skipped ? ` · ${skipped} skipped` : ''}`, skipped ? 'warning' : 'success');
+    });
   }
 
   // ===== Export / menus =====
@@ -940,10 +1177,45 @@ export class TagManagement implements OnDestroy {
     else if (window.innerWidth < 1200) this.selectedId = null;
   }
 
-  private showToast(message: string): void {
-    this.toast = message;
+  /** Short action title ("Tag registered") and a one-line detail ("c3000071fe4c → TV12333"). */
+  private showToast(title: string, message: string, tone: ToastTone = 'success'): void {
+    this.toast = { id: ++this.toastSeq, tone, title, message };
+    this.toastPaused = false;
+    this.runToastTimer(TOAST_MS);
+  }
+
+  closeToast(): void {
     clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => (this.toast = ''), 4000);
+    this.toast = null;
+    this.toastPaused = false;
+  }
+
+  /** Hovering the toast stops its countdown; leaving resumes it with the time that was left. */
+  pauseToast(): void {
+    if (!this.toast || this.toastPaused) return;
+    clearTimeout(this.toastTimer);
+    this.toastLeft = Math.max(0, this.toastEndsAt - Date.now());
+    this.toastPaused = true;
+  }
+
+  resumeToast(): void {
+    if (!this.toast || !this.toastPaused) return;
+    this.toastPaused = false;
+    this.runToastTimer(this.toastLeft);
+  }
+
+  private runToastTimer(ms: number): void {
+    clearTimeout(this.toastTimer);
+    this.toastEndsAt = Date.now() + ms;
+    this.toastTimer = setTimeout(() => this.closeToast(), ms);
+  }
+
+  trackToast(_: number, t: Toast): number {
+    return t.id;
+  }
+
+  toastIcon(tone: ToastTone) {
+    return tone === 'success' ? this.icons.CircleCheck : tone === 'info' ? this.icons.Info : this.icons.CircleAlert;
   }
 
   /** Narrow a dialog for the template (strict templates cannot narrow a union on their own). */

@@ -25,8 +25,7 @@ import {
   Wrench,
   X,
 } from 'lucide-angular';
-import DATA from './progress-log.json';
-import { OUTPUTS, OUTPUT_JOB, demoNow, handoverState, parseLocal } from '../product-output/output-store';
+import { OUTPUTS, OUTPUT_JOB, nowStamp, handoverState, parseLocal } from '../product-output/output-store';
 
 type Tab = 'timeline' | 'entries' | 'stages' | 'outputs' | 'review';
 type EntryType = 'System event' | 'Verified' | 'Delay' | 'Task update' | 'Output' | 'Work progress' | 'Note' | 'Correction';
@@ -89,13 +88,15 @@ interface UpdateForm {
   complete: boolean;
 }
 
-const CURRENT_USER = 'Ravi Patel';
+/** Signed-in user's display name; filled from the auth/user API once wired. */
+const CURRENT_USER = '';
 const TITLES: Partial<Record<EntryType, string>> = { 'Work progress': 'Work progress', 'Task update': 'Task updated', Delay: 'Delay reported', Output: 'Output noted', Note: 'Note added' };
-const SOURCE = DATA as unknown as { job: { code: string; name: string; status: string; site: string; image: string; currentStage: string }; stages: Stage[]; entries: Entry[]; blockers: Blocker[] };
-/** DEMO MODE: kept in memory until the WIP API is wired up. */
-const STAGES: Stage[] = structuredClone(SOURCE.stages);
-let ENTRIES: Entry[] = structuredClone(SOURCE.entries);
-const BLOCKERS: Blocker[] = structuredClone(SOURCE.blockers);
+/** The job being logged; blank until the WIP API is wired up. */
+const JOB: { code: string; name: string; status: string; site: string; image: string; currentStage: string } = { code: '', name: '', status: '', site: '', image: '', currentStage: '' };
+/** Stages, entries and blockers are kept in memory; empty until the WIP API is wired up. */
+const STAGES: Stage[] = [];
+let ENTRIES: Entry[] = [];
+const BLOCKERS: Blocker[] = [];
 let DRAFT: UpdateForm | null = null;
 
 @Component({
@@ -104,7 +105,7 @@ let DRAFT: UpdateForm | null = null;
   imports: [CommonModule, FormsModule, RouterModule, LucideAngularModule],
   templateUrl: './progress-log.html',
   // Buttons, controls, tabs, switches, modal and toast come from the Job Templates stylesheet
-  styleUrls: ['../job-templates/job-templates.css', '../shared/wip-board.css', './progress-log.css'],
+  styleUrls: ['../job-templates/job-templates.css', '../shared/wip-board.css', './progress-log.css', '../shared/wip-purple-theme.css'],
 })
 export class ProgressLog implements OnDestroy {
   readonly icons = {
@@ -118,18 +119,19 @@ export class ProgressLog implements OnDestroy {
     { key: 'outputs', label: 'Output Records' },
     { key: 'review', label: 'Review & Corrections' },
   ];
-  readonly job = SOURCE.job;
+  readonly job = JOB;
   readonly stages = STAGES;
   readonly blockers = BLOCKERS;
   readonly updateTypes: EntryType[] = ['Work progress', 'Task update', 'Delay', 'Output', 'Note'];
-  readonly operators = ['Ravi Patel', 'S. Ali', 'K. Joshi', 'Team A', 'Quality Supervisor'];
+  /** Operators; filled from master data once the API is wired. */
+  readonly operators: string[] = [];
   readonly durations = [0, 15, 30, 45, 60, 90, 120, 180];
   readonly outputJob = OUTPUT_JOB;
 
   tab: Tab = 'timeline';
 
   // Timeline filters
-  date = demoNow().slice(0, 10);
+  date = nowStamp().slice(0, 10);
   stageFilter = '';
   typeFilter = '';
   byFilter = '';
@@ -153,7 +155,7 @@ export class ProgressLog implements OnDestroy {
   }
 
   get now(): string {
-    return demoNow();
+    return nowStamp();
   }
 
   get entries(): Entry[] {
@@ -279,7 +281,7 @@ export class ProgressLog implements OnDestroy {
   private blankForm(): UpdateForm {
     const testing = STAGES.find((s) => s.name === 'Testing');
     return {
-      stage: testing ? 'Testing' : STAGES[0].name, task: testing?.tasks.find((t) => !t.done)?.id ?? '', type: 'Work progress', at: demoNow(), operator: CURRENT_USER,
+      stage: testing ? 'Testing' : STAGES[0]?.name ?? '', task: testing?.tasks.find((t) => !t.done)?.id ?? '', type: 'Work progress', at: nowStamp(), operator: CURRENT_USER,
       minutes: 30, notes: '', files: [], complete: false,
     };
   }

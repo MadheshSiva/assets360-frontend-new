@@ -23,7 +23,7 @@ interface Filters {
   selector: 'app-mdm-compliance-permit-type',
   imports: [FormsModule, RouterLink, LucideAngularModule, PermitTypeForm],
   templateUrl: './permit-type.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../compliance.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../compliance.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class PermitTypePage extends ListPage<PermitTypeRecord, Filters, SortKey> implements OnInit {
   readonly service = inject(PermitTypeService);

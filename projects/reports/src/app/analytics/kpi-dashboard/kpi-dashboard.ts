@@ -82,7 +82,7 @@ export class KpiDashboardPage extends AnalyticsPage {
   views: KpiViewDef[] = KPI_VIEWS.map((v) => ({ ...v, ids: [...v.ids] }));
   layouts: Record<string, { id: string; visible: boolean }[]> = {};
   activeKey = 'executive';
-  businessUnit = BUSINESS_UNITS[0];
+  businessUnit = '';
   granularity = 'Monthly';
   exceptionStatus = EXCEPTION_STATUSES[0];
 
@@ -108,7 +108,6 @@ export class KpiDashboardPage extends AnalyticsPage {
 
   constructor() {
     super();
-    this.updatedMinutes = 2;
     this.views.forEach((v) => (this.layouts[v.key] = v.ids.map((id) => ({ id, visible: true }))));
     this.apply();
   }
@@ -160,7 +159,7 @@ export class KpiDashboardPage extends AnalyticsPage {
     this.filterExceptions();
     this.buildTrend(shown);
     this.buildTargets(shown);
-    this.buildInsights();
+    this.buildInsights(shown.length > 0);
     this.library = KPI_MODULES.map((m) => ({ module: m, count: this.catalog.filter((k) => k.module === m).length }));
   }
 
@@ -174,6 +173,11 @@ export class KpiDashboardPage extends AnalyticsPage {
 
   /** Overall score = average attainment vs target of the KPIs shown (100% = on target). */
   private buildTrend(shown: KpiState[]): void {
+    if (!shown.length) {
+      this.trendLabels = [];
+      this.trendSeries = [];
+      return;
+    }
     const monthly = RA_MONTH_LABELS.map((_, i) =>
       shown.length ? Number((shown.reduce((a, s) => a + Math.min(120, attainment(s.spark[i], s.target, s.def.direction)), 0) / shown.length).toFixed(1)) : 0
     );
@@ -189,7 +193,7 @@ export class KpiDashboardPage extends AnalyticsPage {
     if (this.granularity === 'Quarterly') {
       const quarters: [number, number][] = [[0, 3], [3, 6], [6, 9], [9, 10]];
       const avg = (values: number[], [a, b]: [number, number]) => Number((values.slice(a, b).reduce((x, y) => x + y, 0) / (b - a)).toFixed(1));
-      labels = ['Q1\n2026', 'Q2\n2026', 'Q3\n2026', 'Q4 (QTD)\n2026'];
+      labels = ['Q1', 'Q2', 'Q3', 'Q4 (QTD)'];
       overall = quarters.map((q) => avg(monthly, q));
       previous = quarters.map((q) => avg(prior, q));
     }
@@ -217,7 +221,11 @@ export class KpiDashboardPage extends AnalyticsPage {
     });
   }
 
-  private buildInsights(): void {
+  private buildInsights(hasData: boolean): void {
+    if (!hasData) {
+      this.insights = [];
+      return;
+    }
     const ex = this.viewExceptions;
     const below = ex.filter((s) => s.status !== 'Over Budget');
     const over = ex.filter((s) => s.status === 'Over Budget').sort((a, b) => b.value - b.target - (a.value - a.target))[0];
@@ -390,8 +398,8 @@ export class KpiDashboardPage extends AnalyticsPage {
         { label: 'Change vs previous period', value: s.changeText },
         { label: 'Owner', value: s.def.owner },
         { label: 'Next review due', value: s.due },
-        { label: 'Scope', value: `${this.location} · ${this.businessUnit}` },
-        { label: 'Period', value: this.period }
+        { label: 'Scope', value: `${this.locationLabel} · ${this.businessUnit || BUSINESS_UNITS[0]}` },
+        { label: 'Period', value: this.periodLabel }
       ]
     };
   }

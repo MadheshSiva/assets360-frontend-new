@@ -2,7 +2,7 @@
   <div class="page-head">
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a routerLink="/inspection/overview">Inspection</a><span aria-hidden="true">/</span>
+        <a routerLink="/inspection/overview">Inspection</a><span class="crumb-sep" aria-hidden="true">›</span>
         <span class="current">{{ editing ? 'Edit Draft' : 'New Inspection' }}</span>
       </nav>
       <h1>{{ editing ? 'Edit Inspection Draft' : 'New Inspection' }}</h1>
@@ -50,7 +50,7 @@
                 <input class="control" [class.invalid]="bad('title')" [(ngModel)]="form.title" maxlength="160" placeholder="e.g. Monthly Equipment Safety Inspection" /></label>
               <label class="field"><span class="field-label">Inspection Type <span class="req">*</span></span>
                 <select class="control" [class.invalid]="bad('inspectionTypeName')" [ngModel]="form.inspectionTypeName" (ngModelChange)="onTypeChange($event)">
-                  <option value="">Select type</option>
+                  <option value="">Select Type</option>
                   @for (t of activeTypes(); track t.id) { <option [value]="t.inspectionTypeName">{{ t.inspectionTypeName }}</option> }
                 </select></label>
               <label class="field"><span class="field-label">Inspection Reference</span>
@@ -59,6 +59,7 @@
               <label class="field"><span class="field-label">Priority <span class="req">*</span></span>
                 <span class="with-dot"><span [class]="priorityClass(form.priority)"></span>
                   <select class="control" [class.invalid]="bad('priority')" [(ngModel)]="form.priority">
+                    <option value="" disabled>Select Priority</option>
                     @for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }
                   </select></span></label>
               <label class="field"><span class="field-label">Site <span class="req">*</span></span>
@@ -66,7 +67,7 @@
                 <datalist id="ni-sites">@for (s of sites(); track s) { <option [value]="s"></option> }</datalist></label>
               <label class="field"><span class="field-label">Department</span>
                 <select class="control" [(ngModel)]="form.department">
-                  <option value="">Select department</option>
+                  <option value="">Select Department</option>
                   @for (d of departments(); track d) { <option [value]="d">{{ d }}</option> }
                 </select></label>
               <label class="field"><span class="field-label">Inspection Plan <span class="muted">(Optional)</span></span>
@@ -74,8 +75,9 @@
                   <option value="">No plan</option>
                   @for (p of plans.items(); track p.id) { <option [value]="p.planCode">{{ p.planName }}</option> }
                 </select></label>
-              <label class="field"><span class="field-label">Trigger</span>
-                <select class="control" [(ngModel)]="form.trigger">
+              <label class="field"><span class="field-label">Trigger <span class="req">*</span></span>
+                <select class="control" [class.invalid]="bad('trigger')" [(ngModel)]="form.trigger">
+                  <option value="" disabled>Select Trigger</option>
                   @for (t of triggers; track t) { <option [value]="t">{{ t }}</option> }
                 </select></label>
               <label class="field span-2"><span class="field-label">Description <span class="req">*</span></span>
@@ -96,6 +98,7 @@
               <div class="form-grid">
                 <label class="field"><span class="field-label">Inspection Category <span class="req">*</span></span>
                   <select class="control" [class.invalid]="bad('category')" [(ngModel)]="form.category">
+                    <option value="" disabled>Select Inspection Category</option>
                     @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
                   </select></label>
                 <label class="field"><span class="field-label">Reference Standard <span class="muted">(Optional)</span></span>
@@ -139,7 +142,7 @@
             <h2 class="h">Checklist</h2>
             <label class="field"><span class="field-label">Checklist Template <span class="req">*</span></span>
               <select class="control" [class.invalid]="bad('checklistCode')" [(ngModel)]="form.checklistCode">
-                <option value="">Select checklist</option>
+                <option value="">Select Checklist</option>
                 @for (c of checklistOptions(); track c.id) {
                   <option [value]="c.checklistCode">{{ c.templateName }} {{ c.versionLabel }} ({{ c.checklistCode }}){{ c.checklistCode === defaultChecklistCode ? ' – type default' : '' }}</option>
                 }
@@ -175,7 +178,7 @@
               <label class="field"><span class="field-label">Assignee <span class="req">*</span></span>
                 @if (people().length) {
                   <select class="control" [class.invalid]="bad('assignedTo')" [(ngModel)]="form.assignedTo">
-                    <option value="">Select inspector</option>
+                    <option value="">Select Inspector</option>
                     @for (p of people(); track p) { <option [value]="p">{{ p }}</option> }
                   </select>
                 } @else {
@@ -183,7 +186,7 @@
                 }</label>
               <label class="field"><span class="field-label">Team</span>
                 <select class="control" [(ngModel)]="form.assignedTeam">
-                  <option value="">Select team</option>
+                  <option value="">Select Team</option>
                   @for (t of teams(); track t) { <option [value]="t">{{ t }}</option> }
                 </select></label>
               <label class="field"><span class="field-label">Due Date <span class="req">*</span></span>

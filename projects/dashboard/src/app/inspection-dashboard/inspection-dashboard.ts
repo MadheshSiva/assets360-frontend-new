@@ -122,13 +122,13 @@ export class InspectionDashboard {
     saveOrder('piq.dashboard.inspection.rowBOrder', this.rowBOrder);
   }
 
-  // ===== Summary cards =====
+  // ===== Summary cards (layout only; values stay 0 until the inspection API is wired) =====
   statCards: InspStatCard[] = reorderByKey<InspStatCard>([
-    { key: 'all', label: 'Total Work Orders', value: 128, icon: 'clipboard' },
-    { key: 'inprogress', label: 'In Progress', value: 45, icon: 'progress' },
-    { key: 'pendingapproval', label: 'Pending Approval', value: 23, icon: 'clock' },
-    { key: 'completed', label: 'Completed', value: 60, icon: 'completed' },
-    { key: 'overdue', label: 'Overdue', value: 12, icon: 'overdue' },
+    { key: 'all', label: 'Total Work Orders', value: 0, icon: 'clipboard' },
+    { key: 'inprogress', label: 'In Progress', value: 0, icon: 'progress' },
+    { key: 'pendingapproval', label: 'Pending Approval', value: 0, icon: 'clock' },
+    { key: 'completed', label: 'Completed', value: 0, icon: 'completed' },
+    { key: 'overdue', label: 'Overdue', value: 0, icon: 'overdue' },
   ], 'piq.dashboard.inspection.statOrder', (c) => c.key);
 
   private readonly iconClassMap: Record<string, string> = {
@@ -158,13 +158,7 @@ export class InspectionDashboard {
     this.workOrderFilter = filter;
   }
 
-  workOrders: InspWorkOrder[] = [
-    { id: 'WO-2025-00128', title: 'Boiler Inspection', assetsCount: 3, assignees: ['Michael Brown', 'David Smith', 'Sarah Wilson', 'Anita Rao'], status: 'In Progress', statusClass: 'inprogress', dueDate: '20 May 2025' },
-    { id: 'WO-2025-00127', title: 'Generator Inspection', assetsCount: 2, assignees: ['David Smith', 'Sarah Wilson', 'Anita Rao'], status: 'Pending Approval', statusClass: 'pendingapproval', dueDate: '18 May 2025' },
-    { id: 'WO-2025-00126', title: 'HVAC System Check', assetsCount: 5, assignees: ['Sarah Wilson', 'Michael Brown'], status: 'Completed', statusClass: 'completed', dueDate: '15 May 2025' },
-    { id: 'WO-2025-00125', title: 'Annual Safety Inspection', assetsCount: 10, assignees: ['Michael Brown', 'David Smith', 'Sarah Wilson', 'Anita Rao', 'Chen Wei'], status: 'In Progress', statusClass: 'inprogress', dueDate: '25 May 2025' },
-    { id: 'WO-2025-00124', title: 'Fire Extinguisher Check', assetsCount: 7, assignees: ['David Smith', 'Anita Rao'], status: 'Overdue', statusClass: 'overdue', dueDate: '10 May 2025' },
-  ];
+  workOrders: InspWorkOrder[] = [];
 
   get filteredWorkOrders(): InspWorkOrder[] {
     if (this.workOrderFilter === 'all') return this.workOrders;
@@ -183,27 +177,23 @@ export class InspectionDashboard {
 
   // ===== My inspections =====
   myInspections: MyInspectionRow[] = [
-    { key: 'notstarted', label: 'Not Started', count: 12, icon: 'notstarted', statusClass: 'notstarted' },
-    { key: 'inprogress', label: 'In Progress', count: 8, icon: 'progress', statusClass: 'inprogress' },
-    { key: 'pendingapproval', label: 'Pending Approval', count: 5, icon: 'clock', statusClass: 'pendingapproval' },
-    { key: 'completed', label: 'Completed', count: 20, icon: 'completed', statusClass: 'completed' },
+    { key: 'notstarted', label: 'Not Started', count: 0, icon: 'notstarted', statusClass: 'notstarted' },
+    { key: 'inprogress', label: 'In Progress', count: 0, icon: 'progress', statusClass: 'inprogress' },
+    { key: 'pendingapproval', label: 'Pending Approval', count: 0, icon: 'clock', statusClass: 'pendingapproval' },
+    { key: 'completed', label: 'Completed', count: 0, icon: 'completed', statusClass: 'completed' },
   ];
 
   // ===== Recent inspections =====
-  recentInspections: RecentInspectionRow[] = [
-    { id: 'WO-2025-00127', title: 'Generator Inspection', asset: 'Generator G-01', inspectedBy: 'Michael Brown', status: 'Pending Approval', statusClass: 'pendingapproval', time: '2 hours ago' },
-    { id: 'WO-2025-00128', title: 'Boiler Inspection', asset: 'Boiler B-02', inspectedBy: 'David Smith', status: 'In Progress', statusClass: 'inprogress', time: '5 hours ago' },
-    { id: 'WO-2025-00126', title: 'HVAC System Check', asset: 'HVAC Unit 3A', inspectedBy: 'Sarah Wilson', status: 'Completed', statusClass: 'completed', time: '1 day ago' },
-  ];
+  recentInspections: RecentInspectionRow[] = [];
 
   // ===== Inspection summary donut =====
-  inspectionSummaryTotal = 128;
+  inspectionSummaryTotal = 0;
 
   inspectionSummary: InspectionSummarySegment[] = [
-    { label: 'Passed', value: 68, percent: 53, color: '#22a06b' },
-    { label: 'Failed', value: 25, percent: 20, color: '#e15252' },
-    { label: 'In Progress', value: 23, percent: 18, color: '#f0a93b' },
-    { label: 'Pending Approval', value: 12, percent: 9, color: '#4f2bd8' },
+    { label: 'Passed', value: 0, percent: 0, color: '#22a06b' },
+    { label: 'Failed', value: 0, percent: 0, color: '#e15252' },
+    { label: 'In Progress', value: 0, percent: 0, color: '#f0a93b' },
+    { label: 'Pending Approval', value: 0, percent: 0, color: '#4f2bd8' },
   ];
 
   get donutGradient(): string {
@@ -213,15 +203,15 @@ export class InspectionDashboard {
       cursor += seg.percent;
       return `${seg.color} ${start}% ${cursor}%`;
     });
-    return `conic-gradient(${stops.join(', ')})`;
+    return cursor > 0 ? `conic-gradient(${stops.join(', ')}, #eef0f4 ${cursor}% 100%)` : '#eef0f4';
   }
 
   // ===== Approval summary =====
   approvalSummary: ApprovalSummaryRow[] = [
-    { label: 'Level 1 Approval', pending: 18, icon: 'user' },
-    { label: 'Level 2 Approval', pending: 7, icon: 'user' },
-    { label: 'Level 3 Approval', pending: 3, icon: 'user' },
-    { label: 'Final Approval', pending: 2, icon: 'user' },
+    { label: 'Level 1 Approval', pending: 0, icon: 'user' },
+    { label: 'Level 2 Approval', pending: 0, icon: 'user' },
+    { label: 'Level 3 Approval', pending: 0, icon: 'user' },
+    { label: 'Final Approval', pending: 0, icon: 'user' },
   ];
 
   // ===== Quick actions =====
@@ -284,24 +274,7 @@ export class InspectionDashboard {
     };
   }
 
-  private readonly myInspectionDetails: Record<string, { workOrder: string; asset: string; dueDate: string }[]> = {
-    notstarted: [
-      { workOrder: 'WO-2025-00131', asset: 'Chiller Pump 2', dueDate: '28 May 2025' },
-      { workOrder: 'WO-2025-00132', asset: 'Water Tank 1', dueDate: '29 May 2025' },
-      { workOrder: 'WO-2025-00133', asset: 'Loading Dock Lift', dueDate: '30 May 2025' },
-    ],
-    inprogress: [
-      { workOrder: 'WO-2025-00128', asset: 'Boiler B-02', dueDate: '20 May 2025' },
-      { workOrder: 'WO-2025-00125', asset: 'Site-wide Safety', dueDate: '25 May 2025' },
-    ],
-    pendingapproval: [
-      { workOrder: 'WO-2025-00127', asset: 'Generator G-01', dueDate: '18 May 2025' },
-    ],
-    completed: [
-      { workOrder: 'WO-2025-00126', asset: 'HVAC Unit 3A', dueDate: '15 May 2025' },
-      { workOrder: 'WO-2025-00120', asset: 'Fire Panel A', dueDate: '10 May 2025' },
-    ],
-  };
+  private readonly myInspectionDetails: Record<string, { workOrder: string; asset: string; dueDate: string }[]> = {};
 
   private readonly myInspectionColumns: PopupColumn[] = [
     { key: 'workOrder', label: 'Work Order' },
@@ -354,21 +327,7 @@ export class InspectionDashboard {
     };
   }
 
-  private readonly approvalDetails: Record<string, { workOrder: string; title: string; submittedBy: string; submittedDate: string }[]> = {
-    'Level 1 Approval': [
-      { workOrder: 'WO-2025-00127', title: 'Generator Inspection', submittedBy: 'Michael Brown', submittedDate: '19 May 2025' },
-      { workOrder: 'WO-2025-00129', title: 'Elevator Inspection', submittedBy: 'David Smith', submittedDate: '19 May 2025' },
-    ],
-    'Level 2 Approval': [
-      { workOrder: 'WO-2025-00121', title: 'Fire Panel Check', submittedBy: 'Sarah Wilson', submittedDate: '17 May 2025' },
-    ],
-    'Level 3 Approval': [
-      { workOrder: 'WO-2025-00118', title: 'Structural Audit', submittedBy: 'Anita Rao', submittedDate: '14 May 2025' },
-    ],
-    'Final Approval': [
-      { workOrder: 'WO-2025-00115', title: 'Annual Compliance Review', submittedBy: 'Chen Wei', submittedDate: '10 May 2025' },
-    ],
-  };
+  private readonly approvalDetails: Record<string, { workOrder: string; title: string; submittedBy: string; submittedDate: string }[]> = {};
 
   private readonly approvalColumns: PopupColumn[] = [
     { key: 'workOrder', label: 'Work Order' },

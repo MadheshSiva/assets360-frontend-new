@@ -91,6 +91,7 @@
                 </td>
                 <td>{{ wo.dueDate }}</td>
               </tr>
+              <tr *ngIf="!filteredWorkOrders.length"><td colspan="6" class="insp-popup-empty">No work orders yet.</td></tr>
             </tbody>
           </table>
         </div>
@@ -149,6 +150,7 @@
           <a href="#" class="insp-view-all" (click)="$event.preventDefault(); openRecentInspectionsPopup()">View all</a>
         </div>
         <div class="insp-recent-list">
+          <p *ngIf="!recentInspections.length" class="insp-popup-empty">No recent inspections.</p>
           <div class="insp-recent-row" *ngFor="let insp of recentInspections">
             <div class="insp-recent-main">
               <a href="#" class="insp-wo-link">{{ insp.id }}</a>

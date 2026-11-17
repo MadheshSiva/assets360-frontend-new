@@ -19,7 +19,7 @@ import {
   User,
   Wrench,
 } from 'lucide-angular';
-import { AuthService, DEMO_ROLES, RegisterData, SignupRole } from 'shared-ui';
+import { AuthService, RegisterData, SignupRole } from 'shared-ui';
 
 const USER_NAME_PATTERN = /^[A-Za-z0-9._-]{3,50}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -28,7 +28,7 @@ const MIN_PASSWORD = 8;
 const DESIGN_H = 940;
 const DESIGN_MIN_W = 1280;
 
-/** DEMO MODE: sign-up is validated and kept in the browser only; afterwards the user signs in. */
+/** Sign-up: creates the account on the server (POST /api/auth/register); afterwards the user signs in. */
 @Component({
   standalone: true,
   selector: 'app-signup',
@@ -54,7 +54,7 @@ export class Signup {
   showPassword = false;
   showConfirm = false;
 
-  roles: SignupRole[] = DEMO_ROLES;
+  roles: SignupRole[] = [];
   rolesLoading = false;
   rolesError = '';
 
@@ -64,6 +64,7 @@ export class Signup {
 
   constructor(private auth: AuthService, private router: Router) {
     this.fit();
+    this.loadRoles();
   }
 
   @HostListener('window:resize')
@@ -79,8 +80,20 @@ export class Signup {
     return this.roles.find((r) => r.roleId === this.form.userRoleId);
   }
 
+  /** GET /api/auth/roles: the roles a new account may choose. */
   loadRoles(): void {
-    this.roles = DEMO_ROLES;
+    this.rolesLoading = true;
+    this.rolesError = '';
+    this.auth.getSignupRoles().subscribe({
+      next: (roles) => {
+        this.roles = roles ?? [];
+        this.rolesLoading = false;
+      },
+      error: (err) => {
+        this.rolesLoading = false;
+        this.rolesError = this.auth.errorMessage(err, 'Could not load roles.');
+      },
+    });
   }
 
   private validate(): string | null {
@@ -94,19 +107,31 @@ export class Signup {
     return null;
   }
 
+  /** POST /api/auth/register, then on to sign-in with the new username filled in. */
   signup(): void {
     this.errorMsg = this.validate() ?? '';
-    if (this.errorMsg) return;
+    if (this.errorMsg || this.isLoading) return;
 
     const userName = this.form.userName.trim();
-    this.auth.register({
-      fullName: this.form.fullName.trim(),
-      userName,
-      email: this.form.email.trim(),
-      contactNo: this.form.contactNo.trim(),
-      password: this.form.password,
-      userRoleId: this.form.userRoleId,
-    });
-    this.router.navigate(['/login'], { queryParams: { registered: userName } });
+    this.isLoading = true;
+    this.auth
+      .register({
+        fullName: this.form.fullName.trim(),
+        userName,
+        email: this.form.email.trim(),
+        contactNo: this.form.contactNo.trim(),
+        password: this.form.password,
+        userRoleId: this.form.userRoleId,
+      })
+      .subscribe({
+        next: () => {
+          this.isLoading = false;
+          this.router.navigate(['/login'], { queryParams: { registered: userName } });
+        },
+        error: (err) => {
+          this.isLoading = false;
+          this.errorMsg = this.auth.errorMessage(err, 'Could not create the account.');
+        },
+      });
   }
 }

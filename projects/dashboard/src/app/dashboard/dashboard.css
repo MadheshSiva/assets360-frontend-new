@@ -330,7 +330,7 @@
   width: 174px;
   aspect-ratio: 1;
   border-radius: 50%;
-  background: conic-gradient(#22c55e 0 61%, #2563eb 61% 85%, #f59e0b 85% 92%, #ef4444 92% 100%);
+  background: #f1f5f9;
   display: grid;
   place-items: center;
   justify-self: center;
@@ -1464,4 +1464,14 @@ td {
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
+}
+
+/* Empty state for widgets without data */
+.widget-empty {
+  margin: 0;
+  padding: 18px;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+  list-style: none;
 }

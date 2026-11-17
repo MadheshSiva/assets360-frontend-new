@@ -36,7 +36,7 @@
   <div class="md-card-head">
     <span class="md-card-ic" [style.background]="r.color"><lucide-icon [img]="icons.Smartphone" [size]="16"></lucide-icon></span>
     <div class="md-grow"><strong>{{ r.name }}</strong><small>{{ r.id }} · {{ r.type }}</small></div>
-    <span class="md-pill" [class.is-live]="r.live">{{ r.live ? 'LIVE' : 'DEMO' }}</span>
+    <span class="md-pill" [class.is-live]="r.live">{{ r.live ? 'LIVE' : 'NO FEED' }}</span>
     <button type="button" class="md-x" (click)="closeReading()" aria-label="Close device details"><lucide-icon [img]="icons.X" [size]="15"></lucide-icon></button>
   </div>
   <dl class="md-card-grid">

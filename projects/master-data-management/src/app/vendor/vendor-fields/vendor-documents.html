@@ -4,6 +4,7 @@
     <div class="row-line row-line--doc">
       <input [name]="'docName' + $index" placeholder="Document name or number" [attr.aria-label]="'Document ' + ($index + 1)" [(ngModel)]="d.name" />
       <select [name]="'docType' + $index" [attr.aria-label]="'Document ' + ($index + 1) + ' type'" [(ngModel)]="d.type">
+        <option value="" disabled>Select Type</option>
         @for (t of types; track t) { <option [value]="t">{{ t }}</option> }
       </select>
       <input

@@ -45,7 +45,7 @@
             <div class="field" [class.invalid]="errors.organizationCode">
               <label for="bu-org"><span class="req">*</span> Parent Organization</label>
               <select id="bu-org" name="organizationCode" [(ngModel)]="form.organizationCode" (ngModelChange)="onOrganizationChange()">
-                <option value="" disabled>Select organization</option>
+                <option value="" disabled>Select Parent Organization</option>
                 @for (o of organizations.all(); track o.code) { <option [value]="o.code">{{ o.name }}</option> }
               </select>
               @if (errors.organizationCode) { <small>{{ errors.organizationCode }}</small> }
@@ -86,13 +86,14 @@
           <div class="field">
             <label for="bu-cc">Cost Center</label>
             <select id="bu-cc" name="costCenter" [(ngModel)]="form.costCenter">
-              <option value="">Select cost center</option>
+              <option value="">Select Cost Center</option>
               @for (c of costCenters; track c) { <option [value]="c">{{ c }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="bu-currency">Default Currency</label>
             <select id="bu-currency" name="currency" [(ngModel)]="form.currency">
+              <option value="" disabled>Select Default Currency</option>
               @for (c of currencies; track c) { <option [value]="c">{{ c }}</option> }
             </select>
           </div>
@@ -110,13 +111,14 @@
         <div class="field" [class.invalid]="errors.organizationCode">
           <label for="bu-org-h"><span class="req">*</span> Parent Organization</label>
           <select id="bu-org-h" name="organizationCodeH" [(ngModel)]="form.organizationCode" (ngModelChange)="onOrganizationChange()">
-            <option value="" disabled>Select organization</option>
+            <option value="" disabled>Select Parent Organization</option>
             @for (o of organizations.all(); track o.code) { <option [value]="o.code">{{ o.name }}</option> }
           </select>
         </div>
         <div class="field">
           <label for="bu-parent">Parent Business Unit</label>
           <select id="bu-parent" name="parentCode" [(ngModel)]="form.parentCode">
+            <option [ngValue]="null" disabled>Select Parent Business Unit</option>
             <option [ngValue]="null">None (directly under the organization)</option>
             @for (p of parentOptions; track p.code) { <option [ngValue]="p.code">{{ p.name }} ({{ p.code }})</option> }
           </select>
@@ -160,6 +162,7 @@
           <div class="field">
             <label for="bu-country">Country</label>
             <select id="bu-country" name="country" [(ngModel)]="form.address.country">
+              <option value="" disabled>Select Country</option>
               @for (c of countries; track c.name) { <option [value]="c.name">{{ c.name }}</option> }
             </select>
           </div>
@@ -180,6 +183,7 @@
             <label for="bu-phone">Phone</label>
             <div class="phone">
               <select name="phoneCountry" aria-label="Phone country" [(ngModel)]="form.phoneCountry">
+                <option value="" disabled>Select Country Code</option>
                 @for (c of countries; track c.name) { <option [value]="c.name">{{ c.flag }} {{ c.dial }}</option> }
               </select>
               <input id="bu-phone" name="phone" type="tel" [(ngModel)]="form.phone" />
@@ -225,7 +229,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" [disabled]="saving" class="btn btn--primary">{{ saving ? 'Saving…' : 'Save' }}</button>
+      @if (isLastTab) {
+        <button type="submit" [disabled]="saving" class="btn btn--primary">{{ saving ? 'Saving…' : 'Save' }}</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

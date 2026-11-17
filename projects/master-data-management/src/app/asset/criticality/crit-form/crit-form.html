@@ -50,17 +50,21 @@
               </div>
               @if (errors.color) { <small>{{ errors.color }}</small> }
             </div>
-            <div class="field">
+            <div class="field" [class.invalid]="errors.riskLevel">
               <label for="crit-risk"><span class="req">*</span> Risk Level</label>
               <select id="crit-risk" name="riskLevel" [(ngModel)]="form.riskLevel" (ngModelChange)="onRiskLevelChange()">
+                <option value="" disabled>Select Risk Level</option>
                 @for (s of scale; track s) { <option [value]="s">{{ s }}</option> }
               </select>
+              @if (errors.riskLevel) { <small>{{ errors.riskLevel }}</small> }
             </div>
-            <div class="field">
+            <div class="field" [class.invalid]="errors.maintenancePriority">
               <label for="crit-priority"><span class="req">*</span> Maintenance Priority</label>
               <select id="crit-priority" name="maintenancePriority" [(ngModel)]="form.maintenancePriority">
+                <option value="" disabled>Select Maintenance Priority</option>
                 @for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }
               </select>
+              @if (errors.maintenancePriority) { <small>{{ errors.maintenancePriority }}</small> }
             </div>
             <div class="field" [class.invalid]="errors.isDefault">
               <label for="crit-default">Default Criticality</label>
@@ -104,12 +108,14 @@
           <div class="field">
             <label for="crit-likelihood">Likelihood</label>
             <select id="crit-likelihood" name="likelihood" [(ngModel)]="form.likelihood">
+              <option value="" disabled>Select Likelihood</option>
               @for (s of scale; track s) { <option [value]="s">{{ s }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="crit-impact">Impact</label>
             <select id="crit-impact" name="impact" [(ngModel)]="form.impact">
+              <option value="" disabled>Select Impact</option>
               @for (s of scale; track s) { <option [value]="s">{{ s }}</option> }
             </select>
           </div>
@@ -137,18 +143,21 @@
           <div class="field">
             <label for="crit-inspection">Inspection Frequency</label>
             <select id="crit-inspection" name="inspectionFrequency" [(ngModel)]="form.inspectionFrequency">
+              <option value="" disabled>Select Inspection Frequency</option>
               @for (f of frequencies; track f) { <option [value]="f">{{ f }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="crit-monitoring">Condition Monitoring</label>
             <select id="crit-monitoring" name="conditionMonitoring" [(ngModel)]="form.conditionMonitoring">
+              <option value="" disabled>Select Condition Monitoring</option>
               @for (m of monitoring; track m) { <option [value]="m">{{ m }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="crit-spares">Spare Parts Priority</label>
             <select id="crit-spares" name="sparePartsPriority" [(ngModel)]="form.sparePartsPriority">
+              <option value="" disabled>Select Spare Parts Priority</option>
               @for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }
             </select>
           </div>
@@ -184,7 +193,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

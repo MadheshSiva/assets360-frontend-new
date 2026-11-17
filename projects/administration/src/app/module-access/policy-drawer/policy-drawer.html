@@ -69,21 +69,24 @@
   </div>
 
   <div class="grid2">
-    <div class="field">
-      <label for="pd-scope">Data Scope</label>
+    <div class="field" [class.invalid]="show('dataScope')">
+      <label for="pd-scope">Data Scope <span class="req">*</span></label>
       <select id="pd-scope" name="scope" [(ngModel)]="policy.dataScope">
+        <option value="" disabled>Select Data Scope</option>
         @for (s of scopes; track s) {
           <option [value]="s">{{ s }}</option>
         }
       </select>
+      @if (show('dataScope'); as msg) { <small>{{ msg }}</small> }
     </div>
     <div class="field" [class.invalid]="show('landingModule')">
-      <label for="pd-landing">Default Landing Module</label>
+      <label for="pd-landing">Default Landing Module <span class="req">*</span></label>
       <select id="pd-landing" name="landing" [(ngModel)]="policy.landingModule">
+        <option value="" disabled>Select Default Landing Module</option>
         @for (m of enabledModules; track m) {
           <option [value]="m">{{ m }}</option>
         }
-        @if (enabledModules.indexOf(policy.landingModule) < 0) {
+        @if (policy.landingModule && enabledModules.indexOf(policy.landingModule) < 0) {
           <option [value]="policy.landingModule">{{ policy.landingModule }} (disabled)</option>
         }
       </select>

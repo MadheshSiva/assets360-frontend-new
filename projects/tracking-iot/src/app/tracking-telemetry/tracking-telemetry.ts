@@ -1,6 +1,8 @@
-import { AfterViewInit, Component, ElementRef, HostListener, NgZone, OnDestroy, ViewChild, inject } from '@angular/core';
+import { AfterViewInit, Component, DestroyRef, ElementRef, HostListener, NgZone, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Observable, Subscription, forkJoin, of } from 'rxjs';
 import * as XLSX from 'xlsx';
 import {
   LucideAngularModule,
@@ -35,16 +37,15 @@ import {
   X,
   Zap,
 } from 'lucide-angular';
-import type * as Leaflet from 'leaflet';
-import { MapDrawTools } from '../shared/map-draw-tools/map-draw-tools';
-import { MapLayers, MapPosition, TtMap } from './tt-map';
+import { apiErrorMessage } from '../shared/tracking-api';
+import { MapLayers, MapPlace, MapPosition, TtMap } from './tt-map';
+import { IotAlertDto, IotEventsTimelineDto, MAX_READINGS, MdmBuilding, MdmSite, TelemetryReadApi, TelemetryReadingDto, paramKind, timeOf } from './telemetry-api';
 import {
-  ASSETS, AlertItem, BUILDINGS, CAMPUS_GEO, CAMPUS_NAME, EVENTS, KPIS, MarkerIcon, Metric, RANGE_SPEC, Range, SITE_OPTIONS, Series, Severity, Status,
-  TelemetryEvent, TrackedAsset, buildingName, kpiSpark, seriesFor, sparkSeed, spikeMinsAgo,
+  AlertItem, CAMPUS_NAME, KPIS, LiveKey, MarkerIcon, Metric, RANGE_SPEC, Range, Series, Severity, Status,
+  TelemetryEvent, TelemetrySource, TrackedAsset, buildAssets, buildEvents, buildingName, seriesFor,
 } from './telemetry-data';
 
 type Tab = 'live' | 'location' | 'device' | 'alerts' | 'history';
-type LiveKey = 'temp' | 'vib' | 'battery' | 'rssi';
 interface Tick { x: number; label: string }
 interface Band {
   metric: Metric;
@@ -59,7 +60,7 @@ interface Band {
   threshold: { y: number; label: string } | null;
   alert: { x: number; y: number; value: string; time: string } | null;
 }
-interface ConfigForm { assetId: string; metric: Metric; value: number; email: boolean; sms: boolean; error: string }
+interface ConfigForm { assetId: string; metric: Metric; value: number | null; email: boolean; sms: boolean; error: string }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -70,45 +71,26 @@ const METRIC_META: Record<Metric, { label: string; short: string; unit: string; 
 };
 const ICONS_BY_MARKER: Record<MarkerIcon, typeof Box> = { forklift: Forklift, pump: Droplets, cold: Snowflake, generator: Zap, sensor: Thermometer };
 const CHART_PAD = { l: 50, r: 18, t: 14, gap: 26, axis: 22 };
+/** Live data refresh interval. */
+const POLL_MS = 20000;
+/** Window of alerts shown on the asset tabs and in the events table (open alerts are always included). */
+const ALERT_DAYS = 30;
+const EMPTY_SOURCE: TelemetrySource = { devices: [], health: [], readings: [], alerts: [], locationEvents: [] };
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-/** Ray-casting point-in-polygon on [lng, lat] rings. */
-function inside(lng: number, lat: number, ring: [number, number][]): boolean {
-  let hit = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i];
-    const [xj, yj] = ring[j];
-    if (yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) hit = !hit;
-  }
-  return hit;
-}
-
-function metres(a: [number, number], b: [number, number]): number {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b[1] - a[1]);
-  const dLng = toRad(b[0] - a[0]);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-
 @Component({
   selector: 'app-tracking-telemetry',
   standalone: true,
-  imports: [CommonModule, FormsModule, LucideAngularModule, TtMap, MapDrawTools],
+  imports: [CommonModule, FormsModule, LucideAngularModule, TtMap],
   templateUrl: './tracking-telemetry.html',
-  styleUrls: ['./tracking-telemetry.css', './tracking-telemetry-panels.css'],
+  styleUrls: ['./tracking-telemetry.css', './tracking-telemetry-panels.css', '../shared/iot-purple-theme.css'],
 })
-export class TrackingTelemetry implements AfterViewInit, OnDestroy {
+export class TrackingTelemetry implements OnInit, AfterViewInit, OnDestroy {
   readonly icons = { Activity, ArrowUp, Battery, BatteryLow, Bell, Box, Building2, Calendar, Check, Clock, Cpu, Download, Heart, History, Info, Link, Locate, MapPin, Minus, Plus, RadioTower, Signal, Thermometer, TriangleAlert, Wifi, X };
-  readonly assets = ASSETS;
-  readonly buildings = BUILDINGS;
-  readonly sites = SITE_OPTIONS;
   readonly campus = CAMPUS_NAME;
-  readonly kpis = KPIS;
   readonly ranges = Object.entries(RANGE_SPEC).map(([key, v]) => ({ key: key as Range, label: v.label }));
   readonly metricMeta = METRIC_META;
   readonly metrics: Metric[] = ['temp', 'vib', 'battery'];
@@ -116,15 +98,21 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
   @ViewChild(TtMap) private mapCmp?: TtMap;
   @ViewChild('chartBox') private chartBox?: ElementRef<HTMLDivElement>;
   private readonly zone = inject(NgZone);
+  private readonly api = inject(TelemetryReadApi);
+  private readonly destroyRef = inject(DestroyRef);
 
+  /** Site filter of the page (Master Data site id; '' = all sites). */
   site = '';
-  range: Range = '24h';
-  mapSite = CAMPUS_NAME;
+  private _range: Range = '24h';
+  /** Site and building shown on the map (Master Data ids; '' = all). */
+  mapSite = '';
   building = '';
+  /** Master Data sites and buildings (loaded once). */
+  private mdmSites: MdmSite[] = [];
+  private mdmBuildings: MdmBuilding[] = [];
   layers: MapLayers = { assets: true, devices: true, gateways: true, geofences: true };
   satellite = true;
-  drawMap: Leaflet.Map | null = null;
-  selectedId = 'FL-008';
+  selectedId = '';
   tab: Tab = 'live';
   show: Record<Metric, boolean> = { temp: true, vib: true, battery: false };
   hoverIdx: number | null = null;
@@ -132,47 +120,140 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
   config: ConfigForm | null = null;
   toast = '';
 
-  clock = '';
-  /** Page time origin for the events table and "x sec ago" labels. */
-  readonly t0 = new Date();
-  now = new Date();
-  /** Seconds since each asset last reported (reset on every live tick). */
-  ago: Record<string, number> = {};
-  /** Recent live values for the tile sparklines. */
-  spark: Record<string, Record<LiveKey, number[]>> = {};
-  positions: Record<string, [number, number]> = {};
+  /** True until the first load finishes. */
+  loading = true;
+  /** Message of the last failed refresh ('' once a refresh succeeds). */
+  error = '';
 
-  readonly statuses: Record<string, Status> = Object.fromEntries(ASSETS.map((a) => [a.id, a.status]));
-  readonly kpiSparks = Object.fromEntries(KPIS.map((k) => [k.key, kpiSpark(k.key, k.up)]));
+  clock = '';
+  now = new Date();
+  /** Recent values for the tile sparklines, oldest first. */
+  spark: Record<string, Record<LiveKey, number[]>> = {};
+  /** Map positions: the Tracking API has no device coordinates yet, so this stays empty. */
+  positions: Record<string, [number, number]> = {};
+  statuses: Record<string, Status> = {};
+
+  /** Every tracked asset (IoT device) from the API; `assets` applies the site filter. */
+  private all: TrackedAsset[] = [];
+  private src: TelemetrySource = EMPTY_SOURCE;
+  private openAlertRows: IotAlertDto[] = [];
+  private timeline: IotEventsTimelineDto | null = null;
+  private trendReadings: TelemetryReadingDto[] = [];
+  private trendFor = '';
+  private trendSub?: Subscription;
+  private loadSub?: Subscription;
 
   private timers: ReturnType<typeof setInterval>[] = [];
   private toastTimer?: ReturnType<typeof setTimeout>;
   private resize?: ResizeObserver;
   private trendCache: { key: string; bands: Band[]; mins: number[]; xTicks: Tick[]; height: number; series: Series[] } | null = null;
   private version = 0;
+  private eventsCache: { key: string; rows: TelemetryEvent[] } | null = null;
 
   constructor() {
-    // the forklift's temperature alert sits on the chart at the most recent 02:14; keep the alert and history in step
-    const spike = spikeMinsAgo(new Date());
-    const fl = ASSETS.find((a) => a.id === 'FL-008');
-    if (fl) {
-      fl.alerts.forEach((x) => (x.minsAgo = spike));
-      fl.history.forEach((h) => h.text.startsWith('High temperature') && (h.minsAgo = spike));
-    }
-    for (const a of ASSETS) {
-      this.ago[a.id] = a.silentMins ? a.silentMins * 60 : a.id === 'FL-008' ? 10 : 5 + (a.id.length * 7) % 40;
-      this.spark[a.id] = {
-        temp: a.live.temp === null ? [] : sparkSeed(a.id, 'temp', a.live.temp),
-        vib: a.live.vib === null ? [] : sparkSeed(a.id, 'vib', a.live.vib),
-        battery: a.live.battery === null ? [] : sparkSeed(a.id, 'battery', a.live.battery),
-        rssi: a.live.rssi === null ? [] : sparkSeed(a.id, 'rssi', a.live.rssi),
-      };
-      const f = CAMPUS_GEO.features.find((x) => x.properties.id === a.id);
-      if (f) this.positions[a.id] = f.geometry.coordinates as [number, number];
-    }
     this.tickClock();
     this.timers.push(setInterval(() => this.tickClock(), 1000));
-    this.timers.push(setInterval(() => this.liveTick(), 3000));
+  }
+
+  ngOnInit(): void {
+    this.refresh();
+    this.loadPlaces();
+    this.timers.push(setInterval(() => this.refresh(), POLL_MS));
+  }
+
+  /** Master Data sites and buildings for the site / building pickers and the map pins. */
+  private loadPlaces(): void {
+    forkJoin({ sites: this.api.sites(), buildings: this.api.buildings() })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(({ sites, buildings }) => {
+        const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
+        this.mdmSites = [...sites].sort(byName);
+        this.mdmBuildings = [...buildings].sort(byName);
+        // start the map on a real place: the first site with coordinates (or with a located building)
+        if (!this.mapSite) {
+          const located = this.mdmSites.find((s) => s.lat !== null || this.mdmBuildings.some((b) => this.inSite(b, s) && b.lat !== null));
+          this.mapSite = (located ?? this.mdmSites[0])?.id ?? '';
+        }
+        this.updateMap();
+      });
+  }
+
+  /** Time range of the trend, events table and telemetry KPI; changing it reloads from the API. */
+  get range(): Range {
+    return this._range;
+  }
+
+  set range(r: Range) {
+    if (r === this._range) return;
+    this._range = r;
+    this.hoverIdx = null;
+    this.refresh();
+  }
+
+  /** Sites for the pickers: Master Data sites, or the sites named on devices while Master Data has none. */
+  get sites(): MdmSite[] {
+    if (this.mdmSites.length) return this.mdmSites;
+    return [...new Set(this.all.map((a) => a.building).filter(Boolean))].sort().map((name) => ({ id: name, name, lat: null, lng: null }));
+  }
+
+  /** Buildings of the map's site (all buildings when no site is chosen). */
+  get mapBuildings(): MdmBuilding[] {
+    const site = this.sites.find((s) => s.id === this.mapSite);
+    return site ? this.mdmBuildings.filter((b) => this.inSite(b, site)) : this.mdmBuildings;
+  }
+
+  get assets(): TrackedAsset[] {
+    return this.site ? this.all.filter((a) => this.assetInSite(a, this.site)) : this.all;
+  }
+
+  /** A device belongs to a site by its site id, or by the site's name (devices registered with a name only). */
+  private assetInSite(a: { siteId?: string | null; building?: string | null; siteName?: string | null }, siteId: string): boolean {
+    const s = this.sites.find((x) => x.id === siteId);
+    const name = (a.building ?? a.siteName ?? '').trim().toLowerCase();
+    return (!!a.siteId && a.siteId === siteId) || (!!s && !!name && name === s.name.trim().toLowerCase());
+  }
+
+  private inSite(b: MdmBuilding, s: MdmSite): boolean {
+    return b.siteId ? b.siteId === s.id : b.siteName.trim().toLowerCase() === s.name.trim().toLowerCase();
+  }
+
+  get events(): TelemetryEvent[] {
+    const key = `${this.version}|${this.site}|${this.range}|${Math.floor(this.now.getTime() / 60000)}`;
+    if (this.eventsCache?.key === key) return this.eventsCache.rows;
+    const ids = new Set(this.assets.map((a) => a.id));
+    const evs = buildEvents(this.src, this.all, this.now.getTime(), RANGE_SPEC[this.range].mins);
+    const rows = this.site ? evs.filter((e) => ids.has(e.assetId)) : evs;
+    this.eventsCache = { key, rows };
+    return rows;
+  }
+
+  /** KPI cards, aggregated from the API data. */
+  get kpis(): { key: string; label: string; value: string; note: string; color: string }[] {
+    const assets = this.assets;
+    const online = assets.filter((a) => a.status !== 'offline').length;
+    const open = this.openAlertRows.filter((x) => !this.site || this.assetInSite(x, this.site) || assets.some((a) => a.id === x.deviceId)).length;
+    const pts = this.points();
+    return KPIS.map((k) => {
+      let value: string;
+      if (this.loading) value = '—';
+      else if (k.key === 'tracked') value = assets.length.toLocaleString();
+      else if (k.key === 'online') value = online.toLocaleString();
+      else if (k.key === 'alerts') value = open.toLocaleString();
+      else value = pts.count.toLocaleString() + (pts.capped ? '+' : '');
+      const note = this.loading ? '' : k.key === 'online' && assets.length ? `${Math.round((online / assets.length) * 100)}% of ${assets.length}` : k.key === 'points' ? RANGE_SPEC[this.range].label.toLowerCase() : '';
+      return { ...k, value, note };
+    });
+  }
+
+  /** Telemetry points in the range: the events timeline for 7 days fleet-wide, otherwise the readings returned. */
+  private points(): { count: number; capped: boolean } {
+    if (this.range === '7d' && !this.site && this.timeline) return { count: this.timeline.totals.telemetryData, capped: false };
+    const ids = new Set(this.assets.map((a) => a.id));
+    const since = this.now.getTime() - RANGE_SPEC[this.range].mins * 60000;
+    const rows = this.src.readings.filter((r) => timeOf(r.recordedAt) >= since && (!this.site || ids.has(r.deviceId)));
+    // the endpoint returns at most MAX_READINGS rows, newest first
+    const capped = this.src.readings.length >= MAX_READINGS && timeOf(this.src.readings[this.src.readings.length - 1].recordedAt) >= since;
+    return { count: rows.length, capped };
   }
 
   ngAfterViewInit(): void {
@@ -189,6 +270,89 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
     this.timers.forEach((t) => clearInterval(t));
     clearTimeout(this.toastTimer);
     this.resize?.disconnect();
+    this.loadSub?.unsubscribe();
+    this.trendSub?.unsubscribe();
+  }
+
+  // ===== data =====
+
+  /** Loads devices, health, readings, alerts and location events, then rebuilds the page model. */
+  refresh(): void {
+    const spec = RANGE_SPEC[this.range];
+    this.loadSub?.unsubscribe();
+    this.loadSub = forkJoin({
+      devices: this.api.devices(),
+      health: this.api.deviceHealth(),
+      readings: this.api.readings({ days: spec.days, limit: MAX_READINGS }),
+      alerts: this.api.alerts({ days: ALERT_DAYS }),
+      open: this.api.alerts({ status: 'Open' }),
+      locationEvents: this.api.locationEvents(),
+      timeline: this.range === '7d' ? this.api.timeline(7) : (of(null) as Observable<IotEventsTimelineDto | null>),
+    })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (r) => {
+          const alerts = [...r.alerts, ...r.open.filter((o) => !r.alerts.some((x) => x.alertId === o.alertId))];
+          this.src = { devices: r.devices, health: r.health, readings: r.readings, alerts, locationEvents: r.locationEvents };
+          this.openAlertRows = r.open;
+          this.timeline = r.timeline;
+          this.rebuild();
+          this.loading = false;
+          this.error = '';
+          this.loadTrend();
+        },
+        error: (err) => {
+          this.loading = false;
+          const msg = apiErrorMessage(err, 'Could not load tracking data.');
+          // toast once per distinct failure; the banner stays while the problem lasts
+          if (msg !== this.error) this.showToast(msg);
+          this.error = msg;
+        },
+      });
+  }
+
+  private rebuild(): void {
+    const now = Date.now();
+    this.all = buildAssets(this.src, now, this.all);
+    this.statuses = Object.fromEntries(this.all.map((a) => [a.id, a.status]));
+    const spark: Record<string, Record<LiveKey, number[]>> = {};
+    for (const a of this.all) spark[a.id] = { temp: [], vib: [], battery: [], rssi: [] };
+    // readings are newest first; keep the latest 24 per metric, oldest first
+    for (const r of this.src.readings) {
+      const k = paramKind(r.parameter);
+      const s = spark[r.deviceId];
+      if (!s || !k || k === 'energy' || s[k].length >= 24) continue;
+      s[k].unshift(Number(r.value));
+    }
+    this.spark = spark;
+    this.version++;
+  }
+
+  /** Readings of the selected device for the trend chart (refetched on selection, range change and each poll). */
+  private loadTrend(): void {
+    const a = this.selected;
+    if (!a) {
+      this.trendReadings = [];
+      this.trendFor = '';
+      return;
+    }
+    const key = `${a.id}|${this.range}`;
+    this.trendSub?.unsubscribe();
+    this.trendSub = this.api
+      .readings({ deviceId: a.id, days: RANGE_SPEC[this.range].days, limit: MAX_READINGS })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (rows) => {
+          this.trendReadings = rows;
+          this.trendFor = key;
+          this.version++;
+        },
+        error: (err) => this.showToast(apiErrorMessage(err, 'Could not load telemetry for this asset.')),
+      });
+  }
+
+  private readingsFor(a: TrackedAsset): TelemetryReadingDto[] {
+    return this.trendFor === `${a.id}|${this.range}` ? this.trendReadings : this.src.readings.filter((r) => r.deviceId === a.id);
   }
 
   // ===== live =====
@@ -200,30 +364,6 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
     const off = -n.getTimezoneOffset();
     const zone = `UTC${off >= 0 ? '+' : '-'}${Math.floor(Math.abs(off) / 60)}${Math.abs(off) % 60 ? ':' + pad(Math.abs(off) % 60) : ''}`;
     this.clock = `${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())} (${zone})`;
-    for (const a of ASSETS) this.ago[a.id] = (this.ago[a.id] ?? 0) + 1;
-  }
-
-  /** New readings every few seconds for every reporting device (random walk around the current value). */
-  private liveTick(): void {
-    const step = (v: number, amp: number, lo: number, hi: number) => Math.round(Math.min(hi, Math.max(lo, v + (Math.random() - 0.5) * amp)) * 10) / 10;
-    for (const a of ASSETS) {
-      if (a.status === 'offline') continue;
-      // not every device reports on every tick
-      if (Math.random() < 0.35 && a.id !== this.selectedId) continue;
-      const l = a.live;
-      if (l.temp !== null) l.temp = step(l.temp, Math.max(0.3, Math.abs(l.temp) * 0.015), -30, 120);
-      if (l.vib !== null) l.vib = step(l.vib, Math.max(0.05, l.vib * 0.08), 0, 30);
-      if (l.battery !== null && Math.random() < 0.06) l.battery = Math.max(0, l.battery - 1);
-      if (l.rssi !== null) l.rssi = Math.round(step(l.rssi, 3, -110, -40));
-      const s = this.spark[a.id];
-      for (const k of ['temp', 'vib', 'battery', 'rssi'] as LiveKey[]) {
-        const v = l[k];
-        if (v === null) continue;
-        s[k] = [...s[k].slice(-23), v];
-      }
-      this.ago[a.id] = 0;
-    }
-    this.version++;
   }
 
   onMoved(p: MapPosition): void {
@@ -232,16 +372,18 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
 
   // ===== selection =====
 
-  get selected(): TrackedAsset {
-    return ASSETS.find((a) => a.id === this.selectedId) ?? ASSETS[0];
+  get selected(): TrackedAsset | null {
+    const list = this.assets;
+    return list.find((a) => a.id === this.selectedId) ?? list[0] ?? null;
   }
 
   selectAsset(id: string, tab?: Tab): void {
     if (!id) return;
     this.selectedId = id;
     if (tab) this.tab = tab;
-    else if (this.tab === 'alerts' && !this.openAlerts(this.selected).length) this.tab = 'live';
+    else if (this.tab === 'alerts' && this.selected && !this.openAlerts(this.selected).length) this.tab = 'live';
     this.hoverIdx = null;
+    this.loadTrend();
   }
 
   markerIcon(a: TrackedAsset) {
@@ -253,14 +395,27 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
   }
 
   agoLabel(id: string): string {
-    const s = this.ago[id] ?? 0;
+    const a = this.all.find((x) => x.id === id);
+    if (!a || !Number.isFinite(a.lastSeen)) return 'Never';
+    const s = Math.max(0, Math.floor((this.now.getTime() - a.lastSeen) / 1000));
     if (s < 60) return `${s} sec ago`;
     if (s < 3600) return `${Math.floor(s / 60)} min ago`;
-    return `${Math.floor(s / 3600)} h ago`;
+    if (s < 172800) return `${Math.floor(s / 3600)} h ago`;
+    return `${Math.floor(s / 86400)} days ago`;
+  }
+
+  /** Offline note: how long the device has been silent. */
+  silentFor(a: TrackedAsset): string {
+    return Number.isFinite(a.lastSeen) ? ` for ${this.agoLabel(a.id).replace(' ago', '')}` : ' yet';
   }
 
   openAlerts(a: TrackedAsset): AlertItem[] {
     return a.alerts.filter((x) => !x.acknowledged);
+  }
+
+  isLowBattery(a: TrackedAsset): boolean {
+    const thr = a.thresholds.battery;
+    return a.live.battery !== null && thr !== null && a.live.battery < thr;
   }
 
   // ===== map controls =====
@@ -277,8 +432,35 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
     this.mapCmp?.locate();
   }
 
+  /** Page site filter changed: the map follows it. */
+  onSite(): void {
+    if (this.site) this.mapSite = this.site;
+    this.building = '';
+    this.updateMap();
+  }
+
+  /** Map site changed: its buildings fill the building picker and the map flies to the site. */
+  onMapSite(): void {
+    this.building = '';
+    this.updateMap();
+  }
+
   onBuilding(): void {
-    this.mapCmp?.showBuilding(this.building);
+    this.updateMap();
+  }
+
+  /**
+   * Pins for the map's site and its buildings (every site when none is chosen), then flies to the chosen building,
+   * else the site. A place without coordinates is skipped; the map then fits whatever is located.
+   */
+  private updateMap(): void {
+    const located = <T extends { lat: number | null; lng: number | null }>(p: T): p is T & { lat: number; lng: number } => p.lat !== null && p.lng !== null;
+    const site = this.sites.find((s) => s.id === this.mapSite);
+    const sitePins: MapPlace[] = (site ? [site] : this.sites).filter(located).map((s) => ({ id: s.id, name: s.name, kind: 'site', lat: s.lat, lng: s.lng }));
+    const buildingPins: MapPlace[] = (site ? this.mapBuildings : []).filter(located).map((b) => ({ id: b.id, name: b.name, kind: 'building', lat: b.lat, lng: b.lng }));
+    const places = [...sitePins, ...buildingPins];
+    const focus = places.find((p) => p.id === this.building) ?? places.find((p) => p.id === this.mapSite) ?? (site ? buildingPins[0] : undefined);
+    this.mapCmp?.showPlaces(places, focus?.id ?? '');
   }
 
   toggleLayer(k: keyof MapLayers): void {
@@ -294,11 +476,11 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
   tileValue(a: TrackedAsset, k: LiveKey): string {
     const v = a.live[k];
     if (v === null) return '—';
-    return k === 'temp' ? v.toFixed(1) : k === 'vib' ? v.toFixed(1) : String(v);
+    return k === 'temp' ? v.toFixed(1) : k === 'vib' ? v.toFixed(1) : String(Math.round(v));
   }
 
-  sparkPath(values: number[], w = 120, h = 30): string {
-    if (values.length < 2) return '';
+  sparkPath(values: number[] | undefined, w = 120, h = 30): string {
+    if (!values || values.length < 2) return '';
     const lo = Math.min(...values);
     const hi = Math.max(...values);
     const span = hi - lo || 1;
@@ -308,31 +490,18 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
   // ===== location tab =====
 
   get position(): [number, number] | null {
-    return this.positions[this.selectedId] ?? null;
+    return this.positions[this.selected?.id ?? ''] ?? null;
   }
 
+  /** Zone the selected asset is in, from its latest location event. */
   get geofencesHere(): string[] {
-    const p = this.position;
-    if (!p) return [];
-    return CAMPUS_GEO.features
-      .filter((f) => f.properties.kind === 'geofence' && inside(p[0], p[1], (f.geometry.coordinates as [number, number][][])[0]))
-      .map((f) => String(f.properties.name));
-  }
-
-  get nearestGateway(): { id: string; m: number } | null {
-    const p = this.position;
-    if (!p) return null;
-    let best: { id: string; m: number } | null = null;
-    for (const f of CAMPUS_GEO.features.filter((x) => x.properties.kind === 'gateway')) {
-      const m = Math.round(metres(p, f.geometry.coordinates as [number, number]));
-      if (!best || m < best.m) best = { id: f.properties.id, m };
-    }
-    return best;
+    const z = this.selected?.zone;
+    return z ? [z.name] : [];
   }
 
   get enteredAt(): string {
-    const e = EVENTS.find((x) => x.assetId === this.selectedId && x.event === 'Entered geofence');
-    return e ? this.eventTime(e) : '';
+    const z = this.selected?.zone;
+    return z && Number.isFinite(z.at) ? this.stamp(z.at, true) : '';
   }
 
   buildingName(id: string): string {
@@ -343,25 +512,24 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
     return v.toFixed(6);
   }
 
-  /** History entries are stored as minutes before page load; new ones are negative (after load). */
-  private nowMins(): number {
-    return -(Date.now() - this.t0.getTime()) / 60000;
-  }
-
   // ===== history tab =====
 
-  historyTime(minsAgo: number): string {
-    return this.fmtStamp(new Date(this.t0.getTime() - minsAgo * 60000), false);
+  stamp(ms: number, seconds = false): string {
+    return Number.isFinite(ms) ? this.fmtStamp(new Date(ms), seconds) : '—';
   }
 
   // ===== trend chart =====
 
   get trend() {
     const a = this.selected;
-    const key = [a.id, this.range, this.chartW, this.show.temp, this.show.vib, this.show.battery, a.thresholds.temp, a.thresholds.vib, a.thresholds.battery, Math.floor(this.version / 10)].join('|');
+    if (!a) return null;
+    const key = [a.id, this.range, this.chartW, this.show.temp, this.show.vib, this.show.battery, a.thresholds.temp, a.thresholds.vib, a.thresholds.battery, this.version, Math.floor(this.now.getTime() / 60000)].join('|');
     if (this.trendCache?.key === key) return this.trendCache;
     const on = this.metrics.filter((m) => this.show[m]);
-    const series = on.map((m) => seriesFor(a, m, this.range, this.now));
+    const readings = this.readingsFor(a);
+    const series = on.map((m) => seriesFor(readings, m, this.range, this.now));
+    // nothing reported for this range yet
+    if (!series.some((s) => s.values.some((v) => v !== null))) return null;
     const spec = RANGE_SPEC[this.range];
     const w = this.chartW;
     const plotW = Math.max(200, w - CHART_PAD.l - CHART_PAD.r);
@@ -376,12 +544,12 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
       if (s.metric === 'battery') max = 100;
       else {
         // four equal, round steps: 0 / 10 / 20 / 30 / 40, 0 / 0.5 / 1 / 1.5 / 2, ...
-        const raw = Math.max(...vals, thr * 1.1, s.metric === 'temp' ? 10 : 1);
-        const step = [0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50].find((x) => x * 4 >= raw) ?? 50;
+        const raw = Math.max(...vals, (thr ?? 0) * 1.1, s.metric === 'temp' ? 10 : 1);
+        const step = [0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100, 250, 500, 1000].find((v) => v * 4 >= raw) ?? Math.ceil(raw / 4);
         max = step * 4;
       }
-      const y = (v: number) => top + bandH - (v / max) * bandH;
-      const ticks = [0, 1, 2, 3, 4].map((i) => ({ y: y((max * i) / 4), label: String(Math.round((max * i) / 4 * 10) / 10) }));
+      const y = (v: number) => top + bandH - (Math.max(0, Math.min(v, max)) / max) * bandH;
+      const ticks = [0, 1, 2, 3, 4].map((i) => ({ y: y((max * i) / 4), label: String(Math.round(((max * i) / 4) * 10) / 10) }));
       let path = '';
       let pen = false;
       const dots: { x: number; y: number }[] = [];
@@ -391,18 +559,23 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
           return;
         }
         path += `${pen ? 'L' : 'M'}${x(s.mins[i]).toFixed(1)},${y(v).toFixed(1)}`;
+        // isolated points would not show as a line
+        if (!pen && (s.values[i + 1] ?? null) === null) path += `l0.01,0`;
         pen = true;
       });
-      const breachIdx = s.values.findIndex((v) => v !== null && (s.metric === 'battery' ? v < thr : v > thr));
       let alert: Band['alert'] = null;
-      if (breachIdx >= 0 && breachIdx < s.values.length - 1) {
-        const peak = s.values.reduce<number>((bi2, v, i) => (v !== null && (s.metric === 'battery' ? v < (s.values[bi2] ?? 999) : v > (s.values[bi2] ?? -999)) ? i : bi2), breachIdx);
-        const v = s.values[peak] as number;
-        alert = { x: x(s.mins[peak]), y: y(v), value: `${v} ${meta.unit}`, time: this.clockAt(s.mins[peak]) };
+      if (thr !== null) {
+        const breach = (v: number | null) => v !== null && (s.metric === 'battery' ? v < thr : v > thr);
+        const breachIdx = s.values.findIndex(breach);
+        if (breachIdx >= 0) {
+          const peak = s.values.reduce<number>((best, v, i) => (breach(v) && (s.metric === 'battery' ? v! < s.values[best]! : v! > s.values[best]!) ? i : best), breachIdx);
+          const v = s.values[peak] as number;
+          alert = { x: x(s.mins[peak]), y: y(v), value: `${v} ${meta.unit}`, time: this.clockAt(s.mins[peak]) };
+        }
       }
       return {
         metric: s.metric, label: meta.label, unit: meta.unit, color: meta.color, top, h: bandH, ticks, path, dots,
-        threshold: thr <= max ? { y: y(thr), label: `${meta.thrLabel} (${thr} ${meta.unit})` } : null,
+        threshold: thr !== null && thr <= max ? { y: y(thr), label: `${meta.thrLabel} (${thr} ${meta.unit})` } : null,
         alert,
       };
     });
@@ -435,7 +608,7 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
 
   onChartMove(ev: MouseEvent): void {
     const tr = this.trend;
-    if (!tr.mins.length) return;
+    if (!tr?.mins.length) return;
     const box = (ev.currentTarget as HTMLElement).getBoundingClientRect();
     const px = ev.clientX - box.left;
     const spec = RANGE_SPEC[this.range];
@@ -450,7 +623,7 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
 
   hoverX(): number {
     const tr = this.trend;
-    if (this.hoverIdx === null) return 0;
+    if (this.hoverIdx === null || !tr) return 0;
     const spec = RANGE_SPEC[this.range];
     const plotW = Math.max(200, this.chartW - CHART_PAD.l - CHART_PAD.r);
     return CHART_PAD.l + (1 - tr.mins[this.hoverIdx] / spec.mins) * plotW;
@@ -459,14 +632,15 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
   hoverRows(): { label: string; color: string; value: string }[] {
     const i = this.hoverIdx;
     if (i === null) return [];
-    return this.trend.series.map((s) => {
+    return (this.trend?.series ?? []).map((s) => {
       const v = s.values[i];
-      return { label: METRIC_META[s.metric].short, color: METRIC_META[s.metric].color, value: v === null ? 'No data' : `${v} ${METRIC_META[s.metric].unit}` };
+      return { label: METRIC_META[s.metric].short, color: METRIC_META[s.metric].color, value: v === null || v === undefined ? 'No data' : `${v} ${METRIC_META[s.metric].unit}` };
     });
   }
 
   hoverTime(): string {
-    return this.hoverIdx === null ? '' : this.clockAt(this.trend.mins[this.hoverIdx]);
+    const tr = this.trend;
+    return this.hoverIdx === null || !tr ? '' : this.clockAt(tr.mins[this.hoverIdx]);
   }
 
   toggleMetric(m: Metric): void {
@@ -478,18 +652,24 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
 
   // ===== events table =====
 
-  readonly events = EVENTS;
-
   eventTime(e: TelemetryEvent): string {
-    return this.fmtStamp(new Date(this.t0.getTime() - e.secsAgo * 1000), true);
+    return this.stamp(e.at, true);
   }
 
   fmtStamp(d: Date, seconds: boolean): string {
     return `${pad(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}${seconds ? ':' + pad(d.getSeconds()) : ''}`;
   }
 
-  assetOf(e: TelemetryEvent): TrackedAsset {
-    return ASSETS.find((a) => a.id === e.assetId)!;
+  assetOf(e: TelemetryEvent): TrackedAsset | undefined {
+    return this.all.find((a) => a.id === e.assetId);
+  }
+
+  eventMarker(e: TelemetryEvent): MarkerIcon {
+    return this.assetOf(e)?.icon ?? 'sensor';
+  }
+
+  eventMarkerIcon(e: TelemetryEvent) {
+    return ICONS_BY_MARKER[this.eventMarker(e)];
   }
 
   sevClass(s: Severity): string {
@@ -501,32 +681,29 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
   }
 
   viewAsset(id: string): void {
+    if (!id) return;
     this.selectAsset(id, 'live');
     this.mapCmp?.locate();
     document.querySelector('.tt-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   viewHistory(id: string): void {
+    if (!id) return;
     this.selectAsset(id, 'history');
     document.querySelector('.tt-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  // ===== alerts =====
+  // ===== alert thresholds (kept on this page only: the Tracking API stores no per-asset thresholds) =====
 
-  acknowledge(a: TrackedAsset, al: AlertItem): void {
-    al.acknowledged = true;
-    a.history.unshift({ minsAgo: this.nowMins(), text: `Alert acknowledged: ${al.title}`, by: 'Jordan Davis' });
-    this.showToast(`${al.title} on ${a.name} acknowledged.`);
-  }
-
-  openConfig(e: TelemetryEvent | null, a: TrackedAsset = this.selected): void {
+  openConfig(e: TelemetryEvent | null, a: TrackedAsset | null = this.selected): void {
     const asset = e ? this.assetOf(e) : a;
+    if (!asset) return;
     const metric: Metric = e?.icon === 'battery' ? 'battery' : e?.icon === 'warn' ? 'vib' : 'temp';
     this.config = { assetId: asset.id, metric, value: asset.thresholds[metric], email: true, sms: metric !== 'temp', error: '' };
   }
 
   configAsset(): TrackedAsset | undefined {
-    return ASSETS.find((a) => a.id === this.config?.assetId);
+    return this.all.find((a) => a.id === this.config?.assetId);
   }
 
   onConfigMetric(): void {
@@ -540,39 +717,42 @@ export class TrackingTelemetry implements AfterViewInit, OnDestroy {
     const a = this.configAsset();
     if (!c || !a) return;
     const v = Number(c.value);
-    if (!Number.isFinite(v) || v <= 0) return void (c.error = 'Enter a threshold above 0.');
+    if (c.value === null || !Number.isFinite(v) || v <= 0) return void (c.error = 'Enter a threshold above 0.');
     if (c.metric === 'battery' && v > 100) return void (c.error = 'Battery threshold must be 100% or less.');
     const meta = METRIC_META[c.metric];
-    a.thresholds[c.metric] = v;
-    a.history.unshift({ minsAgo: this.nowMins(), text: `${meta.thrLabel} set to ${v} ${meta.unit}${c.email || c.sms ? ' (notify ' + [c.email ? 'email' : '', c.sms ? 'SMS' : ''].filter(Boolean).join(' + ') + ')' : ''}`, by: 'Jordan Davis' });
+    a.thresholds = { ...a.thresholds, [c.metric]: v };
     this.config = null;
-    this.showToast(`${meta.short} alert for ${a.name} now triggers at ${v} ${meta.unit}.`);
+    this.showToast(`${meta.short} threshold for ${a.name} set to ${v} ${meta.unit} on this page.`);
   }
 
   // ===== export =====
 
   exportData(): void {
     const book = XLSX.utils.book_new();
-    const assets = ASSETS.map((a) => ({
-      Asset: a.name, 'Asset ID': a.id, Type: a.type, Status: this.statusLabel(a.status), Health: a.health, Building: buildingName(a.building),
-      Device: a.device.id, 'Device Type': a.device.type, 'Temperature (°C)': a.live.temp ?? '', 'Vibration (mm/s)': a.live.vib ?? '', 'Battery (%)': a.live.battery ?? '', 'RSSI (dBm)': a.live.rssi ?? '',
+    const list = this.assets;
+    const assets = list.map((a) => ({
+      Asset: a.name, 'Device ID': a.id, 'Asset Code': a.assetCode, Type: a.type, Status: this.statusLabel(a.status), Health: a.health, Site: a.building,
+      'Device Type': a.device.type, 'Temperature (°C)': a.live.temp ?? '', 'Vibration (mm/s)': a.live.vib ?? '', 'Battery (%)': a.live.battery ?? '', 'RSSI (dBm)': a.live.rssi ?? '',
+      'Last Seen': this.stamp(a.lastSeen, true),
     }));
     XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(assets), 'Assets');
-    const ev = EVENTS.map((e) => ({ Timestamp: this.eventTime(e), Asset: this.assetOf(e).name, Device: e.deviceId, Event: e.event, 'Reading / Location': e.reading, Severity: e.severity }));
+    const events = this.events;
+    const ev = events.map((e) => ({ Timestamp: this.eventTime(e), Asset: e.assetName, Device: e.deviceId, Event: e.event, 'Reading / Location': e.reading, Severity: e.severity }));
     XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(ev), 'Events');
     const a = this.selected;
-    const series = this.metrics.map((m) => seriesFor(a, m, this.range, this.now));
-    const rows = series[0].mins.map((m, i) => ({
-      Time: this.fmtStamp(new Date(this.now.getTime() - m * 60000), false),
-      'Temperature (°C)': series[0].values[i] ?? '', 'Vibration (mm/s)': series[1].values[i] ?? '', 'Battery (%)': series[2].values[i] ?? '',
-    }));
-    XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(rows), `${a.id} ${this.range}`);
+    if (a) {
+      const readings = this.readingsFor(a);
+      const series = this.metrics.map((m) => seriesFor(readings, m, this.range, this.now));
+      const rows = series[0].mins
+        .map((m, i) => ({
+          Time: this.fmtStamp(new Date(this.now.getTime() - m * 60000), false),
+          'Temperature (°C)': series[0].values[i] ?? '', 'Vibration (mm/s)': series[1].values[i] ?? '', 'Battery (%)': series[2].values[i] ?? '',
+        }))
+        .filter((r) => r['Temperature (°C)'] !== '' || r['Vibration (mm/s)'] !== '' || r['Battery (%)'] !== '');
+      XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(rows), `${a.id} ${this.range}`.slice(0, 31).replace(/[\\/?*[\]:]/g, '-'));
+    }
     XLSX.writeFile(book, `Tracking_Telemetry_${this.range}.xlsx`);
-    this.showToast(`Exported ${ASSETS.length} assets, ${EVENTS.length} events and ${a.id} telemetry (${RANGE_SPEC[this.range].label.toLowerCase()}).`);
-  }
-
-  get alertMinutes(): number {
-    return spikeMinsAgo(this.now);
+    this.showToast(`Exported ${list.length} assets, ${events.length} events${a ? ` and ${a.id} telemetry` : ''} (${RANGE_SPEC[this.range].label.toLowerCase()}).`);
   }
 
   @HostListener('document:keydown.escape')

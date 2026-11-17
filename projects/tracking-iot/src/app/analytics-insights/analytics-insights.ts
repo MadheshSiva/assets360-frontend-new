@@ -1,4 +1,6 @@
-import { Component, HostListener, OnDestroy } from '@angular/core';
+import { Component, DestroyRef, HostListener, OnDestroy, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subscription } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
@@ -21,7 +23,10 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-angular';
-import { ASSET_TYPES, Analytics, Conn, Filters, HEALTHS, Health, IotDevice, Param, SITES, TECHS, TODAY, VIBRATION_BASELINE, analyze, isoOf } from './analytics-data';
+import { apiErrorMessage } from '../shared/tracking-api';
+import { MAX_DAYS } from '../tracking-telemetry/telemetry-api';
+import { AnalyticsApi, AnalyticsSource } from './analytics-api';
+import { Analytics, Conn, Filters, HEALTHS, Health, IotDevice, LOW_BATTERY, Param, TODAY, VIBRATION_BASELINE, analyze, buildDevices, isoOf } from './analytics-data';
 
 type RangePreset = '7' | '30' | '90' | 'month' | 'custom';
 
@@ -69,13 +74,10 @@ const TW = 400;
   standalone: true,
   imports: [CommonModule, FormsModule, RouterModule, LucideAngularModule],
   templateUrl: './analytics-insights.html',
-  styleUrls: ['./analytics-insights.css', './analytics-insights-charts.css'],
+  styleUrls: ['./analytics-insights.css', './analytics-insights-charts.css', '../shared/iot-purple-theme.css'],
 })
 export class AnalyticsInsights implements OnDestroy {
   readonly icons = { Activity, ArrowRight, Bookmark, CalendarDays, ChevronDown, Database, Download, Info, Lightbulb, MapPin, ShieldCheck, Trash2, TrendingUp, TriangleAlert, X };
-  readonly sites = SITES.map((s) => s.name);
-  readonly assetTypes = ASSET_TYPES;
-  readonly techs = TECHS;
   readonly healths = HEALTHS;
   readonly params = PARAMS;
   readonly connColors = CONN_COLORS;
@@ -114,6 +116,18 @@ export class AnalyticsInsights implements OnDestroy {
   hoverHealth: Health | null = null;
   hoverAlert: number | null = null;
 
+  /** True while the API data loads. */
+  loading = true;
+  /** Message of the last failed load ('' once a load succeeds). */
+  error = '';
+
+  private readonly api = inject(AnalyticsApi);
+  private readonly destroyRef = inject(DestroyRef);
+  private src: AnalyticsSource | null = null;
+  private all: IotDevice[] = [];
+  private loadedDays = 0;
+  private version = 0;
+  private loadSub?: Subscription;
   private cacheKey = '';
   private cache!: Analytics;
 
@@ -123,6 +137,7 @@ export class AnalyticsInsights implements OnDestroy {
 
   ngOnDestroy(): void {
     clearTimeout(this.toastTimer);
+    this.loadSub?.unsubscribe();
   }
 
   // ===== Filters =====
@@ -140,11 +155,65 @@ export class AnalyticsInsights implements OnDestroy {
     this.from = isoOf(start);
     this.to = TODAY;
     this.rangeOpen = false;
+    this.load();
   }
 
   onCustomRange(): void {
     this.preset = 'custom';
     if (this.from > this.to) [this.from, this.to] = [this.to, this.from];
+    this.load();
+  }
+
+  // ===== Data =====
+
+  /** API window in days (whole days ending today) that covers the selected range. */
+  private get windowDays(): number {
+    const from = new Date(this.from + 'T00:00').getTime();
+    const today = new Date(TODAY + 'T00:00').getTime();
+    // +1 for today, +1 so the UTC window also covers the first local day
+    return Math.min(MAX_DAYS, Math.max(1, Math.round((today - from) / 86400000) + 2));
+  }
+
+  /** Loads the API data when the range needs a wider window than the one loaded (or `force`). */
+  load(force = false): void {
+    if (!this.from) return;
+    const days = this.windowDays;
+    if (!force && this.src && this.loadedDays === days) return;
+    this.loadedDays = days;
+    this.loading = true;
+    this.loadSub?.unsubscribe();
+    this.loadSub = this.api
+      .load(days)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (src) => {
+          this.src = src;
+          this.all = buildDevices(src, Date.now());
+          this.version++;
+          this.loading = false;
+          this.error = '';
+        },
+        error: (err) => {
+          this.loading = false;
+          this.loadedDays = 0;
+          this.error = apiErrorMessage(err, 'Could not load analytics data.');
+          this.showToast(this.error);
+        },
+      });
+  }
+
+  get sites(): string[] {
+    return [...new Set(this.all.map((d) => d.site).filter(Boolean))].sort();
+  }
+
+  get assetTypes(): string[] {
+    const types = new Set<string>(this.src?.byAssetType.items.map((i) => i.assetType) ?? []);
+    for (const d of this.all) types.add(d.assetType);
+    return [...types].sort();
+  }
+
+  get techs(): string[] {
+    return [...new Set(this.all.map((d) => d.tech))].sort();
   }
 
   get presetLabel(): string {
@@ -165,10 +234,10 @@ export class AnalyticsInsights implements OnDestroy {
 
   /** Aggregated figures for the current filters (recomputed only when a filter changes). */
   get a(): Analytics {
-    const key = JSON.stringify(this.filters);
+    const key = JSON.stringify(this.filters) + '|' + this.version;
     if (key !== this.cacheKey) {
       this.cacheKey = key;
-      this.cache = analyze(this.filters);
+      this.cache = analyze(this.src, this.all, this.filters);
     }
     return this.cache;
   }
@@ -185,8 +254,8 @@ export class AnalyticsInsights implements OnDestroy {
     return String(Math.round(n));
   }
 
-  fmtDelta(n: number): string {
-    return `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}%`;
+  fmtDelta(n: number | null): string {
+    return n === null ? '' : `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}%`;
   }
 
   shortDate(iso: string): string {
@@ -216,9 +285,11 @@ export class AnalyticsInsights implements OnDestroy {
       .map(({ i, d }) => ({ x: this.xOf(i, n, w), label: this.shortDate(d) }));
   }
 
-  get conn(): { lines: { key: Conn; d: string; color: string }[]; area: string; ticks: { y: number; label: string }[]; xLabels: { x: number; label: string }[]; xs: number[] } {
+  get conn(): { lines: { key: Conn; d: string; color: string }[]; area: string; ticks: { y: number; label: string }[]; xLabels: { x: number; label: string }[]; xs: number[] } | null {
     const c = this.a.connectivity;
     const n = this.a.days.length;
+    // no daily history for the range yet
+    if (!n || c.online.length !== n) return null;
     const { max, step } = this.niceMax(Math.max(1, ...c.online));
     const yOf = (v: number) => LH - LPAD.b - (v / max) * (LH - LPAD.t - LPAD.b);
     const xs = this.a.days.map((_, i) => this.xOf(i, n, LW));
@@ -267,15 +338,27 @@ export class AnalyticsInsights implements OnDestroy {
   get tel(): { d: string; area: string; ticks: { y: number; label: string }[]; xLabels: { x: number; label: string }[]; xs: number[]; ys: number[]; empty: boolean } {
     const vals = this.a.telemetry[this.param];
     const n = vals.length;
-    const empty = !vals.some((v) => v > 0);
-    const { max, step } = this.niceMax(Math.max(1, ...vals) * 1.15);
-    const yOf = (v: number) => LH - LPAD.b - (v / max) * (LH - LPAD.t - LPAD.b);
+    const nums = vals.filter((v): v is number => v !== null);
+    const empty = !nums.length;
+    const { max, step } = this.niceMax(Math.max(1, ...nums) * 1.15);
+    const yOf = (v: number) => LH - LPAD.b - (Math.max(0, v) / max) * (LH - LPAD.t - LPAD.b);
     const xs = vals.map((_, i) => this.xOf(i, n, TW));
-    const ys = vals.map(yOf);
-    const d = vals.map((_, i) => `${i ? 'L' : 'M'}${xs[i].toFixed(1)},${ys[i].toFixed(1)}`).join('');
+    const ys = vals.map((v) => (v === null ? LH - LPAD.b : yOf(v)));
+    // days without readings break the line; the area spans only the reported days
+    let d = '';
+    let pen = false;
+    vals.forEach((v, i) => {
+      if (v === null) return void (pen = false);
+      d += `${pen ? 'L' : 'M'}${xs[i].toFixed(1)},${ys[i].toFixed(1)}`;
+      if (!pen && (vals[i + 1] ?? null) === null) d += 'l0.01,0';
+      pen = true;
+    });
+    const first = vals.findIndex((v) => v !== null);
+    const last = n - 1 - [...vals].reverse().findIndex((v) => v !== null);
+    const solid = vals.slice(first, last + 1).every((v) => v !== null);
     return {
       d,
-      area: n ? `${d}L${xs[n - 1]},${LH - LPAD.b}L${xs[0]},${LH - LPAD.b}Z` : '',
+      area: !empty && solid ? `${d}L${xs[last]},${LH - LPAD.b}L${xs[first]},${LH - LPAD.b}Z` : '',
       ticks: Array.from({ length: 5 }, (_, i) => ({ y: yOf(step * i), label: String(Math.round(step * i * 10) / 10) })),
       xLabels: this.xLabels(this.a.days, TW),
       xs,
@@ -317,12 +400,12 @@ export class AnalyticsInsights implements OnDestroy {
     return { max, ticks: Array.from({ length: 5 }, (_, i) => ({ pct: (i / 4) * 100, label: String(step * i) })) };
   }
 
-  uptimeClass(v: number): string {
-    return v >= 97 ? 'good' : v >= 95 ? 'fair' : 'poor';
+  uptimeClass(v: number | null): string {
+    return v === null ? '' : v >= 97 ? 'good' : v >= 95 ? 'fair' : 'poor';
   }
 
-  coverageClass(v: number): string {
-    return v >= 90 ? 'good' : v >= 85 ? 'fair' : 'poor';
+  coverageClass(v: number | null): string {
+    return v === null ? '' : v >= 90 ? 'good' : v >= 85 ? 'fair' : 'poor';
   }
 
   // ===== Insights =====
@@ -335,7 +418,7 @@ export class AnalyticsInsights implements OnDestroy {
 
   openBatteryAlert(): void {
     const rows = this.a.lowBattery;
-    this.list = { title: 'Low battery tags', note: `${rows.length} tags are below 20% battery. Replace them before they stop reporting.`, file: 'Low_Battery_Tags', rows, extra: 'battery' };
+    this.list = { title: 'Low battery tags', note: `${rows.length} tags are below ${LOW_BATTERY}% battery. Replace them before they stop reporting.`, file: 'Low_Battery_Tags', rows, extra: 'battery' };
   }
 
   openVibration(): void {
@@ -395,6 +478,7 @@ export class AnalyticsInsights implements OnDestroy {
       this.preset = 'custom';
       this.from = v.from;
       this.to = v.to;
+      this.load();
     } else this.setPreset(v.preset);
     this.menuOpen = '';
     this.showToast(`View "${v.name}" applied.`);
@@ -412,7 +496,8 @@ export class AnalyticsInsights implements OnDestroy {
     this.menuOpen = '';
     const a = this.a;
     const scope = [this.site || 'All sites', this.assetType || 'All asset types', this.tech || 'All technologies', this.rangeLabel].join(' · ');
-    const sites = a.sites.map((s) => ({ Site: s.name, 'Uptime %': +s.uptime.toFixed(1), Devices: s.devices, Alerts: s.alerts, 'Location Coverage %': +s.coverage.toFixed(1) }));
+    const num = (v: number | null) => (v === null ? '' : +v.toFixed(1));
+    const sites = a.sites.map((s) => ({ Site: s.name, 'Uptime %': num(s.uptime), Devices: s.devices, Alerts: s.alerts, 'Location Coverage %': num(s.coverage) }));
     if (kind === 'csv') {
       const book = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(sites), 'Sites');
@@ -422,14 +507,14 @@ export class AnalyticsInsights implements OnDestroy {
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet([
       { Metric: 'Scope', Value: scope },
-      { Metric: 'Average Device Uptime %', Value: +a.kpi.uptime.toFixed(1) },
-      { Metric: 'Location Coverage %', Value: +a.kpi.coverage.toFixed(1) },
-      { Metric: 'Telemetry Events', Value: Math.round(a.kpi.events) },
-      { Metric: 'Alert Resolution %', Value: +a.kpi.resolution.toFixed(1) },
+      { Metric: 'Average Device Uptime %', Value: num(a.kpi.uptime) },
+      { Metric: 'Location Coverage %', Value: num(a.kpi.coverage) },
+      { Metric: 'Telemetry Events', Value: a.kpi.events ?? '' },
+      { Metric: 'Alert Resolution %', Value: num(a.kpi.resolution) },
     ]), 'Summary');
     XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(a.days.map((d, i) => ({
-      Date: d, Online: a.connectivity.online[i], Warning: a.connectivity.warning[i], Offline: a.connectivity.offline[i],
-      'Temperature °C': a.telemetry.temperature[i], 'Vibration mm/s': a.telemetry.vibration[i], 'Energy kWh': a.telemetry.energy[i],
+      Date: d, Online: a.connectivity.online[i] ?? '', Warning: a.connectivity.warning[i] ?? '', Offline: a.connectivity.offline[i] ?? '',
+      'Temperature °C': a.telemetry.temperature[i] ?? '', 'Vibration mm/s': a.telemetry.vibration[i] ?? '', 'Energy kWh': a.telemetry.energy[i] ?? '',
     }))), 'Daily');
     XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(HEALTHS.map((h) => ({ Health: h, Devices: a.health[h] }))), 'Device Health');
     XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(a.alerts.map((x) => ({ Category: x.category, Alerts: x.count }))), 'Alerts');

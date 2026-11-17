@@ -169,12 +169,13 @@
 
     @case ('assets') {
       <div class="card">
-        <p class="muted">Showing {{ sampleAssets.length }} of {{ site.assets | number }} assets at this site.</p>
         <table class="grid-table">
           <thead><tr><th>Asset Tag</th><th>Name</th><th>Category</th><th>Status</th></tr></thead>
           <tbody>
-            @for (a of sampleAssets; track a.tag) {
+            @for (a of assets; track a.tag) {
               <tr><td class="mono">{{ a.tag }}</td><td>{{ a.name }}</td><td>{{ a.category }}</td><td>{{ a.status }}</td></tr>
+            } @empty {
+              <tr><td colspan="4" class="empty">No records found.</td></tr>
             }
           </tbody>
         </table>
@@ -186,8 +187,10 @@
         <table class="grid-table">
           <thead><tr><th>Department</th><th>Head</th><th>People</th></tr></thead>
           <tbody>
-            @for (d of sampleDepartments; track d.name) {
+            @for (d of departments; track d.name) {
               <tr><td>{{ d.name }}</td><td>{{ d.head }}</td><td>{{ d.people }}</td></tr>
+            } @empty {
+              <tr><td colspan="3" class="empty">No records found.</td></tr>
             }
           </tbody>
         </table>
@@ -216,8 +219,10 @@
         <table class="grid-table">
           <thead><tr><th>Document</th><th>Type</th><th>Size</th><th>Uploaded On</th></tr></thead>
           <tbody>
-            @for (d of sampleDocuments; track d.name) {
+            @for (d of documents; track d.name) {
               <tr><td>{{ d.name }}</td><td>{{ d.kind }}</td><td>{{ d.size }}</td><td>{{ d.date }}</td></tr>
+            } @empty {
+              <tr><td colspan="4" class="empty">No records found.</td></tr>
             }
           </tbody>
         </table>
@@ -251,6 +256,9 @@
             <li><span class="timeline__when">{{ formatDateTime(a.when) }}</span><span><strong>{{ a.who }}</strong> {{ a.text }}</span></li>
           }
         </ol>
+        @if (!activity.length) {
+          <p class="muted">No records found.</p>
+        }
       </div>
     }
   }

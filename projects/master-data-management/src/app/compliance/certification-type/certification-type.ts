@@ -23,7 +23,7 @@ interface Filters {
   selector: 'app-mdm-compliance-certification-type',
   imports: [FormsModule, RouterLink, LucideAngularModule, CertificationTypeForm],
   templateUrl: './certification-type.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../compliance.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../compliance.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class CertificationTypePage extends ListPage<CertificationTypeRecord, Filters, SortKey> implements OnInit {
   readonly service = inject(CertificationTypeService);

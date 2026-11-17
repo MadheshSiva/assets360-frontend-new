@@ -23,7 +23,7 @@ interface Filters {
   selector: 'app-mdm-inventory-uom',
   imports: [FormsModule, RouterLink, LucideAngularModule, UomForm],
   templateUrl: './uom.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../inventory.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../inventory.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class UomPage extends ListPage<UomRecord, Filters, SortKey> {
   readonly service = inject(UomService);

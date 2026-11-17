@@ -1,72 +1,71 @@
-// DEMO MODE: headline figures shared by several Reports & Analytics pages, so the same KPI reads the
-// same everywhere (e.g. Maintenance Cost on Maintenance Analytics, Financial Analytics and the KPI Dashboard).
-// Period: 01 Jan 2026 – 28 Oct 2026. Amounts in AED.
+// Headline figures shared by several Reports & Analytics pages, so the same KPI reads the same everywhere.
+// Values stay 0 until the reporting API provides them.
 
 export const RA_METRICS = {
   assets: {
-    total: 1248,
-    healthScore: 87,
-    utilization: 78,
-    availability: 94.6,
-    status: { active: 847, underMaintenance: 225, retired: 125, missing: 51 }
+    total: 0,
+    healthScore: 0,
+    utilization: 0,
+    availability: 0,
+    status: { active: 0, underMaintenance: 0, retired: 0, missing: 0 }
   },
   reliability: {
-    mtbfHours: 1284,
-    mttrHours: 6.8
+    mtbfHours: 0,
+    mttrHours: 0
   },
   maintenance: {
-    cost: 1_860_000,
-    budget: 1_720_000,
-    openWorkOrders: 86,
-    totalWorkOrders: 348,
-    pmCompliance: 92,
-    overdueWorkOrders: 18
+    cost: 0,
+    budget: 0,
+    openWorkOrders: 0,
+    totalWorkOrders: 0,
+    pmCompliance: 0,
+    overdueWorkOrders: 0
   },
   inspection: {
-    total: 3486,
-    completionRate: 94.2,
-    openFindings: 128,
-    criticalFindings: 12,
-    correctiveActionsDue: 34
+    total: 0,
+    completionRate: 0,
+    openFindings: 0,
+    criticalFindings: 0,
+    correctiveActionsDue: 0
   },
   compliance: {
-    score: 93.6,
-    openAuditFindings: 42,
-    expiringCertifications: 18,
-    overdueCapa: 9,
-    activeRisks: 16,
-    capaClosureRate: 88.4
+    score: 0,
+    openAuditFindings: 0,
+    expiringCertifications: 0,
+    overdueCapa: 0,
+    activeRisks: 0,
+    capaClosureRate: 0
   },
   inventory: {
-    value: 4_820_000,
-    stockItems: 8426,
-    turnover: 6.8,
-    belowReorder: 186,
-    stockAccuracy: 97.4
+    value: 0,
+    stockItems: 0,
+    turnover: 0,
+    belowReorder: 0,
+    stockAccuracy: 0
   },
   financial: {
-    totalAssetValue: 42_800_000,
-    capex: 6_400_000,
-    opex: 3_180_000,
-    netBookValue: 28_600_000
+    totalAssetValue: 0,
+    capex: 0,
+    opex: 0,
+    netBookValue: 0
   },
   production: {
-    outputUnits: 48620,
-    wipValue: 3_420_000,
-    onTimeCompletion: 91.4,
-    equipmentUtilization: 78,
-    oee: 84.6
+    outputUnits: 0,
+    wipValue: 0,
+    onTimeCompletion: 0,
+    equipmentUtilization: 0,
+    oee: 0
   },
   iot: {
-    connectedAssets: 1086,
-    avgUtilization: 78.6,
-    telemetryAvailability: 98.2,
-    activeAlerts: 37
+    connectedAssets: 0,
+    avgUtilization: 0,
+    telemetryAvailability: 0,
+    activeAlerts: 0
   },
   predictive: {
-    assetsMonitored: 1086,
-    highRiskAssets: 34,
-    predictedFailures: 18,
-    accuracy: 91.8
+    assetsMonitored: 0,
+    highRiskAssets: 0,
+    predictedFailures: 0,
+    accuracy: 0
   }
-} as const;
+};

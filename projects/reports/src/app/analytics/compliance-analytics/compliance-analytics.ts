@@ -80,9 +80,9 @@ export class ComplianceAnalyticsPage extends AnalyticsPage {
   readonly capaTarget = CAPA_TARGET;
   readonly percentFormat = (v: number) => `${Math.round(v)}%`;
 
-  area = AREA_OPTIONS[0];
-  regulation = REGULATION_OPTIONS[0];
-  risk = RISK_LEVELS[0];
+  area = '';
+  regulation = '';
+  risk = '';
   compare = false;
 
   view!: ComplianceView;
@@ -102,7 +102,6 @@ export class ComplianceAnalyticsPage extends AnalyticsPage {
 
   constructor() {
     super();
-    this.updatedMinutes = 8;
     this.apply();
   }
 
@@ -118,11 +117,11 @@ export class ComplianceAnalyticsPage extends AnalyticsPage {
     });
     this.view = v;
     this.kpis = [
-      { key: 'score', label: 'Overall Compliance Score', value: percent(v.score), delta: '+2.4%', up: true, good: true, icon: ShieldCheck, tone: 'green' },
-      { key: 'findings', label: 'Open Audit Findings', value: String(v.findings.length), delta: '-18%', up: false, good: true, icon: FileSearch, tone: 'pink' },
-      { key: 'expiring', label: 'Expiring Certifications', value: String(v.expiringSoon.length), delta: '+6%', up: true, good: false, icon: Award, tone: 'blue' },
-      { key: 'capa', label: 'Overdue CAPA Actions', value: String(v.capaOverdue.length), delta: '-25%', up: false, good: true, icon: ClipboardCheck, tone: 'orange' },
-      { key: 'risks', label: 'Active Compliance Risks', value: String(v.risks.length), delta: '-12%', up: false, good: true, icon: TriangleAlert, tone: 'red' }
+      { key: 'score', label: 'Overall Compliance Score', value: percent(v.score), delta: '', up: true, good: true, icon: ShieldCheck, tone: 'green' },
+      { key: 'findings', label: 'Open Audit Findings', value: String(v.findings.length), delta: '', up: false, good: true, icon: FileSearch, tone: 'pink' },
+      { key: 'expiring', label: 'Expiring Certifications', value: String(v.expiringSoon.length), delta: '', up: true, good: false, icon: Award, tone: 'blue' },
+      { key: 'capa', label: 'Overdue CAPA Actions', value: String(v.capaOverdue.length), delta: '', up: false, good: true, icon: ClipboardCheck, tone: 'orange' },
+      { key: 'risks', label: 'Active Compliance Risks', value: String(v.risks.length), delta: '', up: false, good: true, icon: TriangleAlert, tone: 'red' }
     ];
     this.buildScoreSeries();
     this.severitySeries = LEVELS.map((l) => ({ name: l, values: v.raised[l], color: LEVEL_COLORS[l] }));
@@ -164,6 +163,11 @@ export class ComplianceAnalyticsPage extends AnalyticsPage {
 
   private buildInsights(): void {
     const v = this.view;
+    // Insights are only meaningful once there is compliance data in scope
+    if (!v.findings.length && !v.capaOpen.length && !v.expiring.length && !v.environmental.length) {
+      this.insights = [];
+      return;
+    }
     const critical = v.findings.filter((f) => f.severity === 'Critical').length;
     const soonSites = new Set(v.expiringSoon.map((e) => e.site)).size;
     const envBelow = v.environmental.filter((e) => e.score < SCORE_TARGET);
@@ -232,7 +236,7 @@ export class ComplianceAnalyticsPage extends AnalyticsPage {
 
   kpiAction(kpi: KpiTile, action: string): void {
     if (action === 'Export CSV') {
-      downloadCsv(`compliance-${kpi.key}.csv`, ['KPI', 'Value', 'Change vs previous period', 'Period', 'Location'], [[kpi.label, kpi.value, kpi.delta, this.period, this.location]]);
+      downloadCsv(`compliance-${kpi.key}.csv`, ['KPI', 'Value', 'Change vs previous period', 'Period', 'Location'], [[kpi.label, kpi.value, kpi.delta || '—', this.periodLabel, this.locationLabel]]);
       return;
     }
     const v = this.view;
@@ -260,7 +264,7 @@ export class ComplianceAnalyticsPage extends AnalyticsPage {
       default:
         fields = LEVELS.map((l) => ({ label: l, value: String(v.risks.filter((r) => r.level === l).length) }));
     }
-    fields.push({ label: 'Change vs previous period', value: kpi.delta }, { label: 'Period', value: this.period }, { label: 'Location', value: this.location });
+    fields.push({ label: 'Change vs previous period', value: kpi.delta || '—' }, { label: 'Period', value: this.periodLabel }, { label: 'Location', value: this.locationLabel });
     this.detail = { title: kpi.label, subtitle: kpi.value, fields, finding: null };
   }
 
@@ -366,7 +370,7 @@ export class ComplianceAnalyticsPage extends AnalyticsPage {
       case 'capa':
         this.list = {
           title: 'Overdue CAPA actions',
-          subtitle: `${v.capaOverdue.length} overdue · ${this.location}`,
+          subtitle: `${v.capaOverdue.length} overdue · ${this.locationLabel}`,
           header: CAPA_HEADER,
           rows: this.capaRows(v.capaOverdue),
           fileName: 'overdue-capa-actions.csv'
@@ -375,7 +379,7 @@ export class ComplianceAnalyticsPage extends AnalyticsPage {
       case 'register':
         this.list = {
           title: 'Permits & certifications expiring within 90 days',
-          subtitle: `${v.expiringSoon.length} items · ${this.location}`,
+          subtitle: `${v.expiringSoon.length} items · ${this.locationLabel}`,
           header: EXPIRY_HEADER,
           rows: this.expiryRows(v.expiringSoon),
           fileName: 'expiring-certifications.csv'
@@ -402,7 +406,7 @@ export class ComplianceAnalyticsPage extends AnalyticsPage {
   private showFindings(title: string, rows: ComplianceFinding[]): void {
     this.list = {
       title,
-      subtitle: `${rows.length} finding${rows.length === 1 ? '' : 's'} · ${this.location} · ${this.period}`,
+      subtitle: `${rows.length} finding${rows.length === 1 ? '' : 's'} · ${this.locationLabel} · ${this.periodLabel}`,
       header: FINDING_HEADER,
       rows: this.findingRows(rows),
       fileName: title.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.csv'

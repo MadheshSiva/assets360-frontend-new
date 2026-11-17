@@ -13,7 +13,7 @@ type Tab = 'basic' | 'settings';
   selector: 'app-bin-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './bin-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class BinForm implements OnChanges {
   @Input() mode: 'add' | 'edit' = 'add';
@@ -67,10 +67,27 @@ export class BinForm implements OnChanges {
     this.codeTouched = true;
   }
 
+  /** True on the final tab, where the primary button saves instead of advancing. */
+  get isLastTab(): boolean {
+    return this.tab === this.tabs[this.tabs.length - 1].id;
+  }
+
+  /** Move to the next tab. */
+  next(): void {
+    const i = this.tabs.findIndex((t) => t.id === this.tab);
+    if (i < this.tabs.length - 1) this.tab = this.tabs[i + 1].id;
+  }
+
   submit(): void {
+    // Enter key / primary button on earlier tabs just advances
+    if (!this.isLastTab) {
+      this.next();
+      return;
+    }
     const f = this.form;
     const errors: Record<string, string> = {};
     if (!f.storeCode) errors['storeCode'] = 'Select a store.';
+    if (!f.status) errors['status'] = 'Select a status.';
     if (!f.code.trim()) errors['code'] = 'Enter a bin code.';
     else if (this.service.isCodeTaken(f.code, this.original?.code ?? null)) errors['code'] = `${f.code.trim()} is already used.`;
     if (f.capacity !== null && !(f.capacity > 0)) errors['capacity'] = 'Enter a capacity greater than 0.';

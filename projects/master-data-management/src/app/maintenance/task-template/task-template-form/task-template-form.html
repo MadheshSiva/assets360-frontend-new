@@ -28,7 +28,7 @@
         <div class="field" [class.invalid]="errors['maintenanceType']">
           <label for="tt-maintenanceType"><span class="req">*</span> Maintenance Type</label>
           <select id="tt-maintenanceType" name="maintenanceType" [(ngModel)]="form.maintenanceType">
-            <option value="" disabled>Select maintenance type</option>
+            <option value="" disabled>Select Maintenance Type</option>
             @for (o of typeOptions; track o) { <option [value]="o">{{ o }}</option> }
           </select>
           @if (errors['maintenanceType']) { <small>{{ errors['maintenanceType'] }}</small> }
@@ -43,15 +43,17 @@
           <label for="tt-desc">Description</label>
           <textarea id="tt-desc" name="description" rows="3" placeholder="" [(ngModel)]="form.description"></textarea>
         </div>
-        <div class="field">
-          <label for="tt-status">Status</label>
+        <div class="field" [class.invalid]="errors['status']">
+          <label for="tt-status"><span class="req">*</span> Status</label>
           <div class="status-select">
             <i [attr.data-status]="form.status"></i>
             <select id="tt-status" name="status" [(ngModel)]="form.status">
+              <option value="" disabled>Select Status</option>
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
             </select>
           </div>
+          @if (errors['status']) { <small>{{ errors['status'] }}</small> }
         </div>
       }
 
@@ -82,7 +84,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

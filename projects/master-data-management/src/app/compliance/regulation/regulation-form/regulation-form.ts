@@ -14,7 +14,7 @@ type Tab = 'basic' | 'scope';
   selector: 'app-regulation-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './regulation-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class RegulationForm extends MasterForm<RegulationRecord, Tab> {
   protected readonly store = inject(RegulationService);
@@ -50,7 +50,8 @@ export class RegulationForm extends MasterForm<RegulationRecord, Tab> {
     const errors: Record<string, string> = {};
     if (!f.country) errors['country'] = 'Select a country.';
     if (!f.category) errors['category'] = 'Select a category.';
-    if (errors['country'] || errors['category']) return { errors, tab: 'basic' as Tab };
+    if (!f.status) errors['status'] = 'Select a status.';
+    if (errors['country'] || errors['category'] || errors['status']) return { errors, tab: 'basic' as Tab };
     if (!Number.isInteger(f.reviewMonths) || f.reviewMonths < 1 || f.reviewMonths > 120) errors['reviewMonths'] = 'Enter 1 to 120 months.';
     return { errors, tab: 'scope' as Tab };
   }

@@ -8,14 +8,14 @@
       <label class="filter">
         <span>Warehouse</span>
         <select name="warehouse" [(ngModel)]="draft.warehouse">
-          <option value="">All</option>
+          <option value="">Select Warehouse</option>
           @for (w of warehouses.all(); track w.code) { <option [value]="w.code">{{ w.name }}</option> }
         </select>
       </label>
       <label class="filter">
         <span>Status</span>
         <select name="status" [(ngModel)]="draft.status">
-          <option value="">All</option>
+          <option value="">Select Status</option>
           <option value="Active">Active</option>
           <option value="Inactive">Inactive</option>
         </select>

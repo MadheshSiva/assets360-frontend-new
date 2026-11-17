@@ -1,0 +1,208 @@
+<div class="mdm-page" [class.mdm-page--with-form]="formOpen">
+  <div class="mdm-main">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a [routerLink]="basePath">Master Data Management</a>
+      <span aria-hidden="true">›</span>
+      <a [routerLink]="basePath + '/asset'">Asset</a>
+      <span aria-hidden="true">›</span>
+      <strong>Asset Sub Type</strong>
+    </nav>
+
+    <header class="head">
+      <span class="head__icon"><lucide-icon [img]="icons.GitBranch" [size]="24"></lucide-icon></span>
+      <div class="head__text">
+        <h1>Asset Sub Type</h1>
+        <p>Refine asset types into sub types with their own specifications, tagging, lifecycle and default settings.</p>
+      </div>
+      <button type="button" class="btn btn--primary head__add" (click)="openAdd()">
+        <lucide-icon [img]="icons.Plus" [size]="16"></lucide-icon> Add Asset Sub Type
+      </button>
+    </header>
+
+    <section class="kpis kpis--4" aria-label="Asset sub type summary">
+      <div class="kpi">
+        <span class="kpi__icon kpi__icon--blue"><lucide-icon [img]="icons.Monitor" [size]="26"></lucide-icon></span>
+        <span><small>Total Sub Types</small><strong>{{ stats.total }}</strong></span>
+      </div>
+      <div class="kpi">
+        <span class="kpi__icon kpi__icon--green"><i class="kpi__dot kpi__dot--green"></i></span>
+        <span><small>Active</small><strong>{{ stats.active }}</strong></span>
+      </div>
+      <div class="kpi">
+        <span class="kpi__icon kpi__icon--grey"><i class="kpi__dot kpi__dot--grey"></i></span>
+        <span><small>Inactive</small><strong>{{ stats.inactive }}</strong></span>
+      </div>
+      <div class="kpi">
+        <span class="kpi__icon kpi__icon--purple"><lucide-icon [img]="icons.Layers" [size]="26"></lucide-icon></span>
+        <span><small>Parent Asset Types</small><strong>{{ stats.parents }}</strong></span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <form class="filters" (ngSubmit)="apply()">
+        <label class="search">
+          <lucide-icon [img]="icons.Search" [size]="16"></lucide-icon>
+          <input name="search" placeholder="Search sub type by name, code, asset type..." aria-label="Search asset sub types" [(ngModel)]="draft.search" />
+        </label>
+        <label class="filter">
+          <span>Asset Type</span>
+          <select name="assetType" [(ngModel)]="draft.assetType">
+            <option value="">Select Asset Type</option>
+            @for (t of service.parentTypes(); track t) { <option [value]="t">{{ t }}</option> }
+          </select>
+        </label>
+        <label class="filter">
+          <span>Status</span>
+          <select name="status" [(ngModel)]="draft.status">
+            <option value="">Select Status</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </label>
+        <button type="button" class="btn btn--link" (click)="clear()">Clear</button>
+        <button type="submit" class="btn btn--primary">Apply</button>
+      </form>
+
+      @if (selected.size) {
+        <div class="bulk">
+          <span>{{ selected.size }} selected</span>
+          <button type="button" class="btn btn--link" (click)="selected.clear()">Clear selection</button>
+          <button type="button" class="btn btn--danger" (click)="askDeleteSelected()">Delete selected</button>
+        </div>
+      }
+
+      <div class="table-wrap">
+        <table class="mdm-table">
+          <thead>
+            <tr>
+              <th class="col-check"><input type="checkbox" [checked]="allOnPageSelected" (change)="togglePage()" aria-label="Select all on this page" /></th>
+              <th>
+                <button type="button" class="sort" (click)="sortBy('name')" [class.sort--on]="sortKey === 'name'">
+                  Sub Type Name <lucide-icon [img]="sortKey === 'name' && sortDir === -1 ? icons.ArrowDown : icons.ArrowUp" [size]="13"></lucide-icon>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort" (click)="sortBy('code')" [class.sort--on]="sortKey === 'code'">
+                  Code
+                  @if (sortKey === 'code') { <lucide-icon [img]="sortDir === -1 ? icons.ArrowDown : icons.ArrowUp" [size]="13"></lucide-icon> }
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort" (click)="sortBy('assetType')" [class.sort--on]="sortKey === 'assetType'">
+                  Asset Type
+                  @if (sortKey === 'assetType') { <lucide-icon [img]="sortDir === -1 ? icons.ArrowDown : icons.ArrowUp" [size]="13"></lucide-icon> }
+                </button>
+              </th>
+              <th>Category</th>
+              <th>
+                <button type="button" class="sort" (click)="sortBy('lifecycleYears')" [class.sort--on]="sortKey === 'lifecycleYears'">
+                  Lifecycle (Years)
+                  @if (sortKey === 'lifecycleYears') { <lucide-icon [img]="sortDir === -1 ? icons.ArrowDown : icons.ArrowUp" [size]="13"></lucide-icon> }
+                </button>
+              </th>
+              <th>Assets</th>
+              <th>Status</th>
+              <th class="col-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of pageRows; track r.code) {
+              <tr [class.is-selected]="r.code === selectedCode" (click)="open(r.code, false)">
+                <td class="col-check" (click)="$event.stopPropagation()">
+                  <input type="checkbox" [checked]="selected.has(r.code)" (change)="toggleRow(r.code)" [attr.aria-label]="'Select ' + r.name" />
+                </td>
+                <td>
+                  <div class="name-cell">
+                    <span class="logo thumb thumb--type">
+                      @if (r.image) {
+                        <img [src]="r.image" [alt]="r.name" />
+                      } @else {
+                        <lucide-icon [img]="typeIcons[r.icon]" [size]="18"></lucide-icon>
+                      }
+                    </span>
+                    <button type="button" class="name" (click)="$event.stopPropagation(); open(r.code)">{{ r.name }}</button>
+                  </div>
+                </td>
+                <td>{{ r.code }}</td>
+                <td>{{ r.assetType }}</td>
+                <td>{{ r.category || '-' }}</td>
+                <td>{{ r.lifecycleYears }}</td>
+                <td>{{ r.assetCount | number }}</td>
+                <td><span class="pill" [attr.data-status]="r.status"><i></i>{{ r.status }}</span></td>
+                <td class="col-actions" (click)="$event.stopPropagation()">
+                  <div class="row-menu">
+                    <button type="button" class="dots" [attr.aria-label]="'Actions for ' + r.name" [attr.aria-expanded]="menuFor === r.code" (click)="$event.stopPropagation(); toggleMenu(r.code)">
+                      <lucide-icon [img]="icons.Ellipsis" [size]="18"></lucide-icon>
+                    </button>
+                    @if (menuFor === r.code) {
+                      <div class="menu" role="menu" (click)="$event.stopPropagation()">
+                        <button type="button" role="menuitem" (click)="open(r.code)">View details</button>
+                        <button type="button" role="menuitem" (click)="openEdit({ subType: r })">Edit</button>
+                        <button type="button" role="menuitem" (click)="duplicate(r)">Duplicate</button>
+                        <button type="button" role="menuitem" (click)="toggleStatus(r)">Mark as {{ r.status === 'Active' ? 'Inactive' : 'Active' }}</button>
+                        <button type="button" role="menuitem" class="danger" (click)="askDelete([r])">Delete</button>
+                      </div>
+                    }
+                  </div>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="9" class="empty">No asset sub types match these filters.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <footer class="pager">
+        <span>Showing {{ showingFrom }} to {{ showingTo }} of {{ rows.length }} records</span>
+        <div class="pager__pages">
+          <button type="button" class="page-btn" [disabled]="page === 0" (click)="goTo(page - 1)" aria-label="Previous page">
+            <lucide-icon [img]="icons.ChevronLeft" [size]="15"></lucide-icon>
+          </button>
+          @for (p of pageNumbers; track p) {
+            <button type="button" class="page-btn" [class.active]="p === page" [attr.aria-current]="p === page ? 'page' : null" (click)="goTo(p)">{{ p + 1 }}</button>
+          }
+          <button type="button" class="page-btn" [disabled]="page >= pageCount - 1" (click)="goTo(page + 1)" aria-label="Next page">
+            <lucide-icon [img]="icons.ChevronRight" [size]="15"></lucide-icon>
+          </button>
+          <select class="page-size" name="pageSize" [(ngModel)]="pageSize" (ngModelChange)="page = 0" aria-label="Rows per page">
+            @for (s of pageSizes; track s) { <option [ngValue]="s">{{ s }} / page</option> }
+          </select>
+        </div>
+      </footer>
+    </section>
+  </div>
+
+  @if (formOpen) {
+    <app-sub-type-form #formEl class="mdm-form" [mode]="formMode" [subType]="formRecord" [startTab]="formTab" (saved)="onSaved($event)" (cancelled)="closeForm()"></app-sub-type-form>
+  }
+
+  <div class="mdm-detail" #detailEl>
+    @if (selectedSubType; as t) {
+      <app-sub-type-detail
+        [subType]="t"
+        (edit)="openEdit($event)"
+        (duplicate)="duplicate($event)"
+        (toggleStatus)="toggleStatus($event)"
+        (remove)="askDelete([$event])"
+      ></app-sub-type-detail>
+    }
+  </div>
+</div>
+
+@if (pendingDelete.length) {
+  <div class="overlay" (click)="cancelDelete()">
+    <div class="confirm" role="alertdialog" aria-modal="true" aria-labelledby="subtype-del-title" (click)="$event.stopPropagation()">
+      <h2 id="subtype-del-title">Delete {{ pendingDelete.length === 1 ? pendingDelete[0].name : pendingDelete.length + ' asset sub types' }}?</h2>
+      <p>The sub type and its defaults will be removed. This can't be undone.</p>
+      <div class="confirm__actions">
+        <button type="button" class="btn btn--ghost" (click)="cancelDelete()">Cancel</button>
+        <button type="button" class="btn btn--danger" (click)="confirmDelete()">Delete</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (toast) {
+  <div class="toast" role="status">{{ toast }}</div>
+}

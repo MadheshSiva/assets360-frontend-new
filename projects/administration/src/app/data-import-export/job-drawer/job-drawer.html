@@ -16,19 +16,23 @@
     <div class="row-field" [class.invalid]="errors['object']">
       <label for="job-object">Data Object <span class="req">*</span></label>
       <select id="job-object" name="dataObject" [(ngModel)]="job.dataObject">
+        <option value="" disabled>Select Data Object</option>
         @for (o of objects; track o) { <option [value]="o">{{ o }}</option> }
       </select>
     </div>
+    @if (errors['object']) { <small class="row-error">{{ errors['object'] }}</small> }
 
     @if (isImport) {
       <div class="row-field" [class.invalid]="errors['operation']">
         <label for="job-op">Operation <span class="req">*</span></label>
         <select id="job-op" name="operation" [(ngModel)]="job.operation">
+          <option value="" disabled>Select Operation</option>
           <option value="Insert">Insert</option>
           <option value="Update">Update</option>
           <option value="Upsert">Upsert</option>
         </select>
       </div>
+      @if (errors['operation']) { <small class="row-error">{{ errors['operation'] }}</small> }
 
       <div class="row-field" [class.invalid]="errors['file']">
         <label>Source File <span class="req">*</span></label>
@@ -49,52 +53,64 @@
       </div>
       @if (errors['file']) { <small class="row-error">{{ errors['file'] }}</small> }
     } @else {
-      <div class="row-field">
-        <label for="job-export">Export Format</label>
+      <div class="row-field" [class.invalid]="errors['format']">
+        <label for="job-export">Export Format <span class="req">*</span></label>
         <select id="job-export" name="exportFormat" [(ngModel)]="job.fileFormat">
+          <option value="" disabled>Select Export Format</option>
           <option value="XLSX">Excel (.xlsx)</option>
           <option value="CSV">CSV (.csv)</option>
         </select>
       </div>
+      @if (errors['format']) { <small class="row-error">{{ errors['format'] }}</small> }
     }
 
     @if (isImport) {
-      <div class="row-field">
-        <label for="job-format">File Format</label>
+      <div class="row-field" [class.invalid]="errors['format']">
+        <label for="job-format">File Format <span class="req">*</span></label>
         <select id="job-format" name="fileFormat" [(ngModel)]="job.fileFormat">
+          <option value="" disabled>Select File Format</option>
           <option value="XLSX">XLSX</option>
           <option value="CSV">CSV</option>
         </select>
       </div>
+      @if (errors['format']) { <small class="row-error">{{ errors['format'] }}</small> }
 
-      <div class="row-field">
-        <label for="job-dup">Duplicate Handling</label>
+      <div class="row-field" [class.invalid]="errors['duplicate']">
+        <label for="job-dup">Duplicate Handling <span class="req">*</span></label>
         <select id="job-dup" name="duplicateHandling" [(ngModel)]="job.duplicateHandling">
+          <option value="" disabled>Select Duplicate Handling</option>
           @for (o of duplicateOptions; track o) { <option [value]="o">{{ o }}</option> }
         </select>
       </div>
+      @if (errors['duplicate']) { <small class="row-error">{{ errors['duplicate'] }}</small> }
     }
 
-    <div class="row-field">
-      <label for="job-date">Date Format</label>
+    <div class="row-field" [class.invalid]="errors['dateFormat']">
+      <label for="job-date">Date Format <span class="req">*</span></label>
       <select id="job-date" name="dateFormat" [(ngModel)]="job.dateFormat">
+        <option value="" disabled>Select Date Format</option>
         @for (o of dateFormats; track o) { <option [value]="o">{{ o }}</option> }
       </select>
     </div>
+    @if (errors['dateFormat']) { <small class="row-error">{{ errors['dateFormat'] }}</small> }
 
-    <div class="row-field">
-      <label for="job-delim">Delimiter</label>
+    <div class="row-field" [class.invalid]="errors['delimiter']">
+      <label for="job-delim">Delimiter <span class="req">*</span></label>
       <select id="job-delim" name="delimiter" [(ngModel)]="job.delimiter">
+        <option value="" disabled>Select Delimiter</option>
         @for (o of delimiters; track o) { <option [value]="o">{{ o }}</option> }
       </select>
     </div>
+    @if (errors['delimiter']) { <small class="row-error">{{ errors['delimiter'] }}</small> }
 
-    <div class="row-field">
-      <label for="job-enc">Encoding</label>
+    <div class="row-field" [class.invalid]="errors['encoding']">
+      <label for="job-enc">Encoding <span class="req">*</span></label>
       <select id="job-enc" name="encoding" [(ngModel)]="job.encoding">
+        <option value="" disabled>Select Encoding</option>
         @for (o of encodings; track o) { <option [value]="o">{{ o }}</option> }
       </select>
     </div>
+    @if (errors['encoding']) { <small class="row-error">{{ errors['encoding'] }}</small> }
 
     <div class="row-field" [class.invalid]="errors['batch']">
       <label for="job-batch">Batch Size</label>
@@ -105,6 +121,7 @@
     <div class="row-field" [class.invalid]="errors['schedule']">
       <label for="job-schedule">Schedule</label>
       <select id="job-schedule" name="schedule" [(ngModel)]="scheduleChoice">
+        <option value="" disabled>Select Schedule</option>
         <option value="manual">None (Run manually)</option>
         <option value="once">One-time</option>
         <option value="Daily">Daily</option>

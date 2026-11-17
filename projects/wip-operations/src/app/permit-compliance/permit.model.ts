@@ -1,4 +1,4 @@
-/** Work permits and their compliance evidence for WIP jobs. DEMO MODE: loaded from permits.json and kept in memory. */
+/** Work permits and their compliance evidence for WIP jobs.  */
 export type PermitStatus = 'Awaiting Approval' | 'Approved' | 'Suspended' | 'Rejected' | 'Closed';
 /** Status shown to users, derived from the stored status and the validity window. */
 export type PermitState = 'Active' | 'Expiring Soon' | 'Expired' | 'Scheduled' | 'Awaiting Approval' | 'Suspended' | 'Rejected' | 'Closed';

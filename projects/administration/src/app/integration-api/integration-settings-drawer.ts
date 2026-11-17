@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CircleCheck, CircleX, Eye, EyeOff, LucideAngularModule, Trash2, X } from 'lucide-angular';
-import { AUTH_METHODS, ENVIRONMENTS, Integration, PROVIDERS, RETRY_POLICIES, SYNC_FREQUENCIES } from './integration-api.data';
+import { AUTH_METHODS, ENVIRONMENTS, Environment, Integration, PROVIDERS, RETRY_POLICIES, SYNC_FREQUENCIES } from './integration-api.data';
 import { IntegrationApiService, IntegrationForm, SECRET_MASK, apiErrorMessage } from './integration-api.service';
 import { HTTPS_URL, relative } from './integration-format';
 
@@ -19,14 +19,14 @@ function emptyForm(): IntegrationForm {
   return {
     name: '',
     code: '',
-    provider: 'Custom REST',
-    environment: 'Development',
+    provider: '',
+    environment: '' as Environment,
     baseUrl: 'https://',
-    authMethod: 'OAuth 2.0 (Client Credentials)',
+    authMethod: '',
     clientId: '',
-    syncFrequency: 'Every 15 minutes',
+    syncFrequency: '',
     timeout: 300,
-    retryPolicy: '3 retries (exponential backoff)',
+    retryPolicy: '',
     enabled: true
   };
 }
@@ -62,21 +62,29 @@ function emptyForm(): IntegrationForm {
               <small>{{ errors()['code'] }}</small>
             }
           </div>
-          <div class="field">
+          <div class="field" [class.invalid]="show('provider')">
             <label for="int-provider">Provider <span class="req">*</span></label>
             <select id="int-provider" name="provider" [(ngModel)]="form.provider">
+              <option value="" disabled>Select Provider</option>
               @for (p of providers; track p) {
                 <option [value]="p">{{ p }}</option>
               }
             </select>
+            @if (show('provider')) {
+              <small>{{ errors()['provider'] }}</small>
+            }
           </div>
-          <div class="field">
+          <div class="field" [class.invalid]="show('environment')">
             <label for="int-env">Environment <span class="req">*</span></label>
             <select id="int-env" name="environment" [(ngModel)]="form.environment">
+              <option value="" disabled>Select Environment</option>
               @for (e of environments; track e) {
                 <option [value]="e">{{ e }}</option>
               }
             </select>
+            @if (show('environment')) {
+              <small>{{ errors()['environment'] }}</small>
+            }
           </div>
           <div class="field field--wide" [class.invalid]="show('baseUrl')">
             <label for="int-url">Base URL <span class="req">*</span></label>
@@ -85,13 +93,17 @@ function emptyForm(): IntegrationForm {
               <small>{{ errors()['baseUrl'] }}</small>
             }
           </div>
-          <div class="field field--wide">
+          <div class="field field--wide" [class.invalid]="show('authMethod')">
             <label for="int-auth">Authentication Method <span class="req">*</span></label>
             <select id="int-auth" name="authMethod" [(ngModel)]="form.authMethod">
+              <option value="" disabled>Select Authentication Method</option>
               @for (a of authMethods; track a) {
                 <option [value]="a">{{ a }}</option>
               }
             </select>
+            @if (show('authMethod')) {
+              <small>{{ errors()['authMethod'] }}</small>
+            }
           </div>
           <div class="field field--wide" [class.invalid]="show('clientId')">
             <label for="int-client">Client ID <span class="req">*</span></label>
@@ -130,13 +142,17 @@ function emptyForm(): IntegrationForm {
             </div>
             <small>{{ show('secretKey') ? errors()['secretKey'] : secretHint() }}</small>
           </div>
-          <div class="field">
+          <div class="field" [class.invalid]="show('syncFrequency')">
             <label for="int-freq">Sync Frequency <span class="req">*</span></label>
             <select id="int-freq" name="syncFrequency" [(ngModel)]="form.syncFrequency">
+              <option value="" disabled>Select Sync Frequency</option>
               @for (f of frequencies; track f) {
                 <option [value]="f">{{ f }}</option>
               }
             </select>
+            @if (show('syncFrequency')) {
+              <small>{{ errors()['syncFrequency'] }}</small>
+            }
           </div>
           <div class="field" [class.invalid]="show('timeout')">
             <label for="int-timeout">Timeout (seconds) <span class="req">*</span></label>
@@ -145,13 +161,17 @@ function emptyForm(): IntegrationForm {
               <small>{{ errors()['timeout'] }}</small>
             }
           </div>
-          <div class="field field--wide">
+          <div class="field field--wide" [class.invalid]="show('retryPolicy')">
             <label for="int-retry">Retry Policy <span class="req">*</span></label>
             <select id="int-retry" name="retryPolicy" [(ngModel)]="form.retryPolicy">
+              <option value="" disabled>Select Retry Policy</option>
               @for (r of retryPolicies; track r) {
                 <option [value]="r">{{ r }}</option>
               }
             </select>
+            @if (show('retryPolicy')) {
+              <small>{{ errors()['retryPolicy'] }}</small>
+            }
           </div>
           <div class="field field--wide int-status">
             <span>Status</span>
@@ -289,6 +309,11 @@ export class IntegrationSettingsDrawer implements OnChanges {
     const url = f.baseUrl.trim();
     if (!url || url === 'https://') e['baseUrl'] = 'Base URL is required.';
     else if (!HTTPS_URL.test(url)) e['baseUrl'] = 'Enter a valid https:// URL.';
+    if (!f.provider) e['provider'] = 'Provider is required.';
+    if (!f.environment) e['environment'] = 'Environment is required.';
+    if (!f.authMethod) e['authMethod'] = 'Authentication method is required.';
+    if (!f.syncFrequency) e['syncFrequency'] = 'Sync frequency is required.';
+    if (!f.retryPolicy) e['retryPolicy'] = 'Retry policy is required.';
     if (!f.clientId.trim()) e['clientId'] = 'Client ID is required.';
     if (this.secretKey && this.secretKey.length < 16) e['secretKey'] = 'Secret key must be at least 16 characters.';
     else if (!this.secretKey && this.needsSecret()) e['secretKey'] = 'Secret key is required.';

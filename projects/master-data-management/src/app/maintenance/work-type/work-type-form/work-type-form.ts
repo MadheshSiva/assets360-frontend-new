@@ -17,7 +17,7 @@ type Tab = 'basic' | 'details';
   selector: 'app-work-type-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './work-type-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../maintenance-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../maintenance-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class WorkTypeForm extends MasterForm<WorkTypeRecord, Tab> {
   protected readonly store = inject(WorkTypeService);
@@ -61,6 +61,7 @@ export class WorkTypeForm extends MasterForm<WorkTypeRecord, Tab> {
   protected validate(f: WorkTypeRecord) {
     const errors: Record<string, string> = {};
     if (!f.maintenanceType) errors['maintenanceType'] = 'Select a maintenance type.';
+    if (!f.status) errors['status'] = 'Select a status.';
     if (!(f.durationHours > 0)) errors['hours'] = 'Enter a duration above 0.';
     return { errors, tab: 'basic' as Tab };
   }

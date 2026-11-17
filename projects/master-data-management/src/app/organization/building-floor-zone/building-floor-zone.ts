@@ -37,7 +37,7 @@ const EMPTY_FILTERS: BfzFilters = { search: '', siteId: '', type: '', status: ''
   selector: 'app-mdm-organization-building-floor-zone',
   imports: [FormsModule, RouterLink, DecimalPipe, LucideAngularModule, BfzForm, BfzDetail],
   templateUrl: './building-floor-zone.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', './building-floor-zone.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', './building-floor-zone.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class BuildingFloorZonePage {
   readonly service = inject(BfzService);

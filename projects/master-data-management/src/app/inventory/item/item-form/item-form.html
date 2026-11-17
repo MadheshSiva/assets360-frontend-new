@@ -53,7 +53,7 @@
         <div class="field" [class.invalid]="errors['category']">
           <label for="item-cat"><span class="req">*</span> Category</label>
           <select id="item-cat" name="category" [(ngModel)]="form.category" (ngModelChange)="onCategoryChange()">
-            <option value="" disabled>Select category</option>
+            <option value="" disabled>Select Category</option>
             @for (c of categoryOptions; track c.code) { <option [value]="c.code">{{ c.name }}</option> }
           </select>
           @if (errors['category']) { <small>{{ errors['category'] }}</small> }
@@ -61,7 +61,7 @@
         <div class="field" [class.invalid]="errors['uom']">
           <label for="item-uom"><span class="req">*</span> UOM</label>
           <select id="item-uom" name="uom" [(ngModel)]="form.uom">
-            <option value="" disabled>Select unit of measure</option>
+            <option value="" disabled>Select Unit Of Measure</option>
             @for (u of uomOptions; track u.code) { <option [value]="u.code">{{ u.name }} ({{ u.symbol }})</option> }
           </select>
           @if (errors['uom']) { <small>{{ errors['uom'] }}</small> }
@@ -70,15 +70,17 @@
           <label for="item-desc">Description</label>
           <textarea id="item-desc" name="description" rows="2" placeholder="Enter description" [(ngModel)]="form.description"></textarea>
         </div>
-        <div class="field">
-          <label for="item-status">Status</label>
+        <div class="field" [class.invalid]="errors['status']">
+          <label for="item-status"><span class="req">*</span> Status</label>
           <div class="status-select">
             <i [attr.data-status]="form.status"></i>
             <select id="item-status" name="status" [(ngModel)]="form.status">
+              <option value="" disabled>Select Status</option>
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
             </select>
           </div>
+          @if (errors['status']) { <small>{{ errors['status'] }}</small> }
         </div>
       }
 
@@ -117,21 +119,21 @@
           <div class="field">
             <label for="item-wh">Warehouse</label>
             <select id="item-wh" name="warehouseCode" [(ngModel)]="form.warehouseCode" (ngModelChange)="onWarehouseChange()">
-              <option value="">Select warehouse</option>
+              <option value="">Select Warehouse</option>
               @for (w of warehouses.all(); track w.code) { <option [value]="w.code">{{ w.name }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="item-store">Store</label>
             <select id="item-store" name="storeCode" [(ngModel)]="form.storeCode" (ngModelChange)="onStoreChange()" [disabled]="!form.warehouseCode">
-              <option value="">Select store</option>
+              <option value="">Select Store</option>
               @for (s of storeOptions; track s.code) { <option [value]="s.code">{{ s.name }}</option> }
             </select>
           </div>
           <div class="field" [class.invalid]="errors['location']">
             <label for="item-bin">Bin</label>
             <select id="item-bin" name="binCode" [(ngModel)]="form.binCode" [disabled]="!form.storeCode">
-              <option value="">Select bin</option>
+              <option value="">Select Bin</option>
               @for (b of binOptions; track b.code) { <option [value]="b.code">{{ b.code }} ({{ b.binType }})</option> }
             </select>
             @if (errors['location']) { <small>{{ errors['location'] }}</small> }
@@ -142,25 +144,27 @@
       @case ('financial') {
         <div class="grid">
           <div class="field" [class.invalid]="errors['unitCost']">
-            <label for="item-cost">Unit Cost ({{ form.currency.slice(0, 3) }})</label>
+            <label for="item-cost">Unit Cost{{ form.currency ? ' (' + form.currency.slice(0, 3) + ')' : '' }}</label>
             <input id="item-cost" name="unitCost" type="number" min="0" step="any" [(ngModel)]="form.unitCost" />
             @if (errors['unitCost']) { <small>{{ errors['unitCost'] }}</small> }
           </div>
           <div class="field">
             <label for="item-currency">Currency</label>
             <select id="item-currency" name="currency" [(ngModel)]="form.currency">
+              <option value="" disabled>Select Currency</option>
               @for (c of currencies; track c) { <option [value]="c">{{ c }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="item-valuation">Valuation Method</label>
             <select id="item-valuation" name="valuationMethod" [(ngModel)]="form.valuationMethod">
+              <option value="" disabled>Select Valuation Method</option>
               @for (v of valuationMethods; track v) { <option [value]="v">{{ v }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="item-value">Stock Value</label>
-            <input id="item-value" name="stockValue" [value]="stockValue === null ? '-' : form.currency.slice(0, 3) + ' ' + stockValue" readonly />
+            <input id="item-value" name="stockValue" [value]="stockValue === null ? '-' : (form.currency ? form.currency.slice(0, 3) + ' ' : '') + stockValue" readonly />
           </div>
         </div>
       }
@@ -218,7 +222,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

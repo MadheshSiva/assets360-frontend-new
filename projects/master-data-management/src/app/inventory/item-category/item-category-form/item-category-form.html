@@ -28,7 +28,7 @@
         <div class="field" [class.invalid]="errors['parentCode']">
           <label for="icat-parent">Parent Category</label>
           <select id="icat-parent" name="parentCode" [(ngModel)]="form.parentCode">
-            <option [ngValue]="null">Select parent category</option>
+            <option [ngValue]="null">Select Parent Category</option>
             @for (p of parentOptions; track p.code) { <option [ngValue]="p.code">{{ p.name }} ({{ p.code }})</option> }
           </select>
           @if (errors['parentCode']) { <small>{{ errors['parentCode'] }}</small> }
@@ -37,15 +37,17 @@
           <label for="icat-desc">Description</label>
           <textarea id="icat-desc" name="description" rows="3" placeholder="Enter description" [(ngModel)]="form.description"></textarea>
         </div>
-        <div class="field">
-          <label for="icat-status">Status</label>
+        <div class="field" [class.invalid]="errors['status']">
+          <label for="icat-status"><span class="req">*</span> Status</label>
           <div class="status-select">
             <i [attr.data-status]="form.status"></i>
             <select id="icat-status" name="status" [(ngModel)]="form.status">
+              <option value="" disabled>Select Status</option>
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
             </select>
           </div>
+          @if (errors['status']) { <small>{{ errors['status'] }}</small> }
         </div>
       }
 
@@ -53,6 +55,7 @@
         <div class="field">
           <label for="icat-parent-h">Parent Category</label>
           <select id="icat-parent-h" name="parentCodeH" [(ngModel)]="form.parentCode">
+            <option [ngValue]="null" disabled>Select Parent Category</option>
             <option [ngValue]="null">None (top level)</option>
             @for (p of parentOptions; track p.code) { <option [ngValue]="p.code">{{ p.name }} ({{ p.code }})</option> }
           </select>
@@ -75,12 +78,14 @@
           <div class="field">
             <label for="icat-uom">Default UOM</label>
             <select id="icat-uom" name="defaultUom" [(ngModel)]="form.defaultUom">
+              <option value="" disabled>Select Default UOM</option>
               @for (u of uoms.all(); track u.code) { <option [value]="u.code">{{ u.name }} ({{ u.symbol }})</option> }
             </select>
           </div>
           <div class="field">
             <label for="icat-val">Valuation Method</label>
             <select id="icat-val" name="valuationMethod" [(ngModel)]="form.valuationMethod">
+              <option value="" disabled>Select Valuation Method</option>
               @for (v of valuationMethods; track v) { <option [value]="v">{{ v }}</option> }
             </select>
           </div>
@@ -101,7 +106,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

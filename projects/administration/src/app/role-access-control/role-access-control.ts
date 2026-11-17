@@ -4,13 +4,13 @@ import { RouterLink } from '@angular/router';
 import { catchError, concatMap, defer, from, of, toArray } from 'rxjs';
 import {
   ArrowUp, Briefcase, ChartColumn, ChevronRight, CircleCheck, Coins, Copy, Crown, Download, Ellipsis, Eye, FileText, Funnel, Hammer, Headset, Info,
-  Lock, LucideAngularModule, LucideIconData, Package, Plus, Search, Server, Settings, Shield, ShieldCheck, ShoppingCart, Trash2, Truck, Upload,
+  Lock, LucideAngularModule, LucideIconData, Package, Pencil, Plus, Search, Server, Settings, Shield, ShieldCheck, ShoppingCart, Trash2, Truck, Upload,
   UserCheck, Users, Warehouse, Wrench, X
 } from 'lucide-angular';
 import { AdminPage } from '../shared/admin-common';
 import { PermissionMatrix } from './permission-matrix/permission-matrix';
 import { RoleApprovals, approvalsError } from './role-approvals/role-approvals';
-import { DATA_SCOPES, RoleIcon, RoleRecord, RoleStatus, RoleType, USERS_LAST_MONTH, blankRole, demoUsers } from './role-access.data';
+import { DATA_SCOPES, RoleIcon, RoleRecord, RoleStatus, RoleType, USERS_LAST_MONTH, blankRole } from './role-access.data';
 import { RoleAccessService, adminApiError } from './role-access.service';
 import { RoleDrawer, roleErrors } from './role-drawer/role-drawer';
 import { RoleScope } from './role-scope/role-scope';
@@ -48,7 +48,7 @@ const ROLE_ICONS: Record<RoleIcon, LucideIconData> = {
 export class RoleAccessControlPage extends AdminPage {
   private readonly service = inject(RoleAccessService);
 
-  readonly icons = { ShieldCheck, Users, CircleCheck, FileText, UserCheck, Plus, Copy, Upload, Download, Search, Funnel, ChevronRight, ArrowUp, Info, Ellipsis, Trash2, X };
+  readonly icons = { ShieldCheck, Users, CircleCheck, FileText, UserCheck, Plus, Copy, Upload, Download, Search, Funnel, ChevronRight, ArrowUp, Info, Ellipsis, Trash2, Pencil, X };
   readonly scopes = DATA_SCOPES;
   readonly tabs: { id: Tab; label: string }[] = [
     { id: 'modules', label: 'Modules' },
@@ -69,13 +69,18 @@ export class RoleAccessControlPage extends AdminPage {
   drawerOpen = true;
   menuOpen = false;
   usersOpen = false;
+  /** A create/update request is in flight */
+  saving = false;
   confirm: Confirm | null = null;
 
   constructor() {
     super();
     this.service.load().subscribe({
-      next: (roles) => this.load(roles.find((r) => r.code === 'OPS_MANAGER') ?? roles[0]),
-      error: (err) => this.notify(`Couldn't load roles: ${adminApiError(err, 'roles')}`)
+      next: (roles) => {
+        this.load(roles.find((r) => r.code === 'OPS_MANAGER') ?? roles[0]);
+        this.notify(roles.length ? `Loaded ${roles.length} role${roles.length === 1 ? '' : 's'} from the server.` : 'No roles yet. Create the first role.', 'success');
+      },
+      error: (err) => this.notify(`Couldn't load roles: ${adminApiError(err, 'roles')}`, 'error')
     });
   }
 
@@ -110,7 +115,7 @@ export class RoleAccessControlPage extends AdminPage {
   }
 
   get usersTrend(): number {
-    return Math.round(((this.usersAssigned - USERS_LAST_MONTH) / USERS_LAST_MONTH) * 100);
+    return USERS_LAST_MONTH ? Math.round(((this.usersAssigned - USERS_LAST_MONTH) / USERS_LAST_MONTH) * 100) : 0;
   }
 
   // ===== List =====
@@ -192,7 +197,8 @@ export class RoleAccessControlPage extends AdminPage {
   // ===== Toolbar actions =====
   createRole(): void {
     this.guard(() => {
-      this.startDraft(blankRole());
+      // New roles open with Data Scope / Session Timeout unselected
+      this.startDraft({ ...blankRole(), dataScope: '' as RoleRecord['dataScope'], sessionTimeout: '' });
       this.tab = 'modules';
     });
   }
@@ -240,14 +246,15 @@ export class RoleAccessControlPage extends AdminPage {
         const parsed = JSON.parse(text);
         rows = Array.isArray(parsed) ? parsed : [parsed];
       } catch {
-        this.notify('Import failed: the file is not valid JSON.');
+        this.notify('Import failed: the file is not valid JSON.', 'error');
         return;
       }
       const valid = rows.filter((row) => row && typeof row.name === 'string' && typeof row.code === 'string');
       if (!valid.length) {
-        this.notify('No roles found in the file (each needs a name and code).');
+        this.notify('No roles found in the file (each needs a name and code).', 'error');
         return;
       }
+      this.notify(`Importing ${valid.length} role${valid.length === 1 ? '' : 's'}...`);
       // One POST at a time so each unique code sees the roles created before it
       from(valid)
         .pipe(
@@ -265,7 +272,8 @@ export class RoleAccessControlPage extends AdminPage {
           const added = saved.filter(Boolean).length;
           const failed = saved.length - added;
           this.notify(
-            `Imported ${added} role${added === 1 ? '' : 's'} as custom roles.` + (failed ? ` ${failed} failed (check names and codes).` : '')
+            `Imported ${added} role${added === 1 ? '' : 's'} as custom roles.` + (failed ? ` ${failed} failed (check names and codes).` : ''),
+            failed ? 'error' : 'success'
           );
         });
     });
@@ -278,25 +286,38 @@ export class RoleAccessControlPage extends AdminPage {
     const first = Object.values(errors)[0];
     if (first) {
       this.drawerOpen = true;
-      this.notify(`Fix the highlighted fields: ${first}`);
+      this.notify(`Fix the highlighted fields: ${first}`, 'error');
       return;
     }
     const approval = approvalsError(this.draft);
     if (approval) {
       this.tab = 'approvals';
-      this.notify(approval);
+      this.notify(approval, 'error');
       return;
     }
+    if (this.saving) return;
     this.draft.name = this.draft.name.trim();
     this.draft.code = this.draft.code.trim();
     const wasNew = this.isNew;
+    this.saving = true;
+    this.notify(`${wasNew ? 'Creating' : 'Saving'} ${this.draft.name}...`);
     this.service.save(this.draft).subscribe({
       next: (stored) => {
+        this.saving = false;
         this.load(stored);
-        this.notify(`${stored.name} ${wasNew ? 'created' : 'saved'}.`);
+        this.notify(`${stored.name} ${wasNew ? 'created' : 'saved'} successfully.`, 'success');
       },
-      error: (err) => this.notify(`Couldn't save ${this.draft.name}: ${adminApiError(err, 'roles')}`)
+      error: (err) => {
+        this.saving = false;
+        this.notify(`Couldn't ${wasNew ? 'create' : 'save'} ${this.draft.name}: ${adminApiError(err, 'roles')}`, 'error');
+      }
     });
+  }
+
+  /** Row action: open the role in the details drawer for editing */
+  editRole(r: RoleRecord, e: Event): void {
+    e.stopPropagation();
+    this.select(r);
   }
 
   cancelEdit(): void {
@@ -310,12 +331,14 @@ export class RoleAccessControlPage extends AdminPage {
     if (wasDirty) this.notify('Changes discarded.');
   }
 
-  askDelete(): void {
+  /** Deletes the given role (row action) or the selected one (menu action) after confirmation */
+  askDelete(role?: RoleRecord, e?: Event): void {
+    e?.stopPropagation();
     this.menuOpen = false;
-    const r = this.service.byId(this.selectedId);
-    if (!r || this.isNew) return;
+    const r = role ?? (this.isNew ? undefined : this.service.byId(this.selectedId));
+    if (!r) return;
     if (r.type === 'System') {
-      this.notify(`${r.name} is a system role and can't be deleted.`);
+      this.notify(`${r.name} is a system role and can't be deleted.`, 'error');
       return;
     }
     this.confirm = {
@@ -324,14 +347,16 @@ export class RoleAccessControlPage extends AdminPage {
         ? `${r.users} user${r.users === 1 ? '' : 's'} will lose this role's access. This can't be undone.`
         : "This role isn't assigned to anyone. This can't be undone.",
       action: 'Delete Role',
-      run: () =>
+      run: () => {
+        this.notify(`Deleting ${r.name}...`);
         this.service.remove(r.id).subscribe({
           next: () => {
-            this.load(this.roles[0]);
-            this.notify(`${r.name} deleted.`);
+            if (r.id === this.selectedId || !this.service.byId(this.selectedId)) this.load(this.roles[0]);
+            this.notify(`${r.name} deleted successfully.`, 'success');
           },
-          error: (err) => this.notify(`Couldn't delete ${r.name}: ${adminApiError(err, 'roles')}`)
-        })
+          error: (err) => this.notify(`Couldn't delete ${r.name}: ${adminApiError(err, 'roles')}`, 'error')
+        });
+      }
     };
   }
 
@@ -351,6 +376,7 @@ export class RoleAccessControlPage extends AdminPage {
   }
 
   allUsers(): string[] {
-    return demoUsers(this.draft.id || this.draft.name, this.draft.users);
+    // Role members come from the users API once wired
+    return [];
   }
 }

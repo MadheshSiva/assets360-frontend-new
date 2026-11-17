@@ -1,9 +1,9 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <lucide-icon [img]="icons.House" [size]="15" />
   <a routerLink="/dashboard">Asset360</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <a [routerLink]="basePath">Reports &amp; Analytics</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <strong>Maintenance Analytics</strong>
 </nav>
 
@@ -31,30 +31,35 @@
   <label class="filter filter--period">
     <span>Period</span>
     <select [(ngModel)]="period" (ngModelChange)="recompute()">
+      <option value="">Select Period</option>
       @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Organization</span>
     <select [(ngModel)]="organization" (ngModelChange)="recompute()">
+      <option value="">Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Location</span>
     <select [(ngModel)]="location" (ngModelChange)="recompute()">
+      <option value="">Select Location</option>
       @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Asset Category</span>
     <select [(ngModel)]="category" (ngModelChange)="recompute()">
+      <option value="">Select Asset Category</option>
       @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>
   <label class="filter">
     <span>Maintenance Type</span>
     <select [(ngModel)]="maintenanceType" (ngModelChange)="recompute()">
+      <option value="">Select Maintenance Type</option>
       @for (t of maintenanceTypes; track t) { <option [value]="t">{{ t }}</option> }
     </select>
   </label>

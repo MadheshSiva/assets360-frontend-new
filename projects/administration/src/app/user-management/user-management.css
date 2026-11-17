@@ -132,3 +132,27 @@
     grid-template-columns: minmax(0, 1fr) 380px;
   }
 }
+
+
+/* Row actions: edit / delete next to the more-actions menu */
+.um-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.um-row-actions > .icon-btn {
+  width: 30px;
+  height: 30px;
+  color: #64748b;
+}
+
+.um-row-actions > .icon-btn:hover {
+  background: #f1f5f9;
+  color: var(--adm-purple);
+}
+
+.um-row-actions > .um-row-delete:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}

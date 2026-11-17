@@ -37,7 +37,7 @@ export interface ConditionRecord {
   commentRequired: boolean;
   notifyOwner: boolean;
   blocksAssignment: boolean;
-  // DEMO MODE: counts owned by the Assets and Maintenance modules
+  // counts owned by the Assets and Maintenance modules
   usage: { assets: number; openWorkOrders: number; slaBreaches: number; underWarranty: number };
   documents: number;
   createdOn: string;

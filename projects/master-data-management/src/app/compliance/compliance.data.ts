@@ -1,4 +1,4 @@
-import { CertificationTypeRecord, PermitTypeRecord, RegulationRecord, StandardRecord } from './compliance.model';
+import { CertificationTypeRecord, ComplianceStatus, PermitTypeRecord, RegulationRecord, StandardRecord } from './compliance.model';
 
 export const CERT_CATEGORIES = ['Management System', 'Environmental', 'Health & Safety', 'Calibration', 'Safety', 'Regulatory', 'Personnel'];
 export const APPLICABLE_TO = ['Asset', 'Vendor', 'People'];
@@ -19,7 +19,7 @@ export function blankCertificationType(): CertificationTypeRecord {
     validityMonths: 12,
     renewalReminderDays: 30,
     description: '',
-    status: 'Active',
+    status: '' as ComplianceStatus,
     issuingBody: '',
     standardCode: '',
     requiredDocuments: ['Certificate copy'],
@@ -38,7 +38,7 @@ export function blankPermitType(): PermitTypeRecord {
     category: '',
     validDays: 1,
     description: '',
-    status: 'Active',
+    status: '' as ComplianceStatus,
     approvalLevels: 1,
     approverRoles: ['Supervisor'],
     maxExtensionDays: 1,
@@ -58,7 +58,7 @@ export function blankRegulation(): RegulationRecord {
     category: '',
     issuingAuthority: '',
     description: '',
-    status: 'Active',
+    status: '' as ComplianceStatus,
     assetCategories: [],
     standardCodes: [],
     effectiveDate: '',
@@ -77,7 +77,7 @@ export function blankStandard(): StandardRecord {
     category: '',
     version: '',
     description: '',
-    status: 'Active',
+    status: '' as ComplianceStatus,
     title: '',
     publishedOn: '',
     nextReview: '',

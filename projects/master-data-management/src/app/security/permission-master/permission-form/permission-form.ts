@@ -13,7 +13,7 @@ type Tab = 'basic';
   selector: 'app-permission-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './permission-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class PermissionForm extends MasterForm<PermissionRecord, Tab> {
   // Roles that grant the permission being edited
@@ -43,6 +43,7 @@ export class PermissionForm extends MasterForm<PermissionRecord, Tab> {
     const errors: Record<string, string> = {};
     if (!f.module) errors['module'] = 'Select a module.';
     if (!f.type) errors['type'] = 'Select a permission type.';
+    if (!f.status) errors['status'] = 'Select a status.';
     return { errors, tab: 'basic' as Tab };
   }
 

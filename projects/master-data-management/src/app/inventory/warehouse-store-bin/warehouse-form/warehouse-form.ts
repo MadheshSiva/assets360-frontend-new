@@ -16,7 +16,7 @@ type Tab = 'basic' | 'address' | 'contact' | 'settings';
   selector: 'app-warehouse-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './warehouse-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class WarehouseForm extends MasterForm<WarehouseRecord, Tab> {
   protected readonly store = inject(WarehouseService);
@@ -41,9 +41,10 @@ export class WarehouseForm extends MasterForm<WarehouseRecord, Tab> {
 
   protected validate(f: WarehouseRecord) {
     const errors: Record<string, string> = {};
+    if (!f.status) errors['status'] = 'Select a status.';
     if (f.email.trim() && !EMAIL.test(f.email.trim())) errors['email'] = 'Enter a valid email address.';
     if (f.areaSqm !== null && !(f.areaSqm > 0)) errors['areaSqm'] = 'Enter an area greater than 0.';
-    return { errors, tab: (errors['email'] ? 'contact' : 'settings') as Tab };
+    return { errors, tab: (errors['status'] ? 'basic' : errors['email'] ? 'contact' : 'settings') as Tab };
   }
 
   protected override tidy(f: WarehouseRecord): WarehouseRecord {

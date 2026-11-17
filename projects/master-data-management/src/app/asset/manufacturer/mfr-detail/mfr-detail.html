@@ -143,11 +143,11 @@
               </button>
               <div class="tile">
                 <span class="tile__icon"><lucide-icon [img]="icons.Settings" [size]="18"></lucide-icon></span>
-                <span><small>Active Assets</small><strong>{{ activeAssets | number }}</strong></span>
+                <span><small>Active Assets</small><strong>{{ activeAssets === null ? '-' : (activeAssets | number) }}</strong></span>
               </div>
               <div class="tile">
                 <span class="tile__icon tile__icon--warn"><lucide-icon [img]="icons.TriangleAlert" [size]="18"></lucide-icon></span>
-                <span><small>Under Warranty</small><strong>{{ underWarranty | number }}</strong></span>
+                <span><small>Under Warranty</small><strong>{{ underWarranty === null ? '-' : (underWarranty | number) }}</strong></span>
               </div>
             </div>
           </div>
@@ -195,7 +195,7 @@
           <dt>Support Phone</dt><dd>{{ manufacturer.supportPhone || '-' }}</dd>
           <dt>Standard Warranty</dt><dd>{{ manufacturer.standardWarrantyMonths }} months</dd>
           <dt>SLA Response</dt><dd>{{ manufacturer.slaResponseHours }} hours</dd>
-          <dt>Assets Under Warranty</dt><dd>{{ underWarranty | number }} of {{ assetCount | number }}</dd>
+          <dt>Assets Under Warranty</dt><dd>{{ underWarranty === null ? '-' : (underWarranty | number) + ' of ' + (assetCount | number) }}</dd>
         </dl>
       </div>
     }
@@ -273,6 +273,9 @@
             <li><span class="timeline__when">{{ formatDateTime(a.when) }}</span><span><strong>{{ a.who }}</strong> {{ a.text }}</span></li>
           }
         </ol>
+        @if (!activity.length) {
+          <p class="muted">No records found.</p>
+        }
       </div>
     }
   }

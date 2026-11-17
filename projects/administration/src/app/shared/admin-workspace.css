@@ -1050,7 +1050,8 @@ input[type='radio'] {
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  /* above the shell's sticky topbar (1500) and sidebar toggle (9999), below the topbar's own menus (10050) */
+  z-index: 10040;
   display: grid;
   place-items: center;
   background: rgba(15, 23, 42, 0.4);
@@ -1084,13 +1085,21 @@ input[type='radio'] {
   position: fixed;
   right: 24px;
   bottom: 24px;
-  z-index: 1100;
+  z-index: 10045;
   max-width: 420px;
   padding: 12px 16px;
   border-radius: 10px;
   background: #1e1b2e;
   color: #fff;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.25);
+}
+
+.toast[data-tone='success'] {
+  background: #15803d;
+}
+
+.toast[data-tone='error'] {
+  background: #b91c1c;
 }
 
 /* ===== Responsive ===== */
@@ -1130,4 +1139,17 @@ input[type='radio'] {
   .page-head {
     flex-wrap: wrap;
   }
+}
+
+/* Purple breadcrumb (matches Master Data Management) */
+.crumbs a {
+  color: #6d28d9;
+}
+
+.crumbs a:hover {
+  color: #4c1d95;
+}
+
+.crumbs span {
+  color: #a78bfa;
 }

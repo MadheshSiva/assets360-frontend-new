@@ -35,7 +35,7 @@ import {
   OUTPUT_JOB,
   OUTPUT_LISTS,
   OutputUnit,
-  demoNow,
+  nowStamp,
   handoverState,
 } from './output-store';
 
@@ -55,7 +55,8 @@ interface RecordForm {
   rejectReason: string;
 }
 
-const CURRENT_USER = 'Ravi Patel';
+/** Signed-in user's display name; filled from the auth/user API once wired. */
+const CURRENT_USER = '';
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 @Component({
@@ -64,7 +65,7 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50];
   imports: [CommonModule, FormsModule, RouterModule, LucideAngularModule],
   templateUrl: './product-output.html',
   // Buttons, controls, tabs, modal and toast come from the Job Templates stylesheet
-  styleUrls: ['../job-templates/job-templates.css', '../shared/wip-board.css', './product-output.css'],
+  styleUrls: ['../job-templates/job-templates.css', '../shared/wip-board.css', './product-output.css', '../shared/wip-purple-theme.css'],
 })
 export class ProductOutput implements OnDestroy {
   readonly icons = {
@@ -97,8 +98,8 @@ export class ProductOutput implements OnDestroy {
   sortAsc = true;
   pageSize = 10;
   page = 0;
-  readonly checked = new Set<string>(['P-005']);
-  selectedSerial = 'P-005';
+  readonly checked = new Set<string>();
+  selectedSerial = OUTPUTS[0]?.serial ?? '';
 
   // Record output
   form: RecordForm = this.blankForm();
@@ -106,7 +107,7 @@ export class ProductOutput implements OnDestroy {
   draftSaved = '';
 
   // Handover
-  store = 'Finished Goods Store';
+  store = OUTPUT_LISTS.stores[0] ?? '';
   receiptRef = this.nextReceipt();
 
   // Dialogs
@@ -134,7 +135,7 @@ export class ProductOutput implements OnDestroy {
   }
 
   get now(): string {
-    return demoNow();
+    return nowStamp();
   }
 
   unit(serial: string): OutputUnit | undefined {
@@ -169,7 +170,7 @@ export class ProductOutput implements OnDestroy {
   }
 
   pct(n: number): number {
-    return Math.round((n / this.job.planned) * 100);
+    return this.job.planned ? Math.round((n / this.job.planned) * 100) : 0;
   }
 
   get receivedCount(): number {
@@ -248,8 +249,8 @@ export class ProductOutput implements OnDestroy {
 
   private blankForm(): RecordForm {
     return {
-      stage: 'Final Inspection', quantity: 1, batch: OUTPUT_JOB.batch, serial: this.nextSerial(), producedAt: demoNow(), operator: CURRENT_USER,
-      disposition: 'Awaiting QC', location: 'Inspection Bay', notes: '', files: [], rejectReason: '',
+      stage: OUTPUT_LISTS.stages[0] ?? '', quantity: 1, batch: OUTPUT_JOB.batch, serial: this.nextSerial(), producedAt: nowStamp(), operator: CURRENT_USER,
+      disposition: 'Awaiting QC', location: OUTPUT_LISTS.locations[0] ?? '', notes: '', files: [], rejectReason: '',
     };
   }
 

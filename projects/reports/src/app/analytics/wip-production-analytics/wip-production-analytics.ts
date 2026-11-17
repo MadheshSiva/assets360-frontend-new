@@ -16,7 +16,8 @@ import {
   RaWidget, fmtDate, fmtInt, previousSeries, siteInScope, sumOf
 } from '../inventory-analytics/parts';
 
-const KPI_DELTAS = { output: 11.8, wip: 5.6, onTime: 2.8, utilization: 4.7, oee: 3.2 };
+/** Change vs the previous period (%). Not available until a data source is wired. */
+const KPI_DELTAS = { output: 0, wip: 0, onTime: 0, utilization: 0, oee: 0 };
 
 /** Reports & Analytics > WIP / Production Analytics */
 @Component({
@@ -35,10 +36,10 @@ export class WipProductionAnalyticsPage extends RaDashboardPage implements OnIni
   readonly plants = [ALL_PLANTS, ...PLANTS];
   readonly workCenters = [ALL_WORK_CENTERS, ...WORK_CENTERS.map((c) => c.name)];
   readonly products = [ALL_PRODUCTS, ...PRODUCTS.map((p) => p.name)];
-  plant = ALL_PLANTS;
-  line = ALL_LINES;
-  workCenter = ALL_WORK_CENTERS;
-  product = ALL_PRODUCTS;
+  plant = '';
+  line = '';
+  workCenter = '';
+  product = '';
   lineOptions: string[] = [];
 
   view!: ProductionView;
@@ -60,12 +61,11 @@ export class WipProductionAnalyticsPage extends RaDashboardPage implements OnIni
   readonly hours = (v: number) => `${Math.round(v)} h`;
 
   ngOnInit(): void {
-    this.updatedMinutes = 3;
     this.apply();
   }
 
   override get scopeText(): string {
-    return `${this.period} · ${this.organization} · ${this.plant}`;
+    return `${this.periodLabel} · ${this.organizationLabel} · ${this.plant || ALL_PLANTS}`;
   }
 
   setCompare(on: boolean): void {
@@ -75,10 +75,13 @@ export class WipProductionAnalyticsPage extends RaDashboardPage implements OnIni
 
   /** Recomputes the view whenever a filter changes. */
   apply(): void {
-    const location = this.plant === ALL_PLANTS ? 'All locations' : this.plant;
+    const location = !this.plant || this.plant === ALL_PLANTS ? 'All locations' : this.plant;
     this.lineOptions = [ALL_LINES, ...LINES.filter((l) => siteInScope(l.site, this.organization, location)).map((l) => l.name)];
-    if (!this.lineOptions.includes(this.line)) this.line = ALL_LINES;
-    const v = buildProductionView({ period: this.period, organization: this.organization, plant: this.plant, line: this.line, workCenter: this.workCenter, product: this.product });
+    if (this.line && !this.lineOptions.includes(this.line)) this.line = '';
+    const v = buildProductionView({
+      period: this.period, organization: this.organization, plant: this.plant || ALL_PLANTS, line: this.line || ALL_LINES,
+      workCenter: this.workCenter || ALL_WORK_CENTERS, product: this.product || ALL_PRODUCTS
+    });
     this.view = v;
     this.buildKpis(v);
     this.buildCharts(v);

@@ -62,9 +62,42 @@
   vertical-align: -2px;
 }
 
-.rac-chev {
-  align-self: center;
+/* Role row: the select button plus edit / delete actions on the right */
+.rac-row {
+  position: relative;
+}
+
+.rac-row .list-item {
+  padding-right: 76px;
+}
+
+.rac-row__actions {
+  position: absolute;
+  top: 10px;
+  right: 8px;
+  display: flex;
+  gap: 2px;
+}
+
+.rac-row__actions .icon-btn {
+  width: 30px;
+  height: 30px;
+  color: #64748b;
+}
+
+.rac-row__actions .icon-btn:hover:not(:disabled) {
+  background: #f1f5f9;
   color: var(--adm-purple);
+}
+
+.rac-row__actions .rac-row__delete:hover:not(:disabled) {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.rac-row__actions .icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .rac-tabs {
@@ -109,3 +142,4 @@
   background: #dc2626;
   border-color: #dc2626;
 }
+

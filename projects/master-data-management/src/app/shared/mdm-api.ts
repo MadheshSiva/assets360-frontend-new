@@ -52,6 +52,8 @@ export function inParallel<T>(calls: Observable<T>[]): Observable<T[]> {
 export class MdmApi {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
+  /** Where the resources live; a subclass can point a store at another service (see AssetServiceApi). */
+  protected readonly base: string = MDM_API;
 
   /** Signed-in user for createdBy / updatedBy. */
   actor(): string {
@@ -72,26 +74,35 @@ export class MdmApi {
     for (const [key, value] of Object.entries(query)) {
       if (value !== null && value !== undefined && value !== '') params = params.set(key, String(value));
     }
-    return this.http.get<T[]>(MDM_API + resource, { params });
+    return this.http.get<T[]>(this.base + resource, { params });
   }
 
   get<T>(resource: string, id: string): Observable<T> {
-    return this.http.get<T>(`${MDM_API}${resource}/${id}`);
+    return this.http.get<T>(`${this.base}${resource}/${id}`);
   }
 
   create<T>(resource: string, body: object): Observable<T> {
-    return this.http.post<T>(MDM_API + resource, { ...body, ...this.createStamp() });
+    return this.http.post<T>(this.base + resource, { ...body, ...this.createStamp() });
   }
 
   update<T>(resource: string, id: string, body: object): Observable<T> {
-    return this.http.put<T>(`${MDM_API}${resource}/${id}`, { ...body, ...this.updateStamp() });
+    return this.http.put<T>(`${this.base}${resource}/${id}`, { ...body, ...this.updateStamp() });
   }
 
   setStatus<T>(resource: string, id: string, status: string): Observable<T> {
-    return this.http.patch<T>(`${MDM_API}${resource}/${id}/status`, { status, ...this.updateStamp() });
+    return this.http.patch<T>(`${this.base}${resource}/${id}/status`, { status, ...this.updateStamp() });
   }
 
   remove(resource: string, id: string): Observable<unknown> {
-    return this.http.delete(`${MDM_API}${resource}/${id}`);
+    return this.http.delete(`${this.base}${resource}/${id}`);
   }
+}
+
+/**
+ * MdmApi for resources the Asset service owns: `${assetApiUrl}api/{resource}`. Asset categories live there, so the
+ * Assets pages, Asset Registration and Master Data all share one list.
+ */
+@Injectable({ providedIn: 'root' })
+export class AssetServiceApi extends MdmApi {
+  protected override readonly base = `${environment.assetApiUrl}api/`;
 }

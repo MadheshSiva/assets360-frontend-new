@@ -12,11 +12,11 @@
       <span class="map-head__icon"><lucide-icon [img]="sectionIcon" [size]="20"></lucide-icon></span>
       <div class="map-head__text">
         <h2>{{ sectionLabel }}</h2>
-        <p>Configure global settings for maps, floor plans and spatial management.</p>
+        <p>{{ loading ? 'Loading settings…' : loadError || 'Configure global settings for maps, floor plans and spatial management.' }}</p>
       </div>
       <div class="map-head__actions">
-        <button type="button" class="btn btn--outline" (click)="reset()"><lucide-icon [img]="icons.RotateCcw" [size]="15"></lucide-icon> Reset to Default</button>
-        <button type="button" class="btn btn--primary" [disabled]="!dirty" (click)="save()"><lucide-icon [img]="icons.Save" [size]="15"></lucide-icon> Save Changes</button>
+        <button type="button" class="btn btn--outline" [disabled]="loading || store.working" (click)="reset()"><lucide-icon [img]="icons.RotateCcw" [size]="15"></lucide-icon> Reset to Default</button>
+        <button type="button" class="btn btn--primary" [disabled]="!dirty || loading || store.working" (click)="save()"><lucide-icon [img]="icons.Save" [size]="15"></lucide-icon> {{ store.working ? 'Saving…' : 'Save Changes' }}</button>
       </div>
     </header>
 
@@ -27,6 +27,7 @@
           <div class="srow">
             <span>Default Map View <lucide-icon [img]="icons.CircleHelp" [size]="12" class="muted" title="How a map opens"></lucide-icon></span>
             <select [(ngModel)]="s.defaultView" aria-label="Default map view">
+              <option value="" disabled>Select Default Map View</option>
               <option>Fit to Floor Plan</option><option>Actual Size</option><option>Last Used</option>
             </select>
           </div>
@@ -40,7 +41,7 @@
           </div>
           <div class="srow">
             <span>Measurement Unit</span>
-            <select [(ngModel)]="s.unit" aria-label="Measurement unit"><option>Metric (m, m²)</option><option>Imperial (ft, ft²)</option></select>
+            <select [(ngModel)]="s.unit" aria-label="Measurement unit"><option value="" disabled>Select Measurement Unit</option><option>Metric (m, m²)</option><option>Imperial (ft, ft²)</option></select>
           </div>
           <div class="srow">
             <span>Supported File Types</span>
@@ -56,7 +57,7 @@
           </div>
           <div class="srow">
             <span>Default Coordinate System</span>
-            <select [(ngModel)]="s.coordinateSystem" aria-label="Coordinate system"><option>Floor Plan (Local XY)</option><option>WGS 84 (Lat / Long)</option><option>UTM</option></select>
+            <select [(ngModel)]="s.coordinateSystem" aria-label="Coordinate system"><option value="" disabled>Select Coordinate System</option><option>Floor Plan (Local XY)</option><option>WGS 84 (Lat / Long)</option><option>UTM</option></select>
           </div>
         </div>
       }
@@ -74,11 +75,11 @@
           </div>
           <div class="srow">
             <span>Asset Label Display</span>
-            <select [(ngModel)]="s.assetLabel" aria-label="Asset label display"><option>Asset ID + Name</option><option>Asset ID</option><option>Name</option><option>None</option></select>
+            <select [(ngModel)]="s.assetLabel" aria-label="Asset label display"><option value="" disabled>Select Asset Label Display</option><option>Asset ID + Name</option><option>Asset ID</option><option>Name</option><option>None</option></select>
           </div>
           <div class="srow">
             <span>Label Position</span>
-            <select [(ngModel)]="s.labelPosition" aria-label="Label position"><option>Bottom Center</option><option>Top Center</option><option>Right</option><option>Left</option></select>
+            <select [(ngModel)]="s.labelPosition" aria-label="Label position"><option value="" disabled>Select Label Position</option><option>Bottom Center</option><option>Top Center</option><option>Right</option><option>Left</option></select>
           </div>
           <div class="srow"><span>Show Asset Status Icon</span><label class="switch"><input type="checkbox" [(ngModel)]="s.statusIcon" aria-label="Show asset status icon" /><i></i></label></div>
           <div class="srow"><span>Snap to Grid (Plotting)</span><label class="switch"><input type="checkbox" [(ngModel)]="s.snap" aria-label="Snap to grid" /><i></i></label></div>
@@ -95,6 +96,7 @@
           <div class="srow">
             <span>Default Zone Type</span>
             <select [(ngModel)]="s.zoneType" aria-label="Default zone type">
+              <option value="" disabled>Select Default Zone Type</option>
               <option>Operational</option><option>Production</option><option>Office</option><option>Storage</option><option>Restricted</option><option>Maintenance</option>
             </select>
           </div>
@@ -122,7 +124,7 @@
           <h3><lucide-icon [img]="icons.FileStack" [size]="17"></lucide-icon> Versioning &amp; Publishing</h3>
           <div class="srow">
             <span>Version Numbering</span>
-            <select [(ngModel)]="s.versioning" aria-label="Version numbering"><option>Semantic (v1.0, v1.1, v2.0)</option><option>Sequential (1, 2, 3)</option><option>Date based (2026.01.15)</option></select>
+            <select [(ngModel)]="s.versioning" aria-label="Version numbering"><option value="" disabled>Select Version Numbering</option><option>Semantic (v1.0, v1.1, v2.0)</option><option>Sequential (1, 2, 3)</option><option>Date based (2026.01.15)</option></select>
           </div>
           <div class="srow"><span>Require Approval to Publish</span><label class="switch"><input type="checkbox" [(ngModel)]="s.approval" aria-label="Require approval" /><i></i></label></div>
           <div class="srow">
@@ -140,7 +142,7 @@
           <h3><lucide-icon [img]="icons.Lock" [size]="17"></lucide-icon> Access &amp; Security</h3>
           <div class="srow">
             <span>Default Map Access</span>
-            <select [(ngModel)]="s.mapAccess" aria-label="Default map access"><option>View Only</option><option>View &amp; Plot</option><option>Full Edit</option><option>No Access</option></select>
+            <select [(ngModel)]="s.mapAccess" aria-label="Default map access"><option value="" disabled>Select Default Map Access</option><option>View Only</option><option>View &amp; Plot</option><option>Full Edit</option><option>No Access</option></select>
           </div>
           <div class="srow"><span>Allow Download of Map Files</span><label class="switch"><input type="checkbox" [(ngModel)]="s.allowDownload" aria-label="Allow download" /><i></i></label></div>
           <div class="srow"><span>Watermark Published Maps</span><label class="switch"><input type="checkbox" [(ngModel)]="s.watermark" aria-label="Watermark" /><i></i></label></div>

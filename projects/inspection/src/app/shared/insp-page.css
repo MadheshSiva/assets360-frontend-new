@@ -166,3 +166,8 @@ textarea.control { height: auto; min-height: 80px; padding: 8px 10px; resize: ve
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .form-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Breadcrumb: links and separators purple, current page stays dark */
+.breadcrumb a { color: #6d28d9; }
+.breadcrumb a:hover { color: #4c1d95; }
+.breadcrumb .crumb-sep { color: #a78bfa; }

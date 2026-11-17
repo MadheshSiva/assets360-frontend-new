@@ -97,10 +97,10 @@ export function plainText(text: string, sample: Record<string, string>): string 
     <div class="sd-head"><h3>Sample Data</h3>
       <button type="button" class="refresh" (click)="refresh.emit()"><lucide-icon [img]="icons.RefreshCw" [size]="14"></lucide-icon>Refresh preview</button></div>
     <table class="sd">
-      <tr><td>Inspection</td><td>{{ sample()['inspection_id'] }}</td></tr>
-      <tr><td>Inspector</td><td>{{ sample()['inspector_name'] }}</td></tr>
-      <tr><td>Asset</td><td class="acc">{{ sample()['asset_code'] || sample()['asset_name'] }}</td></tr>
-      <tr><td>Due date</td><td>{{ sample()['due_date'] }}</td></tr>
+      <tr><td>Inspection</td><td>{{ sample()['inspection_id'] || '—' }}</td></tr>
+      <tr><td>Inspector</td><td>{{ sample()['inspector_name'] || '—' }}</td></tr>
+      <tr><td>Asset</td><td class="acc">{{ sample()['asset_code'] || sample()['asset_name'] || '—' }}</td></tr>
+      <tr><td>Due date</td><td>{{ sample()['due_date'] || '—' }}</td></tr>
     </table>
   `,
   styleUrls: ['./notification-preview.css']
@@ -126,7 +126,6 @@ export class NotificationPreview {
   }
 
   email(): string {
-    const name = this.sample()['inspector_name'] || 'recipient';
-    return `${name.toLowerCase().trim().replace(/\s+/g, '.')}@example.com`;
+    return this.sample()['inspector_name'] || 'Assigned inspector';
   }
 }

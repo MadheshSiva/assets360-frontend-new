@@ -18,7 +18,7 @@
   <div class="field" [class.invalid]="err('category')">
     <label for="ts-cat">Category <span class="req">*</span></label>
     <select id="ts-cat" [(ngModel)]="template.category">
-      <option value="">Select</option>
+      <option value="" disabled>Select Category</option>
       @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
     </select>
     @if (err('category')) { <small>{{ err('category') }}</small> }
@@ -26,7 +26,7 @@
   <div class="field" [class.invalid]="err('triggerEvent')">
     <label for="ts-trigger">Trigger Event <span class="req">*</span></label>
     <select id="ts-trigger" [(ngModel)]="template.triggerEvent">
-      <option value="">Select</option>
+      <option value="" disabled>Select Trigger Event</option>
       @for (e of triggerEvents; track e) { <option [value]="e">{{ e }}</option> }
     </select>
     @if (err('triggerEvent')) { <small>{{ err('triggerEvent') }}</small> }
@@ -47,26 +47,34 @@
   <div class="field" [class.invalid]="err('language')">
     <label for="ts-lang">Language <span class="req">*</span></label>
     <select id="ts-lang" [(ngModel)]="template.language">
+      <option value="" disabled>Select Language</option>
       @for (l of languages; track l) { <option [value]="l">{{ l }}</option> }
     </select>
+    @if (err('language')) { <small>{{ err('language') }}</small> }
   </div>
-  <div class="field">
-    <label for="ts-priority">Priority</label>
+  <div class="field" [class.invalid]="err('priority')">
+    <label for="ts-priority">Priority <span class="req">*</span></label>
     <select id="ts-priority" [(ngModel)]="template.priority">
+      <option value="" disabled>Select Priority</option>
       @for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }
     </select>
+    @if (err('priority')) { <small>{{ err('priority') }}</small> }
   </div>
-  <div class="field">
-    <label for="ts-timing">Delivery Timing</label>
+  <div class="field" [class.invalid]="err('deliveryTiming')">
+    <label for="ts-timing">Delivery Timing <span class="req">*</span></label>
     <select id="ts-timing" [(ngModel)]="template.deliveryTiming">
+      <option value="" disabled>Select Delivery Timing</option>
       @for (t of timings; track t) { <option [value]="t">{{ t }}</option> }
     </select>
+    @if (err('deliveryTiming')) { <small>{{ err('deliveryTiming') }}</small> }
   </div>
-  <div class="field">
-    <label for="ts-retry">Retry Policy</label>
+  <div class="field" [class.invalid]="err('retryPolicy')">
+    <label for="ts-retry">Retry Policy <span class="req">*</span></label>
     <select id="ts-retry" [(ngModel)]="template.retryPolicy">
+      <option value="" disabled>Select Retry Policy</option>
       @for (r of retries; track r) { <option [value]="r">{{ r }}</option> }
     </select>
+    @if (err('retryPolicy')) { <small>{{ err('retryPolicy') }}</small> }
   </div>
 </div>
 
@@ -87,6 +95,7 @@
     <lucide-icon [img]="icons.Eye" [size]="18"></lucide-icon>
     <h3>Live Preview</h3>
     <select [(ngModel)]="previewChannel" aria-label="Preview channel">
+      <option value="" disabled>Select Preview Channel</option>
       @for (c of channels; track c) { <option [value]="c">{{ channelLabels[c] }} Preview</option> }
     </select>
   </div>

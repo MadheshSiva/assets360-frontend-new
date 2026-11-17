@@ -28,14 +28,14 @@
         <label class="filter">
           <span>Category</span>
           <select name="category" [(ngModel)]="draft.category">
-            <option value="">All</option>
+            <option value="">Select Category</option>
             @for (o of chartCategories; track o) { <option [value]="o">{{ o }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Status</span>
           <select name="status" [(ngModel)]="draft.status">
-            <option value="">All</option>
+            <option value="">Select Status</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
           </select>

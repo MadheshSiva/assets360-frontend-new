@@ -1,32 +1,24 @@
 import { RA_LOCATIONS, RA_ORGANIZATIONS, RA_PERIODS } from '../../shared/analytics-common';
 
-// DEMO MODE: site weights used to scale the group-wide sample data down to a filtered scope.
+// Sites (with their activity weights) used to scale group-wide figures down to a filtered scope.
+// They come from the Administration API (not wired yet).
 // Shared by Inspection Analytics, Compliance Analytics and the KPI Dashboard so a location reads the same on each.
 
 export interface RaSite {
   name: string;
-  /** Short code used in asset IDs (AST-2026-DXB-000247) */
+  /** Short site code used in asset IDs */
   code: string;
   org: string;
   /** Share of the group's activity (all weights add up to 1) */
   weight: number;
 }
 
-export const RA_SITES: RaSite[] = [
-  { name: 'Dubai HQ', code: 'DXB', org: 'Purple IQ UAE', weight: 0.22 },
-  { name: 'Abu Dhabi Office', code: 'AUH', org: 'Purple IQ UAE', weight: 0.16 },
-  { name: 'Sharjah Facility', code: 'SHJ', org: 'Purple IQ UAE', weight: 0.14 },
-  { name: 'Riyadh Office', code: 'RUH', org: 'Purple IQ KSA', weight: 0.12 },
-  { name: 'London Office', code: 'LON', org: 'Purple IQ Group', weight: 0.06 },
-  { name: 'Singapore Office', code: 'SIN', org: 'Purple IQ Group', weight: 0.05 },
-  { name: 'Jebel Ali Warehouse', code: 'JEA', org: 'Purple IQ UAE', weight: 0.15 },
-  { name: 'Al Ain Depot', code: 'AAN', org: 'Purple IQ UAE', weight: 0.1 }
-];
+export const RA_SITES: RaSite[] = [];
 
 /** Sites matching the Organization and Location filters. The group organization covers every site. */
 export function sitesInScope(organization: string, location: string): RaSite[] {
-  const allOrgs = organization === RA_ORGANIZATIONS[0] || organization === 'Purple IQ Group';
-  return RA_SITES.filter((s) => (location === RA_LOCATIONS[0] || s.name === location) && (allOrgs || s.org === organization));
+  const allOrgs = !organization || organization === RA_ORGANIZATIONS[0];
+  return RA_SITES.filter((s) => (!location || location === RA_LOCATIONS[0] || s.name === location) && (allOrgs || s.org === organization));
 }
 
 export function siteWeight(sites: RaSite[]): number {
@@ -52,32 +44,6 @@ export function periodWindow(period: string): { start: number; end: number } {
   }
 }
 
-/** Deterministic pseudo-random numbers (mulberry32) so sample data is identical on every load. */
-export function seededRandom(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/** Repeats each value by its count, then shuffles deterministically: spread([['A', 2], ['B', 1]], 7). */
-export function spread<T>(counts: [T, number][], seed: number): T[] {
-  const items: T[] = [];
-  counts.forEach(([value, n]) => {
-    for (let i = 0; i < n; i++) items.push(value);
-  });
-  const rnd = seededRandom(seed);
-  for (let i = items.length - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1));
-    [items[i], items[j]] = [items[j], items[i]];
-  }
-  return items;
-}
-
 export function scale(values: number[], factor: number): number[] {
   return values.map((v) => Math.round(v * factor));
 }
@@ -86,8 +52,8 @@ export function total(values: number[]): number {
   return values.reduce((a, b) => a + b, 0);
 }
 
-/** The data runs to 28 Oct 2026; due dates are relative to that day. */
-export const RA_AS_OF = new Date(2026, 9, 28);
+/** Due dates are relative to today. */
+export const RA_AS_OF = new Date();
 
 export function dateFromOffset(days: number): Date {
   const d = new Date(RA_AS_OF);

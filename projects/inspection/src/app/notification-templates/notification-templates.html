@@ -2,7 +2,7 @@
   <div class="page-head">
     <div class="grow">
       <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a routerLink="/inspection/overview">Inspection</a><span>/</span><span>Configuration</span><span>/</span>
+        <a routerLink="/inspection/overview">Inspection</a><span class="crumb-sep" aria-hidden="true">›</span><span>Configuration</span><span class="crumb-sep" aria-hidden="true">›</span>
         <span class="current">Notification Templates</span>
       </nav>
       <h1>Notification Templates</h1>
@@ -103,6 +103,7 @@
                   <input class="control" [(ngModel)]="d.templateName" (ngModelChange)="touch()" /></label>
                 <label class="field"><span class="field-label">Event</span>
                   <select class="control" [(ngModel)]="d.event" (ngModelChange)="touch()">
+                    <option value="" disabled>Select Event</option>
                     @for (e of events(); track e) { <option [value]="e">{{ e }}</option> }
                   </select></label>
               </div>
@@ -118,13 +119,13 @@
               <div class="form-grid">
                 <label class="field"><span class="field-label">Send to</span>
                   <select class="control" [ngModel]="d.recipients[0] || ''" (ngModelChange)="setSendTo($event)">
-                    <option value="">Select recipient</option>
+                    <option value="">Select Recipient</option>
                     @for (r of recipientOptions; track r) { <option [value]="r">{{ r }}</option> }
                   </select></label>
                 <div class="field"><span class="field-label">CC (optional)</span>
                   <span class="cc">
                     <select class="control" [ngModel]="d.ccRecipients[0] || ''" (ngModelChange)="setCc($event)" aria-label="CC">
-                      <option value="">None</option>
+                      <option value="">Select CC</option>
                       @for (r of recipientOptions; track r) { <option [value]="r">{{ r }}</option> }
                     </select>
                     <button type="button" class="icon-btn" aria-label="Clear CC" [disabled]="!d.ccRecipients.length" (click)="setCc('')"><lucide-icon [img]="icons.X" [size]="16"></lucide-icon></button>
@@ -169,6 +170,7 @@
                 <span class="field-label">Notification Timing &amp; Options</span>
                 <div class="timing-row">
                   <select class="control" [(ngModel)]="d.timing" (ngModelChange)="touch()" aria-label="Notification timing">
+                    <option value="" disabled>Select Notification Timing &amp; Options</option>
                     @if (d.timing && !timings.includes(d.timing)) { <option [value]="d.timing">{{ d.timing }}</option> }
                     @for (t of timings; track t) { <option [value]="t">{{ t }}</option> }
                   </select>

@@ -18,7 +18,7 @@ type SortKey = 'name' | 'code' | 'maintenanceType' | 'estimatedHours' | 'tasks';
   selector: 'app-mdm-maintenance-task-template',
   imports: [FormsModule, RouterLink, LucideAngularModule, TaskTemplateForm],
   templateUrl: './task-template.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../../people/people.css', '../maintenance.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../../people/people.css', '../maintenance.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class TaskTemplatePage extends ListPage<TaskTemplateRecord, TaskTemplateFilters, SortKey> implements OnInit {
   readonly service = inject(TaskTemplateService);

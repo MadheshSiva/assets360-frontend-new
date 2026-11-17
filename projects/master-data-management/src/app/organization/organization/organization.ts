@@ -32,7 +32,7 @@ const EMPTY_FILTERS: OrganizationFilters = { search: '', status: '', type: '' };
   selector: 'app-mdm-organization',
   imports: [FormsModule, RouterLink, LucideAngularModule, OrganizationForm],
   templateUrl: './organization.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', './organization.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', './organization.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class OrganizationPage {
   readonly service = inject(OrganizationService);

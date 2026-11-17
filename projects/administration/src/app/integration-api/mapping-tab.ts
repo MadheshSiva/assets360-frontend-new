@@ -15,7 +15,7 @@ import { IntegrationApiService } from './integration-api.service';
       <div class="panel__head">
         <h3>Field Mapping ({{ rows.length }})</h3>
         <select class="select int-select-sm" aria-label="Filter by data object" [(ngModel)]="objectFilter">
-          <option value="">All objects</option>
+          <option value="">Select Data Object</option>
           @for (o of integration.dataObjects; track o) {
             <option [value]="o">{{ o }}</option>
           }
@@ -42,6 +42,7 @@ import { IntegrationApiService } from './integration-api.service';
               <tr>
                 <td>
                   <select [attr.aria-label]="'Data object for ' + m.source" [(ngModel)]="m.object" (ngModelChange)="touch()">
+                    <option value="" disabled>Select Object</option>
                     @for (o of integration.dataObjects; track o) {
                       <option [value]="o">{{ o }}</option>
                     }
@@ -59,6 +60,7 @@ import { IntegrationApiService } from './integration-api.service';
                 </td>
                 <td>
                   <select aria-label="Transform" [(ngModel)]="m.transform" (ngModelChange)="touch()">
+                    <option value="" disabled>Select Transform</option>
                     @for (t of transforms; track t) {
                       <option [value]="t">{{ t }}</option>
                     }

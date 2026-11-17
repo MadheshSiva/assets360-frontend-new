@@ -140,11 +140,10 @@
 
     @case ('team') {
       <div class="card">
-        <p class="muted">Showing {{ team.length }} of {{ department.employees | number }} employees.</p>
         <table class="grid-table">
           <thead><tr><th>Name</th><th>Role</th></tr></thead>
           <tbody>
-            @for (p of team; track p.name) { <tr><td>{{ p.name }}</td><td>{{ p.role }}</td></tr> }
+            @for (p of team; track p.name) { <tr><td>{{ p.name }}</td><td>{{ p.role }}</td></tr> } @empty { <tr><td colspan="2" class="empty">No records found.</td></tr> }
           </tbody>
         </table>
       </div>
@@ -152,12 +151,13 @@
 
     @case ('assets') {
       <div class="card">
-        <p class="muted">Showing {{ assetRows.length }} of {{ department.assets | number }} assets assigned to this department.</p>
         <table class="grid-table">
           <thead><tr><th>Asset Tag</th><th>Name</th><th>Category</th><th>Assigned To</th></tr></thead>
           <tbody>
             @for (a of assetRows; track a.tag) {
               <tr><td class="mono">{{ a.tag }}</td><td>{{ a.name }}</td><td>{{ a.category }}</td><td>{{ a.holder }}</td></tr>
+            } @empty {
+              <tr><td colspan="4" class="empty">No records found.</td></tr>
             }
           </tbody>
         </table>
@@ -210,7 +210,7 @@
         <table class="grid-table">
           <thead><tr><th>Document</th><th>Type</th><th>Size</th><th>Uploaded On</th></tr></thead>
           <tbody>
-            @for (d of documents; track d.name) { <tr><td>{{ d.name }}</td><td>{{ d.kind }}</td><td>{{ d.size }}</td><td>{{ d.date }}</td></tr> }
+            @for (d of documents; track d.name) { <tr><td>{{ d.name }}</td><td>{{ d.kind }}</td><td>{{ d.size }}</td><td>{{ d.date }}</td></tr> } @empty { <tr><td colspan="4" class="empty">No records found.</td></tr> }
           </tbody>
         </table>
       </div>
@@ -223,6 +223,9 @@
             <li><span class="timeline__when">{{ formatDateTime(a.when) }}</span><span><strong>{{ a.who }}</strong> {{ a.text }}</span></li>
           }
         </ol>
+        @if (!activity.length) {
+          <p class="muted">No records found.</p>
+        }
       </div>
     }
   }

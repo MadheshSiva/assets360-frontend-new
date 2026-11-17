@@ -13,6 +13,7 @@
   <label class="org-picker">
     Organization
     <select [(ngModel)]="organization">
+      <option value="" disabled>Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
@@ -32,7 +33,7 @@
     <div class="stat__body">
       <span class="stat__label">Records Numbered</span>
       <span class="stat__value">{{ recordsNumbered.toLocaleString('en-US') }}</span>
-      <span class="stat__trend"><lucide-icon [img]="icons.ArrowUp" [size]="12"></lucide-icon> +12% from last month</span>
+      <span class="stat__trend"><lucide-icon [img]="icons.ArrowUp" [size]="12"></lucide-icon> 0% from last month</span>
     </div>
   </div>
   <div class="stat">
@@ -65,11 +66,11 @@
     <input [(ngModel)]="search" placeholder="Search sequences..." aria-label="Search sequences" />
   </label>
   <select class="select" [(ngModel)]="moduleFilter" aria-label="Module filter">
-    <option value="">All Modules</option>
+    <option value="">Select Module</option>
     @for (m of modules; track m) { <option [value]="m">{{ m }}</option> }
   </select>
   <select class="select" [(ngModel)]="statusFilter" aria-label="Status filter">
-    <option value="">All Statuses</option>
+    <option value="">Select Status</option>
     @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
   </select>
 </div>

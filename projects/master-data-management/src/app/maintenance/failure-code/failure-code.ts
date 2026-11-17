@@ -18,7 +18,7 @@ type SortKey = 'name' | 'code' | 'category' | 'severity';
   selector: 'app-mdm-maintenance-failure-code',
   imports: [FormsModule, RouterLink, LucideAngularModule, FailureCodeForm],
   templateUrl: './failure-code.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../../people/people.css', '../maintenance.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../../people/people.css', '../maintenance.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class FailureCodePage extends ListPage<FailureCodeRecord, FailureCodeFilters, SortKey> implements OnInit {
   readonly service = inject(FailureCodeService);

@@ -28,17 +28,21 @@ export interface KpiFormValue {
           @if (tried && nameError) { <small>{{ nameError }}</small> }
         </div>
         <div class="rak-form-grid kd-form-grid">
-          <div class="field">
-            <label for="kd-module">Module</label>
+          <div class="field" [class.invalid]="tried && !form.module">
+            <label for="kd-module">Module <span class="req">*</span></label>
             <select id="kd-module" name="module" [(ngModel)]="form.module" [disabled]="editing">
+              <option value="" disabled>Select Module</option>
               @for (m of modules; track m) { <option [value]="m">{{ m }}</option> }
             </select>
+            @if (tried && !form.module) { <small>Choose a module.</small> }
           </div>
-          <div class="field">
-            <label for="kd-unit">Unit</label>
+          <div class="field" [class.invalid]="tried && !form.unit">
+            <label for="kd-unit">Unit <span class="req">*</span></label>
             <select id="kd-unit" name="unit" [(ngModel)]="form.unit" [disabled]="editing">
+              <option value="" disabled>Select Unit</option>
               @for (u of units; track u.value) { <option [value]="u.value">{{ u.label }}</option> }
             </select>
+            @if (tried && !form.unit) { <small>Choose a unit.</small> }
           </div>
           <div class="field" [class.invalid]="tried && !valueOk">
             <label for="kd-value">Current value <span class="req">*</span></label>
@@ -50,17 +54,19 @@ export interface KpiFormValue {
             <input id="kd-target" name="target" type="number" min="0" step="any" [(ngModel)]="form.target" />
             @if (tried && !targetOk) { <small>Enter a target greater than 0.</small> }
           </div>
-          <div class="field">
-            <label for="kd-direction">Direction</label>
+          <div class="field" [class.invalid]="tried && !form.direction">
+            <label for="kd-direction">Direction <span class="req">*</span></label>
             <select id="kd-direction" name="direction" [(ngModel)]="form.direction">
+              <option value="" disabled>Select Direction</option>
               <option value="higher">Higher is better</option>
               <option value="lower">Lower is better</option>
             </select>
+            @if (tried && !form.direction) { <small>Choose a direction.</small> }
           </div>
           <div class="field" [class.invalid]="tried && !form.owner">
             <label for="kd-owner">Owner <span class="req">*</span></label>
             <select id="kd-owner" name="owner" [(ngModel)]="form.owner">
-              <option value="">Select owner</option>
+              <option value="">Select Owner</option>
               @for (p of people; track p) { <option [value]="p">{{ p }}</option> }
             </select>
             @if (tried && !form.owner) { <small>Choose an owner.</small> }
@@ -95,7 +101,7 @@ export class KpiFormDialog implements OnInit {
   @Output() saved = new EventEmitter<KpiFormValue>();
   @Output() closed = new EventEmitter<void>();
 
-  form: KpiFormValue = { name: '', module: 'Asset', unit: '%', value: null, target: null, direction: 'higher', owner: '' };
+  form: KpiFormValue = { name: '', module: '' as KpiModule, unit: '' as KpiUnit, value: null, target: null, direction: '' as KpiDirection, owner: '' };
   tried = false;
 
   get editing(): boolean {
@@ -106,9 +112,9 @@ export class KpiFormDialog implements OnInit {
     const k = this.kpi;
     this.form = k
       ? { name: k.name, module: k.module, unit: k.unit, value: k.value, target: k.target, direction: k.direction, owner: k.owner }
-      : { ...this.form, module: this.defaultModule };
+      : { ...this.form };
     // KPI_UNITS is the source of truth for the unit list
-    if (!KPI_UNITS.includes(this.form.unit)) this.form.unit = '%';
+    if (k && !KPI_UNITS.includes(this.form.unit)) this.form.unit = '%';
   }
 
   get nameError(): string {
@@ -128,7 +134,7 @@ export class KpiFormDialog implements OnInit {
 
   submit(): void {
     this.tried = true;
-    if (this.nameError || !this.valueOk || !this.targetOk || !this.form.owner) return;
+    if (this.nameError || !this.form.module || !this.form.unit || !this.valueOk || !this.targetOk || !this.form.direction || !this.form.owner) return;
     this.saved.emit({ ...this.form, name: this.form.name.trim(), value: Number(this.form.value), target: Number(this.form.target) });
   }
 

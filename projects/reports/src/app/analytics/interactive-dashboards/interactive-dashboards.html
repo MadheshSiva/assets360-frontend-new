@@ -1,6 +1,6 @@
 <nav class="crumbs" aria-label="Breadcrumb">
   <a [routerLink]="basePath">Reports &amp; Analytics</a>
-  <span>/</span>
+  <span aria-hidden="true">›</span>
   <strong>Interactive Dashboards</strong>
 </nav>
 
@@ -34,7 +34,6 @@
         <div class="menu" role="menu">
           <button type="button" (click)="openSaveView()">Save view</button>
           <button type="button" (click)="copyLink()">Copy dashboard link</button>
-          <button type="button" (click)="resetDemo()">Reset demo dashboards</button>
         </div>
       }
     </div>
@@ -53,7 +52,7 @@
       <div class="menu idb-menu" role="menu">
         @for (d of store.dashboards; track d.id) {
           <ng-container *ngTemplateOutlet="dashItem; context: { $implicit: d }"></ng-container>
-        }
+        } @empty { <p class="muted idb-menu__empty">No dashboards yet.</p> }
       </div>
     }
   </div>
@@ -95,21 +94,25 @@
 <section class="filters" aria-label="Filters">
   <label class="filter filter--period"><span>Period</span>
     <select [(ngModel)]="period" (ngModelChange)="onFilterChange()">
+      <option value="">Select Period</option>
       @for (p of periods; track p) { <option [value]="p">{{ p }}</option> }
     </select>
   </label>
   <label class="filter"><span>Organization</span>
     <select [(ngModel)]="organization" (ngModelChange)="onFilterChange()">
+      <option value="">Select Organization</option>
       @for (o of organizations; track o) { <option [value]="o">{{ o }}</option> }
     </select>
   </label>
   <label class="filter"><span>Location</span>
     <select [(ngModel)]="location" (ngModelChange)="onFilterChange()">
+      <option value="">Select Location</option>
       @for (l of locations; track l) { <option [value]="l">{{ l }}</option> }
     </select>
   </label>
   <label class="filter"><span>Asset Category</span>
     <select [(ngModel)]="category" (ngModelChange)="onFilterChange()">
+      <option value="">Select Asset Category</option>
       @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
     </select>
   </label>
@@ -138,6 +141,14 @@
         }
       </div>
     } @empty {
+      @if (!hasDashboard) {
+        <div class="idb-blank">
+          <lucide-icon [img]="icons.ChartColumn" [size]="32" />
+          <strong>No dashboards yet</strong>
+          <span class="muted">Create a dashboard, then add widgets from the Widget Library.</span>
+          <button type="button" class="btn btn--primary" (click)="createOpen = true"><lucide-icon [img]="icons.CirclePlus" [size]="16" /> Create Dashboard</button>
+        </div>
+      } @else {
       <div class="idb-blank" [class.idb-cell--over]="overIndex === 0">
         <lucide-icon [img]="icons.ChartColumn" [size]="32" />
         <strong>This dashboard has no widgets yet</strong>
@@ -146,6 +157,7 @@
           <button type="button" class="btn btn--primary" (click)="openAdd(null)"><lucide-icon [img]="icons.CirclePlus" [size]="16" /> Add Widget</button>
         }
       </div>
+      }
     }
     @if (editMode && current.widgets.length) {
       <div class="idb-dropzone" [class.idb-cell--over]="overIndex === current.widgets.length">Drop here to add at the end</div>
@@ -214,7 +226,7 @@
         <h2>{{ expanded.title }}</h2>
         <button type="button" class="icon-btn" (click)="expanded = null" aria-label="Close"><lucide-icon [img]="icons.X" [size]="18" /></button>
       </div>
-      <p class="muted">{{ period }} · {{ organization }} · {{ location }} · {{ category }}</p>
+      <p class="muted">{{ periodLabel }} · {{ organizationLabel }} · {{ locationLabel }} · {{ category || categories[0] }}</p>
       <app-idb-widget [config]="expanded" [filters]="filters" [height]="400" [bare]="true" (viewAsset)="detail = $event" (notice)="onNotice($event)" />
       <div class="dialog__actions">
         <button type="button" class="btn" (click)="exportWidget(expanded)"><lucide-icon [img]="icons.Download" [size]="16" /> Export CSV</button>

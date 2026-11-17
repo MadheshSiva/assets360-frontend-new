@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, ElementRef, EventEmitter, Input, NgZone, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild, ViewEncapsulation, inject } from '@angular/core';
 import type * as Leaflet from 'leaflet';
-import { Droplets, Forklift, LucideIconData, RadioTower, Snowflake, Thermometer, Zap } from 'lucide-angular';
+import { Building2, Droplets, Forklift, LucideIconData, MapPin, RadioTower, Snowflake, Thermometer, Zap } from 'lucide-angular';
 import { CAMPUS_GEO, CampusFeature, MarkerIcon, Status } from './telemetry-data';
 
 type L = typeof Leaflet;
@@ -8,19 +8,15 @@ type LngLat = [number, number];
 
 export interface MapLayers { assets: boolean; devices: boolean; gateways: boolean; geofences: boolean }
 export interface MapPosition { id: string; lat: number; lng: number }
+/** A Master Data site or building shown as a pin (only places with coordinates). */
+export interface MapPlace { id: string; name: string; kind: 'site' | 'building'; lat: number; lng: number }
 
-interface Mover {
-  id: string;
-  marker: Leaflet.Marker;
-  label: Leaflet.Marker;
-  path: Leaflet.LatLng[];
-  /** cumulative metres at each vertex */
-  cum: number[];
-  total: number;
-  speed: number;
-  dist: number;
-  last: number;
-}
+/** Zoom when flying to a single site / building. */
+const PLACE_ZOOM: Record<MapPlace['kind'], number> = { site: 16, building: 18 };
+
+/** Neutral view used until site geometry is loaded. */
+const DEFAULT_CENTER: [number, number] = [20, 0];
+const DEFAULT_ZOOM = 2;
 
 const TILES = {
   sat: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', opts: { maxNativeZoom: 19, maxZoom: 20, attribution: 'Imagery &copy; Esri, Maxar' } },
@@ -38,12 +34,12 @@ function svgOf(data: LucideIconData): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
 }
 const SVG = Object.fromEntries(Object.entries(ICON_DATA).map(([k, v]) => [k, svgOf(v)])) as Record<MarkerIcon | 'gateway', string>;
+const PLACE_SVG: Record<MapPlace['kind'], string> = { site: svgOf(MapPin), building: svgOf(Building2) };
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 /**
- * Leaflet campus map for Tracking & Telemetry. Everything drawn comes from campus.geo.json: building footprints,
- * geofences, internal roads, gateways, asset / device positions and the forklift's patrol route (animated).
- * Runs outside Angular and reports back through outputs.
+ * Leaflet site map for Tracking & Telemetry. Everything drawn comes from CAMPUS_GEO: building footprints,
+ * geofences, internal roads, gateways and asset / device positions. Runs outside Angular and reports back through outputs.
  */
 @Component({
   selector: 'app-tt-map',
@@ -69,13 +65,12 @@ export class TtMap implements AfterViewInit, OnChanges, OnDestroy {
   private map?: Leaflet.Map;
   private base?: Leaflet.TileLayer;
   private campusBounds?: Leaflet.LatLngBounds;
-  private groups: Record<'buildings' | 'roads' | 'geofences' | 'gateways' | 'assets' | 'devices' | 'labels', Leaflet.LayerGroup> = {} as never;
+  private groups: Record<'places' | 'buildings' | 'roads' | 'geofences' | 'gateways' | 'assets' | 'devices' | 'labels', Leaflet.LayerGroup> = {} as never;
+  /** Master Data pins and the one to fly to; kept so a call made before the map exists still applies. */
+  private placeView: { places: MapPlace[]; focusId: string } | null = null;
   private markers = new Map<string, Leaflet.Marker>();
   private labels = new Map<string, Leaflet.Marker>();
   private buildings = new Map<string, Leaflet.Polygon>();
-  private movers: Mover[] = [];
-  private frame = 0;
-  private lastEmit = 0;
   private resize?: ResizeObserver;
   private destroyed = false;
 
@@ -101,7 +96,6 @@ export class TtMap implements AfterViewInit, OnChanges, OnDestroy {
 
   ngOnDestroy(): void {
     this.destroyed = true;
-    cancelAnimationFrame(this.frame);
     this.resize?.disconnect();
     this.map?.remove();
   }
@@ -123,7 +117,11 @@ export class TtMap implements AfterViewInit, OnChanges, OnDestroy {
   }
 
   fitCampus(animate: boolean): void {
-    if (!this.map || !this.campusBounds) return;
+    if (!this.map) return;
+    if (!this.campusBounds) {
+      if (!animate) this.map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+      return;
+    }
     this.map.flyToBounds(this.campusBounds, { padding: [18, 18], duration: animate ? 0.8 : 0, animate });
   }
 
@@ -137,29 +135,57 @@ export class TtMap implements AfterViewInit, OnChanges, OnDestroy {
     else this.fitCampus(true);
   }
 
+  /**
+   * Shows Master Data sites / buildings as pins and flies to `focusId` (or fits all pins when it has none).
+   * Places without coordinates are left out by the caller.
+   */
+  showPlaces(places: MapPlace[], focusId = ''): void {
+    this.placeView = { places, focusId };
+    if (this.map) this.zone.runOutsideAngular(() => this.renderPlaces(true));
+  }
+
+  private renderPlaces(animate: boolean): void {
+    const L = this.L;
+    const map = this.map;
+    const view = this.placeView;
+    if (!L || !map || !view) return;
+    this.groups.places.clearLayers();
+    for (const p of view.places) {
+      const on = p.id === view.focusId;
+      L.marker([p.lat, p.lng], {
+        keyboard: false,
+        riseOnHover: true,
+        zIndexOffset: on ? 300 : 0,
+        icon: L.divIcon({ className: 'tt-mk-wrap', html: `<span class="tt-place tt-place--${p.kind}${on ? ' is-on' : ''}">${PLACE_SVG[p.kind]}</span>`, iconSize: [30, 30], iconAnchor: [15, 15] }),
+      })
+        .bindTooltip(`<strong>${esc(p.name)}</strong><span>${p.kind === 'site' ? 'Site' : 'Building'}</span>`, { className: 'tt-tip', direction: 'top', offset: [0, -14] })
+        .addTo(this.groups.places);
+    }
+    const focus = view.places.find((p) => p.id === view.focusId);
+    const opts = { duration: animate ? 0.9 : 0, animate };
+    if (focus) map.flyTo([focus.lat, focus.lng], PLACE_ZOOM[focus.kind], opts);
+    else if (view.places.length) map.flyToBounds(L.latLngBounds(view.places.map((p) => [p.lat, p.lng] as [number, number])), { ...opts, padding: [60, 60], maxZoom: 17 });
+  }
+
   // ===== setup =====
 
   private init(L: L): void {
     const el = this.host.nativeElement;
-    const map = L.map(el, { zoomControl: false, attributionControl: true, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 90, maxZoom: 20, minZoom: 14, fadeAnimation: true, zoomAnimation: true });
+    const map = L.map(el, { zoomControl: false, attributionControl: true, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 90, maxZoom: 20, minZoom: 2, fadeAnimation: true, zoomAnimation: true });
     this.map = map;
     map.attributionControl.setPrefix('');
     L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 110 }).addTo(map);
-    for (const k of ['roads', 'buildings', 'geofences', 'gateways', 'devices', 'assets', 'labels'] as const) this.groups[k] = L.layerGroup().addTo(map);
+    for (const k of ['roads', 'places', 'buildings', 'geofences', 'gateways', 'devices', 'assets', 'labels'] as const) this.groups[k] = L.layerGroup().addTo(map);
     this.setBase();
     this.draw(L);
     this.fitCampus(false);
+    this.renderPlaces(false);
     this.applyLayers();
     this.resize = new ResizeObserver(() => map.invalidateSize({ animate: false }));
     this.resize.observe(el);
     // the drawing tools own map clicks while they draw / place (container gets md-busy)
     map.on('click', () => !el.classList.contains('md-busy') && this.zone.run(() => this.select.emit('')));
     this.zone.run(() => this.ready.emit(map));
-    const tick = (t: number) => {
-      this.animate(t);
-      this.frame = requestAnimationFrame(tick);
-    };
-    this.frame = requestAnimationFrame(tick);
   }
 
   /** Cross-fades the base tiles when switching map / satellite. */
@@ -243,17 +269,6 @@ export class TtMap implements AfterViewInit, OnChanges, OnDestroy {
         }
       }
     }
-    // patrol routes: the forklift drives its loop inside Warehouse Zone B
-    for (const f of feats.filter((x) => x.properties.kind === 'route')) {
-      const id = String(f.properties['asset']);
-      const marker = this.markers.get(id);
-      const label = this.labels.get(id);
-      if (!marker || !label) continue;
-      const path = (f.geometry.coordinates as LngLat[]).map(([lng, lat]) => L.latLng(lat, lng));
-      const cum = [0];
-      for (let i = 1; i < path.length; i++) cum.push(cum[i - 1] + path[i - 1].distanceTo(path[i]));
-      this.movers.push({ id, marker, label, path, cum, total: cum[cum.length - 1], speed: Number(f.properties['speedMps']) || 1.5, dist: 0, last: 0 });
-    }
   }
 
   private tipFor(id: string, building: string): string {
@@ -302,26 +317,5 @@ export class TtMap implements AfterViewInit, OnChanges, OnDestroy {
     set(this.groups.devices, this.layers.devices);
     set(this.groups.gateways, this.layers.gateways);
     set(this.groups.geofences, this.layers.geofences);
-  }
-
-  private animate(t: number): void {
-    for (const mv of this.movers) {
-      const dt = mv.last ? Math.min(0.1, (t - mv.last) / 1000) : 0;
-      mv.last = t;
-      mv.dist = (mv.dist + mv.speed * dt) % mv.total;
-      let i = 1;
-      while (i < mv.cum.length - 1 && mv.cum[i] < mv.dist) i++;
-      const a = mv.path[i - 1];
-      const b = mv.path[i];
-      const seg = mv.cum[i] - mv.cum[i - 1] || 1;
-      const k = (mv.dist - mv.cum[i - 1]) / seg;
-      const pos = this.L!.latLng(a.lat + (b.lat - a.lat) * k, a.lng + (b.lng - a.lng) * k);
-      mv.marker.setLatLng(pos);
-      mv.label.setLatLng(pos);
-      if (t - this.lastEmit > 1000) {
-        this.lastEmit = t;
-        this.zone.run(() => this.moved.emit({ id: mv.id, lat: pos.lat, lng: pos.lng }));
-      }
-    }
   }
 }

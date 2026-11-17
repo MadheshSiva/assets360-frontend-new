@@ -4,10 +4,21 @@ import { LucideAngularModule, Plus, Trash2, X } from 'lucide-angular';
 import { TRACKING_METHODS } from '../../asset-model/asset-model.data';
 import { MODEL_ICONS, MODEL_ICON_KEYS } from '../../asset-model/asset-model.icons';
 import { CUSTOM_FIELD_TYPES } from '../../asset-type/asset-type.data';
+import { AssetTypeService } from '../../asset-type/asset-type.service';
 import { HEX_COLOR } from '../../level-icons';
-import { CATEGORY_ASSET_TYPES, CATEGORY_COST_CENTERS, CATEGORY_TYPE_DEFAULTS, blankCategory } from '../category.data';
+import { CATEGORY_TYPE_DEFAULTS, blankCategory } from '../category.data';
 import { CategoryRecord } from '../category.model';
 import { CategoryService } from '../category.service';
+
+/** A new category starts with every dropdown empty so the user picks each value. */
+function newCategory(): CategoryRecord {
+  return {
+    ...blankCategory(),
+    depreciationMethod: '' as CategoryRecord['depreciationMethod'],
+    trackingMethod: '' as CategoryRecord['trackingMethod'],
+    defaultCondition: '' as CategoryRecord['defaultCondition']
+  };
+}
 
 export type CatFormTab = 'basic' | 'defaults' | 'fields' | 'settings';
 type FieldKey = 'name' | 'code' | 'assetType' | 'image' | 'color' | 'usefulLifeYears' | 'tagPrefix' | 'customFields';
@@ -34,7 +45,8 @@ const TAB_OF: Record<FieldKey, CatFormTab> = {
     '../../../shared/styles/mdm-drawer-extras.css',
     '../../asset-model/model-form/model-form.css',
     '../../asset-type/type-form/type-form.css',
-    '../../level-form.css'
+    '../../level-form.css',
+    '../../../shared/styles/mdm-purple-theme.css'
   ]
 })
 export class CatForm implements OnChanges {
@@ -49,8 +61,8 @@ export class CatForm implements OnChanges {
   readonly icons = { X, Plus, Trash2 };
   readonly typeIcons = MODEL_ICONS;
   readonly iconKeys = MODEL_ICON_KEYS;
-  readonly assetTypes = CATEGORY_ASSET_TYPES;
-  readonly costCenters = CATEGORY_COST_CENTERS;
+  // Asset types from GET /api/master-data/asset-types?clientId=...
+  private readonly typeStore = inject(AssetTypeService);
   readonly trackingMethods = TRACKING_METHODS;
   readonly fieldTypes = CUSTOM_FIELD_TYPES;
   readonly tabs: { id: CatFormTab; label: string }[] = [
@@ -61,15 +73,21 @@ export class CatForm implements OnChanges {
   ];
 
   tab: CatFormTab = 'basic';
-  form: CategoryRecord = blankCategory();
+  form: CategoryRecord = newCategory();
   errors: Partial<Record<FieldKey, string>> = {};
   private original: CategoryRecord | null = null;
 
   ngOnChanges(): void {
     this.original = this.mode === 'edit' ? this.category : null;
-    this.form = this.category ? structuredClone(this.category) : blankCategory();
+    this.form = this.category ? structuredClone(this.category) : newCategory();
     this.errors = {};
     this.tab = this.startTab;
+  }
+
+  /** Active asset type names from Master Data, plus the category's current value so an edit keeps it. */
+  get assetTypes(): string[] {
+    const names = this.typeStore.active().map((t) => t.name);
+    return [...new Set([...names, this.form.assetType].filter(Boolean))].sort((a, b) => a.localeCompare(b));
   }
 
   get isEdit(): boolean {
@@ -86,11 +104,23 @@ export class CatForm implements OnChanges {
     return this.service.all().filter((c) => !blocked.has(c.code));
   }
 
+  // Cost centers already used on categories, plus the current value
+  get costCenters(): string[] {
+    return [...new Set([this.form.costCenter, ...this.service.all().map((r) => r.costCenter)].filter(Boolean))];
+  }
+
   // New categories pick up the usual accounting defaults for their asset type
   onAssetTypeChange(): void {
+    if (this.isEdit) return;
+    const type = this.typeStore.findByName(this.form.assetType);
+    if (type) {
+      this.form.depreciationMethod = type.depreciationMethod;
+      this.form.usefulLifeYears = type.lifecycleYears;
+      this.form.trackingMethod = type.trackingMethod;
+      return;
+    }
     const d = CATEGORY_TYPE_DEFAULTS[this.form.assetType];
-    if (!d || this.isEdit) return;
-    [this.form.depreciationMethod, this.form.usefulLifeYears, this.form.trackingMethod] = d;
+    if (d) [this.form.depreciationMethod, this.form.usefulLifeYears, this.form.trackingMethod] = d;
   }
 
   // Suggest the tag prefix from the code (CAT-IT gives IT) until one is typed
@@ -101,7 +131,7 @@ export class CatForm implements OnChanges {
   }
 
   addField(): void {
-    this.form.customFields = [...this.form.customFields, { name: '', type: 'Text', required: false }];
+    this.form.customFields = [...this.form.customFields, { name: '', type: '' as CategoryRecord['customFields'][number]['type'], required: false }];
   }
 
   removeField(index: number): void {
@@ -134,7 +164,23 @@ export class CatForm implements OnChanges {
     this.form.image = null;
   }
 
+  /** True on the final tab, where the primary button saves instead of advancing. */
+  get isLastTab(): boolean {
+    return this.tab === this.tabs[this.tabs.length - 1].id;
+  }
+
+  /** Move to the next tab. */
+  next(): void {
+    const i = this.tabs.findIndex((t) => t.id === this.tab);
+    if (i < this.tabs.length - 1) this.tab = this.tabs[i + 1].id;
+  }
+
   submit(): void {
+    // Enter key / primary button on earlier tabs just advances
+    if (!this.isLastTab) {
+      this.next();
+      return;
+    }
     const f = this.form;
     const errors: Partial<Record<FieldKey, string>> = {};
     if (!f.name.trim()) errors.name = 'Enter a category name.';
@@ -148,6 +194,7 @@ export class CatForm implements OnChanges {
     const names = f.customFields.map((c) => c.name.trim().toLowerCase());
     if (names.some((n) => !n)) errors.customFields = 'Every custom field needs a name.';
     else if (new Set(names).size !== names.length) errors.customFields = 'Custom field names must be unique.';
+    else if (f.customFields.some((c) => !c.type)) errors.customFields = 'Every custom field needs a type.';
     this.errors = errors;
 
     const keys = Object.keys(errors) as FieldKey[];
@@ -169,7 +216,7 @@ export class CatForm implements OnChanges {
         tagPrefix: f.tagPrefix.trim().toUpperCase(),
         customFields: f.customFields.map((c) => ({ ...c, name: c.name.trim() })),
         createdOn: this.original?.createdOn ?? stamp,
-        createdBy: this.original?.createdBy ?? 'Rex Kumar',
+        createdBy: this.original?.createdBy ?? '',
         updatedOn: stamp
       },
       originalCode: this.original?.code ?? null

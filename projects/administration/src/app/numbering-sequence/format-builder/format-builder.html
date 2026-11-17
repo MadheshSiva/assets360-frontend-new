@@ -36,16 +36,19 @@
           }
           @case ('date') {
             <select class="tok__ctl" [(ngModel)]="token.value" (ngModelChange)="changed.emit()" aria-label="Date format">
+              <option value="" disabled>Select Date Format</option>
               @for (f of dateFormats; track f) { <option [value]="f">{{ f }}</option> }
             </select>
           }
           @case ('location') {
             <select class="tok__ctl" [(ngModel)]="token.value" (ngModelChange)="changed.emit()" aria-label="Location code">
+              <option value="" disabled>Select Location Code</option>
               @for (c of locationCodes; track c) { <option [value]="c">{{ c }}</option> }
             </select>
           }
           @case ('number') {
             <select class="tok__ctl" [ngModel]="sequence.numberLength" (ngModelChange)="setNumberLength($event)" aria-label="Number padding">
+              <option [ngValue]="null" disabled>Select Number Padding</option>
               @for (n of numberLengths; track n) { <option [ngValue]="n">{{ padSample(n) }}</option> }
             </select>
           }
@@ -63,6 +66,7 @@
           <div class="tok tok--sep">
             <div class="tok__head"><span class="tok__label">Separator</span></div>
             <select class="tok__ctl" [(ngModel)]="sequence.separator" (ngModelChange)="changed.emit()" aria-label="Separator">
+              <option value="" disabled>Select Separator</option>
               @for (s of separators; track s.value) { <option [value]="s.value">{{ s.label }}</option> }
             </select>
           </div>

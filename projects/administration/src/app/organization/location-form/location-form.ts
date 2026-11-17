@@ -80,7 +80,7 @@ export class LocationForm implements OnChanges {
   }
 
   onCountryChange(): void {
-    if (!this.cities.includes(this.form.city)) this.form.city = this.cities[0] ?? '';
+    if (!this.cities.includes(this.form.city)) this.form.city = '';
   }
 
   private validate(): boolean {
@@ -95,6 +95,9 @@ export class LocationForm implements OnChanges {
     else if (this.service.nameTaken(f.name, f.parent, original)) e['name'] = 'Another location under the same parent has this name.';
     if (PARENT_TYPE[f.type] && !f.parent) e['parent'] = `Choose the ${PARENT_TYPE[f.type]!.toLowerCase()} this ${f.type.toLowerCase()} belongs to.`;
     if (!f.country) e['country'] = 'Country is required.';
+    if (!f.city) e['city'] = 'City is required.';
+    if (!f.timeZone) e['timeZone'] = 'Time zone is required.';
+    if (!f.status) e['status'] = 'Status is required.';
     // The Administration API requires a location manager
     if (!f.contact.trim()) e['contact'] = 'Contact person is required.';
     else if (!this.people.includes(f.contact.trim())) e['contact'] = 'Pick a person from the list.';

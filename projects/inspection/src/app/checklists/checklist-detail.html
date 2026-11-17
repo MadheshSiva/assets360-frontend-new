@@ -15,6 +15,7 @@
       </div>
     </div>
     <select class="control ver" aria-label="Version" [ngModel]="source.id" (ngModelChange)="selectId.emit($event)">
+      <option value="" disabled>Select Version</option>
       @for (v of versions(); track v.id) { <option [value]="v.id">Version {{ v.versionLabel }}{{ v.status === 'Draft' ? ' (Draft)' : '' }}</option> }
     </select>
     <span class="menu-wrap">
@@ -90,6 +91,7 @@
                       </td>
                       <td>
                         <select class="control control--sm resp" aria-label="Response type" [(ngModel)]="t.responseType" [disabled]="locked">
+                          <option value="" disabled>Select Response Type</option>
                           @for (o of responseOptions(t); track o) { <option [value]="o">{{ o }}</option> }
                         </select>
                       </td>
@@ -171,13 +173,14 @@
           <label class="field"><span class="field-label">Checklist name</span><input class="control" [(ngModel)]="draft.templateName" [disabled]="locked" /></label>
           <label class="field"><span class="field-label">Inspection type</span>
             <select class="control" [ngModel]="draft.inspectionTypeId" (ngModelChange)="pickType($event)" [disabled]="locked">
-              <option value="">— None —</option>
+              <option value="">Select Inspection Type</option>
               @for (t of api.types.items(); track t.id) { <option [value]="t.id">{{ t.inspectionTypeName }}</option> }
             </select></label>
           <label class="field"><span class="field-label">Asset category</span><input class="control" [(ngModel)]="draft.assetCategory" [disabled]="locked" /></label>
           <label class="field"><span class="field-label">Asset type</span><input class="control" [(ngModel)]="draft.assetType" [disabled]="locked" /></label>
           <label class="field"><span class="field-label">Scoring method</span>
             <select class="control" [(ngModel)]="draft.scoring" [disabled]="locked">
+              <option value="" disabled>Select Scoring Method</option>
               @for (m of scoringMethods; track m) { <option [value]="m">{{ m }}</option> }
             </select></label>
           <label class="field"><span class="field-label">Owner</span><input class="control" [(ngModel)]="draft.owner" [disabled]="locked" /></label>

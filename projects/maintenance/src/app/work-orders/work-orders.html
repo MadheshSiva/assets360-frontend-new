@@ -50,11 +50,11 @@
         <input type="search" placeholder="Search by WO#, asset name, tag, description..." [ngModel]="search()" (ngModelChange)="setFilter('search', $event)" />
       </label>
       <select class="control sel" [ngModel]="type()" (ngModelChange)="setFilter('type', $event)" aria-label="Maintenance type">
-        <option value="">All Maintenance Types</option>
+        <option value="">Select Maintenance Type</option>
         @for (t of types; track t) { <option [value]="t">{{ t }}</option> }
       </select>
       <select class="control sel" [ngModel]="priority()" (ngModelChange)="setFilter('priority', $event)" aria-label="Priority">
-        <option value="">All Priorities</option>
+        <option value="">Select Priority</option>
         @for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }
       </select>
       <button type="button" class="btn btn-outline" (click)="export()"><lucide-icon [img]="icons.Download" [size]="16"></lucide-icon>Export</button>
@@ -64,6 +64,7 @@
       <div class="bulk">
         <strong>{{ n }} selected</strong>
         <select class="control sel" [ngModel]="bulkStatus()" (ngModelChange)="bulkStatus.set($event)" aria-label="New status">
+          <option value="" disabled>Select New Status</option>
           <option value="">Change status to...</option>
           @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
         </select>

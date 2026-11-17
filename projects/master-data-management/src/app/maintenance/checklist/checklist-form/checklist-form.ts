@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { LucideAngularModule, Plus, Trash2, X } from 'lucide-angular';
 import { MasterForm } from '../../form-base';
 import { CHECKLIST_CATEGORIES, CHECKLIST_TYPES, RESPONSE_TYPES, blankChecklist } from '../checklist.data';
-import { ChecklistRecord } from '../checklist.model';
+import { ChecklistRecord, ResponseType } from '../checklist.model';
 import { ChecklistService } from '../checklist.service';
 
 type Tab = 'basic' | 'items';
@@ -13,7 +13,7 @@ type Tab = 'basic' | 'items';
   selector: 'app-checklist-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './checklist-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../maintenance-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../maintenance-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class ChecklistForm extends MasterForm<ChecklistRecord, Tab> {
   protected readonly store = inject(ChecklistService);
@@ -31,7 +31,7 @@ export class ChecklistForm extends MasterForm<ChecklistRecord, Tab> {
   }
 
   addItem(): void {
-    this.form.items = [...this.form.items, { question: '', response: 'Pass / Fail', required: true }];
+    this.form.items = [...this.form.items, { question: '', response: '' as ResponseType, required: true }];
   }
 
   removeItem(index: number): void {
@@ -42,9 +42,11 @@ export class ChecklistForm extends MasterForm<ChecklistRecord, Tab> {
     const errors: Record<string, string> = {};
     if (!f.checklistType) errors['checklistType'] = 'Select a type.';
     if (!f.category) errors['category'] = 'Select a category.';
+    if (!f.status) errors['status'] = 'Select a status.';
     if (Object.keys(errors).length) return { errors, tab: 'basic' as Tab };
     if (!f.items.length) errors['items'] = 'Add at least one item.';
     else if (f.items.some((i) => !i.question.trim())) errors['items'] = 'Fill in every item or remove the empty ones.';
+    else if (f.items.some((i) => !i.response)) errors['items'] = 'Select a response type for every item.';
     return { errors, tab: 'items' as Tab };
   }
 

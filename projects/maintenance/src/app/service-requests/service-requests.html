@@ -60,19 +60,19 @@
         <input type="search" placeholder="Search by request ID, asset name, description, requested by..." [ngModel]="search()" (ngModelChange)="set('search', $event)" />
       </label>
       <select class="control sel" [ngModel]="status()" (ngModelChange)="set('status', $event)" aria-label="Status">
-        <option value="">All Status</option>
+        <option value="">Select Status</option>
         @for (s of ['Open', 'In Progress', 'Overdue', 'Resolved', 'Closed', 'Rejected']; track s) { <option [value]="s">{{ s }}</option> }
       </select>
       <select class="control sel" [ngModel]="category()" (ngModelChange)="set('category', $event)" aria-label="Category">
-        <option value="">All Categories</option>
+        <option value="">Select Category</option>
         @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
       </select>
       <select class="control sel" [ngModel]="priority()" (ngModelChange)="set('priority', $event)" aria-label="Priority">
-        <option value="">All Priorities</option>
+        <option value="">Select Priority</option>
         @for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }
       </select>
       <select class="control sel" [ngModel]="location()" (ngModelChange)="set('location', $event)" aria-label="Location">
-        <option value="">All Locations</option>
+        <option value="">Select Location</option>
         @for (l of locations(); track l) { <option [value]="l">{{ l }}</option> }
       </select>
       <button type="button" class="btn btn-accent-outline" (click)="advanced.set(!advanced())"><lucide-icon [img]="icons.Filter" [size]="16"></lucide-icon>Advanced Filters</button>
@@ -80,7 +80,7 @@
     @if (advanced()) {
       <div class="adv">
         <label class="field"><span class="field-label">Request Type</span>
-          <select class="control" [ngModel]="reqType()" (ngModelChange)="set('reqType', $event)"><option value="">All Types</option>@for (t of types; track t) { <option [value]="t">{{ t }}</option> }</select>
+          <select class="control" [ngModel]="reqType()" (ngModelChange)="set('reqType', $event)"><option value="">Select Request Type</option>@for (t of types; track t) { <option [value]="t">{{ t }}</option> }</select>
         </label>
         <label class="field"><span class="field-label">Assigned To</span><input class="control" [ngModel]="assignee()" (ngModelChange)="set('assignee', $event)" placeholder="Name" /></label>
         <div class="field"><span class="field-label">&nbsp;</span><button type="button" class="btn btn-outline" (click)="export()">Export filtered (CSV)</button></div>
@@ -190,18 +190,18 @@
         <div class="form-grid">
           <label class="field"><span class="field-label">Request ID <span class="req">*</span></span><input class="control" name="issueId" [(ngModel)]="form.issueId" [readonly]="!!editingId()" /></label>
           <label class="field"><span class="field-label">Status</span>
-            <select class="control" name="status" [(ngModel)]="form.status">@for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }</select>
+            <select class="control" name="status" [(ngModel)]="form.status"><option value="" disabled>Select Status</option>@for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }</select>
           </label>
           <label class="field"><span class="field-label">Request Type <span class="req">*</span></span>
-            <select class="control" name="issueType" [(ngModel)]="form.issueType">@for (t of types; track t) { <option [value]="t">{{ t }}</option> }</select>
+            <select class="control" name="issueType" [(ngModel)]="form.issueType"><option value="" disabled>Select Request Type</option>@for (t of types; track t) { <option [value]="t">{{ t }}</option> }</select>
           </label>
           <label class="field"><span class="field-label">Category</span>
-            <select class="control" name="category" [(ngModel)]="form.category">@for (c of categories; track c) { <option [value]="c">{{ c }}</option> }</select>
+            <select class="control" name="category" [(ngModel)]="form.category"><option value="" disabled>Select Category</option>@for (c of categories; track c) { <option [value]="c">{{ c }}</option> }</select>
           </label>
           <app-mnt-asset-picker [(assetId)]="form.assetId" [(assetName)]="form.assetName" (picked)="onAsset($event)"></app-mnt-asset-picker>
           <label class="field"><span class="field-label">Location</span><input class="control" name="location" [(ngModel)]="form.location" /></label>
           <label class="field"><span class="field-label">Priority <span class="req">*</span></span>
-            <select class="control" name="severity" [(ngModel)]="form.severity">@for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }</select>
+            <select class="control" name="severity" [(ngModel)]="form.severity"><option value="" disabled>Select Priority</option>@for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }</select>
           </label>
           <label class="field"><span class="field-label">Requested By</span><input class="control" name="reportedBy" list="sr-people" [(ngModel)]="form.reportedBy" /></label>
           <label class="field"><span class="field-label">Assigned To</span><input class="control" name="assignedTo" list="sr-people" [(ngModel)]="form.assignedTo" /></label>

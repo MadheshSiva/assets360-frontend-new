@@ -21,7 +21,7 @@ interface Filters {
   selector: 'app-mdm-system-configuration-api-sync-status',
   imports: [FormsModule, RouterLink, LucideAngularModule, SyncStatusForm],
   templateUrl: './api-sync-status.html',
-  styleUrls: ['../../shared/styles/mdm-page.css', '../system-config.css']
+  styleUrls: ['../../shared/styles/mdm-page.css', '../system-config.css', '../../shared/styles/mdm-purple-theme.css']
 })
 export class ApiSyncStatusPage extends ListPage<SyncStatusRecord, Filters, SortKey> {
   readonly service = inject(SyncStatusService);

@@ -44,8 +44,8 @@
             </div>
             <div class="field" [class.invalid]="errors.category">
               <label for="type-cat"><span class="req">*</span> Category</label>
-              <select id="type-cat" name="category" [(ngModel)]="form.category" (ngModelChange)="onCategoryChange()">
-                <option value="" disabled>Select category</option>
+              <select id="type-cat" name="category" [(ngModel)]="form.category">
+                <option value="" disabled>Select Category</option>
                 @for (c of service.categories(); track c) { <option [value]="c">{{ c }}</option> }
               </select>
               @if (errors.category) { <small>{{ errors.category }}</small> }
@@ -53,7 +53,7 @@
             <div class="field">
               <label for="type-class">Asset Class</label>
               <select id="type-class" name="assetClass" [(ngModel)]="form.assetClass">
-                <option value="">Select asset class</option>
+                <option value="">Select Asset Class</option>
                 @for (c of classes; track c) { <option [value]="c">{{ c }}</option> }
               </select>
             </div>
@@ -97,7 +97,7 @@
           <div class="field">
             <label for="type-class-c">Asset Class</label>
             <select id="type-class-c" name="assetClassC" [(ngModel)]="form.assetClass">
-              <option value="">Select asset class</option>
+              <option value="">Select Asset Class</option>
               @for (c of classes; track c) { <option [value]="c">{{ c }}</option> }
             </select>
           </div>
@@ -144,6 +144,7 @@
           <div class="field">
             <label for="type-mtype">Maintenance Type</label>
             <select id="type-mtype" name="maintenanceType" [(ngModel)]="form.maintenanceType">
+              <option value="" disabled>Select Maintenance Type</option>
               @for (m of maintenanceTypes; track m) { <option [value]="m">{{ m }}</option> }
             </select>
           </div>
@@ -166,6 +167,7 @@
           <div class="field">
             <label for="type-method">Depreciation Method</label>
             <select id="type-method" name="depreciationMethod" [(ngModel)]="form.depreciationMethod">
+              <option value="" disabled>Select Depreciation Method</option>
               <option value="Straight Line">Straight Line</option>
               <option value="Declining Balance">Declining Balance</option>
             </select>
@@ -183,13 +185,14 @@
           <div class="field">
             <label for="type-cc">Default Cost Center</label>
             <select id="type-cc" name="costCenter" [(ngModel)]="form.costCenter">
-              <option value="">Select cost center</option>
+              <option value="">Select Default Cost Center</option>
               @for (c of costCenters; track c) { <option [value]="c">{{ c }}</option> }
             </select>
           </div>
           <div class="field">
             <label for="type-currency">Currency</label>
             <select id="type-currency" name="currency" [(ngModel)]="form.currency">
+              <option value="" disabled>Select Currency</option>
               @for (c of currencies; track c) { <option [value]="c">{{ c }}</option> }
             </select>
           </div>
@@ -215,6 +218,7 @@
           <div class="field">
             <label for="type-condition">Default Condition</label>
             <select id="type-condition" name="defaultCondition" [(ngModel)]="form.defaultCondition">
+              <option value="" disabled>Select Default Condition</option>
               <option value="New">New</option>
               <option value="Good">Good</option>
               <option value="Fair">Fair</option>
@@ -223,6 +227,7 @@
           <div class="field">
             <label for="type-tracking">Tracking Method</label>
             <select id="type-tracking" name="trackingMethod" [(ngModel)]="form.trackingMethod">
+              <option value="" disabled>Select Tracking Method</option>
               @for (t of trackingMethods; track t) { <option [value]="t">{{ t }}</option> }
             </select>
           </div>
@@ -265,6 +270,7 @@
             <div class="spec-row field-row">
               <input [name]="'fieldName' + $index" placeholder="Field name, e.g. MAC Address" [attr.aria-label]="'Custom field ' + ($index + 1) + ' name'" [(ngModel)]="c.name" />
               <select [name]="'fieldType' + $index" [attr.aria-label]="'Custom field ' + ($index + 1) + ' type'" [(ngModel)]="c.type">
+                <option value="" disabled>Select Type</option>
                 @for (t of fieldTypes; track t) { <option [value]="t">{{ t }}</option> }
               </select>
               <label class="field-row__req"><input type="checkbox" [name]="'fieldReq' + $index" [(ngModel)]="c.required" /> Required</label>
@@ -287,7 +293,11 @@
 
     <footer class="drawer__footer">
       <button type="button" class="btn btn--ghost" (click)="cancelled.emit()">Cancel</button>
-      <button type="submit" class="btn btn--primary">Save</button>
+      @if (isLastTab) {
+        <button type="submit" class="btn btn--primary">Save</button>
+      } @else {
+        <button type="button" class="btn btn--primary" (click)="next()">Next</button>
+      }
     </footer>
   </form>
 </aside>

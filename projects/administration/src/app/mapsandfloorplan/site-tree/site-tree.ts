@@ -5,7 +5,10 @@ import { ChevronDown, ChevronRight, ListFilter, LucideAngularModule, Search } fr
 import { KIND_ICONS, SiteNode } from '../maps.data';
 import { MapsStore } from '../maps.store';
 
-/** Organization > site > building > floor tree with search; floors are selectable. */
+/**
+ * Organization > site > building > floor tree (from Master Data Management) with search. Sites, buildings and floors
+ * are selectable, since floor plans can hang on any of them; the caret folds a branch. Counts = floor plans on the node.
+ */
 @Component({
   standalone: true,
   selector: 'app-site-tree',
@@ -16,13 +19,22 @@ import { MapsStore } from '../maps.store';
         <lucide-icon [img]="icons.Search" [size]="15"></lucide-icon>
         <input [placeholder]="placeholder" [attr.aria-label]="placeholder" [(ngModel)]="query" />
       </label>
-      <button type="button" class="icon-btn" aria-label="Filter" [class.on]="floorsOnly" (click)="floorsOnly = !floorsOnly">
+      <button type="button" class="icon-btn" aria-label="Filter" title="Only floors with floor plans" [class.on]="floorsOnly" (click)="floorsOnly = !floorsOnly">
         <lucide-icon [img]="icons.ListFilter" [size]="16"></lucide-icon>
       </button>
     </div>
-    <ul class="tree" role="tree">
-      <ng-container *ngTemplateOutlet="branch; context: { $implicit: store.tree, depth: 0 }"></ng-container>
-    </ul>
+    @if (store.treeLoading) {
+      <p class="tree-note">Loading locations…</p>
+    } @else if (store.treeEmpty) {
+      <p class="tree-note">{{ store.treeError || 'No sites yet — add sites, buildings and floors in Master Data Management.' }}</p>
+      @if (store.treeError) {
+        <button type="button" class="retry" (click)="store.loadTree()">Retry</button>
+      }
+    } @else if (store.tree) {
+      <ul class="tree" role="tree">
+        <ng-container *ngTemplateOutlet="branch; context: { $implicit: store.tree, depth: 0 }"></ng-container>
+      </ul>
+    }
 
     <ng-template #branch let-node let-depth="depth">
       @if (matches(node)) {
@@ -34,15 +46,15 @@ import { MapsStore } from '../maps.store';
             [style.padding-left.px]="depth * 16 + 4"
             (click)="onNode(node)"
           >
-            <span class="node__caret">
+            <span class="node__caret" (click)="toggle($event, node)">
               @if (node.children?.length) {
                 <lucide-icon [img]="isOpen(node) ? icons.ChevronDown : icons.ChevronRight" [size]="14"></lucide-icon>
               }
             </span>
             <lucide-icon class="node__icon" [img]="kindIcon(node)" [size]="15"></lucide-icon>
-            <span class="node__label">{{ node.label }}</span>
-            @if (node.count !== undefined) {
-              <span class="node__count">{{ node.count }}</span>
+            <span class="node__label" [title]="node.label">{{ node.label }}</span>
+            @if (node.kind !== 'org') {
+              <span class="node__count">{{ store.countOf(node.id) }}</span>
             }
           </div>
           @if (node.children?.length && isOpen(node)) {
@@ -69,12 +81,14 @@ import { MapsStore } from '../maps.store';
     .node { display: flex; align-items: center; gap: 6px; height: 32px; padding-right: 6px; border-radius: 8px; cursor: pointer; color: #1e293b; }
     .node:hover { background: #faf9fe; }
     .node.active { background: #ede7fb; color: #5b2aa8; font-weight: 700; }
-    .node__caret { display: grid; place-items: center; width: 14px; color: #64748b; }
+    .node__caret { display: grid; place-items: center; width: 14px; min-height: 20px; color: #64748b; }
     .node__icon { color: #5b2aa8; }
     .node--floor .node__icon { color: #7c6bb0; }
     .node__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .node__count { min-width: 20px; padding: 0 6px; border-radius: 6px; background: #f1f5f9; font-size: 11px; text-align: center; color: #475569; }
     .node.active .node__count { background: #fff; color: #5b2aa8; }
+    .tree-note { margin: 8px 4px; font-size: 12.5px; color: #64748b; line-height: 1.45; }
+    .retry { margin: 0 4px; padding: 4px 10px; border: 1px solid #e6e8ef; border-radius: 8px; background: #fff; font: inherit; font-size: 12px; cursor: pointer; }
   `
 })
 export class SiteTree {
@@ -85,9 +99,9 @@ export class SiteTree {
   @Output() floorSelect = new EventEmitter<string>();
 
   query = '';
-  /** Filter button: hide branches that hold no floor plans. */
+  /** Filter button: hide floors that hold no floor plans. */
   floorsOnly = false;
-  private closed = new Set<string>(['ho-b', 'p1', 'wh']);
+  private closed = new Set<string>();
 
   kindIcon(node: SiteNode) {
     return KIND_ICONS[node.kind];
@@ -98,18 +112,29 @@ export class SiteTree {
   }
 
   onNode(node: SiteNode): void {
-    if (node.kind === 'floor') {
-      this.store.selectFloor(node.id);
-      this.floorSelect.emit(node.id);
+    if (node.kind === 'org') {
+      this.flip(node.id);
       return;
     }
-    if (this.closed.has(node.id)) this.closed.delete(node.id);
-    else this.closed.add(node.id);
+    this.closed.delete(node.id);
+    this.store.selectFloor(node.id);
+    this.floorSelect.emit(node.id);
+  }
+
+  toggle(event: MouseEvent, node: SiteNode): void {
+    if (!node.children?.length) return;
+    event.stopPropagation();
+    this.flip(node.id);
+  }
+
+  private flip(id: string): void {
+    if (this.closed.has(id)) this.closed.delete(id);
+    else this.closed.add(id);
   }
 
   matches(node: SiteNode): boolean {
     const q = this.query.trim().toLowerCase();
-    const self = (!q || node.label.toLowerCase().includes(q)) && (!this.floorsOnly || node.kind !== 'floor' || (node.count ?? 0) > 0);
+    const self = (!q || node.label.toLowerCase().includes(q)) && (!this.floorsOnly || node.kind !== 'floor' || this.store.countOf(node.id) > 0);
     return self || !!node.children?.some((c) => this.matches(c));
   }
 }

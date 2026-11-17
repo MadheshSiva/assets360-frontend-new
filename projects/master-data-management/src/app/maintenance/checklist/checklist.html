@@ -28,14 +28,14 @@
         <label class="filter">
           <span>Checklist Type</span>
           <select name="checklistType" [(ngModel)]="draft.checklistType">
-            <option value="">All</option>
+            <option value="">Select Checklist Type</option>
             @for (o of types; track o) { <option [value]="o">{{ o }}</option> }
           </select>
         </label>
         <label class="filter">
           <span>Status</span>
           <select name="status" [(ngModel)]="draft.status">
-            <option value="">All</option>
+            <option value="">Select Status</option>
             @for (o of statuses; track o) { <option [value]="o">{{ o }}</option> }
           </select>
         </label>

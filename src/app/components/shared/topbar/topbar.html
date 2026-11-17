@@ -107,7 +107,7 @@
 
     <form *ngIf="dialog === 'preferences'" class="acct-body" (ngSubmit)="savePrefs()">
       <label class="acct-field"><span>Start page after sign-in</span>
-        <select [(ngModel)]="prefsForm.landing" name="landing"><option *ngFor="let lp of landingPages" [value]="lp.path">{{ lp.label }}</option></select></label>
+        <select [(ngModel)]="prefsForm.landing" name="landing"><option value="" disabled>Select Landing</option><option *ngFor="let lp of landingPages" [value]="lp.path">{{ lp.label }}</option></select></label>
       <fieldset class="acct-field acct-radios"><legend>Time format</legend>
         <label><input type="radio" name="tf" value="12h" [(ngModel)]="prefsForm.timeFormat" />12-hour (2:30 PM)</label>
         <label><input type="radio" name="tf" value="24h" [(ngModel)]="prefsForm.timeFormat" />24-hour (14:30)</label></fieldset>

@@ -13,7 +13,7 @@ type Tab = 'basic' | 'conversion' | 'settings';
   selector: 'app-uom-form',
   imports: [FormsModule, LucideAngularModule],
   templateUrl: './uom-form.html',
-  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css']
+  styleUrls: ['../../../shared/styles/mdm-drawer.css', '../../../shared/styles/mdm-drawer-extras.css', '../../../people/people-form.css', '../../../shared/styles/mdm-purple-theme.css']
 })
 export class UomForm extends MasterForm<UomRecord, Tab> {
   protected readonly store = inject(UomService);
@@ -48,14 +48,16 @@ export class UomForm extends MasterForm<UomRecord, Tab> {
 
   protected validate(f: UomRecord) {
     const errors: Record<string, string> = {};
+    if (!f.type) errors['type'] = 'Select a type.';
     if (!f.symbol.trim()) errors['symbol'] = 'Enter a symbol.';
+    if (!f.status) errors['status'] = 'Select a status.';
     if (!(f.conversionFactor > 0)) errors['conversionFactor'] = 'Enter a factor greater than 0.';
     if (!f.baseUom && f.conversionFactor !== 1) errors['conversionFactor'] = 'A unit without a base unit has a factor of 1.';
     if (this.original && f.baseUom && this.store.derived(this.original.code).length) {
       errors['baseUom'] = 'Other units are based on this one, so it must stay a base unit.';
     }
     if (f.allowDecimals && !(Number.isInteger(f.decimalPlaces) && f.decimalPlaces >= 1 && f.decimalPlaces <= 6)) errors['decimalPlaces'] = 'Enter 1 to 6.';
-    const tab: Tab = errors['symbol'] ? 'basic' : errors['decimalPlaces'] && Object.keys(errors).length === 1 ? 'settings' : 'conversion';
+    const tab: Tab = errors['type'] || errors['symbol'] || errors['status'] ? 'basic' : errors['decimalPlaces'] && Object.keys(errors).length === 1 ? 'settings' : 'conversion';
     return { errors, tab };
   }
 

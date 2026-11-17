@@ -15,6 +15,7 @@
       <label class="field">
         <span class="field-label">Status</span>
         <select class="control" name="status" [(ngModel)]="form.status">
+          <option value="" disabled>Select Status</option>
           @for (s of statuses; track s) { <option [value]="s">{{ s }}</option> }
         </select>
       </label>
@@ -26,18 +27,21 @@
       <label class="field">
         <span class="field-label">Maintenance Type <span class="req">*</span></span>
         <select class="control" name="workType" [(ngModel)]="form.workType">
+          <option value="" disabled>Select Maintenance Type</option>
           @for (t of types; track t) { <option [value]="t">{{ t }}</option> }
         </select>
       </label>
       <label class="field">
         <span class="field-label">Category</span>
         <select class="control" name="category" [(ngModel)]="form.category">
+          <option value="" disabled>Select Category</option>
           @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
         </select>
       </label>
       <label class="field">
         <span class="field-label">Priority <span class="req">*</span></span>
         <select class="control" name="priority" [(ngModel)]="form.priority">
+          <option value="" disabled>Select Priority</option>
           @for (p of priorities; track p) { <option [value]="p">{{ p }}</option> }
         </select>
       </label>
@@ -60,6 +64,7 @@
       <label class="field">
         <span class="field-label">Work Order Source</span>
         <select class="control" name="source" [(ngModel)]="form.source">
+          <option value="" disabled>Select Work Order Source</option>
           @for (s of sources; track s) { <option [value]="s">{{ s }}</option> }
         </select>
       </label>

@@ -1,7 +1,6 @@
 import { CategoryRecord } from './category.model';
 
 export const CATEGORY_ASSET_TYPES = ['Fixed Asset', 'Movable Asset', 'Fleet Asset', 'Facility Asset', 'Consumable', 'Intangible Asset', 'Leased Asset'];
-export const CATEGORY_COST_CENTERS = ['IT-001', 'MFG-001', 'FLT-001', 'FM-001', 'FM-002', 'TLS-001', 'ADM-001', 'HSE-001', 'ELE-001', 'NET-001', 'QA-001', 'SEC-001'];
 
 // Defaults by category asset type: [depreciation, useful life (years), tracking]
 const TYPE_DEFAULTS: Record<string, [CategoryRecord['depreciationMethod'], number, CategoryRecord['trackingMethod']]> = {
